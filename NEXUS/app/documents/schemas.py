@@ -21,6 +21,16 @@ class DocumentResponse(BaseModel):
     minio_path: str
 
 
+class DocumentDetail(DocumentResponse):
+    """Extended document metadata including storage details."""
+
+    metadata_: dict = Field(default_factory=dict)
+    file_size_bytes: int | None = None
+    content_hash: str | None = None
+    job_id: UUID | None = None
+    updated_at: datetime | None = None
+
+
 class DocumentListResponse(PaginatedResponse[DocumentResponse]):
     """Paginated list of ingested documents."""
 

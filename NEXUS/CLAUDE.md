@@ -13,10 +13,10 @@
 | **M1: Single Doc Ingestion** | DONE | 23 | POST /ingest, 6-stage Celery pipeline (parse→chunk→embed→extract→index→complete), Docling parser, semantic chunker, OpenAI embeddings (1024d), GLiNER NER, Qdrant+Neo4j indexing, job tracking |
 | **M2: Query Pipeline (LangGraph)** | DONE | 53 | POST /query, POST /query/stream (SSE), LangGraph 8-node state graph (classify→rewrite→retrieve→rerank→check_relevance→graph_lookup→synthesize→follow_ups), HybridRetriever (Qdrant+Neo4j), chat persistence, GET/DELETE /chats |
 | **M3: Multi-Format + Entity Resolution** | DONE | 44 | EML/MSG/CSV/RTF parsers (stdlib+extract-msg+striprtf), ZIP extraction with child jobs, batch upload endpoint, email-aware chunking, entity resolution (rapidfuzz+embeddings), feature-flagged relationship extraction (Instructor+Claude), working entity/graph API endpoints |
-| **M4: Chat + Streamlit + Doc/Entity Browsing** | TODO | — | Multi-turn pronoun resolution, document/entity CRUD endpoints, Streamlit dashboard (3 pages), LangGraph PostgresCheckpointer |
-| **M5: Production Hardening** | TODO | — | MinIO event-driven ingestion, structlog everywhere, batch embed optimization, cross-encoder reranker, rate limiting, Flower monitoring, full test coverage |
+| **M4: Chat + Streamlit + Doc/Entity Browsing** | DONE | 15 | DocumentService CRUD (raw SQL), 4 working document endpoints (list/get/preview/download with presigned URLs), Streamlit 3-page dashboard (Chat/Documents/Entities), DocumentDetail schema, pyproject frontend optional deps |
+| **M5: Production Hardening** | TODO | — | LangGraph PostgresCheckpointer for multi-turn memory, MinIO event-driven ingestion, structlog everywhere, batch embed optimization, cross-encoder reranker, rate limiting, Flower monitoring, full test coverage |
 
-**Total tests: 128 passing** (as of M3 completion)
+**Total tests: 143 passing** (as of M4 completion)
 
 ---
 

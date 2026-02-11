@@ -63,6 +63,10 @@ dev = [
     "httpx>=0.27",
     "ruff>=0.8",
 ]
+frontend = [
+    "streamlit>=1.40",
+    "requests",
+]
 
 [build-system]
 requires = ["hatchling"]

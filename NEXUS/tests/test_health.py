@@ -81,13 +81,21 @@ async def test_entities_endpoint_returns_200(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_documents_stub_returns_200(client: AsyncClient) -> None:
-    """Stub documents list endpoint should return 200 with stub response."""
-    response = await client.get("/api/v1/documents")
+async def test_documents_list_returns_200(client: AsyncClient) -> None:
+    """Documents list endpoint should return 200 with paginated response."""
+    from unittest.mock import AsyncMock, patch
+
+    with patch(
+        "app.documents.service.DocumentService.list_documents",
+        new_callable=AsyncMock,
+        return_value=([], 0),
+    ):
+        response = await client.get("/api/v1/documents")
     assert response.status_code == 200
     body = response.json()
-    assert "detail" in body
-    assert body["detail"] == "not implemented"
+    assert "items" in body
+    assert "total" in body
+    assert body["total"] == 0
 
 
 @pytest.mark.asyncio
