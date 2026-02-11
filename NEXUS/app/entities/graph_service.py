@@ -313,6 +313,247 @@ class GraphService:
             logger.error("graph.entity_connections.failed", entity=entity_name)
             raise
 
+    # ------------------------------------------------------------------
+    # Entity resolution & search operations (M3)
+    # ------------------------------------------------------------------
+
+    async def get_all_entities_by_type(
+        self,
+        entity_type: str,
+    ) -> list[dict[str, Any]]:
+        """Return all entities of a given type."""
+        query = """
+        MATCH (e:Entity {type: $entity_type})
+        RETURN e.name AS name, e.type AS type, e.mention_count AS mention_count
+        ORDER BY e.mention_count DESC
+        """
+        try:
+            records = await self._run_query(query, {"entity_type": entity_type})
+            logger.debug(
+                "graph.entities_by_type.fetched",
+                entity_type=entity_type,
+                count=len(records),
+            )
+            return records
+        except Exception:
+            logger.error("graph.entities_by_type.failed", entity_type=entity_type)
+            raise
+
+    async def merge_entities(
+        self,
+        canonical_name: str,
+        alias_name: str,
+        entity_type: str,
+    ) -> None:
+        """Merge two entity nodes, keeping the canonical name.
+
+        Transfers all relationships from the alias to the canonical node,
+        adds the alias to the canonical's aliases list, sums mention counts,
+        and deletes the alias node.
+        """
+        query = """
+        MATCH (canonical:Entity {name: $canonical_name, type: $entity_type})
+        MATCH (alias:Entity {name: $alias_name, type: $entity_type})
+        WHERE canonical <> alias
+
+        // Transfer MENTIONED_IN relationships
+        WITH canonical, alias
+        OPTIONAL MATCH (alias)-[r:MENTIONED_IN]->(d:Document)
+        WITH canonical, alias, collect(d) AS docs, collect(r) AS rels
+        FOREACH (d IN docs |
+            MERGE (canonical)-[:MENTIONED_IN]->(d)
+        )
+        FOREACH (r IN rels | DELETE r)
+
+        // Update canonical: add alias, sum mention counts
+        WITH canonical, alias
+        SET canonical.mention_count = coalesce(canonical.mention_count, 0) + coalesce(alias.mention_count, 0),
+            canonical.aliases = coalesce(canonical.aliases, []) + [$alias_name]
+
+        // Delete alias node and its remaining relationships
+        WITH alias
+        DETACH DELETE alias
+        """
+        try:
+            await self._run_write(
+                query,
+                {
+                    "canonical_name": canonical_name,
+                    "alias_name": alias_name,
+                    "entity_type": entity_type,
+                },
+            )
+            logger.info(
+                "graph.entity.merged",
+                canonical=canonical_name,
+                alias=alias_name,
+                type=entity_type,
+            )
+        except Exception:
+            logger.error(
+                "graph.entity.merge_failed",
+                canonical=canonical_name,
+                alias=alias_name,
+            )
+            raise
+
+    async def search_entities(
+        self,
+        query: str | None = None,
+        entity_type: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Search entities with optional text query and type filter.
+
+        Returns (items, total_count).
+        """
+        where_clauses: list[str] = []
+        params: dict[str, Any] = {"limit": limit, "offset": offset}
+
+        if query:
+            where_clauses.append("toLower(e.name) CONTAINS toLower($query)")
+            params["query"] = query
+
+        if entity_type:
+            where_clauses.append("e.type = $entity_type")
+            params["entity_type"] = entity_type
+
+        where_str = "WHERE " + " AND ".join(where_clauses) if where_clauses else ""
+
+        count_cypher = f"""
+        MATCH (e:Entity) {where_str}
+        RETURN count(e) AS total
+        """
+        data_cypher = f"""
+        MATCH (e:Entity) {where_str}
+        RETURN e.name AS name, e.type AS type, e.mention_count AS mention_count,
+               e.first_seen AS first_seen, e.last_seen AS last_seen,
+               coalesce(e.aliases, []) AS aliases
+        ORDER BY e.mention_count DESC
+        SKIP $offset LIMIT $limit
+        """
+        try:
+            count_records = await self._run_query(count_cypher, params)
+            total = count_records[0]["total"] if count_records else 0
+
+            records = await self._run_query(data_cypher, params)
+            logger.debug(
+                "graph.search_entities.fetched",
+                total=total,
+                returned=len(records),
+            )
+            return records, total
+        except Exception:
+            logger.error("graph.search_entities.failed")
+            raise
+
+    async def get_entity_by_name(
+        self,
+        name: str,
+        entity_type: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Look up a single entity by name (and optionally type)."""
+        if entity_type:
+            cypher = """
+            MATCH (e:Entity {name: $name, type: $entity_type})
+            RETURN e.name AS name, e.type AS type, e.mention_count AS mention_count,
+                   e.first_seen AS first_seen, e.last_seen AS last_seen,
+                   coalesce(e.aliases, []) AS aliases
+            LIMIT 1
+            """
+            params = {"name": name, "entity_type": entity_type}
+        else:
+            cypher = """
+            MATCH (e:Entity {name: $name})
+            RETURN e.name AS name, e.type AS type, e.mention_count AS mention_count,
+                   e.first_seen AS first_seen, e.last_seen AS last_seen,
+                   coalesce(e.aliases, []) AS aliases
+            LIMIT 1
+            """
+            params = {"name": name}
+
+        try:
+            records = await self._run_query(cypher, params)
+            if records:
+                return records[0]
+            return None
+        except Exception:
+            logger.error("graph.get_entity_by_name.failed", name=name)
+            raise
+
+    async def get_entity_timeline(
+        self,
+        entity_name: str,
+    ) -> list[dict[str, Any]]:
+        """Return chronological events / document mentions for an entity."""
+        cypher = """
+        MATCH (e:Entity {name: $name})-[r:MENTIONED_IN]->(d:Document)
+        RETURN d.filename AS document,
+               d.type AS document_type,
+               r.page_number AS page_number,
+               d.created_at AS date
+        ORDER BY d.created_at
+        """
+        try:
+            records = await self._run_query(cypher, {"name": entity_name})
+            logger.debug(
+                "graph.entity_timeline.fetched",
+                entity=entity_name,
+                events=len(records),
+            )
+            return records
+        except Exception:
+            logger.error("graph.entity_timeline.failed", entity=entity_name)
+            raise
+
+    async def create_relationships(
+        self,
+        doc_id: str,
+        relationships: list[dict[str, Any]],
+    ) -> int:
+        """Create relationship edges between entities for a document.
+
+        Each dict in *relationships* should have:
+        - source_entity, source_type, target_entity, target_type
+        - relationship_type, context, confidence, temporal
+        """
+        if not relationships:
+            return 0
+
+        query = """
+        UNWIND $rels AS rel
+        MATCH (src:Entity {name: rel.source_entity, type: rel.source_type})
+        MATCH (tgt:Entity {name: rel.target_entity, type: rel.target_type})
+        MERGE (src)-[r:RELATED_TO {type: rel.relationship_type}]->(tgt)
+        SET r.context = rel.context,
+            r.confidence = rel.confidence,
+            r.temporal = rel.temporal,
+            r.doc_id = $doc_id
+        """
+        try:
+            await self._run_write(
+                query,
+                {"doc_id": doc_id, "rels": relationships},
+            )
+            logger.info(
+                "graph.relationships.created",
+                doc_id=doc_id,
+                count=len(relationships),
+            )
+            return len(relationships)
+        except Exception:
+            logger.error(
+                "graph.relationships.create_failed",
+                doc_id=doc_id,
+                count=len(relationships),
+            )
+            raise
+
+    # ------------------------------------------------------------------
+    # Graph statistics
+    # ------------------------------------------------------------------
+
     async def get_graph_stats(self) -> dict[str, Any]:
         """Return aggregate node and edge counts for the knowledge graph."""
         node_query = """

@@ -19,7 +19,8 @@ dependencies = [
 
     # Document Processing
     "docling>=2.70",
-    # unstructured deferred to M3 (email/RTF parsing) — numba dep incompatible with py3.12
+    "extract-msg>=0.48",
+    "striprtf>=0.0.26",
 
     # Retrieval
     "llama-index-core",

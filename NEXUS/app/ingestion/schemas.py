@@ -47,4 +47,7 @@ class JobListResponse(PaginatedResponse[JobStatusResponse]):
 class BatchIngestResponse(BaseModel):
     """Returned when a batch of files is accepted for ingestion."""
 
+    batch_id: UUID
     job_ids: list[UUID]
+    filenames: list[str]
+    total_files: int

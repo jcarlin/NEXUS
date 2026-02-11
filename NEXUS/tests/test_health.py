@@ -65,13 +65,19 @@ async def test_query_stub_returns_not_implemented(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_entities_stub_returns_200(client: AsyncClient) -> None:
-    """Stub entities list endpoint should return 200 with stub response."""
-    response = await client.get("/api/v1/entities")
+async def test_entities_endpoint_returns_200(client: AsyncClient) -> None:
+    """Entities list endpoint should return 200 with entity data."""
+    from unittest.mock import AsyncMock, patch
+
+    mock_gs = AsyncMock()
+    mock_gs.search_entities = AsyncMock(return_value=([], 0))
+
+    with patch("app.dependencies._graph_service", mock_gs):
+        response = await client.get("/api/v1/entities")
     assert response.status_code == 200
     body = response.json()
-    assert "detail" in body
-    assert body["detail"] == "not implemented"
+    assert "items" in body
+    assert "total" in body
 
 
 @pytest.mark.asyncio
@@ -85,10 +91,17 @@ async def test_documents_stub_returns_200(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_graph_stats_stub_returns_200(client: AsyncClient) -> None:
-    """Stub graph stats endpoint should return 200 with stub response."""
-    response = await client.get("/api/v1/graph/stats")
+async def test_graph_stats_returns_200(client: AsyncClient) -> None:
+    """Graph stats endpoint should return 200 with stats data."""
+    from unittest.mock import AsyncMock, patch
+
+    mock_gs = AsyncMock()
+    mock_gs.get_graph_stats = AsyncMock(return_value={
+        "total_nodes": 0, "total_edges": 0, "node_counts": {}, "edge_counts": {}
+    })
+
+    with patch("app.dependencies._graph_service", mock_gs):
+        response = await client.get("/api/v1/graph/stats")
     assert response.status_code == 200
     body = response.json()
-    assert "detail" in body
-    assert body["detail"] == "not implemented"
+    assert "total_nodes" in body

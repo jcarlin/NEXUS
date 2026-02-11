@@ -133,10 +133,10 @@ async def test_list_jobs(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_batch_returns_501(client: AsyncClient) -> None:
-    """POST /ingest/batch should return 501 (not implemented)."""
+async def test_batch_requires_files(client: AsyncClient) -> None:
+    """POST /ingest/batch without files should return 422."""
     response = await client.post("/api/v1/ingest/batch")
-    assert response.status_code == 501
+    assert response.status_code == 422
 
 
 @pytest.mark.asyncio

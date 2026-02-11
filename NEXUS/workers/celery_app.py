@@ -25,5 +25,5 @@ celery_app.conf.update(
     worker_prefetch_multiplier=1,
 )
 
-# Autodiscover tasks in the ingestion domain (add more as domains grow).
-celery_app.autodiscover_tasks(["app.ingestion"])
+# Autodiscover tasks in all domains with Celery tasks.
+celery_app.autodiscover_tasks(["app.ingestion", "app.entities"])

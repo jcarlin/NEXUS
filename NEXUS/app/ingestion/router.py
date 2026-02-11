@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_db, get_minio
 from app.ingestion.schemas import (
+    BatchIngestResponse,
     IngestResponse,
     JobListResponse,
     JobProgress,
@@ -128,16 +129,70 @@ async def ingest_single(
 
 
 # -----------------------------------------------------------------------
-# POST /ingest/batch — multi-file upload [M3 stub]
+# POST /ingest/batch — multi-file upload
 # -----------------------------------------------------------------------
 
-@router.post("/ingest/batch", status_code=501)
-async def ingest_batch():
-    """Upload multiple files (or a ZIP archive) for ingestion.
+@router.post("/ingest/batch", response_model=BatchIngestResponse)
+async def ingest_batch(
+    files: list[UploadFile] = File(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Upload multiple files for ingestion.
 
-    Not yet implemented — planned for M3.
+    Each file is uploaded to MinIO, gets its own job record, and a separate
+    Celery task is dispatched.  ZIP files are supported and handled by the
+    ``process_zip`` task which extracts and dispatches child jobs.
     """
-    raise HTTPException(status_code=501, detail="Batch ingestion not yet implemented (M3)")
+    if not files:
+        raise HTTPException(status_code=400, detail="No files provided")
+
+    storage = get_minio()
+    batch_id = uuid4()
+    job_ids: list = []
+    filenames: list[str] = []
+
+    for file in files:
+        file_bytes = await file.read()
+        filename = file.filename or "unnamed"
+
+        if len(file_bytes) == 0:
+            logger.warning("ingest.batch.skipping_empty", filename=filename)
+            continue
+
+        job_id = uuid4()
+        minio_path = f"raw/{job_id}/{filename}"
+
+        content_type = file.content_type or "application/octet-stream"
+        await storage.upload_bytes(key=minio_path, data=file_bytes, content_type=content_type)
+
+        job_row = await IngestionService.create_job(
+            db=db,
+            filename=filename,
+            minio_path=minio_path,
+            job_id=job_id,
+        )
+
+        process_document.delay(str(job_row["id"]), minio_path)
+
+        job_ids.append(job_row["id"])
+        filenames.append(filename)
+
+        logger.info(
+            "ingest.batch.file_dispatched",
+            batch_id=str(batch_id),
+            job_id=str(job_row["id"]),
+            filename=filename,
+        )
+
+    if not job_ids:
+        raise HTTPException(status_code=400, detail="All uploaded files were empty")
+
+    return BatchIngestResponse(
+        batch_id=batch_id,
+        job_ids=job_ids,
+        filenames=filenames,
+        total_files=len(job_ids),
+    )
 
 
 # -----------------------------------------------------------------------

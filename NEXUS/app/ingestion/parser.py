@@ -1,4 +1,4 @@
-"""Document parsing via Docling.
+"""Document parsing via Docling and lightweight format-specific parsers.
 
 Routes files to the correct parser based on extension.
 Extracts text, structure, and page images.
@@ -6,6 +6,11 @@ Extracts text, structure, and page images.
 
 from __future__ import annotations
 
+import csv
+import email
+import email.policy
+import io
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -27,13 +32,18 @@ PARSER_ROUTES: dict[str, str] = {
     ".jpeg": "docling",
     ".tiff": "docling",
     ".tif": "docling",
-    # These are deferred to M3 (unstructured):
-    ".eml": "unsupported",
-    ".msg": "unsupported",
-    ".rtf": "unsupported",
+    # M3: Email formats
+    ".eml": "eml",
+    ".msg": "msg",
+    # M3: Data / text formats
+    ".csv": "csv",
+    ".tsv": "csv",
+    ".rtf": "rtf",
+    # Plaintext
     ".txt": "plaintext",
-    ".csv": "unsupported",
+    # Legacy Word — needs libreoffice, not supported
     ".doc": "unsupported",
+    # ZIP: handled by task layer, not parser
     ".zip": "zip_extract",
 }
 
@@ -64,8 +74,12 @@ class DocumentParser:
     Currently supports:
     - Docling: PDF, DOCX, XLSX, PPTX, HTML, and image files.
     - Plaintext: .txt files (read directly).
+    - EML: RFC 822 email files (stdlib email.parser).
+    - MSG: Outlook .msg files (extract-msg library).
+    - CSV/TSV: Tabular data rendered as markdown tables.
+    - RTF: Rich Text Format (striprtf library).
 
-    Other formats (EML, MSG, RTF, CSV, legacy DOC) are deferred to M3.
+    Other formats (legacy DOC) are not yet supported.
     """
 
     def __init__(self) -> None:
@@ -120,15 +134,23 @@ class DocumentParser:
             return self._parse_with_docling(file_path, filename)
         if backend == "plaintext":
             return self._parse_plaintext(file_path, filename)
+        if backend == "eml":
+            return self._parse_eml(file_path, filename)
+        if backend == "msg":
+            return self._parse_msg(file_path, filename)
+        if backend == "csv":
+            return self._parse_csv(file_path, filename)
+        if backend == "rtf":
+            return self._parse_rtf(file_path, filename)
         if backend == "unsupported":
             raise ValueError(
-                f"File format '{ext}' is not yet supported (scheduled for M3). "
+                f"File format '{ext}' is not supported. "
                 f"File: '{filename}'"
             )
         if backend == "zip_extract":
             raise ValueError(
-                "ZIP extraction is not yet supported in the parser. "
-                "Extract the archive first, then ingest individual files."
+                "ZIP files are handled by the task layer, not the parser. "
+                "Use process_document or process_zip tasks instead."
             )
 
         # Defensive fallback — should never reach here.
@@ -320,5 +342,287 @@ class DocumentParser:
             text=text,
             pages=[PageContent(page_number=1, text=text, tables=[], images=[])],
             metadata={"format": ".txt"},
+            page_count=1,
+        )
+
+    # ------------------------------------------------------------------
+    # EML backend (RFC 822 email, stdlib)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _parse_eml(file_path: Path, filename: str) -> ParseResult:
+        """Parse an EML file using stdlib email.parser."""
+        raw_bytes = file_path.read_bytes()
+        msg = email.message_from_bytes(raw_bytes, policy=email.policy.default)
+
+        # Extract headers
+        headers = {
+            "from": str(msg.get("From", "")),
+            "to": str(msg.get("To", "")),
+            "cc": str(msg.get("Cc", "")),
+            "subject": str(msg.get("Subject", "")),
+            "date": str(msg.get("Date", "")),
+        }
+
+        # Extract body text
+        body = ""
+        if msg.is_multipart():
+            for part in msg.walk():
+                content_type = part.get_content_type()
+                if content_type == "text/plain":
+                    payload = part.get_content()
+                    if isinstance(payload, str):
+                        body = payload
+                        break
+            # Fallback: strip HTML if no plaintext part found
+            if not body:
+                for part in msg.walk():
+                    content_type = part.get_content_type()
+                    if content_type == "text/html":
+                        payload = part.get_content()
+                        if isinstance(payload, str):
+                            body = re.sub(r"<[^>]+>", "", payload)
+                            body = re.sub(r"\s+", " ", body).strip()
+                            break
+        else:
+            content_type = msg.get_content_type()
+            payload = msg.get_content()
+            if isinstance(payload, str):
+                if content_type == "text/html":
+                    body = re.sub(r"<[^>]+>", "", payload)
+                    body = re.sub(r"\s+", " ", body).strip()
+                else:
+                    body = payload
+
+        # Collect attachments metadata (binary data stored separately)
+        attachments: list[dict] = []
+        if msg.is_multipart():
+            for part in msg.walk():
+                disposition = part.get_content_disposition()
+                if disposition == "attachment" or (
+                    disposition == "inline" and part.get_filename()
+                ):
+                    att_filename = part.get_filename() or "unnamed_attachment"
+                    att_data = part.get_payload(decode=True)
+                    if att_data:
+                        attachments.append({
+                            "filename": att_filename,
+                            "content_type": part.get_content_type(),
+                            "data": att_data,
+                        })
+
+        # Format header block
+        header_block = (
+            f"From: {headers['from']}\n"
+            f"To: {headers['to']}\n"
+        )
+        if headers["cc"]:
+            header_block += f"Cc: {headers['cc']}\n"
+        header_block += (
+            f"Date: {headers['date']}\n"
+            f"Subject: {headers['subject']}\n"
+        )
+
+        full_text = f"{header_block}\n{body}"
+
+        metadata: dict = {
+            "format": ".eml",
+            "document_type": "email",
+            **headers,
+        }
+        if attachments:
+            metadata["attachment_count"] = len(attachments)
+            metadata["attachment_data"] = attachments
+
+        logger.info(
+            "parser.eml.success",
+            filename=filename,
+            text_length=len(full_text),
+            attachments=len(attachments),
+        )
+
+        return ParseResult(
+            text=full_text,
+            pages=[PageContent(page_number=1, text=full_text, tables=[], images=[])],
+            metadata=metadata,
+            page_count=1,
+        )
+
+    # ------------------------------------------------------------------
+    # MSG backend (Outlook .msg, extract-msg library)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _parse_msg(file_path: Path, filename: str) -> ParseResult:
+        """Parse an Outlook .msg file using extract-msg."""
+        import extract_msg
+
+        msg = extract_msg.Message(str(file_path))
+        try:
+            headers = {
+                "from": msg.sender or "",
+                "to": msg.to or "",
+                "cc": msg.cc or "",
+                "subject": msg.subject or "",
+                "date": str(msg.date) if msg.date else "",
+            }
+
+            body = msg.body or ""
+
+            # Collect attachments
+            attachments: list[dict] = []
+            for att in msg.attachments:
+                att_filename = getattr(att, "longFilename", None) or getattr(att, "shortFilename", None) or "unnamed"
+                att_data = getattr(att, "data", None)
+                if att_data:
+                    attachments.append({
+                        "filename": att_filename,
+                        "content_type": "application/octet-stream",
+                        "data": att_data,
+                    })
+
+            # Format header block
+            header_block = (
+                f"From: {headers['from']}\n"
+                f"To: {headers['to']}\n"
+            )
+            if headers["cc"]:
+                header_block += f"Cc: {headers['cc']}\n"
+            header_block += (
+                f"Date: {headers['date']}\n"
+                f"Subject: {headers['subject']}\n"
+            )
+
+            full_text = f"{header_block}\n{body}"
+
+            metadata: dict = {
+                "format": ".msg",
+                "document_type": "email",
+                **headers,
+            }
+            if attachments:
+                metadata["attachment_count"] = len(attachments)
+                metadata["attachment_data"] = attachments
+
+            logger.info(
+                "parser.msg.success",
+                filename=filename,
+                text_length=len(full_text),
+                attachments=len(attachments),
+            )
+
+            return ParseResult(
+                text=full_text,
+                pages=[PageContent(page_number=1, text=full_text, tables=[], images=[])],
+                metadata=metadata,
+                page_count=1,
+            )
+        finally:
+            msg.close()
+
+    # ------------------------------------------------------------------
+    # CSV/TSV backend (stdlib csv → markdown table)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _parse_csv(file_path: Path, filename: str) -> ParseResult:
+        """Parse a CSV/TSV file into a markdown table."""
+        MAX_ROWS = 1000
+
+        try:
+            raw_text = file_path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            raw_text = file_path.read_text(encoding="latin-1")
+
+        # Detect dialect (comma vs tab vs other)
+        try:
+            sample = raw_text[:8192]
+            dialect = csv.Sniffer().sniff(sample)
+        except csv.Error:
+            # Default to comma-separated
+            dialect = csv.excel
+
+        reader = csv.reader(io.StringIO(raw_text), dialect)
+        rows: list[list[str]] = []
+        for row in reader:
+            rows.append(row)
+            if len(rows) > MAX_ROWS + 1:  # +1 for header
+                break
+
+        if not rows:
+            return ParseResult(
+                text="(empty CSV file)",
+                pages=[PageContent(page_number=1, text="(empty CSV file)", tables=[], images=[])],
+                metadata={"format": Path(filename).suffix.lower(), "row_count": 0, "column_count": 0},
+                page_count=1,
+            )
+
+        truncated = len(rows) > MAX_ROWS + 1
+        total_row_count = len(rows) - 1  # Subtract header
+        if truncated:
+            rows = rows[:MAX_ROWS + 1]
+            total_row_count = MAX_ROWS
+
+        # Build markdown table
+        header = rows[0]
+        column_count = len(header)
+        md_lines: list[str] = []
+        md_lines.append("| " + " | ".join(header) + " |")
+        md_lines.append("| " + " | ".join(["---"] * column_count) + " |")
+        for row in rows[1:]:
+            # Pad or truncate row to match header length
+            padded = row[:column_count] + [""] * max(0, column_count - len(row))
+            md_lines.append("| " + " | ".join(padded) + " |")
+
+        text = "\n".join(md_lines)
+
+        metadata: dict = {
+            "format": Path(filename).suffix.lower(),
+            "row_count": total_row_count,
+            "column_count": column_count,
+            "truncated": truncated,
+        }
+
+        logger.info(
+            "parser.csv.success",
+            filename=filename,
+            rows=total_row_count,
+            columns=column_count,
+            truncated=truncated,
+        )
+
+        return ParseResult(
+            text=text,
+            pages=[PageContent(page_number=1, text=text, tables=[text], images=[])],
+            metadata=metadata,
+            page_count=1,
+        )
+
+    # ------------------------------------------------------------------
+    # RTF backend (striprtf library)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _parse_rtf(file_path: Path, filename: str) -> ParseResult:
+        """Parse an RTF file using striprtf."""
+        from striprtf.striprtf import rtf_to_text
+
+        try:
+            raw = file_path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            raw = file_path.read_text(encoding="latin-1")
+
+        text = rtf_to_text(raw)
+
+        logger.info(
+            "parser.rtf.success",
+            filename=filename,
+            text_length=len(text),
+        )
+
+        return ParseResult(
+            text=text,
+            pages=[PageContent(page_number=1, text=text, tables=[], images=[])],
+            metadata={"format": ".rtf"},
             page_count=1,
         )

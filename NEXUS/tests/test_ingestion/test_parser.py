@@ -53,15 +53,15 @@ def test_parse_unsupported_extension_raises():
         tmp_path.unlink(missing_ok=True)
 
 
-def test_parse_deferred_format_raises():
-    """Formats deferred to M3 should raise with a clear message."""
+def test_parse_unsupported_doc_format_raises():
+    """Legacy .doc format should raise with a clear message."""
     parser = DocumentParser()
-    with tempfile.NamedTemporaryFile(suffix=".eml", delete=False) as f:
-        f.write(b"From: test@example.com\n")
+    with tempfile.NamedTemporaryFile(suffix=".doc", delete=False) as f:
+        f.write(b"fake doc content")
         tmp_path = Path(f.name)
 
     try:
-        with pytest.raises(ValueError, match="not yet supported"):
-            parser.parse(tmp_path, "email.eml")
+        with pytest.raises(ValueError, match="not supported"):
+            parser.parse(tmp_path, "legacy.doc")
     finally:
         tmp_path.unlink(missing_ok=True)

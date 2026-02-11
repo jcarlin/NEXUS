@@ -72,7 +72,12 @@ class TextChunker:
         """Return the number of tokens in *text* using cl100k_base."""
         return len(self._encoding.encode(text))
 
-    def chunk(self, text: str, metadata: dict | None = None) -> list[Chunk]:
+    def chunk(
+        self,
+        text: str,
+        metadata: dict | None = None,
+        document_type: str | None = None,
+    ) -> list[Chunk]:
         """Split *text* into a list of :class:`Chunk` objects.
 
         Parameters
@@ -82,6 +87,9 @@ class TextChunker:
         metadata:
             Optional base metadata to attach to every chunk.  Keys like
             ``source_file`` and ``page_number`` are preserved on each chunk.
+        document_type:
+            Optional hint (e.g. ``"email"``) that enables format-specific
+            chunking strategies.
 
         Returns
         -------
@@ -93,6 +101,10 @@ class TextChunker:
         if not text or not text.strip():
             logger.debug("chunker.empty_input")
             return []
+
+        # Email-aware chunking: split body from quoted replies first
+        if document_type == "email":
+            return self._chunk_email(text, metadata)
 
         blocks = self._split_into_blocks(text)
         raw_chunks = self._assemble_chunks(blocks)
@@ -288,3 +300,70 @@ class TextChunker:
                 if candidate > best:
                     best = candidate
         return best
+
+    # ------------------------------------------------------------------
+    # Email-aware chunking
+    # ------------------------------------------------------------------
+
+    # Pattern for quoted reply boundaries: lines starting with > or
+    # common reply markers like "On ... wrote:" or "-----Original Message-----"
+    _REPLY_MARKER_RE = re.compile(
+        r"^(?:"
+        r"(?:>{1,}\s)|"                          # > quoted lines
+        r"(?:On .+ wrote:$)|"                     # "On ... wrote:"
+        r"(?:-{3,}\s*Original Message\s*-{3,})|"  # ---Original Message---
+        r"(?:-{3,}\s*Forwarded .+\s*-{3,})"       # ---Forwarded message---
+        r")",
+        re.MULTILINE | re.IGNORECASE,
+    )
+
+    def _chunk_email(self, text: str, base_metadata: dict) -> list[Chunk]:
+        """Split an email into body and quoted-reply sections, then chunk each.
+
+        This prevents quoted replies from being merged into the primary body
+        content, making retrieval more precise for email threads.
+        """
+        # Find the first quoted reply boundary
+        match = self._REPLY_MARKER_RE.search(text)
+
+        if match:
+            body_text = text[:match.start()].strip()
+            quoted_text = text[match.start():].strip()
+            sections = []
+            if body_text:
+                sections.append(("body", body_text))
+            if quoted_text:
+                sections.append(("quoted_reply", quoted_text))
+        else:
+            sections = [("body", text)]
+
+        all_chunks: list[Chunk] = []
+        chunk_idx = 0
+
+        for section_label, section_text in sections:
+            blocks = self._split_into_blocks(section_text)
+            raw_chunks = self._assemble_chunks(blocks)
+
+            for chunk_text in raw_chunks:
+                token_count = self.count_tokens(chunk_text)
+                chunk_meta = {
+                    **base_metadata,
+                    "chunk_index": chunk_idx,
+                    "email_section": section_label,
+                }
+                all_chunks.append(
+                    Chunk(
+                        chunk_index=chunk_idx,
+                        text=chunk_text,
+                        token_count=token_count,
+                        metadata=chunk_meta,
+                    )
+                )
+                chunk_idx += 1
+
+        logger.info(
+            "chunker.email.complete",
+            total_chunks=len(all_chunks),
+            total_tokens=sum(c.token_count for c in all_chunks),
+        )
+        return all_chunks
