@@ -21,22 +21,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
-from app.dependencies import (
-    get_db,
-    get_embedder,
-    get_entity_extractor,
-    get_graph_service,
-    get_llm,
-    get_query_graph,
-    get_retriever,
-)
-from app.query.nodes import (
-    _format_chat_history,
-    _format_context,
-    _format_graph_context,
-    create_nodes,
-)
-from app.query.prompts import SYNTHESIS_PROMPT
+from app.common.rate_limit import rate_limit_queries
+from app.dependencies import get_db, get_query_graph
 from app.query.schemas import (
     ChatHistoryResponse,
     ChatMessage,
@@ -49,6 +35,19 @@ from app.query.schemas import (
 
 logger = structlog.get_logger(__name__)
 router = APIRouter(tags=["query"])
+
+# Map LangGraph node names to SSE stage names for the client
+_STAGE_MAP = {
+    "classify": "classifying",
+    "rewrite": "rewriting",
+    "retrieve": "retrieving",
+    "rerank": "reranking",
+    "check_relevance": "checking_relevance",
+    "graph_lookup": "graph_lookup",
+    "reformulate": "reformulating",
+    "synthesize": "analyzing",
+    "generate_follow_ups": "generating_follow_ups",
+}
 
 
 # ------------------------------------------------------------------
@@ -131,6 +130,7 @@ async def query(
     request: QueryRequest,
     db: AsyncSession = Depends(get_db),
     graph=Depends(get_query_graph),
+    _rate_limit=Depends(rate_limit_queries),
 ):
     """Execute a single investigation query and return the full response."""
     thread_id = str(request.thread_id) if request.thread_id else str(uuid.uuid4())
@@ -165,8 +165,9 @@ async def query(
         "_filters": request.filters,
     }
 
-    # Run the graph
-    final_state = await graph.ainvoke(initial_state)
+    # Run the graph with checkpointer config
+    config = {"configurable": {"thread_id": thread_id}}
+    final_state = await graph.ainvoke(initial_state, config)
 
     # Save user message
     await _save_message(db, thread_id, "user", request.query)
@@ -210,15 +211,15 @@ async def query(
 async def query_stream(
     request: QueryRequest,
     db: AsyncSession = Depends(get_db),
-    llm=Depends(get_llm),
-    retriever=Depends(get_retriever),
-    graph_service=Depends(get_graph_service),
-    entity_extractor=Depends(get_entity_extractor),
+    graph=Depends(get_query_graph),
+    _rate_limit=Depends(rate_limit_queries),
 ):
     """Execute a query with Server-Sent Events streaming.
 
-    Calls node functions directly (not ``graph.ainvoke``) so that the
-    synthesis step can stream tokens incrementally.
+    Uses ``graph.astream()`` with ``stream_mode=["updates", "custom"]``:
+    - "updates" channel emits node outputs (used for status + sources events)
+    - "custom" channel emits token-level data from ``get_stream_writer()``
+      inside the synthesize node
     """
     thread_id = str(request.thread_id) if request.thread_id else str(uuid.uuid4())
 
@@ -228,128 +229,58 @@ async def query_stream(
         rows = await _load_thread_messages(db, thread_id)
         messages = [{"role": r["role"], "content": r["content"]} for r in rows]
 
-    nodes = create_nodes(llm, retriever, graph_service, entity_extractor)
+    initial_state = {
+        "messages": messages,
+        "thread_id": thread_id,
+        "user_id": "default",
+        "original_query": request.query,
+        "rewritten_query": "",
+        "query_type": "",
+        "text_results": [],
+        "visual_results": [],
+        "graph_results": [],
+        "fused_context": [],
+        "response": "",
+        "source_documents": [],
+        "follow_up_questions": [],
+        "entities_mentioned": [],
+        "_relevance": "",
+        "_reformulated": False,
+        "_filters": request.filters,
+    }
+
+    config = {"configurable": {"thread_id": thread_id}}
 
     async def event_generator():
-        state: dict[str, Any] = {
-            "messages": messages,
-            "thread_id": thread_id,
-            "user_id": "default",
-            "original_query": request.query,
-            "rewritten_query": "",
-            "query_type": "",
-            "text_results": [],
-            "visual_results": [],
-            "graph_results": [],
-            "fused_context": [],
-            "response": "",
-            "source_documents": [],
-            "follow_up_questions": [],
-            "entities_mentioned": [],
-            "_relevance": "",
-            "_reformulated": False,
-            "_filters": request.filters,
-        }
+        final_state: dict[str, Any] = {}
 
-        # Phase 1: Classify
-        yield {"event": "status", "data": json.dumps({"stage": "classifying"})}
-        update = await nodes["classify"](state)
-        state.update(update)
-
-        # Phase 2: Rewrite
-        yield {"event": "status", "data": json.dumps({"stage": "rewriting"})}
-        update = await nodes["rewrite"](state)
-        state.update(update)
-
-        # Phase 3: Retrieve
-        yield {"event": "status", "data": json.dumps({"stage": "retrieving"})}
-        update = await nodes["retrieve"](state)
-        state.update(update)
-
-        # Phase 4: Rerank
-        update = await nodes["rerank"](state)
-        state.update(update)
-
-        # Phase 5: Check relevance + possible reformulation loop
-        update = await nodes["check_relevance"](state)
-        state.update(update)
-
-        if state.get("_relevance") == "not_relevant" and not state.get("_reformulated"):
-            yield {"event": "status", "data": json.dumps({"stage": "reformulating"})}
-            update = await nodes["reformulate"](state)
-            state.update(update)
-
-            yield {"event": "status", "data": json.dumps({"stage": "retrieving"})}
-            update = await nodes["retrieve"](state)
-            state.update(update)
-            update = await nodes["rerank"](state)
-            state.update(update)
-
-        # Phase 6: Graph lookup
-        yield {"event": "status", "data": json.dumps({"stage": "graph_lookup"})}
-        update = await nodes["graph_lookup"](state)
-        state.update(update)
-
-        # Emit sources BEFORE generation starts
-        yield {
-            "event": "sources",
-            "data": json.dumps({"documents": state.get("source_documents", [])}),
-        }
-
-        # Phase 7: Stream synthesis tokens
-        yield {"event": "status", "data": json.dumps({"stage": "analyzing"})}
-
-        query = state.get("rewritten_query") or state["original_query"]
-        context = _format_context(state.get("fused_context", []))
-        graph_context = _format_graph_context(state.get("graph_results", []))
-
-        synthesis_prompt = SYNTHESIS_PROMPT.format(
-            context=context,
-            graph_context=graph_context,
-            query=query,
-        )
-
-        full_response = ""
-        async for token in llm.stream(
-            [
-                {"role": "system", "content": "You are a legal investigation analyst."},
-                {"role": "user", "content": synthesis_prompt},
-            ],
-            max_tokens=2048,
-            temperature=0.1,
+        async for stream_mode, chunk in graph.astream(
+            initial_state, config, stream_mode=["updates", "custom"]
         ):
-            full_response += token
-            yield {"event": "token", "data": json.dumps({"text": token})}
+            if stream_mode == "updates":
+                for node_name, update in chunk.items():
+                    # Emit status event for each node
+                    stage = _STAGE_MAP.get(node_name, node_name)
+                    yield {
+                        "event": "status",
+                        "data": json.dumps({"stage": stage}),
+                    }
+                    # Emit sources after rerank node
+                    if node_name == "rerank" and "source_documents" in update:
+                        yield {
+                            "event": "sources",
+                            "data": json.dumps({"documents": update["source_documents"]}),
+                        }
+                    # Accumulate state from all nodes
+                    final_state.update(update)
 
-        state["response"] = full_response
-
-        # Extract entities from response
-        entities_mentioned: list[dict[str, Any]] = []
-        try:
-            raw_entities = entity_extractor.extract(
-                full_response,
-                entity_types=["person", "organization", "location", "vehicle"],
-                threshold=0.4,
-            )
-            seen_names: set[str] = set()
-            for ent in raw_entities:
-                name_lower = ent.text.lower()
-                if name_lower not in seen_names:
-                    seen_names.add(name_lower)
-                    entities_mentioned.append({
-                        "name": ent.text,
-                        "type": ent.type,
-                        "kg_id": None,
-                        "connections": 0,
-                    })
-        except Exception:
-            logger.warning("query_stream.entity_extraction_failed")
-
-        state["entities_mentioned"] = entities_mentioned
-
-        # Phase 8: Follow-ups
-        update = await nodes["generate_follow_ups"](state)
-        state.update(update)
+            elif stream_mode == "custom":
+                # Custom channel: token events from synthesize node
+                if isinstance(chunk, dict) and chunk.get("type") == "token":
+                    yield {
+                        "event": "token",
+                        "data": json.dumps({"text": chunk["text"]}),
+                    }
 
         # Save messages to DB
         try:
@@ -358,10 +289,10 @@ async def query_stream(
                 db,
                 thread_id,
                 "assistant",
-                full_response,
-                source_documents=state.get("source_documents", []),
-                entities_mentioned=entities_mentioned,
-                follow_up_questions=state.get("follow_up_questions", []),
+                final_state.get("response", ""),
+                source_documents=final_state.get("source_documents", []),
+                entities_mentioned=final_state.get("entities_mentioned", []),
+                follow_up_questions=final_state.get("follow_up_questions", []),
             )
             await db.commit()
         except Exception:
@@ -372,8 +303,8 @@ async def query_stream(
             "event": "done",
             "data": json.dumps({
                 "thread_id": thread_id,
-                "follow_ups": state.get("follow_up_questions", []),
-                "entities": entities_mentioned,
+                "follow_ups": final_state.get("follow_up_questions", []),
+                "entities": final_state.get("entities_mentioned", []),
             }),
         }
 

@@ -51,6 +51,13 @@ class Settings(BaseSettings):
     gliner_model: str = "urchade/gliner_multi_pii-v1"
     enable_relationship_extraction: bool = False  # Tier-2 Instructor+LLM extraction off by default
 
+    # --- Rate Limiting ---
+    rate_limit_queries_per_minute: int = 30
+    rate_limit_ingests_per_minute: int = 10
+
+    # --- Embedding ---
+    embedding_batch_size: int = 32  # Conservative for 16GB Mac
+
     # --- Reranker ---
     enable_reranker: bool = False  # bge-reranker-v2-m3, deferred
 

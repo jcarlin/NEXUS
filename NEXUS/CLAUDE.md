@@ -14,9 +14,10 @@
 | **M2: Query Pipeline (LangGraph)** | DONE | 53 | POST /query, POST /query/stream (SSE), LangGraph 8-node state graph (classify→rewrite→retrieve→rerank→check_relevance→graph_lookup→synthesize→follow_ups), HybridRetriever (Qdrant+Neo4j), chat persistence, GET/DELETE /chats |
 | **M3: Multi-Format + Entity Resolution** | DONE | 44 | EML/MSG/CSV/RTF parsers (stdlib+extract-msg+striprtf), ZIP extraction with child jobs, batch upload endpoint, email-aware chunking, entity resolution (rapidfuzz+embeddings), feature-flagged relationship extraction (Instructor+Claude), working entity/graph API endpoints |
 | **M4: Chat + Streamlit + Doc/Entity Browsing** | DONE | 15 | DocumentService CRUD (raw SQL), 4 working document endpoints (list/get/preview/download with presigned URLs), Streamlit 3-page dashboard (Chat/Documents/Entities), DocumentDetail schema, pyproject frontend optional deps |
-| **M5: Production Hardening** | TODO | — | LangGraph PostgresCheckpointer for multi-turn memory, MinIO event-driven ingestion, structlog everywhere, batch embed optimization, cross-encoder reranker, rate limiting, Flower monitoring, full test coverage |
+| **M5: Production Hardening (Core)** | DONE | 16 | PostgresCheckpointer for multi-turn graph state, streaming refactor (graph.astream + get_stream_writer), MinIO webhook ingestion, Redis sliding-window rate limiting, structlog contextvars (request_id/task_id/job_id), configurable embed batch size |
+| **M5b: Production Hardening (Remaining)** | TODO | — | Cross-encoder reranker, Flower monitoring, full test coverage |
 
-**Total tests: 143 passing** (as of M4 completion)
+**Total tests: 159 passing** (as of M5 core completion)
 
 ---
 

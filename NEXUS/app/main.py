@@ -85,6 +85,15 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     except Exception as exc:
         logger.error("startup.redis.failed", error=str(exc))
 
+    # --- LangGraph Checkpointer (PostgresSaver) ---
+    try:
+        from app.dependencies import get_checkpointer
+
+        get_checkpointer()  # Creates tables if needed (idempotent)
+        logger.info("startup.checkpointer.ok")
+    except Exception as exc:
+        logger.error("startup.checkpointer.failed", error=str(exc))
+
     # --- PostgreSQL connectivity (via SQLAlchemy engine) ---
     try:
         from sqlalchemy import text as sa_text

@@ -177,6 +177,7 @@ def get_embedder() -> TextEmbedder:
             api_key=settings.openai_api_key,
             model=settings.embedding_model,
             dimensions=settings.embedding_dimensions,
+            batch_size=settings.embedding_batch_size,
         )
     return _embedder
 
@@ -233,6 +234,33 @@ def get_retriever() -> HybridRetriever:
 
 
 # ---------------------------------------------------------------------------
+# LangGraph Checkpointer (sync psycopg connection)
+# ---------------------------------------------------------------------------
+
+_checkpointer = None
+_checkpointer_conn = None
+
+
+def get_checkpointer():
+    """Return the PostgresSaver checkpointer singleton.
+
+    Uses a synchronous ``psycopg`` connection with ``autocommit=True``.
+    The ``.setup()`` call is idempotent — it creates checkpoint tables if they
+    don't already exist.
+    """
+    global _checkpointer, _checkpointer_conn
+    if _checkpointer is None:
+        import psycopg
+        from langgraph.checkpoint.postgres import PostgresSaver
+
+        settings = get_settings()
+        _checkpointer_conn = psycopg.connect(settings.postgres_url_sync, autocommit=True)
+        _checkpointer = PostgresSaver(conn=_checkpointer_conn)
+        _checkpointer.setup()
+    return _checkpointer
+
+
+# ---------------------------------------------------------------------------
 # Query Graph (compiled LangGraph)
 # ---------------------------------------------------------------------------
 
@@ -250,7 +278,7 @@ def get_query_graph():
             retriever=get_retriever(),
             graph_service=get_graph_service(),
             entity_extractor=get_entity_extractor(),
-        ).compile()
+        ).compile(checkpointer=get_checkpointer())
     return _query_graph
 
 
@@ -260,7 +288,16 @@ def get_query_graph():
 
 async def close_all() -> None:
     """Gracefully tear down all shared clients."""
-    global _async_engine, _neo4j_driver, _redis_client
+    global _async_engine, _neo4j_driver, _redis_client, _checkpointer, _checkpointer_conn
+
+    if _checkpointer_conn is not None:
+        try:
+            _checkpointer_conn.close()
+        except Exception:
+            pass
+        _checkpointer_conn = None
+        _checkpointer = None
+        logger.info("shutdown.checkpointer")
 
     if _async_engine is not None:
         await _async_engine.dispose()

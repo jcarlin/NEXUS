@@ -59,16 +59,14 @@ async def query_client():
 
         # Override dependencies
         from app import dependencies
+        from app.common.rate_limit import rate_limit_queries
 
         async def mock_get_db():
             yield mock_db
 
         test_app.dependency_overrides[dependencies.get_db] = mock_get_db
         test_app.dependency_overrides[dependencies.get_query_graph] = lambda: mock_graph
-        test_app.dependency_overrides[dependencies.get_llm] = lambda: AsyncMock()
-        test_app.dependency_overrides[dependencies.get_retriever] = lambda: AsyncMock()
-        test_app.dependency_overrides[dependencies.get_graph_service] = lambda: AsyncMock()
-        test_app.dependency_overrides[dependencies.get_entity_extractor] = lambda: MagicMock()
+        test_app.dependency_overrides[rate_limit_queries] = lambda: None
 
         transport = ASGITransport(app=test_app)
         async with AsyncClient(transport=transport, base_url="http://testserver") as ac:

@@ -51,3 +51,29 @@ class BatchIngestResponse(BaseModel):
     job_ids: list[UUID]
     filenames: list[str]
     total_files: int
+
+
+# ---------------------------------------------------------------------------
+# MinIO S3 Event Notification schemas
+# ---------------------------------------------------------------------------
+
+
+class S3EventRecord(BaseModel):
+    """Single record from an S3/MinIO bucket event notification."""
+
+    eventName: str = ""
+    s3: dict = Field(default_factory=dict)
+
+
+class S3EventNotification(BaseModel):
+    """Payload sent by MinIO for bucket event notifications."""
+
+    Records: list[S3EventRecord] = Field(default_factory=list)
+
+
+class WebhookResponse(BaseModel):
+    """Response from the MinIO webhook endpoint."""
+
+    status: str
+    job_ids: list[str]
+    total: int

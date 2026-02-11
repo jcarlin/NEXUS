@@ -37,17 +37,19 @@ class TextEmbedder:
         native dimension reduction via the ``dimensions`` parameter.
     """
 
-    BATCH_SIZE: int = 64  # Max texts per API call
+    BATCH_SIZE: int = 64  # Max texts per API call (class default)
 
     def __init__(
         self,
         api_key: str,
         model: str = "text-embedding-3-large",
         dimensions: int = 1024,
+        batch_size: int = 64,
     ) -> None:
         self._client = AsyncOpenAI(api_key=api_key)
         self._model = model
         self._dimensions = dimensions
+        self.batch_size = batch_size
 
     # ------------------------------------------------------------------
     # Public API
@@ -80,8 +82,8 @@ class TextEmbedder:
 
         all_embeddings: list[list[float]] = []
 
-        for batch_start in range(0, len(texts), self.BATCH_SIZE):
-            batch = texts[batch_start : batch_start + self.BATCH_SIZE]
+        for batch_start in range(0, len(texts), self.batch_size):
+            batch = texts[batch_start : batch_start + self.batch_size]
             batch_embeddings = await self._embed_batch(batch)
             all_embeddings.extend(batch_embeddings)
 

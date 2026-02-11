@@ -132,6 +132,13 @@ async def test_graph_invoke_end_to_end(mock_llm, mock_retriever, mock_graph_serv
 
     mock_llm.complete.side_effect = mock_complete
 
+    # synthesize node now uses llm.stream() — return an async iterator of tokens
+    async def mock_stream(messages, **kwargs):
+        for token in ["Based on the evidence, ", "Test Person is mentioned in doc.pdf."]:
+            yield token
+
+    mock_llm.stream = mock_stream
+
     graph = build_graph(mock_llm, mock_retriever, mock_graph_service, mock_entity_extractor)
     compiled = graph.compile()
 

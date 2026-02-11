@@ -283,7 +283,19 @@ def create_nodes(
     # --- synthesize ---
 
     async def synthesize(state: dict) -> dict:
-        """Generate the answer with citations from evidence and graph context."""
+        """Generate the answer with citations from evidence and graph context.
+
+        Uses ``get_stream_writer()`` to emit tokens on the custom channel
+        when invoked via ``graph.astream()``.  When called via ``graph.ainvoke()``
+        the writer is a no-op, so this node works for both paths.
+        """
+        try:
+            from langgraph.config import get_stream_writer
+            writer = get_stream_writer()
+        except RuntimeError:
+            # Outside of a runnable context (e.g., direct call in tests)
+            writer = lambda x: None  # noqa: E731
+
         query = state.get("rewritten_query") or state["original_query"]
         fused = state.get("fused_context", [])
         graph_results = state.get("graph_results", [])
@@ -297,16 +309,19 @@ def create_nodes(
             query=query,
         )
 
-        response = await llm.complete(
+        full_response = ""
+        async for token in llm.stream(
             [
                 {"role": "system", "content": "You are a legal investigation analyst."},
                 {"role": "user", "content": prompt},
             ],
             max_tokens=2048,
             temperature=0.1,
-        )
+        ):
+            full_response += token
+            writer({"type": "token", "text": token})
 
-        response = response.strip()
+        response = full_response.strip()
 
         # Extract entities from the response for linking
         entities_mentioned: list[dict[str, Any]] = []

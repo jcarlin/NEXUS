@@ -60,6 +60,12 @@ async def client() -> AsyncIterator[AsyncClient]:
         # Re-create the app with the patched lifespan
         test_app = main_module.create_app()
 
+        # Override rate limiters to no-op so tests aren't blocked
+        from app.common.rate_limit import rate_limit_ingests, rate_limit_queries
+
+        test_app.dependency_overrides[rate_limit_queries] = lambda: None
+        test_app.dependency_overrides[rate_limit_ingests] = lambda: None
+
         transport = ASGITransport(app=test_app)
         async with AsyncClient(transport=transport, base_url="http://testserver") as ac:
             yield ac

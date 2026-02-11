@@ -373,6 +373,9 @@ def process_zip(self, job_id: str, minio_path: str) -> dict:
     - Nested ZIPs are NOT recursed (single level).
     - Each extracted file gets its own child job linked via parent_job_id.
     """
+    structlog.contextvars.clear_contextvars()
+    structlog.contextvars.bind_contextvars(task_id=self.request.id, job_id=job_id)
+
     from app.config import Settings
     from app.ingestion.parser import PARSER_ROUTES
 
@@ -520,6 +523,9 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
     Each stage updates the job row in Postgres so clients can poll progress.
     On failure, the job is marked ``failed`` with the error traceback.
     """
+    structlog.contextvars.clear_contextvars()
+    structlog.contextvars.bind_contextvars(task_id=self.request.id, job_id=job_id)
+
     from app.config import Settings
 
     settings = Settings()

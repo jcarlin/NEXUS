@@ -37,6 +37,13 @@ def _make_nodes(llm_responses: list[str] | None = None):
     else:
         llm.complete.return_value = "mocked response"
 
+    # synthesize uses llm.stream() — provide an async generator
+    async def _mock_stream(messages, **kwargs):
+        response = llm_responses[-1] if llm_responses else "mocked response"
+        yield response
+
+    llm.stream = _mock_stream
+
     retriever = AsyncMock()
     retriever.retrieve_all.return_value = (
         [

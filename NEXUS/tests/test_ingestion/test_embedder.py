@@ -32,8 +32,7 @@ async def test_embed_single_returns_vector():
 @pytest.mark.asyncio
 async def test_embed_texts_batching():
     """embed_texts should batch requests when over BATCH_SIZE."""
-    embedder = TextEmbedder(api_key="test-key", dimensions=4)
-    embedder.BATCH_SIZE = 2  # Small batch for testing
+    embedder = TextEmbedder(api_key="test-key", dimensions=4, batch_size=2)
 
     def make_response(count, offset=0):
         resp = MagicMock()

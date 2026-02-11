@@ -16,6 +16,7 @@ import structlog
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.rate_limit import rate_limit_ingests
 from app.dependencies import get_db, get_minio
 from app.ingestion.schemas import (
     BatchIngestResponse,
@@ -23,6 +24,8 @@ from app.ingestion.schemas import (
     JobListResponse,
     JobProgress,
     JobStatusResponse,
+    S3EventNotification,
+    WebhookResponse,
 )
 from app.ingestion.service import IngestionService
 from app.ingestion.tasks import process_document
@@ -74,6 +77,7 @@ def _job_row_to_status_response(row: dict) -> JobStatusResponse:
 async def ingest_single(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
+    _rate_limit=Depends(rate_limit_ingests),
 ):
     """Upload a single file for ingestion.
 
@@ -136,6 +140,7 @@ async def ingest_single(
 async def ingest_batch(
     files: list[UploadFile] = File(...),
     db: AsyncSession = Depends(get_db),
+    _rate_limit=Depends(rate_limit_ingests),
 ):
     """Upload multiple files for ingestion.
 
@@ -196,16 +201,70 @@ async def ingest_batch(
 
 
 # -----------------------------------------------------------------------
-# POST /ingest/webhook — MinIO bucket notification handler [M3 stub]
+# POST /ingest/webhook — MinIO bucket notification handler
 # -----------------------------------------------------------------------
 
-@router.post("/ingest/webhook", status_code=501)
-async def ingest_webhook():
-    """Receive MinIO bucket event notifications.
+@router.post("/ingest/webhook", response_model=WebhookResponse)
+async def ingest_webhook(
+    payload: S3EventNotification,
+    db: AsyncSession = Depends(get_db),
+):
+    """Receive MinIO bucket event notifications and trigger ingestion.
 
-    Not yet implemented — planned for M3.
+    Parses S3-style event records, filters for ``s3:ObjectCreated:*`` events,
+    creates a job per object, and dispatches Celery tasks.
     """
-    raise HTTPException(status_code=501, detail="MinIO webhook ingestion not yet implemented (M3)")
+    if not payload.Records:
+        raise HTTPException(status_code=400, detail="No event records in payload")
+
+    job_ids: list[str] = []
+
+    for record in payload.Records:
+        # Only process object-created events
+        if not record.eventName.startswith("s3:ObjectCreated:"):
+            continue
+
+        # Extract the object key from the S3 event structure
+        s3_info = record.s3
+        obj = s3_info.get("object", {})
+        object_key = obj.get("key", "")
+
+        if not object_key:
+            continue
+
+        # Extract filename from the key
+        filename = object_key.rsplit("/", 1)[-1] if "/" in object_key else object_key
+
+        # Create job record
+        job_row = await IngestionService.create_job(
+            db=db,
+            filename=filename,
+            minio_path=object_key,
+        )
+
+        # Dispatch Celery task
+        process_document.delay(str(job_row["id"]), object_key)
+
+        job_ids.append(str(job_row["id"]))
+
+        logger.info(
+            "webhook.job_dispatched",
+            job_id=str(job_row["id"]),
+            object_key=object_key,
+            event_name=record.eventName,
+        )
+
+    if not job_ids:
+        raise HTTPException(
+            status_code=400,
+            detail="No actionable s3:ObjectCreated events found in payload",
+        )
+
+    return WebhookResponse(
+        status="accepted",
+        job_ids=job_ids,
+        total=len(job_ids),
+    )
 
 
 # -----------------------------------------------------------------------
