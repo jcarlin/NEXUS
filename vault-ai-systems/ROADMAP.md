@@ -1,6 +1,6 @@
 # Vault AI Systems — Master Product Roadmap
 
-**Version:** 5.0
+**Version:** 5.4
 **Date:** February 22, 2026
 **Status:** Active
 **Supersedes:** Product Blueprint v3.0 (October 23, 2025)
@@ -238,7 +238,7 @@ Nearly free if the chat UI and API are built. The AI introduces itself to first-
 
 **Goal:** Graduate from pilot to a product you can sell. Add the management, security, and operational features enterprise buyers require for procurement approval.
 **Audience:** First paying customers. IT admins and security teams evaluating for purchase.
-**Estimated effort:** 200–260 hours
+**Estimated effort:** 230–290 hours
 **Target:** 8–12 weeks after Stage 2.
 
 ## Epic 8: Full API Gateway
@@ -326,68 +326,91 @@ Move wizard backend into the API gateway for consistency.
 | GET | `/vault/setup/verify` | Run system verification | 2 hrs | ✅ |
 | POST | `/vault/setup/complete` | Finalize, lock setup endpoints | 1 hr | ✅ |
 
-**Epic 8 Subtotal: ~115 hours**
+### 8.7 Frontend Completions (Missed in Epic 8) ✅
+
+Frontend wiring for backend endpoints identified during Feb 2026 audit. All complete.
+
+| Task | Description | Effort | Status |
+|------|-------------|--------|--------|
+| 8.7.1 | ✅ Network Settings UI — wire `NetworkSettings.tsx` to `GET/PUT /vault/admin/config/network` (display hostname, IP, DNS; add edit form) | 2 hrs | ✅ |
+| 8.7.2 | ✅ API Key edit/disable UI — add edit button (rename label) and enable/disable toggle per key in Advanced Settings, wire to `PUT /vault/admin/keys/{key_id}` | 2 hrs | ✅ |
+| 8.7.3 | ✅ GPU details panel — per-GPU metrics view (utilization, VRAM bar, temperature, power draw) using `GET /vault/system/gpu`, on Insights or Models page | 3 hrs | ✅ |
+| 8.7.4 | ✅ Runtime default model settings — new `GET/PUT /vault/admin/config/models` endpoint for default chat/embedding model selection + Settings UI dropdowns. Chat auto-selects default model for new conversations. | 6 hrs | ✅ |
+| 8.7.5 | ✅ Conversation model locking — disable model selector after first message in conversation, optional server-side enforcement, per-message model tracking in messages table for audit trail | 5 hrs | ✅ |
+
+**Epic 8 Subtotal: ~133 hours**
 
 ## Epic 9: Quarantine Pipeline (Stages 1–3)
 
 File integrity, malware scanning, and content sanitization for everything entering the system.
 
-| Task | Description | Effort |
-|------|-------------|--------|
-| 9.1 | Quarantine directory structure: isolated staging area, filesystem permissions | 2 hrs |
-| 9.2 | File type verification: magic byte checking, MIME validation (python-magic) | 4 hrs |
-| 9.3 | File structure validation: per-format deep validation (PDF, DOCX, JSON, JSONL, safetensors) | 6 hrs |
-| 9.4 | Size/count limits: configurable max file size, batch limits, storage alerts | 2 hrs |
-| 9.5 | Archive bomb detection: compression ratio checks, nested archive limits | 3 hrs |
-| 9.6 | ClamAV installation: offline config, pre-loaded signatures, systemd service | 3 hrs |
-| 9.7 | ClamAV scanning integration: Python service, result parsing, status mapping | 4 hrs |
-| 9.8 | YARA rule engine: custom rules for AI-specific threats | 6 hrs |
-| 9.9 | Hash blacklist: SHA-256 known-bad file database | 2 hrs |
-| 9.10 | Signature update mechanism: extract from USB update bundles, GPG verify | 4 hrs |
-| 9.11 | Signature staleness monitoring: age tracking, dashboard widget | 2 hrs |
-| 9.12 | PDF sanitization: strip JS/executables, rebuild clean (pikepdf/dangerzone) | 6 hrs |
-| 9.13 | Office document sanitization: strip macros/ActiveX/OLE (python-docx, openpyxl) | 6 hrs |
-| 9.14 | Image re-encoding: strip steganography via Pillow re-encode | 3 hrs |
-| 9.15 | Metadata scrubbing: EXIF, author info, XMP across all formats | 3 hrs |
-| 9.16 | Pipeline orchestrator: async job runner sequencing files through stages | 6 hrs |
-| 9.17 | Quarantine API endpoints (9 endpoints) | 6 hrs |
-| 9.18 | Quarantine hold workflow: admin review UI integration | 4 hrs |
-| 9.19 | Integration with upload flows: all file paths funnel through quarantine | 4 hrs |
-| 9.20 | Integration testing with known-bad files (EICAR, macro DOCX, etc.) | 6 hrs |
+**Backend:** ✅ Complete — 9 endpoints, 71 tests, 3-stage scanning (integrity → malware → content sanitization), python-magic, pikepdf, python-docx, openpyxl, Pillow, ClamAV, YARA.
+**Frontend:** ✅ Complete — Quarantine admin page (stats, signature health, held files table, file detail dialog), upload modal wired to real scan API, quarantine settings panel.
+
+| Task | Description | Effort | Status |
+|------|-------------|--------|--------|
+| 9.1 | Quarantine directory structure: isolated staging area, filesystem permissions | 2 hrs | ✅ |
+| 9.2 | File type verification: magic byte checking, MIME validation (python-magic) | 4 hrs | ✅ |
+| 9.3 | File structure validation: per-format deep validation (PDF, DOCX, JSON, JSONL, safetensors) | 6 hrs | ✅ |
+| 9.4 | Size/count limits: configurable max file size, batch limits, storage alerts | 2 hrs | ✅ |
+| 9.5 | Archive bomb detection: compression ratio checks, nested archive limits | 3 hrs | ✅ |
+| 9.6 | ClamAV installation: offline config, pre-loaded signatures, systemd service | 3 hrs | ✅ |
+| 9.7 | ClamAV scanning integration: Python service, result parsing, status mapping | 4 hrs | ✅ |
+| 9.8 | YARA rule engine: custom rules for AI-specific threats | 6 hrs | ✅ |
+| 9.9 | Hash blacklist: SHA-256 known-bad file database | 2 hrs | ✅ |
+| 9.10 | Signature update mechanism: extract from USB update bundles, GPG verify | 4 hrs | ✅ |
+| 9.11 | Signature staleness monitoring: age tracking, dashboard widget | 2 hrs | ✅ |
+| 9.12 | PDF sanitization: strip JS/executables, rebuild clean (pikepdf/dangerzone) | 6 hrs | ✅ |
+| 9.13 | Office document sanitization: strip macros/ActiveX/OLE (python-docx, openpyxl) | 6 hrs | ✅ |
+| 9.14 | Image re-encoding: strip steganography via Pillow re-encode | 3 hrs | ✅ |
+| 9.15 | Metadata scrubbing: EXIF, author info, XMP across all formats | 3 hrs | ✅ |
+| 9.16 | Pipeline orchestrator: async job runner sequencing files through stages | 6 hrs | ✅ |
+| 9.17 | Quarantine API endpoints (9 endpoints) | 6 hrs | ✅ |
+| 9.18 | Quarantine hold workflow: admin review UI integration | 4 hrs | ✅ |
+| 9.19 | Integration with upload flows: all file paths funnel through quarantine | 4 hrs | ✅ |
+| 9.20 | Integration testing with known-bad files (EICAR, macro DOCX, etc.) | 6 hrs | ✅ |
 
 **Epic 9 Subtotal: ~75 hours**
 
-## Epic 10: Update Mechanism
+## Epic 10: Update Mechanism ✅
 
-Air-gapped update lifecycle via USB bundles.
+Air-gapped update lifecycle via USB bundles. Secure, admin-driven workflow: plug in USB → scan → verify GPG signature → review changelog → apply → health check → automatic rollback on failure.
 
-| Task | Description | Effort |
-|------|-------------|--------|
-| 10.1 | Update bundle format specification: directory structure, manifest, versioning scheme | 4 hrs |
-| 10.2 | Build server tooling: script that packages containers, models, APT packages, ClamAV sigs, API code into signed bundle | 8 hrs |
-| 10.3 | GPG signing pipeline: generate Vault AI signing key, sign bundles at build time | 3 hrs |
-| 10.4 | USB detection: auto-detect mounted USB, scan for update bundles | 4 hrs |
-| 10.5 | Signature verification: verify GPG signature before showing update to admin | 3 hrs |
-| 10.6 | Update API endpoints (7 endpoints): scan, pending, apply, progress, rollback, history, status | 8 hrs |
-| 10.7 | Update apply engine: load new containers into local registry, swap services, run migrations | 12 hrs |
-| 10.8 | Database migration framework: versioned SQLite schema migrations, forward-only with rollback safety | 6 hrs |
-| 10.9 | Rollback mechanism: retain previous container images + config, one-version rollback | 8 hrs |
-| 10.10 | Health check gating: automatic rollback if health checks fail post-update | 4 hrs |
-| 10.11 | Update progress UI: frontend component showing step-by-step progress | 4 hrs |
-| 10.12 | End-to-end testing: full update cycle on test unit | 6 hrs |
+**Backend:** ✅ Complete — 7 admin-only endpoints, UpdateService + UpdateEngine + USBScanner + GPGVerifier + HealthChecker + UpdateBundle + UpdateDirectory, Alembic migration framework (baseline + update_jobs), 70 new tests (42 unit + 28 integration), 492 total.
+**Frontend:** ✅ Complete — UpdatePanel with scan/apply/rollback/progress/history, wired into AdvancedSettings.
+**Infrastructure:** ✅ Complete — Ansible: vault-update-apply.service (systemd one-shot), atomic swap script, sudoers fragment, GPG key deployment.
+**Build tooling:** ✅ Complete — `scripts/build_update_bundle.py` (Typer CLI, GPG signing, per-file checksums).
 
-**Epic 10 Subtotal: ~70 hours**
+| Task | Description | Effort | Status |
+|------|-------------|--------|--------|
+| 10.1 | Update bundle format specification: directory structure, manifest, versioning scheme | 4 hrs | ✅ |
+| 10.2 | Build server tooling: script that packages containers, models, APT packages, ClamAV sigs, API code into signed bundle | 8 hrs | ✅ |
+| 10.3 | GPG signing pipeline: generate Vault AI signing key, sign bundles at build time | 3 hrs | ✅ |
+| 10.4 | USB detection: auto-detect mounted USB, scan for update bundles | 4 hrs | ✅ |
+| 10.5 | Signature verification: verify GPG signature before showing update to admin | 3 hrs | ✅ |
+| 10.6 | Update API endpoints (7 endpoints): scan, pending, apply, progress, rollback, history, status | 8 hrs | ✅ |
+| 10.7 | Update apply engine: load new containers into local registry, swap services, run migrations | 12 hrs | ✅ |
+| 10.8 | Database migration framework: versioned SQLite schema migrations, forward-only with rollback safety | 6 hrs | ✅ |
+| 10.9 | Rollback mechanism: retain previous container images + config, one-version rollback | 8 hrs | ✅ |
+| 10.10 | Health check gating: automatic rollback if health checks fail post-update | 4 hrs | ✅ |
+| 10.11 | Update progress UI: frontend component showing step-by-step progress | 4 hrs | ✅ |
+| 10.12 | End-to-end testing: full update cycle on test unit | 6 hrs | ✅ |
+
+**Epic 10 Subtotal: ~70 hours** ✅ Complete
 
 ## Epic 11: Support & Diagnostics Tooling
 
-| Task | Description | Effort |
-|------|-------------|--------|
-| 11.1 | Support bundle generator: `vault-support-bundle` packages logs, hardware info, system state, config (with secrets redacted) into encrypted archive | 6 hrs |
-| 11.2 | Backup to USB: encrypted snapshot of all user data (conversations, API keys, audit logs, adapters, configs) | 8 hrs |
-| 11.3 | Restore from backup: restore snapshot onto fresh or replacement unit | 6 hrs |
-| 11.4 | Factory reset: admin-triggered full reset to golden image state (preserves hardware config) | 4 hrs |
+| Task | Description | Effort | Status |
+|------|-------------|--------|--------|
+| 11.1 | Support bundle generator: `POST /vault/admin/diagnostics/bundle` — packages system info, hardware, config (secrets redacted), audit log into gzip tarball | 6 hrs | ✅ |
+| 11.2 | Backup: `POST /vault/admin/backup` — atomic SQLite .backup() + config + TLS certs, optional Fernet encryption with PBKDF2 passphrase | 8 hrs | ✅ |
+| 11.3 | Restore from backup: `POST /vault/admin/restore` — validate tarball, decrypt if needed, replace DB (old saved as .bak), restore config + TLS | 6 hrs | ✅ |
+| 11.4 | Factory reset: `POST /vault/admin/factory-reset` — clears user tables, resets config defaults, deletes setup flag, re-triggers setup wizard | 4 hrs | ✅ |
+| 11.5 | User data export: `GET /vault/admin/data/export` — conversations+messages, API keys (metadata only), training jobs, system config as JSON. Frontend wired. | 4 hrs | ✅ |
+| 11.6 | User data purge: `POST /vault/admin/data/purge` — bulk delete conversations/messages/jobs, optional API key deletion, confirmation required. Frontend wired. | 4 hrs | ✅ |
+| 11.7 | Chat archiving: `POST /vault/admin/conversations/archive` — sets archived flag on old conversations, filtered from list, still accessible by ID. Frontend wired with date picker. | 4 hrs | ✅ |
 
-**Epic 11 Subtotal: ~24 hours**
+**Epic 11 Subtotal: ~36 hours** ✅ Complete
 
 ## Stage 3 Decisions Required
 
@@ -406,7 +429,7 @@ Air-gapped update lifecycle via USB bundles.
 - [ ] Admin can manage API keys, view system config, and restart services through API
 - [ ] Product ready for sales to customers beyond pilot group
 
-## Stage 3 Total Effort: 200–260 hours
+## Stage 3 Total Effort: 230–290 hours
 
 ---
 
@@ -451,34 +474,42 @@ Air-gapped update lifecycle via USB bundles.
 
 ## Epic 14: LDAP/SSO Integration
 
-| Task | Description | Effort |
-|------|-------------|--------|
-| 14.1 | LDAP/Active Directory connector: authenticate users against org directory | 8 hrs |
-| 14.2 | User sync: pull user/group info from LDAP, map to API key scopes | 6 hrs |
-| 14.3 | User management API endpoints (4 endpoints): list, create, update, deactivate | 6 hrs |
-| 14.4 | Role-based access: map LDAP groups to Vault roles (user, power-user, admin) | 4 hrs |
-| 14.5 | First-boot SSO setup: optional LDAP config step in setup wizard | 4 hrs |
+**Backend:** ✅ Complete — 13 new endpoints, 52 tests, dual-auth middleware (API key + JWT coexistence), LDAP connector (AD + OpenLDAP), JIT user provisioning, group-to-role mapping, local admin fallback with bcrypt password hash.
 
-**Epic 14 Subtotal: ~28 hours**
+| Task | Description | Effort | Status |
+|------|-------------|--------|--------|
+| 14.1 | LDAP/AD connector + JWT auth: LdapService (test, authenticate, search, groups via ldap3), JwtService (HS256, configurable expiry), auth endpoints (login, me, ldap-enabled), dual-auth middleware (API key `vault_sk_*` + JWT `eyJ*` differentiated by prefix) | 12 hrs | ✅ |
+| 14.2 | User/group sync: LdapSyncService (full sync, role resolution from group mappings, deactivate removed users), LDAP config CRUD (get/put/test/sync), stored in SystemConfig | 7 hrs | ✅ |
+| 14.3 | User management extensions: auth_source/ldap_dn fields, password hashing (bcrypt), filter by auth_source | 3 hrs | ✅ |
+| 14.4 | Role-based access: LdapGroupMapping table (group DN → vault role with priority), dual-auth require_admin (JWT role + API key scope), group mapping CRUD (4 endpoints) | 5 hrs | ✅ |
+| 14.5 | First-boot SSO setup: optional LDAP step in setup wizard (configure or skip), POST /vault/setup/sso + /vault/setup/sso/skip | 4 hrs | ✅ |
+| 14.6 | Frontend login + LDAP settings: LoginPage (credentials + API key tabs), AuthContext dual-auth, LdapSettings panel | 8 hrs | Planned |
+| 14.7 | Alembic migration framework: initial migration (current schema) + LDAP migration | 3 hrs | Deferred |
+
+**Epic 14 Subtotal: ~42 hours** (backend 31 hrs ✅, frontend 8 hrs planned, Alembic 3 hrs deferred)
 
 ## Epic 15: WebSocket Endpoints
 
-| Task | Description | Effort |
-|------|-------------|--------|
-| 15.1 | `ws://vault-cube.local/api/ws/inference` — real-time inference streaming (alternative to SSE) | 4 hrs |
-| 15.2 | `ws://vault-cube.local/api/ws/system` — live system metrics push | 4 hrs |
-| 15.3 | `ws://vault-cube.local/api/ws/logs` — live log streaming for admin | 4 hrs |
-| 15.4 | `ws://vault-cube.local/api/ws/updates` — update progress streaming | 3 hrs |
+**Backend:** `/ws/system` complete (Epic 8), `/ws/logs` complete (admin-only, journalctl streaming, 8 WS tests).
+**Frontend:** Reusable `useWebSocket` hook with auto-reconnect, `/ws/system` wired to InsightsPage + GpuDetailsPanel, `/ws/logs` wired to SystemLogsTab with Live toggle.
+**Deferred:** 15.1 (SSE works, revisit Stage 6) and 15.4 (depends on Epic 10).
 
-**Epic 15 Subtotal: ~15 hours**
+| Task | Description | Effort | Status |
+|------|-------------|--------|--------|
+| 15.1 | `ws://vault-cube.local/api/ws/inference` — real-time inference streaming (alternative to SSE) | 4 hrs | Deferred — SSE works, revisit Stage 6 |
+| 15.2 | `ws://vault-cube.local/api/ws/system` — live system metrics push | 4 hrs | ✅ (backend Epic 8, frontend wired) |
+| 15.3 | `ws://vault-cube.local/api/ws/logs` — live log streaming for admin | 4 hrs | ✅ (backend + frontend) |
+| 15.4 | `ws://vault-cube.local/api/ws/updates` — update progress streaming | 3 hrs | Deferred — depends on Epic 10 |
+
+**Epic 15 Subtotal: ~15 hours** (8 hrs done, 7 hrs deferred)
 
 ## Stage 4 Exit Criteria
 
 - [ ] Users can upload documents and ask questions about them with cited sources
 - [ ] PII scanning catches SSN, credit card, and MRN patterns in test data
 - [ ] Quarantine Stage 4 flags prompt injections and data poisoning in training datasets
-- [ ] LDAP integration tested against Active Directory and OpenLDAP
-- [ ] WebSocket endpoints operational for real-time dashboard updates
+- [x] LDAP integration backend complete: dual-auth middleware, JWT sessions, LDAP connector, group-to-role mapping, 13 endpoints, 52 tests (frontend login page deferred)
+- [x] WebSocket endpoints operational for real-time dashboard updates (15.2 system metrics, 15.3 live logs; 15.1 and 15.4 deferred)
 
 ## Stage 4 Total Effort: 160–200 hours
 
@@ -543,7 +574,7 @@ Air-gapped update lifecycle via USB bundles.
 
 **Goal:** Unlock direct hardware access for power users. The Vault Cube becomes a complete AI research workstation, not just an appliance.
 **Audience:** University research labs, ML engineering teams.
-**Estimated effort:** 60–80 hours
+**Estimated effort:** 75–95 hours
 **Target:** As customer demand dictates.
 
 ## Epic 19: Developer Mode
@@ -557,8 +588,10 @@ Air-gapped update lifecycle via USB bundles.
 | 19.5 | VS Code Server option: browser-based IDE connected to dev GPUs | 6 hrs |
 | 19.6 | Resource monitoring: dev mode resource consumption visible in admin dashboard | 4 hrs |
 | 19.7 | Custom container launching: admin can deploy arbitrary Docker containers on dev GPUs | 8 hrs |
+| 19.8 | Model Inspector — view model architecture (layer count, parameter count, attention heads, context window), quantization info (method, bits, group size), optional layer activation visualization | 10 hrs |
+| 19.9 | Python Console — browser-based Python REPL (xterm.js + WebSocket to IPython kernel) with pre-loaded model access libraries, lighter-weight alternative to full JupyterHub | 5 hrs |
 
-**Epic 19 Subtotal: ~46 hours**
+**Epic 19 Subtotal: ~61 hours**
 
 ## Epic 20: Multi-Model Serving
 
@@ -577,7 +610,7 @@ Air-gapped update lifecycle via USB bundles.
 - [ ] Multiple models can serve inference simultaneously on different GPU subsets
 - [ ] All dev mode sessions logged to audit trail
 
-## Stage 6 Total Effort: 60–80 hours
+## Stage 6 Total Effort: 75–95 hours
 
 ---
 
@@ -623,11 +656,11 @@ These are real customer needs we've identified but haven't committed to a stage.
 |-------|-------------|-----------|--------|------------|--------|
 | Stage 1 | Foundation (Epics 1–2) | 0 | 60–75 hrs | 60–75 hrs | Epic 1 ✅, Epic 2.1–2.3 ✅ (GPU stack validated on GCP) |
 | Stage 2 | Rev 1 — Pilot Product (Epics 3–7) | 3 + CLI + 29 frontend API + 7 setup | 120–160 hrs | 180–235 hrs | API ✅, UI ✅, Rev 2 API ✅, frontend wired ✅, first-boot wizard ✅, model type/status ✅, onboarding agent ✅, admin scope enforcement ✅, Epic 6 ✅ (monitoring) |
-| Stage 3 | Rev 2 — Enterprise (Epics 8–11) | ~57 (partially done via Rev 2) | 200–260 hrs | 380–495 hrs | Epic 8 ✅ (64 endpoints, 239 tests). Epics 9–11 remaining (quarantine, updates, support). |
-| Stage 4 | Rev 3 — Data Platform (Epics 12–15) | +27 | 160–200 hrs | 540–695 hrs | Planned |
-| Stage 5 | Rev 4 — Training (Epics 16–18) | +14 | 120–160 hrs | 660–855 hrs | Planned |
-| Stage 6 | Rev 5 — Research (Epics 19–20) | +8 | 60–80 hrs | 720–935 hrs | Planned |
-| **Total** | **Full platform vision** | **~95** | **720–935 hrs** | | |
+| Stage 3 | Rev 2 — Enterprise (Epics 8–11) | ~57 (partially done via Rev 2) | 230–290 hrs | 410–525 hrs | Epic 8 ✅ (64 endpoints, 239 tests, 8.7 frontend completions ✅). Epic 9 ✅ (quarantine pipeline: 9 backend endpoints, 71 tests, frontend admin page + upload integration + settings). Epic 11 ✅ (support & diagnostics: 7 endpoints, 52 tests — support bundle, backup/restore with encryption, factory reset, data export/purge, chat archiving; frontend wired). Epic 10 remaining (updates). |
+| Stage 4 | Rev 3 — Data Platform (Epics 12–15) | +27 | 160–200 hrs | 570–725 hrs | Epic 14 backend ✅ (LDAP/SSO: 13 endpoints, 52 tests, dual-auth middleware, JWT + LDAP connector, group mapping; frontend login deferred). Epic 15 partial ✅ (WS /ws/logs endpoint + frontend hooks for /ws/system + /ws/logs; 15.1 & 15.4 deferred). |
+| Stage 5 | Rev 4 — Training (Epics 16–18) | +14 | 120–160 hrs | 690–885 hrs | Planned |
+| Stage 6 | Rev 5 — Research (Epics 19–20) | +8 | 75–95 hrs | 765–980 hrs | Planned. Epic 19.8–19.9 added (model inspector, Python console). |
+| **Total** | **Full platform vision** | **~95** | **765–980 hrs** | | |
 
 ---
 
@@ -690,3 +723,7 @@ Decisions made during planning, documented for reference.
 | 4.8 | Feb 21, 2026 | CTO / AI Assistant | GPU track complete. Epic 1 tasks 1.8–1.10 ✅ (NVIDIA driver 570, CUDA 12.8, Container Toolkit, GCP integration test passed). Epic 2 tasks 2.1–2.3 ✅ (PyTorch 2.10+cu128, cuDNN 9.7, vLLM 0.13.0 via NGC container 26.01-py3, TensorFlow via NGC). Hardware spec resolved: 2× RTX 5090 FE (64GB VRAM), 256GB DDR5 ECC, 1 GPU currently installed. Updated hardware refs across all docs. |
 | 4.9 | Feb 22, 2026 | CTO / AI Assistant | Epic 8 complete (Full API Gateway ✅). 24 new endpoints: audit query/export/stats (3), full config + TLS (4), text completions + embeddings + model detail (3), conversation export (1), expanded health + inference stats + services/restart/logs (5), model management — list/detail/load/unload/active/import/delete (7), WebSocket live metrics (1). 63 total endpoints, 234 tests. |
 | 5.0 | Feb 22, 2026 | CTO / AI Assistant | Epic 6 complete (Monitoring Setup ✅): 4 Ansible roles (cockpit, prometheus, grafana, prometheus-alerts), Prometheus /metrics backend endpoint, 4 Grafana dashboards, 8 alert rules. 39 new files. 64 total endpoints, 239 tests. |
+| 5.1 | Feb 22, 2026 | CTO / AI Assistant | Frontend-vs-roadmap audit additions: Epic 8.7 (frontend completions — network settings wiring, API key edit/disable, GPU details panel, runtime default model config, conversation model locking), Epic 11.5–11.7 (user data controls — export, purge, chat archiving), Epic 19.8–19.9 (model inspector, Python console). Updated Stage 3 effort (230–290 hrs) and Stage 6 effort (75–95 hrs). Disabled file attachment button until RAG (Epic 12) ships. |
+| 5.2 | Feb 22, 2026 | CTO / AI Assistant | Epic 11 complete (Support & Diagnostics ✅). 7 new admin endpoints: support bundle (gzip tarball), backup/restore with optional Fernet encryption (PBKDF2), factory reset, data export, data purge, chat archiving. Added `archived` column to Conversation model. Frontend DataSettings wired to real API (export/archive/purge), AdvancedSettings gains support bundle/backup/factory reset section. 52 new integration tests, 365 total. |
+| 5.3 | Feb 22, 2026 | CTO / AI Assistant | Epic 15 partial (WebSocket Endpoints). Backend: `/ws/logs` admin-only endpoint (journalctl streaming, platform fallback), `_validate_ws_token()` refactored to return scope info. Frontend: reusable `useWebSocket<T>` hook with auto-reconnect + exponential backoff, `useSystemMetricsWs` wires `/ws/system` into InsightsPage (live CPU/RAM/disk cards, connection indicator) + GpuDetailsPanel (WS data replaces 10s polling), `useLiveLogsWs` wires `/ws/logs` into SystemLogsTab (Live toggle, 500-entry FIFO buffer, auto-scroll). Tasks 15.1 (WS inference) and 15.4 (WS updates) deferred. 368 backend tests, 8 WS tests. |
+| 5.4 | Feb 22, 2026 | CTO / AI Assistant | Epic 14 backend complete (LDAP/SSO Integration ✅). Dual-auth middleware: API keys (`vault_sk_*`) and JWT tokens (`eyJ*`) coexist, differentiated by prefix. New services: JwtService (HS256, configurable expiry), LdapService (ldap3 — test, authenticate, search, groups; AD + OpenLDAP via configurable filters), LdapSyncService (full sync, role resolution from group mappings, deactivate removed users). 13 new endpoints: auth login/me/ldap-enabled, LDAP config get/put/test, manual sync, group mapping CRUD (4), setup SSO configure/skip. DB schema: User gains password_hash/ldap_dn/auth_source, ApiKey gains user_id FK, new LdapGroupMapping table. Local admin fallback with bcrypt. JIT provisioning on first LDAP login. 52 new tests (420 total). Frontend login page + LDAP settings deferred to 14.6. Alembic deferred to 14.7. |
