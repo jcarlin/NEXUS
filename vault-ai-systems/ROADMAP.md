@@ -1,7 +1,7 @@
 # Vault AI Systems — Master Product Roadmap
 
-**Version:** 5.1
-**Date:** February 21, 2026
+**Version:** 5.0
+**Date:** February 22, 2026
 **Status:** Active
 **Supersedes:** Product Blueprint v3.0 (October 23, 2025)
 
@@ -328,32 +328,32 @@ Move wizard backend into the API gateway for consistency.
 
 **Epic 8 Subtotal: ~115 hours**
 
-## Epic 9: Quarantine Pipeline (Stages 1–3) ✅
+## Epic 9: Quarantine Pipeline (Stages 1–3)
 
 File integrity, malware scanning, and content sanitization for everything entering the system.
 
-| Task | Description | Effort | Status |
-|------|-------------|--------|--------|
-| 9.1 | Quarantine directory structure: isolated staging area, filesystem permissions | 2 hrs | ✅ |
-| 9.2 | File type verification: magic byte checking, MIME validation (python-magic) | 4 hrs | ✅ |
-| 9.3 | File structure validation: per-format deep validation (PDF, DOCX, JSON, JSONL, safetensors) | 6 hrs | ✅ |
-| 9.4 | Size/count limits: configurable max file size, batch limits, storage alerts | 2 hrs | ✅ |
-| 9.5 | Archive bomb detection: compression ratio checks, nested archive limits | 3 hrs | ✅ |
-| 9.6 | ClamAV installation: offline config, pre-loaded signatures, systemd service | 3 hrs | (Ansible — separate infra task) |
-| 9.7 | ClamAV scanning integration: Python service, result parsing, status mapping | 4 hrs | ✅ |
-| 9.8 | YARA rule engine: custom rules for AI-specific threats | 6 hrs | ✅ |
-| 9.9 | Hash blacklist: SHA-256 known-bad file database | 2 hrs | ✅ |
-| 9.10 | Signature update mechanism: extract from USB update bundles, GPG verify | 4 hrs | ✅ |
-| 9.11 | Signature staleness monitoring: age tracking, dashboard widget | 2 hrs | ✅ |
-| 9.12 | PDF sanitization: strip JS/executables, rebuild clean (pikepdf) | 6 hrs | ✅ |
-| 9.13 | Office document sanitization: strip macros/ActiveX/OLE (python-docx, openpyxl) | 6 hrs | ✅ |
-| 9.14 | Image re-encoding: strip steganography via Pillow re-encode | 3 hrs | ✅ |
-| 9.15 | Metadata scrubbing: EXIF, author info, XMP across all formats | 3 hrs | ✅ |
-| 9.16 | Pipeline orchestrator: async job runner sequencing files through stages | 6 hrs | ✅ |
-| 9.17 | Quarantine API endpoints (9 endpoints) | 6 hrs | ✅ |
-| 9.18 | Quarantine hold workflow: admin review UI integration | 4 hrs | ✅ |
-| 9.19 | Integration with upload flows: all file paths funnel through quarantine | 4 hrs | ✅ |
-| 9.20 | Integration testing with known-bad files (EICAR, macro DOCX, etc.) | 6 hrs | ✅ (71 new tests) |
+| Task | Description | Effort |
+|------|-------------|--------|
+| 9.1 | Quarantine directory structure: isolated staging area, filesystem permissions | 2 hrs |
+| 9.2 | File type verification: magic byte checking, MIME validation (python-magic) | 4 hrs |
+| 9.3 | File structure validation: per-format deep validation (PDF, DOCX, JSON, JSONL, safetensors) | 6 hrs |
+| 9.4 | Size/count limits: configurable max file size, batch limits, storage alerts | 2 hrs |
+| 9.5 | Archive bomb detection: compression ratio checks, nested archive limits | 3 hrs |
+| 9.6 | ClamAV installation: offline config, pre-loaded signatures, systemd service | 3 hrs |
+| 9.7 | ClamAV scanning integration: Python service, result parsing, status mapping | 4 hrs |
+| 9.8 | YARA rule engine: custom rules for AI-specific threats | 6 hrs |
+| 9.9 | Hash blacklist: SHA-256 known-bad file database | 2 hrs |
+| 9.10 | Signature update mechanism: extract from USB update bundles, GPG verify | 4 hrs |
+| 9.11 | Signature staleness monitoring: age tracking, dashboard widget | 2 hrs |
+| 9.12 | PDF sanitization: strip JS/executables, rebuild clean (pikepdf/dangerzone) | 6 hrs |
+| 9.13 | Office document sanitization: strip macros/ActiveX/OLE (python-docx, openpyxl) | 6 hrs |
+| 9.14 | Image re-encoding: strip steganography via Pillow re-encode | 3 hrs |
+| 9.15 | Metadata scrubbing: EXIF, author info, XMP across all formats | 3 hrs |
+| 9.16 | Pipeline orchestrator: async job runner sequencing files through stages | 6 hrs |
+| 9.17 | Quarantine API endpoints (9 endpoints) | 6 hrs |
+| 9.18 | Quarantine hold workflow: admin review UI integration | 4 hrs |
+| 9.19 | Integration with upload flows: all file paths funnel through quarantine | 4 hrs |
+| 9.20 | Integration testing with known-bad files (EICAR, macro DOCX, etc.) | 6 hrs |
 
 **Epic 9 Subtotal: ~75 hours**
 
@@ -623,7 +623,7 @@ These are real customer needs we've identified but haven't committed to a stage.
 |-------|-------------|-----------|--------|------------|--------|
 | Stage 1 | Foundation (Epics 1–2) | 0 | 60–75 hrs | 60–75 hrs | Epic 1 ✅, Epic 2.1–2.3 ✅ (GPU stack validated on GCP) |
 | Stage 2 | Rev 1 — Pilot Product (Epics 3–7) | 3 + CLI + 29 frontend API + 7 setup | 120–160 hrs | 180–235 hrs | API ✅, UI ✅, Rev 2 API ✅, frontend wired ✅, first-boot wizard ✅, model type/status ✅, onboarding agent ✅, admin scope enforcement ✅, Epic 6 ✅ (monitoring) |
-| Stage 3 | Rev 2 — Enterprise (Epics 8–11) | ~57 (partially done via Rev 2) | 200–260 hrs | 380–495 hrs | Epic 8 ✅ (64 endpoints, 239 tests), Epic 9 ✅ (quarantine pipeline: 9 endpoints, 71 tests, 310 total). Epics 10–11 remaining (updates, support). |
+| Stage 3 | Rev 2 — Enterprise (Epics 8–11) | ~57 (partially done via Rev 2) | 200–260 hrs | 380–495 hrs | Epic 8 ✅ (64 endpoints, 239 tests). Epics 9–11 remaining (quarantine, updates, support). |
 | Stage 4 | Rev 3 — Data Platform (Epics 12–15) | +27 | 160–200 hrs | 540–695 hrs | Planned |
 | Stage 5 | Rev 4 — Training (Epics 16–18) | +14 | 120–160 hrs | 660–855 hrs | Planned |
 | Stage 6 | Rev 5 — Research (Epics 19–20) | +8 | 60–80 hrs | 720–935 hrs | Planned |
@@ -690,6 +690,3 @@ Decisions made during planning, documented for reference.
 | 4.8 | Feb 21, 2026 | CTO / AI Assistant | GPU track complete. Epic 1 tasks 1.8–1.10 ✅ (NVIDIA driver 570, CUDA 12.8, Container Toolkit, GCP integration test passed). Epic 2 tasks 2.1–2.3 ✅ (PyTorch 2.10+cu128, cuDNN 9.7, vLLM 0.13.0 via NGC container 26.01-py3, TensorFlow via NGC). Hardware spec resolved: 2× RTX 5090 FE (64GB VRAM), 256GB DDR5 ECC, 1 GPU currently installed. Updated hardware refs across all docs. |
 | 4.9 | Feb 22, 2026 | CTO / AI Assistant | Epic 8 complete (Full API Gateway ✅). 24 new endpoints: audit query/export/stats (3), full config + TLS (4), text completions + embeddings + model detail (3), conversation export (1), expanded health + inference stats + services/restart/logs (5), model management — list/detail/load/unload/active/import/delete (7), WebSocket live metrics (1). 63 total endpoints, 234 tests. |
 | 5.0 | Feb 22, 2026 | CTO / AI Assistant | Epic 6 complete (Monitoring Setup ✅): 4 Ansible roles (cockpit, prometheus, grafana, prometheus-alerts), Prometheus /metrics backend endpoint, 4 Grafana dashboards, 8 alert rules. 39 new files. 64 total endpoints, 239 tests. |
-| 5.1 | Feb 21, 2026 | CTO / AI Assistant | Frontend wired to all Epic 8 endpoints: model management (load/unload/import/delete), audit log viewer with system logs tab, conversation export (JSON/Markdown), live inference stats, TLS certificate management, service management with restart, security settings tab. 9 new files, 9 modified files. New route: /audit. `npm run build` clean. |
-| 5.2 | Feb 21, 2026 | CTO / AI Assistant | App deployment infrastructure complete: 5 new Ansible roles (nodejs, uv, vault-backend, vault-frontend, caddy), new app.yml playbook, systemd services for backend + frontend, Caddy reverse proxy with self-signed TLS. Three-playbook deployment: site.yml → gpu.yml → app.yml. Backend venv separated from PyTorch. Added python-multipart dependency. |
-| 5.3 | Feb 21, 2026 | CTO / AI Assistant | Epic 9 complete (Quarantine Pipeline ✅). 3-stage security pipeline: file integrity (magic bytes, format validation, archive bombs), malware scanning (ClamAV client, YARA engine, hash blacklist), content sanitization (PDF JS stripping, Office macro removal, image re-encoding, metadata scrub). 9 new API endpoints, pipeline orchestrator with async background processing, signature management. 73 total endpoints, 310 tests. |
