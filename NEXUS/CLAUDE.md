@@ -959,7 +959,44 @@ Phase 3: Fully Local
 
 ---
 
-## 13. Critical Implementation Notes
+## 13. Future Enhancements (Backlog)
+
+Items under consideration for future milestones. Prioritized by expected impact on investigative query quality.
+
+### 13.1 GraphRAG Community Intelligence (High Priority)
+
+Based on [GraphRAG feasibility research](docs/research/graphrag-feasibility-report.md). NEXUS already has entity extraction, Neo4j KG, and hybrid retrieval — these items add the **community detection and global query** capabilities that the current pipeline lacks.
+
+| # | Enhancement | Description | Effort | Dependencies |
+|---|---|---|---|---|
+| G1 | **Neo4j GDS community detection** | Run Leiden algorithm on existing entity graph to identify clusters of related entities (e.g., "all people connected to Company X through financial transactions"). No re-indexing needed — operates on entities NEXUS already extracts. | 1 week | `graphdatascience` Python package; verify Neo4j Community Edition GDS support (may need NetworkX fallback) |
+| G2 | **LazyGraphRAG query-time summarization** | When a global/corpus-wide query arrives, identify relevant communities via entity matching, extract claims from community members on-the-fly, rank by relevance. Defers LLM cost to query time (99.9% cheaper than full GraphRAG indexing). | 1–2 weeks | G1 (community detection) |
+| G3 | **Global query classifier** | Add a "global" query type to the existing LangGraph `classify` node. Routes corpus-wide questions (e.g., "What are the major patterns across all documents?") to community summaries instead of vector retrieval. | 3 days | G2 (query-time summarization) |
+| G4 | **Pre-computed community summaries** | For stable/large communities, pre-generate and cache LLM summaries at 2–3 hierarchy levels. Store as nodes in Neo4j linked to constituent entities. Faster than query-time summarization for frequently-queried communities. | 1–2 weeks | G1; optional optimization after G2–G3 prove value |
+| G5 | **Community-aware entity explorer** | Surface community structure in the frontend entity browser. Show cluster membership, inter-community bridges, and hierarchical navigation. | 1 week | G1; frontend work |
+| G6 | **Incremental community updates** | Re-run community detection on affected subgraphs when new documents are ingested. Invalidate stale community summaries. | 1 week | G1, G4 |
+
+**Key decision:** Do NOT replace the existing ingestion pipeline with Microsoft's `graphrag` library. NEXUS's pipeline is more capable (multi-modal, streaming, entity resolution, cost-efficient GLiNER). Instead, cherry-pick community detection + query-time summarization concepts.
+
+### 13.2 Production Hardening (M5b — Existing)
+
+| # | Enhancement | Description | Effort |
+|---|---|---|---|
+| P1 | Cross-encoder reranker | `bge-reranker-v2-m3` via TEI for retrieval reranking | 1 week |
+| P2 | Flower monitoring | Production Celery monitoring dashboard | 2 days |
+| P3 | Full test coverage | Expand from 159 to comprehensive coverage | 2 weeks |
+
+### 13.3 Other Considerations
+
+| # | Enhancement | Description | Priority |
+|---|---|---|---|
+| O1 | BenchmarkQED evaluation | Adopt Microsoft's automated RAG benchmarking suite to measure retrieval quality regressions | Medium |
+| O2 | Personalized PageRank for graph traversal | Research shows graph operators matter more than graph structure — PPR may improve graph retrieval quality | Medium |
+| O3 | `neo4j-graphrag` Python package evaluation | Neo4j's official GraphRAG package offers text-to-Cypher, graph traversal retrievers — could complement `graph_service.py` | Low |
+
+---
+
+## 14. Critical Implementation Notes
 
 ### DO
 - **Stream everything**: SSE for queries, WebSocket for job progress
