@@ -2,6 +2,7 @@
 
 import time
 import uuid
+from uuid import UUID
 
 import structlog
 from fastapi import FastAPI, Request, Response
@@ -140,7 +141,12 @@ class AuditLoggingMiddleware(BaseHTTPMiddleware):
             user_email = user.get("email") if user else None
 
             matter_header = request.headers.get("X-Matter-ID")
-            matter_id = matter_header if matter_header else None
+            matter_id: UUID | None = None
+            if matter_header:
+                try:
+                    matter_id = UUID(matter_header)
+                except ValueError:
+                    pass  # Invalid UUID in header — store as NULL
 
             request_id = getattr(request.state, "request_id", None)
 

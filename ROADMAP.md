@@ -18,7 +18,7 @@
 | M5 | Production Hardening (Core) | Done | 16 | — | M4 |
 | M5b | Tests + Reranker | Done | 27 | — | — |
 | M6 | Auth + Multi-Tenancy | Done | 15 | — | — |
-| M7 | Audit + Privilege | Done | 17 | — | M6 |
+| M7 | Audit + Privilege | Done | 20 | — | M6 |
 | M8 | Retrieval Infrastructure | Done | 8 | — | — (parallel w/ M7) |
 | M9 | Evaluation Framework | TODO | — | 1.5 weeks | M8 |
 | M10 | Agentic Query Pipeline | TODO | — | 2.5 weeks | M8, M9 |
@@ -30,7 +30,7 @@
 | M16 | Visual Embeddings | TODO | — | 2 weeks | M15 (conditional) |
 | M17 | Full Local Deployment | TODO | — | 2 weeks | All |
 
-**Total tests: 227 passing** (as of M7 completion)
+**Total tests: 230 passing** (as of M7 completion)
 
 **Estimated total: ~23 weeks solo, ~18 weeks with 2 developers** (M7+M8 parallel, M12 parallel with M10-11)
 
@@ -136,7 +136,7 @@
   - Skips noisy endpoints (`/health`, `/docs`, `/openapi.json`, `/redoc`)
   - Own DB session (fire-and-forget), never breaks the request
 - `GET /admin/audit-log` — paginated, filterable audit log viewer (admin-only)
-- 17 tests: privilege CRUD (4), privilege filtering (3), Qdrant must_not filter (1), Neo4j Cypher filter (1), audit middleware (5), admin endpoint (2), helper functions (1)
+- 20 tests: privilege CRUD (4), privilege filtering (3), Qdrant must_not filter (1), Neo4j Cypher filter (1), graph traversal privilege (3), audit middleware (5), admin endpoint (2), helper functions (1)
 
 ### M8: Retrieval Infrastructure
 - Sparse embeddings via FastEmbed BM42 (`app/ingestion/sparse_embedder.py`) — feature-flagged via `ENABLE_SPARSE_EMBEDDINGS`

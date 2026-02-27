@@ -92,7 +92,9 @@ async def test_retrieve_graph_extracts_entities_and_fetches_connections(
 ):
     results = await retriever.retrieve_graph("Who is Jeffrey Epstein?")
     mock_entity_extractor.extract.assert_called_once()
-    mock_graph_service.get_entity_connections.assert_called_once_with("Jeffrey Epstein", limit=20)
+    mock_graph_service.get_entity_connections.assert_called_once_with(
+        "Jeffrey Epstein", limit=20, exclude_privilege_statuses=None,
+    )
     assert len(results) == 1
     assert results[0]["source"] == "Jeffrey Epstein"
 
@@ -147,6 +149,26 @@ async def test_retrieve_text_with_sparse_embedder(mock_embedder, mock_vector_sto
     mock_sparse.embed_single.assert_called_once_with("Who is Epstein?")
     call_kwargs = mock_vector_store.query_text.call_args.kwargs
     assert call_kwargs["sparse_vector"] == ([0, 5, 10], [0.9, 0.4, 0.1])
+
+
+async def test_retrieve_graph_passes_exclude_privilege(retriever, mock_graph_service):
+    """retrieve_graph must forward exclude_privilege_statuses to get_entity_connections."""
+    await retriever.retrieve_graph(
+        "Who is Jeffrey Epstein?",
+        exclude_privilege_statuses=["privileged", "work_product"],
+    )
+    call_kwargs = mock_graph_service.get_entity_connections.call_args.kwargs
+    assert call_kwargs["exclude_privilege_statuses"] == ["privileged", "work_product"]
+
+
+async def test_retrieve_all_forwards_privilege_to_graph(retriever, mock_graph_service):
+    """retrieve_all must pass exclude_privilege_statuses through to retrieve_graph."""
+    await retriever.retrieve_all(
+        "test query",
+        exclude_privilege_statuses=["privileged"],
+    )
+    call_kwargs = mock_graph_service.get_entity_connections.call_args.kwargs
+    assert call_kwargs["exclude_privilege_statuses"] == ["privileged"]
 
 
 async def test_retrieve_text_without_sparse_embedder_skips_sparse(retriever, mock_vector_store):

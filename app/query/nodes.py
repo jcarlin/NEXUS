@@ -261,7 +261,8 @@ def create_nodes(
                 continue
             try:
                 connections = await graph_service.get_entity_connections(
-                    entity_name, limit=10
+                    entity_name, limit=10,
+                    exclude_privilege_statuses=state.get("_exclude_privilege") or None,
                 )
                 new_graph.extend(connections)
             except Exception:

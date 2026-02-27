@@ -315,6 +315,25 @@ async def test_rerank_falls_back_when_reranker_none():
     assert result["source_documents"][1]["relevance_score"] == 0.3
 
 
+async def test_graph_lookup_passes_exclude_privilege():
+    """graph_lookup must forward _exclude_privilege state to get_entity_connections."""
+    nodes, _, _, graph_service, _ = _make_nodes()
+    state = _base_state(
+        fused_context=[
+            {"chunk_text": "John Doe was seen at the meeting.", "score": 0.9,
+             "source_file": "doc.pdf", "page_number": 1, "id": "p1"},
+        ],
+        graph_results=[],
+        _exclude_privilege=["privileged", "work_product"],
+    )
+    await nodes["graph_lookup"](state)
+
+    # get_entity_connections should have been called with the exclusion list
+    graph_service.get_entity_connections.assert_called_once()
+    call_kwargs = graph_service.get_entity_connections.call_args.kwargs
+    assert call_kwargs["exclude_privilege_statuses"] == ["privileged", "work_product"]
+
+
 async def test_rerank_uses_score_sorting_when_disabled():
     """When enable_reranker=False, no reranker call, score-based sorting only."""
     nodes, *_ = _make_nodes()

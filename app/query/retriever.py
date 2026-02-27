@@ -83,6 +83,7 @@ class HybridRetriever:
         query: str,
         *,
         limit: int = 20,
+        exclude_privilege_statuses: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """Extract entities from *query*, then fetch their Neo4j neighbourhoods.
 
@@ -96,7 +97,10 @@ class HybridRetriever:
 
         # Fetch connections for each detected entity in parallel
         tasks = [
-            self._graph_service.get_entity_connections(ent.text, limit=limit)
+            self._graph_service.get_entity_connections(
+                ent.text, limit=limit,
+                exclude_privilege_statuses=exclude_privilege_statuses,
+            )
             for ent in entities
         ]
         all_connections = await asyncio.gather(*tasks, return_exceptions=True)
@@ -146,7 +150,7 @@ class HybridRetriever:
         """
         text_results, graph_results = await asyncio.gather(
             self.retrieve_text(query, limit=text_limit, filters=filters, exclude_privilege_statuses=exclude_privilege_statuses),
-            self.retrieve_graph(query, limit=graph_limit),
+            self.retrieve_graph(query, limit=graph_limit, exclude_privilege_statuses=exclude_privilege_statuses),
         )
         return text_results, graph_results
 
