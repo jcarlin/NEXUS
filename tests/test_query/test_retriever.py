@@ -27,7 +27,7 @@ class FakeEntity:
 @pytest.fixture()
 def mock_embedder():
     embedder = AsyncMock()
-    embedder.embed_single.return_value = [0.1] * 1024
+    embedder.embed_query.return_value = [0.1] * 1024
     return embedder
 
 
@@ -76,7 +76,7 @@ def retriever(mock_embedder, mock_vector_store, mock_entity_extractor, mock_grap
 
 async def test_retrieve_text_embeds_query_and_searches(retriever, mock_embedder, mock_vector_store):
     results = await retriever.retrieve_text("Who is Epstein?")
-    mock_embedder.embed_single.assert_called_once_with("Who is Epstein?")
+    mock_embedder.embed_query.assert_called_once_with("Who is Epstein?")
     mock_vector_store.query_text.assert_called_once()
     assert len(results) == 2
 

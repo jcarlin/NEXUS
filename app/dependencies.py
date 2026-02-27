@@ -21,7 +21,11 @@ from app.common.vector_store import VectorStoreClient
 from app.config import Settings
 from app.entities.extractor import EntityExtractor
 from app.entities.graph_service import GraphService
-from app.ingestion.embedder import TextEmbedder
+from app.common.embedder import (
+    EmbeddingProvider,
+    LocalEmbeddingProvider,
+    OpenAIEmbeddingProvider,
+)
 from app.ingestion.sparse_embedder import SparseEmbedder
 from app.query.reranker import Reranker
 from app.query.retriever import HybridRetriever
@@ -167,20 +171,26 @@ def get_llm() -> LLMClient:
 # Text Embedder
 # ---------------------------------------------------------------------------
 
-_embedder: TextEmbedder | None = None
+_embedder: EmbeddingProvider | None = None
 
 
-def get_embedder() -> TextEmbedder:
-    """Return the ``TextEmbedder`` singleton."""
+def get_embedder() -> EmbeddingProvider:
+    """Return the embedding provider singleton based on ``EMBEDDING_PROVIDER`` config."""
     global _embedder
     if _embedder is None:
         settings = get_settings()
-        _embedder = TextEmbedder(
-            api_key=settings.openai_api_key,
-            model=settings.embedding_model,
-            dimensions=settings.embedding_dimensions,
-            batch_size=settings.embedding_batch_size,
-        )
+        if settings.embedding_provider == "local":
+            _embedder = LocalEmbeddingProvider(
+                model_name=settings.local_embedding_model,
+                dimensions=settings.embedding_dimensions,
+            )
+        else:
+            _embedder = OpenAIEmbeddingProvider(
+                api_key=settings.openai_api_key,
+                model=settings.embedding_model,
+                dimensions=settings.embedding_dimensions,
+                batch_size=settings.embedding_batch_size,
+            )
     return _embedder
 
 
