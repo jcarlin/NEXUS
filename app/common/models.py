@@ -25,6 +25,15 @@ class JobStatus(StrEnum):
     FAILED = "failed"
 
 
+class PrivilegeStatus(StrEnum):
+    """Attorney-client privilege classification for documents."""
+
+    PRIVILEGED = "privileged"
+    WORK_PRODUCT = "work_product"
+    CONFIDENTIAL = "confidential"
+    NOT_PRIVILEGED = "not_privileged"
+
+
 class DocumentType(StrEnum):
     """Broad document categories for filtering and analytics."""
 

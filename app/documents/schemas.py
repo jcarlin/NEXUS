@@ -5,7 +5,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from app.common.models import PaginatedResponse
+from app.common.models import PaginatedResponse, PrivilegeStatus
 
 
 class DocumentResponse(BaseModel):
@@ -19,6 +19,7 @@ class DocumentResponse(BaseModel):
     entity_count: int = 0
     created_at: datetime
     minio_path: str
+    privilege_status: str | None = None
 
 
 class DocumentDetail(DocumentResponse):
@@ -29,6 +30,8 @@ class DocumentDetail(DocumentResponse):
     content_hash: str | None = None
     job_id: UUID | None = None
     updated_at: datetime | None = None
+    privilege_reviewed_by: UUID | None = None
+    privilege_reviewed_at: datetime | None = None
 
 
 class DocumentListResponse(PaginatedResponse[DocumentResponse]):
@@ -41,3 +44,18 @@ class DocumentPreview(BaseModel):
     doc_id: UUID
     page: int = Field(default=1, ge=1)
     image_url: str
+
+
+class PrivilegeUpdateRequest(BaseModel):
+    """Request body for updating a document's privilege status."""
+
+    privilege_status: PrivilegeStatus
+
+
+class PrivilegeUpdateResponse(BaseModel):
+    """Response after updating privilege status."""
+
+    id: UUID
+    privilege_status: str
+    privilege_reviewed_by: UUID
+    privilege_reviewed_at: datetime

@@ -9,7 +9,7 @@ import structlog
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from app.common.middleware import RequestIDMiddleware, RequestLoggingMiddleware, setup_cors
+from app.common.middleware import AuditLoggingMiddleware, RequestIDMiddleware, RequestLoggingMiddleware, setup_cors
 from app.config import Settings
 from app.dependencies import (
     close_all,
@@ -135,9 +135,11 @@ def create_app() -> FastAPI:
     # --- Middleware (order matters: outermost first) ---
     setup_cors(application)
     application.add_middleware(RequestLoggingMiddleware)
+    application.add_middleware(AuditLoggingMiddleware)
     application.add_middleware(RequestIDMiddleware)
 
     # --- Domain routers (lazy imports to keep this module lightweight) ---
+    from app.auth.admin_router import router as admin_router
     from app.auth.router import router as auth_router
     from app.ingestion.router import router as ingestion_router
     from app.query.router import router as query_router
@@ -149,6 +151,7 @@ def create_app() -> FastAPI:
     application.include_router(query_router, prefix="/api/v1")
     application.include_router(entities_router, prefix="/api/v1")
     application.include_router(documents_router, prefix="/api/v1")
+    application.include_router(admin_router, prefix="/api/v1")
 
     # --- Health endpoint ---
     @application.get("/api/v1/health", tags=["system"])

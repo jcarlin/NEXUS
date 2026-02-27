@@ -1,4 +1,4 @@
-"""Auth domain Pydantic schemas: roles, tokens, users, matters."""
+"""Auth domain Pydantic schemas: roles, tokens, users, matters, audit."""
 
 from __future__ import annotations
 
@@ -7,6 +7,8 @@ from enum import StrEnum
 from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field
+
+from app.common.models import PaginatedResponse
 
 
 class Role(StrEnum):
@@ -54,3 +56,25 @@ class MatterResponse(BaseModel):
     description: str | None = None
     is_active: bool
     created_at: datetime
+
+
+class AuditLogEntry(BaseModel):
+    """Single row from the audit_log table."""
+
+    id: UUID
+    user_id: UUID | None = None
+    user_email: str | None = None
+    action: str
+    resource: str
+    resource_type: str | None = None
+    matter_id: UUID | None = None
+    ip_address: str
+    user_agent: str | None = None
+    status_code: int
+    duration_ms: float | None = None
+    request_id: str | None = None
+    created_at: datetime
+
+
+class AuditLogListResponse(PaginatedResponse[AuditLogEntry]):
+    """Paginated list of audit log entries."""

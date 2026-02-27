@@ -17,7 +17,11 @@ logger = structlog.get_logger(__name__)
 # Column list shared across queries
 _COLUMNS = """id, job_id, filename, document_type, page_count, chunk_count,
               entity_count, minio_path, file_size_bytes, content_hash,
-              matter_id, metadata_, created_at, updated_at"""
+              matter_id, metadata_, created_at, updated_at,
+              privilege_status, privilege_reviewed_by, privilege_reviewed_at"""
+
+# Privilege statuses that non-privileged users (paralegal, reviewer) cannot see
+_RESTRICTED_STATUSES = ("privileged", "work_product")
 
 
 def _row_to_dict(row) -> dict:
@@ -41,6 +45,7 @@ class DocumentService:
         offset: int = 0,
         limit: int = 50,
         matter_id: UUID | None = None,
+        user_role: str | None = None,
     ) -> tuple[list[dict], int]:
         """Return ``(items, total_count)`` with offset/limit pagination.
 
@@ -48,6 +53,7 @@ class DocumentService:
         - *document_type*: exact match on the ``document_type`` column.
         - *filename_search*: case-insensitive substring match via ``ILIKE``.
         - *matter_id*: scope to a specific case matter.
+        - *user_role*: when not admin/attorney, filters out privileged/work_product docs.
 
         Documents are ordered by ``created_at DESC`` (newest first).
         """
@@ -65,6 +71,12 @@ class DocumentService:
         if filename_search is not None:
             where_clauses.append("filename ILIKE :filename_search")
             params["filename_search"] = f"%{filename_search}%"
+
+        # Privilege filtering: non-admin/attorney users cannot see restricted docs
+        if user_role not in ("admin", "attorney"):
+            where_clauses.append(
+                "(privilege_status IS NULL OR privilege_status NOT IN ('privileged', 'work_product'))"
+            )
 
         where_sql = ""
         if where_clauses:
@@ -105,13 +117,21 @@ class DocumentService:
         db: AsyncSession,
         doc_id: UUID,
         matter_id: UUID | None = None,
+        user_role: str | None = None,
     ) -> dict | None:
-        """Fetch a single document by id.  Returns ``None`` if not found."""
+        """Fetch a single document by id.  Returns ``None`` if not found.
+
+        When *user_role* is not admin/attorney, documents with privilege_status
+        of ``privileged`` or ``work_product`` are treated as not found.
+        """
         where = "WHERE id = :doc_id"
         params: dict = {"doc_id": doc_id}
         if matter_id is not None:
             where += " AND matter_id = :matter_id"
             params["matter_id"] = matter_id
+
+        if user_role not in ("admin", "attorney"):
+            where += " AND (privilege_status IS NULL OR privilege_status NOT IN ('privileged', 'work_product'))"
 
         result = await db.execute(
             text(f"SELECT {_COLUMNS} FROM documents {where}"),
@@ -137,6 +157,55 @@ class DocumentService:
         if row is None:
             return None
         return _row_to_dict(row)
+
+    # ------------------------------------------------------------------
+    # PRIVILEGE UPDATE
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    async def update_privilege(
+        db: AsyncSession,
+        doc_id: UUID,
+        privilege_status: str,
+        reviewed_by: UUID,
+    ) -> dict | None:
+        """Update a document's privilege status.
+
+        Returns the updated row dict or ``None`` if the document was not found.
+        """
+        result = await db.execute(
+            text("""
+                UPDATE documents
+                SET privilege_status = :privilege_status,
+                    privilege_reviewed_by = :reviewed_by,
+                    privilege_reviewed_at = now(),
+                    updated_at = now()
+                WHERE id = :doc_id
+                RETURNING privilege_reviewed_at
+            """),
+            {
+                "doc_id": doc_id,
+                "privilege_status": privilege_status,
+                "reviewed_by": reviewed_by,
+            },
+        )
+        row = result.first()
+        if row is None:
+            return None
+
+        reviewed_at = row._mapping["privilege_reviewed_at"]
+        logger.info(
+            "document.privilege_updated",
+            doc_id=str(doc_id),
+            privilege_status=privilege_status,
+            reviewed_by=str(reviewed_by),
+        )
+        return {
+            "id": doc_id,
+            "privilege_status": privilege_status,
+            "privilege_reviewed_by": reviewed_by,
+            "privilege_reviewed_at": reviewed_at,
+        }
 
     # ------------------------------------------------------------------
     # DELETE

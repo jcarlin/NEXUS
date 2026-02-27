@@ -138,12 +138,14 @@ def create_nodes(
         """Run hybrid retrieval (text + graph) in parallel."""
         query = state.get("rewritten_query") or state["original_query"]
         filters = state.get("_filters")
+        exclude_privilege = state.get("_exclude_privilege", [])
 
         text_results, graph_results = await retriever.retrieve_all(
             query,
             text_limit=20,
             graph_limit=20,
             filters=filters,
+            exclude_privilege_statuses=exclude_privilege or None,
         )
 
         logger.debug(

@@ -1,4 +1,4 @@
-"""ASGI middleware: request IDs, structured logging, CORS configuration."""
+"""ASGI middleware: request IDs, structured logging, audit logging, CORS configuration."""
 
 import time
 import uuid
@@ -79,3 +79,98 @@ def setup_cors(app: FastAPI) -> None:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+
+# ---------------------------------------------------------------------------
+# Audit-logging middleware
+# ---------------------------------------------------------------------------
+
+# Endpoints to skip for audit logging (noisy / non-business)
+_AUDIT_SKIP_PREFIXES = ("/api/v1/health", "/docs", "/openapi.json", "/redoc")
+
+
+def _derive_resource_type(path: str) -> str | None:
+    """Extract the resource type from a URL path like ``/api/v1/documents/...``."""
+    parts = path.split("/")
+    # /api/v1/{resource_type}/...  → parts = ["", "api", "v1", resource_type, ...]
+    if len(parts) >= 4 and parts[1] == "api" and parts[2] == "v1":
+        return parts[3]
+    return None
+
+
+def _get_client_ip(request: Request) -> str:
+    """Return the client IP, preferring X-Forwarded-For when present."""
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    if request.client:
+        return request.client.host
+    return "unknown"
+
+
+class AuditLoggingMiddleware(BaseHTTPMiddleware):
+    """Records every API call to the ``audit_log`` table in PostgreSQL."""
+
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        # Skip noisy endpoints
+        path = request.url.path
+        if any(path.startswith(prefix) for prefix in _AUDIT_SKIP_PREFIXES):
+            return await call_next(request)
+
+        start = time.perf_counter()
+        response: Response | None = None
+        try:
+            response = await call_next(request)
+            return response
+        finally:
+            elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
+            status_code = response.status_code if response else 500
+            await self._write_audit_log(request, status_code, elapsed_ms)
+
+    @staticmethod
+    async def _write_audit_log(request: Request, status_code: int, duration_ms: float) -> None:
+        """Insert an audit log row in its own session (fire-and-forget)."""
+        try:
+            from sqlalchemy import text as sa_text
+            from app.dependencies import _get_session_factory
+
+            # Extract user info if available
+            user = getattr(request.state, "user", None)
+            user_id = user["id"] if user else None
+            user_email = user.get("email") if user else None
+
+            matter_header = request.headers.get("X-Matter-ID")
+            matter_id = matter_header if matter_header else None
+
+            request_id = getattr(request.state, "request_id", None)
+
+            factory = _get_session_factory()
+            async with factory() as session:
+                await session.execute(
+                    sa_text("""
+                        INSERT INTO audit_log
+                            (user_id, user_email, action, resource, resource_type,
+                             matter_id, ip_address, user_agent, status_code,
+                             duration_ms, request_id)
+                        VALUES
+                            (:user_id, :user_email, :action, :resource, :resource_type,
+                             :matter_id, :ip_address, :user_agent, :status_code,
+                             :duration_ms, :request_id)
+                    """),
+                    {
+                        "user_id": user_id,
+                        "user_email": user_email,
+                        "action": request.method,
+                        "resource": str(request.url.path),
+                        "resource_type": _derive_resource_type(str(request.url.path)),
+                        "matter_id": matter_id,
+                        "ip_address": _get_client_ip(request),
+                        "user_agent": request.headers.get("User-Agent"),
+                        "status_code": status_code,
+                        "duration_ms": duration_ms,
+                        "request_id": request_id,
+                    },
+                )
+                await session.commit()
+        except Exception:
+            logger.warning("audit_log.write_failed", exc_info=True)

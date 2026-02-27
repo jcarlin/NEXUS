@@ -63,6 +63,7 @@ class InvestigationState(TypedDict, total=False):
     _relevance: str
     _reformulated: bool
     _filters: dict[str, Any] | None
+    _exclude_privilege: list[str]
 
 
 def _route_relevance(state: dict) -> str:

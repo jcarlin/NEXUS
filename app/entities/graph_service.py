@@ -281,19 +281,62 @@ class GraphService:
             logger.error("graph.document_entities.failed", doc_id=doc_id)
             raise
 
+    async def update_document_privilege(
+        self,
+        doc_id: str,
+        privilege_status: str,
+    ) -> None:
+        """Set the ``privilege_status`` property on a ``:Document`` node."""
+        query = """
+        MATCH (d:Document {id: $doc_id})
+        SET d.privilege_status = $privilege_status
+        """
+        try:
+            await self._run_write(
+                query,
+                {"doc_id": doc_id, "privilege_status": privilege_status},
+            )
+            logger.info(
+                "graph.document.privilege_updated",
+                doc_id=doc_id,
+                privilege_status=privilege_status,
+            )
+        except Exception:
+            logger.error(
+                "graph.document.privilege_update_failed",
+                doc_id=doc_id,
+            )
+            raise
+
     async def get_entity_connections(
         self,
         entity_name: str,
         *,
         limit: int = 50,
+        exclude_privilege_statuses: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """Return the graph neighbourhood for a named entity.
 
         Traverses one hop outward and returns connected entities together
         with the relationship type and any context stored on the edge.
+
+        When *exclude_privilege_statuses* is provided, connections to
+        Document nodes with those privilege statuses are filtered out.
         """
-        query = """
-        MATCH (e:Entity {name: $name})-[r]-(connected)
+        where_clause = ""
+        params: dict[str, Any] = {"name": entity_name, "limit": limit}
+
+        if exclude_privilege_statuses:
+            where_clause = (
+                "WHERE (NOT connected:Document "
+                "OR connected.privilege_status IS NULL "
+                "OR NOT connected.privilege_status IN $excluded_statuses)"
+            )
+            params["excluded_statuses"] = exclude_privilege_statuses
+
+        query = f"""
+        MATCH (e:Entity {{name: $name}})-[r]-(connected)
+        {where_clause}
         RETURN e.name           AS source,
                type(r)          AS relationship_type,
                connected.name   AS target,
@@ -302,10 +345,7 @@ class GraphService:
         LIMIT $limit
         """
         try:
-            records = await self._run_query(
-                query,
-                {"name": entity_name, "limit": limit},
-            )
+            records = await self._run_query(query, params)
             logger.debug(
                 "graph.entity_connections.fetched",
                 entity=entity_name,

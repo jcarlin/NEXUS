@@ -18,7 +18,7 @@
 | M5 | Production Hardening (Core) | Done | 16 | — | M4 |
 | M5b | Tests + Reranker | Done | 27 | — | — |
 | M6 | Auth + Multi-Tenancy | Done | 15 | — | — |
-| M7 | Audit + Privilege | TODO | — | 1.5 weeks | M6 |
+| M7 | Audit + Privilege | Done | 17 | — | M6 |
 | M8 | Retrieval Infrastructure | Done | 8 | — | — (parallel w/ M7) |
 | M9 | Evaluation Framework | TODO | — | 1.5 weeks | M8 |
 | M10 | Agentic Query Pipeline | TODO | — | 2.5 weeks | M8, M9 |
@@ -30,7 +30,7 @@
 | M16 | Visual Embeddings | TODO | — | 2 weeks | M15 (conditional) |
 | M17 | Full Local Deployment | TODO | — | 2 weeks | All |
 
-**Total tests: 210 passing** (as of M8 completion)
+**Total tests: 227 passing** (as of M7 completion)
 
 **Estimated total: ~23 weeks solo, ~18 weeks with 2 developers** (M7+M8 parallel, M12 parallel with M10-11)
 
@@ -123,6 +123,21 @@
 - Auth dependency overrides in test fixtures (existing 187 tests unaffected)
 - 15 tests: auth service (4), auth router (4), auth middleware (7)
 
+### M7: Audit + Privilege
+- Alembic migration 003: `audit_log` table, `privilege_status` + `privilege_reviewed_by` + `privilege_reviewed_at` on `documents`
+- `PrivilegeStatus` enum: `privileged`, `work_product`, `confidential`, `not_privileged`
+- `PATCH /documents/{id}/privilege` — tag privilege status (admin/attorney/paralegal; reviewer excluded)
+- Privilege enforcement at all 3 data layers:
+  - SQL: `WHERE privilege_status NOT IN (...)` for non-admin/attorney roles
+  - Qdrant: `must_not` filter on `privilege_status` payload field
+  - Neo4j: Cypher `WHERE` clause filtering Document nodes by privilege status
+- Privilege filtering threaded through query pipeline (router → LangGraph state → retriever → vector store)
+- `AuditLoggingMiddleware`: every API call → `audit_log` table (user, action, resource, matter, IP, user_agent, status, duration)
+  - Skips noisy endpoints (`/health`, `/docs`, `/openapi.json`, `/redoc`)
+  - Own DB session (fire-and-forget), never breaks the request
+- `GET /admin/audit-log` — paginated, filterable audit log viewer (admin-only)
+- 17 tests: privilege CRUD (4), privilege filtering (3), Qdrant must_not filter (1), Neo4j Cypher filter (1), audit middleware (5), admin endpoint (2), helper functions (1)
+
 ### M8: Retrieval Infrastructure
 - Sparse embeddings via FastEmbed BM42 (`app/ingestion/sparse_embedder.py`) — feature-flagged via `ENABLE_SPARSE_EMBEDDINGS`
 - Lazy-loaded `SparseTextEmbedding` (follows Reranker/EntityExtractor pattern)
@@ -137,22 +152,6 @@
 ---
 
 ## Next Up
-
-### M7: Audit + Privilege (1.5 weeks)
-*Legal compliance requirements — non-negotiable for enterprise. Depends on M6.*
-
-- [ ] Alembic migration: `audit_log` table, `privilege_status` + `privilege_reviewed_by` on `documents`
-- [ ] Audit logging middleware: every API call → audit_log (user, action, resource, matter, IP, user_agent, response status)
-- [ ] `PATCH /documents/{id}/privilege` — tag as privileged/work_product/confidential/not_privileged
-- [ ] Privilege filtering in Qdrant retrieval (filter on `privilege_status` payload)
-- [ ] Privilege filtering in SQL queries (WHERE clause)
-- [ ] Privilege filtering in Neo4j Cypher queries
-- [ ] `GET /admin/audit-log` — filterable audit log viewer (admin-only)
-- [ ] ~10 tests (privilege enforcement at all 3 data layers, audit logging)
-
-**Key files:** `app/common/middleware.py` (audit), `app/documents/router.py` (privilege endpoints), Alembic migration, `app/query/retriever.py` (privilege filters)
-
----
 
 ### M9: Evaluation Framework (1.5 weeks)
 *Measure before you optimize. Must come before retrieval tuning and agentic query.*

@@ -178,6 +178,7 @@ async def query(
         "_relevance": "",
         "_reformulated": False,
         "_filters": {**(request.filters or {}), "matter_id": str(matter_id)},
+        "_exclude_privilege": ["privileged", "work_product"] if current_user["role"] not in ("admin", "attorney") else [],
     }
 
     # Run the graph with checkpointer config
@@ -265,6 +266,7 @@ async def query_stream(
         "_relevance": "",
         "_reformulated": False,
         "_filters": {**(request.filters or {}), "matter_id": str(matter_id)},
+        "_exclude_privilege": ["privileged", "work_product"] if current_user["role"] not in ("admin", "attorney") else [],
     }
 
     config = {"configurable": {"thread_id": thread_id}}

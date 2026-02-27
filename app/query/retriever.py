@@ -58,6 +58,7 @@ class HybridRetriever:
         *,
         limit: int = 20,
         filters: dict[str, Any] | None = None,
+        exclude_privilege_statuses: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """Embed *query* and run dense (+ optional sparse RRF) search against ``nexus_text``."""
         vector = await self._embedder.embed_single(query)
@@ -68,6 +69,7 @@ class HybridRetriever:
 
         results = await self._vector_store.query_text(
             vector, limit=limit, filters=filters, sparse_vector=sparse_vector,
+            exclude_privilege_statuses=exclude_privilege_statuses,
         )
         logger.debug("retriever.text", query_len=len(query), results=len(results), sparse=sparse_vector is not None)
         return results
@@ -135,6 +137,7 @@ class HybridRetriever:
         text_limit: int = 20,
         graph_limit: int = 20,
         filters: dict[str, Any] | None = None,
+        exclude_privilege_statuses: list[str] | None = None,
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         """Run text and graph retrieval in parallel.
 
@@ -142,7 +145,7 @@ class HybridRetriever:
             Tuple of (text_results, graph_results).
         """
         text_results, graph_results = await asyncio.gather(
-            self.retrieve_text(query, limit=text_limit, filters=filters),
+            self.retrieve_text(query, limit=text_limit, filters=filters, exclude_privilege_statuses=exclude_privilege_statuses),
             self.retrieve_graph(query, limit=graph_limit),
         )
         return text_results, graph_results

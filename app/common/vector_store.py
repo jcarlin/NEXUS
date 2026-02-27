@@ -145,21 +145,59 @@ class VectorStoreClient:
         self.client.upsert(collection_name=TEXT_COLLECTION, points=points)
         logger.info("qdrant.upsert", collection=TEXT_COLLECTION, count=len(points))
 
+    async def update_privilege_status(
+        self,
+        doc_id: str,
+        privilege_status: str,
+    ) -> None:
+        """Batch-update ``privilege_status`` payload on all points for a document.
+
+        Uses ``set_payload`` with a filter on the ``doc_id`` field to update
+        all chunks belonging to the document in one call.
+        """
+        self.client.set_payload(
+            collection_name=TEXT_COLLECTION,
+            payload={"privilege_status": privilege_status},
+            points=Filter(
+                must=[FieldCondition(key="doc_id", match=MatchValue(value=doc_id))]
+            ),
+        )
+        logger.info(
+            "qdrant.privilege_updated",
+            doc_id=doc_id,
+            privilege_status=privilege_status,
+        )
+
     async def query_text(
         self,
         vector: list[float],
         limit: int = 15,
         filters: dict[str, Any] | None = None,
         sparse_vector: tuple[list[int], list[float]] | None = None,
+        exclude_privilege_statuses: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """Search ``nexus_text``. Uses RRF fusion when sparse vector is provided."""
-        qdrant_filter: Filter | None = None
+        must_conditions: list[FieldCondition] = []
+        must_not_conditions: list[FieldCondition] = []
+
         if filters:
-            conditions = [
+            must_conditions = [
                 FieldCondition(key=k, match=MatchValue(value=v))
                 for k, v in filters.items()
             ]
-            qdrant_filter = Filter(must=conditions)
+
+        if exclude_privilege_statuses:
+            for status in exclude_privilege_statuses:
+                must_not_conditions.append(
+                    FieldCondition(key="privilege_status", match=MatchValue(value=status))
+                )
+
+        qdrant_filter: Filter | None = None
+        if must_conditions or must_not_conditions:
+            qdrant_filter = Filter(
+                must=must_conditions or None,
+                must_not=must_not_conditions or None,
+            )
 
         if sparse_vector is not None and self._enable_sparse:
             # Native RRF fusion via prefetch
