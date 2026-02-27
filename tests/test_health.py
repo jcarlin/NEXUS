@@ -57,11 +57,14 @@ async def test_ingestion_stub_returns_not_implemented(client: AsyncClient) -> No
 
 
 @pytest.mark.asyncio
-async def test_query_stub_returns_not_implemented(client: AsyncClient) -> None:
-    """Stub query endpoint should return a not-implemented marker."""
-    response = await client.post("/api/v1/query")
-    # 422 (no body) or 200 with stub response
-    assert response.status_code in (200, 422)
+async def test_query_requires_body(client: AsyncClient) -> None:
+    """Query endpoint should return 422 when no body is provided."""
+    from unittest.mock import AsyncMock, patch
+
+    # Patch checkpointer to avoid Postgres connection during dependency resolution
+    with patch("app.dependencies.get_checkpointer", return_value=AsyncMock()):
+        response = await client.post("/api/v1/query")
+    assert response.status_code == 422
 
 
 @pytest.mark.asyncio

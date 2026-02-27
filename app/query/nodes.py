@@ -159,15 +159,36 @@ def create_nodes(
     # --- rerank ---
 
     async def rerank(state: dict) -> dict:
-        """Score-based filtering: take top 10 text results, build source docs."""
-        text_results = state.get("text_results", [])
+        """Rerank text results via cross-encoder (if enabled) or score sort."""
+        from app.config import Settings
+        from app.dependencies import get_reranker, get_settings
 
-        # Sort by Qdrant score descending, take top 10
-        sorted_results = sorted(
-            text_results,
-            key=lambda r: r.get("score", 0),
-            reverse=True,
-        )[:10]
+        text_results = state.get("text_results", [])
+        settings = get_settings()
+
+        # Try cross-encoder reranking when feature flag is on
+        sorted_results = None
+        if settings.enable_reranker:
+            try:
+                reranker = get_reranker()
+                if reranker is not None:
+                    query = state.get("rewritten_query") or state.get("original_query", "")
+                    sorted_results = reranker.rerank(
+                        query,
+                        text_results,
+                        top_n=settings.reranker_top_n,
+                    )
+                    logger.debug("node.rerank.cross_encoder", count=len(sorted_results))
+            except Exception:
+                logger.warning("node.rerank.cross_encoder_failed", exc_info=True)
+
+        # Fallback: score-based sorting
+        if sorted_results is None:
+            sorted_results = sorted(
+                text_results,
+                key=lambda r: r.get("score", 0),
+                reverse=True,
+            )[:settings.reranker_top_n]
 
         # Build fused_context for synthesis
         fused_context = sorted_results

@@ -35,6 +35,9 @@ dependencies = [
     "gliner>=0.2.24",
     "spacy>=3.8",
 
+    # Reranker
+    "sentence-transformers>=3.0",
+
     # Infrastructure
     "celery[redis]>=5.5",
     "boto3",

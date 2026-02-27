@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -258,3 +258,82 @@ async def test_generate_follow_ups_returns_list():
     assert "follow_up_questions" in result
     assert isinstance(result["follow_up_questions"], list)
     assert len(result["follow_up_questions"]) <= 3
+
+
+# ---------------------------------------------------------------------------
+# Reranker feature-flag tests
+# ---------------------------------------------------------------------------
+
+
+async def test_rerank_uses_cross_encoder_when_enabled():
+    """When enable_reranker=True and reranker available, use cross-encoder."""
+    nodes, *_ = _make_nodes()
+    results = [
+        {"id": f"p{i}", "score": 0.5, "source_file": f"doc{i}.pdf", "page_number": i, "chunk_text": f"text {i}"}
+        for i in range(5)
+    ]
+    state = _base_state(text_results=results, rewritten_query="test query")
+
+    mock_reranker = MagicMock()
+    mock_reranker.rerank.return_value = [
+        {"id": "p2", "score": 0.95, "source_file": "doc2.pdf", "page_number": 2, "chunk_text": "text 2"},
+        {"id": "p0", "score": 0.80, "source_file": "doc0.pdf", "page_number": 0, "chunk_text": "text 0"},
+    ]
+
+    mock_settings = MagicMock()
+    mock_settings.enable_reranker = True
+    mock_settings.reranker_top_n = 10
+
+    with patch("app.dependencies.get_settings", return_value=mock_settings), \
+         patch("app.dependencies.get_reranker", return_value=mock_reranker):
+        result = await nodes["rerank"](state)
+
+    mock_reranker.rerank.assert_called_once()
+    assert len(result["source_documents"]) == 2
+    assert result["source_documents"][0]["relevance_score"] == 0.95
+
+
+async def test_rerank_falls_back_when_reranker_none():
+    """Flag on but reranker returns None → fall back to score-based sorting."""
+    nodes, *_ = _make_nodes()
+    results = [
+        {"id": "p0", "score": 0.9, "source_file": "doc0.pdf", "page_number": 0, "chunk_text": "text 0"},
+        {"id": "p1", "score": 0.3, "source_file": "doc1.pdf", "page_number": 1, "chunk_text": "text 1"},
+    ]
+    state = _base_state(text_results=results)
+
+    mock_settings = MagicMock()
+    mock_settings.enable_reranker = True
+    mock_settings.reranker_top_n = 10
+
+    with patch("app.dependencies.get_settings", return_value=mock_settings), \
+         patch("app.dependencies.get_reranker", return_value=None):
+        result = await nodes["rerank"](state)
+
+    # Should use score-based sorting
+    assert result["source_documents"][0]["relevance_score"] == 0.9
+    assert result["source_documents"][1]["relevance_score"] == 0.3
+
+
+async def test_rerank_uses_score_sorting_when_disabled():
+    """When enable_reranker=False, no reranker call, score-based sorting only."""
+    nodes, *_ = _make_nodes()
+    results = [
+        {"id": "p0", "score": 0.4, "source_file": "doc0.pdf", "page_number": 0, "chunk_text": "text 0"},
+        {"id": "p1", "score": 0.8, "source_file": "doc1.pdf", "page_number": 1, "chunk_text": "text 1"},
+    ]
+    state = _base_state(text_results=results)
+
+    mock_settings = MagicMock()
+    mock_settings.enable_reranker = False
+    mock_settings.reranker_top_n = 10
+
+    with patch("app.dependencies.get_settings", return_value=mock_settings), \
+         patch("app.dependencies.get_reranker") as mock_get_reranker:
+        result = await nodes["rerank"](state)
+
+    # get_reranker should not be called when flag is off
+    mock_get_reranker.assert_not_called()
+    # Sorted by score descending
+    assert result["source_documents"][0]["relevance_score"] == 0.8
+    assert result["source_documents"][1]["relevance_score"] == 0.4

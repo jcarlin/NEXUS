@@ -22,6 +22,7 @@ from app.config import Settings
 from app.entities.extractor import EntityExtractor
 from app.entities.graph_service import GraphService
 from app.ingestion.embedder import TextEmbedder
+from app.query.reranker import Reranker
 from app.query.retriever import HybridRetriever
 
 logger = structlog.get_logger(__name__)
@@ -211,6 +212,24 @@ def get_entity_extractor() -> EntityExtractor:
         settings = get_settings()
         _entity_extractor = EntityExtractor(model_name=settings.gliner_model)
     return _entity_extractor
+
+
+# ---------------------------------------------------------------------------
+# Reranker (feature-flagged)
+# ---------------------------------------------------------------------------
+
+_reranker: Reranker | None = None
+
+
+def get_reranker() -> Reranker | None:
+    """Return the ``Reranker`` singleton, or ``None`` when disabled."""
+    global _reranker
+    settings = get_settings()
+    if not settings.enable_reranker:
+        return None
+    if _reranker is None:
+        _reranker = Reranker(model_name=settings.reranker_model)
+    return _reranker
 
 
 # ---------------------------------------------------------------------------

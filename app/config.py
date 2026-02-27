@@ -60,6 +60,8 @@ class Settings(BaseSettings):
 
     # --- Reranker ---
     enable_reranker: bool = False  # bge-reranker-v2-m3, deferred
+    reranker_model: str = "BAAI/bge-reranker-v2-m3"
+    reranker_top_n: int = 10
 
     model_config = {
         "env_file": ".env",
