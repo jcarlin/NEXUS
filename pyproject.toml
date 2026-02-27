@@ -55,6 +55,7 @@ dependencies = [
     # Auth
     "PyJWT[cryptography]",
     "passlib[bcrypt]",
+    "bcrypt<4.1",
     "email-validator",
 
     # Utilities

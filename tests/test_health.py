@@ -59,10 +59,12 @@ async def test_ingestion_stub_returns_not_implemented(client: AsyncClient) -> No
 @pytest.mark.asyncio
 async def test_query_requires_body(client: AsyncClient) -> None:
     """Query endpoint should return 422 when no body is provided."""
-    from unittest.mock import AsyncMock, patch
+    from unittest.mock import patch
+
+    from langgraph.checkpoint.memory import InMemorySaver
 
     # Patch checkpointer to avoid Postgres connection during dependency resolution
-    with patch("app.dependencies.get_checkpointer", return_value=AsyncMock()):
+    with patch("app.dependencies.get_checkpointer", return_value=InMemorySaver()):
         response = await client.post("/api/v1/query")
     assert response.status_code == 422
 
