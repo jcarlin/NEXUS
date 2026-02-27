@@ -1,0 +1,78 @@
+# docker-compose.prod.yml — Full containerized stack (extends docker-compose.yml)
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# Adds the FastAPI API server, Celery worker, and Flower monitoring.
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file: .env
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      # Override dev localhost URLs to use Docker service names
+      POSTGRES_URL: postgresql://nexus:${POSTGRES_PASSWORD}@postgres:5432/nexus
+      REDIS_URL: redis://redis:6379/0
+      QDRANT_URL: http://qdrant:6333
+      NEO4J_URI: bolt://neo4j:7687
+      MINIO_ENDPOINT: minio:9000
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/api/v1/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A workers.celery_app worker -l info -c 1 --max-tasks-per-child=100
+    env_file: .env
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      # Override dev localhost URLs to use Docker service names
+      POSTGRES_URL: postgresql://nexus:${POSTGRES_PASSWORD}@postgres:5432/nexus
+      REDIS_URL: redis://redis:6379/0
+      QDRANT_URL: http://qdrant:6333
+      NEO4J_URI: bolt://neo4j:7687
+      MINIO_ENDPOINT: minio:9000
+    restart: unless-stopped
+
+  flower:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A workers.celery_app flower --port=5555
+    ports:
+      - "5555:5555"
+    env_file: .env
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      REDIS_URL: redis://redis:6379/0
+    restart: unless-stopped

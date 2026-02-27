@@ -1,0 +1,129 @@
+"""Tests for the HybridRetriever."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
+from app.query.retriever import HybridRetriever
+
+
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class FakeEntity:
+    text: str
+    type: str
+    score: float
+    start: int
+    end: int
+
+
+@pytest.fixture()
+def mock_embedder():
+    embedder = AsyncMock()
+    embedder.embed_single.return_value = [0.1] * 1024
+    return embedder
+
+
+@pytest.fixture()
+def mock_vector_store():
+    vs = AsyncMock()
+    vs.query_text.return_value = [
+        {"id": "p1", "score": 0.9, "source_file": "doc.pdf", "page_number": 1, "chunk_text": "chunk 1"},
+        {"id": "p2", "score": 0.8, "source_file": "doc.pdf", "page_number": 2, "chunk_text": "chunk 2"},
+    ]
+    return vs
+
+
+@pytest.fixture()
+def mock_entity_extractor():
+    extractor = MagicMock()
+    extractor.extract.return_value = [
+        FakeEntity(text="Jeffrey Epstein", type="person", score=0.95, start=0, end=15),
+    ]
+    return extractor
+
+
+@pytest.fixture()
+def mock_graph_service():
+    gs = AsyncMock()
+    gs.get_entity_connections.return_value = [
+        {"source": "Jeffrey Epstein", "relationship_type": "ASSOCIATED_WITH", "target": "Ghislaine Maxwell"},
+    ]
+    return gs
+
+
+@pytest.fixture()
+def retriever(mock_embedder, mock_vector_store, mock_entity_extractor, mock_graph_service):
+    return HybridRetriever(
+        embedder=mock_embedder,
+        vector_store=mock_vector_store,
+        entity_extractor=mock_entity_extractor,
+        graph_service=mock_graph_service,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Tests
+# ---------------------------------------------------------------------------
+
+
+async def test_retrieve_text_embeds_query_and_searches(retriever, mock_embedder, mock_vector_store):
+    results = await retriever.retrieve_text("Who is Epstein?")
+    mock_embedder.embed_single.assert_called_once_with("Who is Epstein?")
+    mock_vector_store.query_text.assert_called_once()
+    assert len(results) == 2
+
+
+async def test_retrieve_text_passes_filters(retriever, mock_vector_store):
+    await retriever.retrieve_text("query", filters={"document_type": "flight_log"})
+    _, kwargs = mock_vector_store.query_text.call_args
+    assert kwargs["filters"] == {"document_type": "flight_log"}
+
+
+async def test_retrieve_graph_extracts_entities_and_fetches_connections(
+    retriever, mock_entity_extractor, mock_graph_service
+):
+    results = await retriever.retrieve_graph("Who is Jeffrey Epstein?")
+    mock_entity_extractor.extract.assert_called_once()
+    mock_graph_service.get_entity_connections.assert_called_once_with("Jeffrey Epstein", limit=20)
+    assert len(results) == 1
+    assert results[0]["source"] == "Jeffrey Epstein"
+
+
+async def test_retrieve_graph_returns_empty_when_no_entities(retriever, mock_entity_extractor):
+    mock_entity_extractor.extract.return_value = []
+    results = await retriever.retrieve_graph("what happened?")
+    assert results == []
+
+
+async def test_retrieve_graph_deduplicates_connections(retriever, mock_entity_extractor, mock_graph_service):
+    mock_entity_extractor.extract.return_value = [
+        FakeEntity(text="Epstein", type="person", score=0.9, start=0, end=7),
+        FakeEntity(text="Maxwell", type="person", score=0.8, start=10, end=17),
+    ]
+    # Both entities return the same connection
+    mock_graph_service.get_entity_connections.return_value = [
+        {"source": "Epstein", "relationship_type": "ASSOCIATED_WITH", "target": "Maxwell"},
+    ]
+    results = await retriever.retrieve_graph("Epstein and Maxwell")
+    # Should be deduplicated to 1
+    assert len(results) == 1
+
+
+async def test_retrieve_all_runs_in_parallel(retriever):
+    text_results, graph_results = await retriever.retrieve_all("test query")
+    assert len(text_results) == 2
+    assert len(graph_results) == 1
+
+
+async def test_extract_query_entities_uses_higher_threshold(retriever, mock_entity_extractor):
+    retriever.extract_query_entities("Who is Epstein?")
+    _, kwargs = mock_entity_extractor.extract.call_args
+    assert kwargs["threshold"] == 0.5

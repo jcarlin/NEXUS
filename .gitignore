@@ -1,0 +1,80 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+*.egg
+dist/
+build/
+sdist/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# uv
+uv.lock
+
+# Testing / Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker persistent volumes
+docker-volumes/
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# Alembic
+migrations/versions/__pycache__/
+
+# ML models (downloaded at runtime)
+models/
+*.onnx
+*.bin
+*.safetensors
+*.gguf
+*.pt
+*.pth
+
+# PaddleOCR cache
+~/.paddleocr/
+
+# MinIO local data
+minio_data/
+
+# Frontend
+frontend/node_modules/
+frontend/.next/
+frontend/dist/
+frontend/build/
+
+# Logs
+*.log
+logs/
+
+# Jupyter (if used for exploration)
+.ipynb_checkpoints/
+.hypothesis/
