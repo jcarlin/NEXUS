@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     embedding_provider: str = "openai"  # openai | local
     embedding_model: str = "text-embedding-3-large"
     embedding_dimensions: int = 1024
+    local_embedding_model: str = "BAAI/bge-large-en-v1.5"
     enable_visual_embeddings: bool = False  # ColQwen2.5 deferred
 
     # --- PostgreSQL ---

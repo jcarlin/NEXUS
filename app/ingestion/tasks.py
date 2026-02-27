@@ -263,15 +263,22 @@ def _upload_to_minio(settings, key: str, data: bytes, content_type: str = "image
 # ---------------------------------------------------------------------------
 
 async def _embed_chunks(settings, chunk_texts: list[str]) -> list[list[float]]:
-    """Embed chunk texts using the TextEmbedder (async OpenAI API)."""
-    from app.ingestion.embedder import TextEmbedder
+    """Embed chunk texts using the configured embedding provider."""
+    from app.common.embedder import LocalEmbeddingProvider, OpenAIEmbeddingProvider
 
-    embedder = TextEmbedder(
-        api_key=settings.openai_api_key,
-        model=settings.embedding_model,
-        dimensions=settings.embedding_dimensions,
-    )
-    return await embedder.embed_texts(chunk_texts)
+    if settings.embedding_provider == "local":
+        provider = LocalEmbeddingProvider(
+            model_name=settings.local_embedding_model,
+            dimensions=settings.embedding_dimensions,
+        )
+    else:
+        provider = OpenAIEmbeddingProvider(
+            api_key=settings.openai_api_key,
+            model=settings.embedding_model,
+            dimensions=settings.embedding_dimensions,
+            batch_size=settings.embedding_batch_size,
+        )
+    return await provider.embed_texts(chunk_texts)
 
 
 async def _index_to_neo4j(

@@ -13,10 +13,10 @@ from typing import TYPE_CHECKING, Any
 import structlog
 
 if TYPE_CHECKING:
+    from app.common.embedder import EmbeddingProvider
     from app.common.vector_store import VectorStoreClient
     from app.entities.extractor import EntityExtractor, ExtractedEntity
     from app.entities.graph_service import GraphService
-    from app.ingestion.embedder import TextEmbedder
     from app.ingestion.sparse_embedder import SparseEmbedder
 
 logger = structlog.get_logger(__name__)
@@ -36,7 +36,7 @@ class HybridRetriever:
 
     def __init__(
         self,
-        embedder: TextEmbedder,
+        embedder: EmbeddingProvider,
         vector_store: VectorStoreClient,
         entity_extractor: EntityExtractor,
         graph_service: GraphService,
@@ -61,7 +61,7 @@ class HybridRetriever:
         exclude_privilege_statuses: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """Embed *query* and run dense (+ optional sparse RRF) search against ``nexus_text``."""
-        vector = await self._embedder.embed_single(query)
+        vector = await self._embedder.embed_query(query)
 
         sparse_vector: tuple[list[int], list[float]] | None = None
         if self._sparse_embedder is not None:

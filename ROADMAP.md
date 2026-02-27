@@ -2,7 +2,7 @@
 
 > Multimodal RAG Investigation Platform for Legal Document Intelligence
 
-**Last updated:** 2026-02-26
+**Last updated:** 2026-02-27
 
 ---
 
@@ -22,7 +22,7 @@
 | M7 | Audit + Privilege | — | Done | 20 | — | M6 |
 | M7b | SOC 2 Audit Readiness | — | TODO | — | 1 week | M7 |
 | M8 | Retrieval Infrastructure | — | Done | 8 | — | — (parallel w/ M7) |
-| M8b | Embedding Abstraction Layer | — | TODO | — | 0.5 weeks | M8 |
+| M8b | Embedding Abstraction Layer | — | Done | 11 | — | M8 |
 | M9 | Evaluation Framework | — | TODO | — | 2 weeks | M8 |
 | M9b | Case Intelligence Layer | ⚡ Case Setup | TODO | — | 2 weeks | M9 |
 | M10 | Agentic Query Pipeline | ⚡ Orchestrator, Citation Verifier | TODO | — | 2.5 weeks | M8, M9, M9b |
@@ -37,7 +37,7 @@
 | M16 | Visual Embeddings | — | TODO | — | 2 weeks | M15 (conditional) |
 | M17 | Full Local Deployment | — | TODO | — | 2 weeks | All |
 
-**Total tests: 230 passing** (as of M7 completion)
+**Total tests: 241 passing** (as of M8b completion)
 
 **6 autonomous LangGraph agents** across the pipeline (Case Setup, Investigation Orchestrator, Citation Verifier, Hot Doc Scanner, Contextual Completeness, Entity Resolution)
 
@@ -199,6 +199,15 @@ M16 (Visual Embeddings) — conditional on M9 eval showing text retrieval gaps
 - `scripts/reembed.py` migration script: scroll → re-embed → recreate collection with named vectors
 - 8 tests: sparse embedder (2), vector store (4), retriever sparse (2)
 
+### M8b: Embedding Abstraction Layer
+- `app/common/embedder.py`: `EmbeddingProvider` protocol with `embed_texts()` and `embed_query()` methods
+- `OpenAIEmbeddingProvider`: existing OpenAI behavior behind the protocol, with audit logging (SHA-256 hash of input data on every external API call)
+- `LocalEmbeddingProvider`: BGE-large-en-v1.5 via sentence-transformers (CPU/GPU/MPS auto-detect, lazy-loaded, `asyncio.to_thread()` for async compat)
+- Config: `EMBEDDING_PROVIDER=openai|local`, `LOCAL_EMBEDDING_MODEL` setting
+- All embedding calls routed through abstraction: DI factory (`get_embedder()`), ingestion pipeline (`_embed_chunks`), query pipeline (`HybridRetriever`)
+- `app/ingestion/embedder.py` → backward-compatible re-export alias
+- 11 tests: OpenAI provider (4), local provider (4), DI factory (2), protocol check (1)
+
 ---
 
 ## Next Up
@@ -233,22 +242,6 @@ M16 (Visual Embeddings) — conditional on M9 eval showing text retrieval gaps
 **Key files:** `app/common/middleware.py`, `app/common/audit.py`, Alembic migration
 
 ---
-
-### M8b: Embedding Abstraction Layer (0.5 weeks)
-*Post-Heppner (SDNY, Feb 2026), documents processed through consumer-grade AI may lose attorney-client privilege. Must decouple from OpenAI before processing privileged documents. Depends on M8.*
-
-- [ ] `app/common/embedder.py` abstraction: `EmbeddingProvider` protocol with `embed_texts()` and `embed_query()` methods
-- [ ] OpenAI provider (existing behavior, now behind interface)
-- [ ] Local provider stub: BGE-large-en-v1.5 via sentence-transformers (CPU/GPU auto-detect, follows Reranker pattern)
-- [ ] Config: `EMBEDDING_PROVIDER=openai|local`, `LOCAL_EMBEDDING_MODEL` setting
-- [ ] All embedding calls routed through abstraction (ingestion pipeline + query pipeline)
-- [ ] Audit logging: every external embedding API call logged with data hash (for privilege compliance verification)
-- [ ] Optional: legal domain embeddings support (voyage-law-2 or similar fine-tuned model) as third provider
-- [ ] ~5 tests
-
-**Key files:** `app/common/embedder.py`, `app/ingestion/embedder.py` (refactor), `app/query/retriever.py` (refactor)
-
-**Note:** Harvey AI uses custom legal embeddings (voyage-law-2-harvey) as a key differentiator. Even if we start with OpenAI/BGE, the abstraction layer enables swapping in legal-domain embeddings later without pipeline changes.
 
 ---
 

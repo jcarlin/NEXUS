@@ -10,8 +10,8 @@ from app.ingestion.embedder import TextEmbedder
 
 
 @pytest.mark.asyncio
-async def test_embed_single_returns_vector():
-    """embed_single should return a list of floats."""
+async def test_embed_query_returns_vector():
+    """embed_query should return a list of floats."""
     embedder = TextEmbedder(api_key="test-key", dimensions=1024)
 
     mock_data = MagicMock()
@@ -23,7 +23,7 @@ async def test_embed_single_returns_vector():
 
     with patch.object(embedder._client.embeddings, "create", new_callable=AsyncMock) as mock_create:
         mock_create.return_value = mock_response
-        result = await embedder.embed_single("test text")
+        result = await embedder.embed_query("test text")
 
     assert len(result) == 1024
     assert all(isinstance(x, float) for x in result)
