@@ -105,6 +105,7 @@ def _create_document_record(
     minio_path: str,
     file_size: int,
     content_hash: str,
+    matter_id: str | None = None,
 ) -> str:
     """Insert a row into the ``documents`` table and return its id."""
     doc_id = str(uuid.uuid4())
@@ -115,11 +116,11 @@ def _create_document_record(
                 INSERT INTO documents
                     (id, job_id, filename, document_type, page_count, chunk_count,
                      entity_count, minio_path, file_size_bytes, content_hash,
-                     metadata_, created_at, updated_at)
+                     matter_id, metadata_, created_at, updated_at)
                 VALUES
                     (:id, :job_id, :filename, :doc_type, :page_count, :chunk_count,
                      :entity_count, :minio_path, :file_size, :content_hash,
-                     :metadata_, now(), now())
+                     :matter_id, :metadata_, now(), now())
                 """
             ),
             {
@@ -133,6 +134,7 @@ def _create_document_record(
                 "minio_path": minio_path,
                 "file_size": file_size,
                 "content_hash": content_hash,
+                "matter_id": matter_id,
                 "metadata_": "{}",
             },
         )
@@ -147,6 +149,7 @@ def _create_child_job(
     parent_job_id: str,
     filename: str,
     minio_path: str,
+    matter_id: str | None = None,
 ) -> str:
     """Create a child job row linked to a parent (for ZIP / email attachments)."""
     child_id = str(uuid.uuid4())
@@ -155,15 +158,16 @@ def _create_child_job(
             text(
                 """
                 INSERT INTO jobs (id, filename, status, stage, progress, error,
-                                  parent_job_id, metadata_, created_at, updated_at)
+                                  parent_job_id, matter_id, metadata_, created_at, updated_at)
                 VALUES (:id, :filename, 'pending', 'uploading', '{}', NULL,
-                        :parent_job_id, :metadata_, now(), now())
+                        :parent_job_id, :matter_id, :metadata_, now(), now())
                 """
             ),
             {
                 "id": child_id,
                 "filename": filename,
                 "parent_job_id": parent_job_id,
+                "matter_id": matter_id,
                 "metadata_": json.dumps({"minio_path": minio_path}),
             },
         )
@@ -176,6 +180,19 @@ def _create_child_job(
         filename=filename,
     )
     return child_id
+
+
+def _get_job_matter_id(engine, job_id: str) -> str | None:
+    """Read the matter_id from a job record (set at ingest time)."""
+    with engine.connect() as conn:
+        result = conn.execute(
+            text("SELECT matter_id FROM jobs WHERE id = :job_id"),
+            {"job_id": job_id},
+        )
+        row = result.first()
+        if row is None or row.matter_id is None:
+            return None
+        return str(row.matter_id)
 
 
 def _is_job_cancelled(engine, job_id: str) -> bool:
@@ -266,6 +283,7 @@ async def _index_to_neo4j(
     minio_path: str,
     entities: list[dict],
     chunk_data: list[dict],
+    matter_id: str | None = None,
 ) -> None:
     """Create Document, Entity, and Chunk nodes in Neo4j."""
     from neo4j import AsyncGraphDatabase
@@ -286,6 +304,7 @@ async def _index_to_neo4j(
             doc_type=doc_type,
             page_count=page_count,
             minio_path=minio_path,
+            matter_id=matter_id,
         )
 
         # Bulk-index entities
@@ -381,6 +400,7 @@ def process_zip(self, job_id: str, minio_path: str) -> dict:
 
     settings = Settings()
     engine = _get_sync_engine()
+    zip_matter_id = _get_job_matter_id(engine, job_id)
 
     try:
         _update_stage(engine, job_id, "parsing", "uploading")
@@ -443,7 +463,7 @@ def process_zip(self, job_id: str, minio_path: str) -> dict:
 
                     # Create child job
                     child_id = _create_child_job(
-                        engine, job_id, basename, child_minio_path
+                        engine, job_id, basename, child_minio_path, matter_id=zip_matter_id
                     )
                     child_jobs.append(child_id)
 
@@ -534,6 +554,9 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
 
     logger.info("task.start", job_id=job_id, minio_path=minio_path, filename=filename)
 
+    # Read matter_id from the job record (set by the API router at ingest time)
+    matter_id = _get_job_matter_id(engine, job_id)
+
     # Detect ZIP files — delegate to process_zip
     ext = Path(filename).suffix.lower()
     if ext == ".zip":
@@ -588,7 +611,7 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
                     att["data"],
                     content_type=att.get("content_type", "application/octet-stream"),
                 )
-                child_id = _create_child_job(engine, job_id, att_filename, att_minio_path)
+                child_id = _create_child_job(engine, job_id, att_filename, att_minio_path, matter_id=matter_id)
                 process_document.delay(child_id, att_minio_path)
                 logger.info(
                     "task.email_attachment_dispatched",
@@ -644,7 +667,7 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
             return {"job_id": job_id, "status": "cancelled"}
 
         # ---------------------------------------------------------------
-        # Stage 3: EMBEDDING — OpenAI text-embedding-3-large (1024d)
+        # Stage 3: EMBEDDING — dense (OpenAI) + optional sparse (BM42)
         # ---------------------------------------------------------------
         chunk_texts = [c.text for c in chunks]
 
@@ -652,6 +675,15 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
             embeddings = asyncio.run(_embed_chunks(settings, chunk_texts))
         else:
             embeddings = []
+
+        # Sparse embeddings (feature-flagged)
+        sparse_embeddings: list[tuple[list[int], list[float]]] = []
+        if settings.enable_sparse_embeddings and chunk_texts:
+            from app.ingestion.sparse_embedder import SparseEmbedder
+
+            sparse_emb = SparseEmbedder(model_name=settings.sparse_embedding_model)
+            sparse_embeddings = sparse_emb.embed_texts(chunk_texts)
+            logger.info("task.sparse_embedded", job_id=job_id, count=len(sparse_embeddings))
 
         logger.info("task.embedded", job_id=job_id, embedding_count=len(embeddings))
 
@@ -719,7 +751,7 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
         # ---------------------------------------------------------------
         # 5a. Qdrant upsert
         from qdrant_client import QdrantClient
-        from qdrant_client.models import PointStruct
+        from qdrant_client.models import PointStruct, SparseVector
 
         qdrant = QdrantClient(url=settings.qdrant_url)
 
@@ -728,20 +760,33 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
 
         for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
             point_id = str(uuid.uuid4())
+            payload = {
+                "source_file": filename,
+                "page_number": chunk.metadata.get("page_number", 1),
+                "section_heading": chunk.metadata.get("section_heading", ""),
+                "chunk_text": chunk.text,
+                "chunk_index": chunk.chunk_index,
+                "doc_id": job_id,
+                "token_count": chunk.token_count,
+            }
+            if matter_id is not None:
+                payload["matter_id"] = matter_id
+
+            # Build vector: named format when sparse enabled, unnamed otherwise
+            if sparse_embeddings:
+                indices, values = sparse_embeddings[i]
+                vector = {
+                    "dense": embedding,
+                    "sparse": SparseVector(indices=indices, values=values),
+                }
+            elif settings.enable_sparse_embeddings:
+                # Sparse enabled but no sparse vectors (e.g. empty text)
+                vector = {"dense": embedding}
+            else:
+                vector = embedding
+
             points.append(
-                PointStruct(
-                    id=point_id,
-                    vector=embedding,
-                    payload={
-                        "source_file": filename,
-                        "page_number": chunk.metadata.get("page_number", 1),
-                        "section_heading": chunk.metadata.get("section_heading", ""),
-                        "chunk_text": chunk.text,
-                        "chunk_index": chunk.chunk_index,
-                        "doc_id": job_id,
-                        "token_count": chunk.token_count,
-                    },
-                )
+                PointStruct(id=point_id, vector=vector, payload=payload)
             )
             chunk_data_for_neo4j.append({
                 "chunk_id": point_id,
@@ -767,6 +812,7 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
                 minio_path=minio_path,
                 entities=all_entities,
                 chunk_data=chunk_data_for_neo4j,
+                matter_id=matter_id,
             )
         )
 
@@ -786,6 +832,7 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
             minio_path=minio_path,
             file_size=file_size,
             content_hash=content_hash,
+            matter_id=matter_id,
         )
 
         _update_stage(

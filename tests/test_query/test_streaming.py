@@ -49,8 +49,18 @@ async def stream_client():
         test_app.dependency_overrides[dependencies.get_db] = mock_get_db
         test_app.dependency_overrides[dependencies.get_query_graph] = lambda: mock_graph
 
+        from uuid import UUID
+
+        from app.auth.middleware import get_current_user, get_matter_id
         from app.common.rate_limit import rate_limit_queries
+
         test_app.dependency_overrides[rate_limit_queries] = lambda: None
+        test_app.dependency_overrides[get_current_user] = lambda: {
+            "id": UUID("00000000-0000-0000-0000-000000000099"),
+            "email": "test@nexus.dev", "full_name": "Test", "role": "admin",
+            "is_active": True, "created_at": "2025-01-01T00:00:00+00:00",
+        }
+        test_app.dependency_overrides[get_matter_id] = lambda: UUID("00000000-0000-0000-0000-000000000001")
 
         transport = ASGITransport(app=test_app)
         async with AsyncClient(transport=transport, base_url="http://testserver") as ac:

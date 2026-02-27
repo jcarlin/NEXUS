@@ -138,11 +138,13 @@ def create_app() -> FastAPI:
     application.add_middleware(RequestIDMiddleware)
 
     # --- Domain routers (lazy imports to keep this module lightweight) ---
+    from app.auth.router import router as auth_router
     from app.ingestion.router import router as ingestion_router
     from app.query.router import router as query_router
     from app.entities.router import router as entities_router
     from app.documents.router import router as documents_router
 
+    application.include_router(auth_router, prefix="/api/v1")
     application.include_router(ingestion_router, prefix="/api/v1")
     application.include_router(query_router, prefix="/api/v1")
     application.include_router(entities_router, prefix="/api/v1")

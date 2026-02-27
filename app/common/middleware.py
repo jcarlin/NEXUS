@@ -62,10 +62,19 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 # ---------------------------------------------------------------------------
 
 def setup_cors(app: FastAPI) -> None:
-    """Add permissive CORS for local development."""
+    """Configure CORS from ``Settings.cors_allowed_origins`` (comma-separated)."""
+    from app.dependencies import get_settings
+
+    settings = get_settings()
+    origins_str = settings.cors_allowed_origins.strip()
+    if origins_str:
+        origins = [o.strip() for o in origins_str.split(",") if o.strip()]
+    else:
+        origins = ["http://localhost:5173", "http://localhost:3000"]
+
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

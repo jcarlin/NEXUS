@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from app.entities.extractor import EntityExtractor, ExtractedEntity
     from app.entities.graph_service import GraphService
     from app.ingestion.embedder import TextEmbedder
+    from app.ingestion.sparse_embedder import SparseEmbedder
 
 logger = structlog.get_logger(__name__)
 
@@ -39,11 +40,13 @@ class HybridRetriever:
         vector_store: VectorStoreClient,
         entity_extractor: EntityExtractor,
         graph_service: GraphService,
+        sparse_embedder: SparseEmbedder | None = None,
     ) -> None:
         self._embedder = embedder
         self._vector_store = vector_store
         self._entity_extractor = entity_extractor
         self._graph_service = graph_service
+        self._sparse_embedder = sparse_embedder
 
     # ------------------------------------------------------------------
     # Text retrieval (Qdrant dense search)
@@ -56,10 +59,17 @@ class HybridRetriever:
         limit: int = 20,
         filters: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
-        """Embed *query* and run dense similarity search against ``nexus_text``."""
+        """Embed *query* and run dense (+ optional sparse RRF) search against ``nexus_text``."""
         vector = await self._embedder.embed_single(query)
-        results = await self._vector_store.query_text(vector, limit=limit, filters=filters)
-        logger.debug("retriever.text", query_len=len(query), results=len(results))
+
+        sparse_vector: tuple[list[int], list[float]] | None = None
+        if self._sparse_embedder is not None:
+            sparse_vector = self._sparse_embedder.embed_single(query)
+
+        results = await self._vector_store.query_text(
+            vector, limit=limit, filters=filters, sparse_vector=sparse_vector,
+        )
+        logger.debug("retriever.text", query_len=len(query), results=len(results), sparse=sparse_vector is not None)
         return results
 
     # ------------------------------------------------------------------

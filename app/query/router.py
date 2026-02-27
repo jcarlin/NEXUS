@@ -13,6 +13,7 @@ import json
 import uuid
 from datetime import datetime, timezone
 from typing import Any
+from uuid import UUID
 
 import structlog
 from fastapi import APIRouter, Depends
@@ -21,6 +22,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
+from app.auth.middleware import get_current_user, get_matter_id
 from app.common.rate_limit import rate_limit_queries
 from app.dependencies import get_db, get_query_graph
 from app.query.schemas import (
@@ -63,15 +65,18 @@ async def _save_message(
     source_documents: list[dict] | None = None,
     entities_mentioned: list[dict] | None = None,
     follow_up_questions: list[str] | None = None,
+    matter_id: UUID | None = None,
 ) -> str:
     """Insert a message into ``chat_messages`` and return its id."""
     message_id = str(uuid.uuid4())
     await db.execute(
         text("""
             INSERT INTO chat_messages
-                (id, thread_id, role, content, source_documents, entities_mentioned, follow_up_questions, created_at)
+                (id, thread_id, role, content, source_documents, entities_mentioned,
+                 follow_up_questions, matter_id, created_at)
             VALUES
-                (:id, :thread_id, :role, :content, :source_documents, :entities_mentioned, :follow_up_questions, :created_at)
+                (:id, :thread_id, :role, :content, :source_documents, :entities_mentioned,
+                 :follow_up_questions, :matter_id, :created_at)
         """),
         {
             "id": message_id,
@@ -81,6 +86,7 @@ async def _save_message(
             "source_documents": json.dumps(source_documents or []),
             "entities_mentioned": json.dumps(entities_mentioned or []),
             "follow_up_questions": json.dumps(follow_up_questions or []),
+            "matter_id": matter_id,
             "created_at": datetime.now(timezone.utc),
         },
     )
@@ -90,17 +96,24 @@ async def _save_message(
 async def _load_thread_messages(
     db: AsyncSession,
     thread_id: str,
+    matter_id: UUID | None = None,
 ) -> list[dict[str, Any]]:
     """Load all messages for a thread, ordered by creation time."""
+    where = "WHERE thread_id = :thread_id"
+    params: dict[str, Any] = {"thread_id": thread_id}
+    if matter_id is not None:
+        where += " AND matter_id = :matter_id"
+        params["matter_id"] = matter_id
+
     result = await db.execute(
-        text("""
+        text(f"""
             SELECT id, thread_id, role, content, source_documents,
                    entities_mentioned, follow_up_questions, created_at
             FROM chat_messages
-            WHERE thread_id = :thread_id
+            {where}
             ORDER BY created_at ASC
         """),
-        {"thread_id": thread_id},
+        params,
     )
     rows = result.mappings().all()
     return [dict(r) for r in rows]
@@ -129,6 +142,8 @@ def _parse_jsonb(val: Any) -> list:
 async def query(
     request: QueryRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+    matter_id: UUID = Depends(get_matter_id),
     graph=Depends(get_query_graph),
     _rate_limit=Depends(rate_limit_queries),
 ):
@@ -138,7 +153,7 @@ async def query(
     # Load chat history if continuing a thread
     messages: list[dict[str, Any]] = []
     if request.thread_id:
-        rows = await _load_thread_messages(db, thread_id)
+        rows = await _load_thread_messages(db, thread_id, matter_id=matter_id)
         messages = [
             {"role": r["role"], "content": r["content"]}
             for r in rows
@@ -148,7 +163,7 @@ async def query(
     initial_state = {
         "messages": messages,
         "thread_id": thread_id,
-        "user_id": "default",
+        "user_id": str(current_user["id"]),
         "original_query": request.query,
         "rewritten_query": "",
         "query_type": "",
@@ -162,7 +177,7 @@ async def query(
         "entities_mentioned": [],
         "_relevance": "",
         "_reformulated": False,
-        "_filters": request.filters,
+        "_filters": {**(request.filters or {}), "matter_id": str(matter_id)},
     }
 
     # Run the graph with checkpointer config
@@ -170,7 +185,7 @@ async def query(
     final_state = await graph.ainvoke(initial_state, config)
 
     # Save user message
-    await _save_message(db, thread_id, "user", request.query)
+    await _save_message(db, thread_id, "user", request.query, matter_id=matter_id)
 
     # Save assistant response
     message_id = await _save_message(
@@ -181,6 +196,7 @@ async def query(
         source_documents=final_state.get("source_documents", []),
         entities_mentioned=final_state.get("entities_mentioned", []),
         follow_up_questions=final_state.get("follow_up_questions", []),
+        matter_id=matter_id,
     )
 
     # Flush to DB
@@ -211,6 +227,8 @@ async def query(
 async def query_stream(
     request: QueryRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+    matter_id: UUID = Depends(get_matter_id),
     graph=Depends(get_query_graph),
     _rate_limit=Depends(rate_limit_queries),
 ):
@@ -226,13 +244,13 @@ async def query_stream(
     # Load chat history
     messages: list[dict[str, Any]] = []
     if request.thread_id:
-        rows = await _load_thread_messages(db, thread_id)
+        rows = await _load_thread_messages(db, thread_id, matter_id=matter_id)
         messages = [{"role": r["role"], "content": r["content"]} for r in rows]
 
     initial_state = {
         "messages": messages,
         "thread_id": thread_id,
-        "user_id": "default",
+        "user_id": str(current_user["id"]),
         "original_query": request.query,
         "rewritten_query": "",
         "query_type": "",
@@ -246,7 +264,7 @@ async def query_stream(
         "entities_mentioned": [],
         "_relevance": "",
         "_reformulated": False,
-        "_filters": request.filters,
+        "_filters": {**(request.filters or {}), "matter_id": str(matter_id)},
     }
 
     config = {"configurable": {"thread_id": thread_id}}
@@ -284,7 +302,7 @@ async def query_stream(
 
         # Save messages to DB
         try:
-            await _save_message(db, thread_id, "user", request.query)
+            await _save_message(db, thread_id, "user", request.query, matter_id=matter_id)
             await _save_message(
                 db,
                 thread_id,
@@ -293,6 +311,7 @@ async def query_stream(
                 source_documents=final_state.get("source_documents", []),
                 entities_mentioned=final_state.get("entities_mentioned", []),
                 follow_up_questions=final_state.get("follow_up_questions", []),
+                matter_id=matter_id,
             )
             await db.commit()
         except Exception:
@@ -321,6 +340,8 @@ async def list_chats(
     offset: int = 0,
     limit: int = 20,
     db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+    matter_id: UUID = Depends(get_matter_id),
 ):
     """List all chat threads with summary info."""
     result = await db.execute(
@@ -331,11 +352,12 @@ async def list_chats(
                 MAX(created_at) as last_message_at,
                 MIN(CASE WHEN role = 'user' THEN content END) as first_query
             FROM chat_messages
+            WHERE matter_id = :matter_id
             GROUP BY thread_id
             ORDER BY MAX(created_at) DESC
             LIMIT :limit OFFSET :offset
         """),
-        {"limit": limit, "offset": offset},
+        {"limit": limit, "offset": offset, "matter_id": matter_id},
     )
     rows = result.mappings().all()
 
@@ -361,9 +383,11 @@ async def list_chats(
 async def get_chat(
     thread_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+    matter_id: UUID = Depends(get_matter_id),
 ):
     """Return the full message history for a chat thread."""
-    rows = await _load_thread_messages(db, thread_id)
+    rows = await _load_thread_messages(db, thread_id, matter_id=matter_id)
 
     if not rows:
         return JSONResponse(status_code=404, content={"detail": "Thread not found"})
@@ -401,11 +425,13 @@ async def get_chat(
 async def delete_chat(
     thread_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+    matter_id: UUID = Depends(get_matter_id),
 ):
     """Delete a chat thread and all its messages."""
     result = await db.execute(
-        text("DELETE FROM chat_messages WHERE thread_id = :thread_id"),
-        {"thread_id": thread_id},
+        text("DELETE FROM chat_messages WHERE thread_id = :thread_id AND matter_id = :matter_id"),
+        {"thread_id": thread_id, "matter_id": matter_id},
     )
     await db.commit()
 

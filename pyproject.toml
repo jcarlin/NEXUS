@@ -25,6 +25,7 @@ dependencies = [
 
     # Retrieval
     "llama-index-core",
+    "fastembed",
 
     # Vector DB & Graph
     "qdrant-client>=1.12",
@@ -50,6 +51,11 @@ dependencies = [
 
     # Entity Resolution
     "rapidfuzz",
+
+    # Auth
+    "PyJWT[cryptography]",
+    "passlib[bcrypt]",
+    "email-validator",
 
     # Utilities
     "pydantic>=2.10",

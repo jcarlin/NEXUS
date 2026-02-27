@@ -46,6 +46,7 @@ class IngestionService:
         minio_path: str,
         parent_job_id: UUID | None = None,
         job_id: UUID | None = None,
+        matter_id: UUID | None = None,
     ) -> dict:
         """Insert a new job row and return it as a dict.
 
@@ -64,9 +65,9 @@ class IngestionService:
             text(
                 """
                 INSERT INTO jobs (id, filename, status, stage, progress, error,
-                                  parent_job_id, metadata_, created_at, updated_at)
+                                  parent_job_id, matter_id, metadata_, created_at, updated_at)
                 VALUES (:id, :filename, :status, :stage, :progress, :error,
-                        :parent_job_id, :metadata_, :created_at, :updated_at)
+                        :parent_job_id, :matter_id, :metadata_, :created_at, :updated_at)
                 """
             ),
             {
@@ -77,6 +78,7 @@ class IngestionService:
                 "progress": "{}",
                 "error": None,
                 "parent_job_id": parent_job_id,
+                "matter_id": matter_id,
                 "metadata_": f'{{"minio_path": "{minio_path}"}}',
                 "created_at": now,
                 "updated_at": now,
@@ -94,6 +96,7 @@ class IngestionService:
             "progress": {},
             "error": None,
             "parent_job_id": parent_job_id,
+            "matter_id": matter_id,
             "metadata_": {"minio_path": minio_path},
             "created_at": now,
             "updated_at": now,
@@ -104,18 +107,28 @@ class IngestionService:
     # ------------------------------------------------------------------
 
     @staticmethod
-    async def get_job(db: AsyncSession, job_id: UUID) -> dict | None:
+    async def get_job(
+        db: AsyncSession,
+        job_id: UUID,
+        matter_id: UUID | None = None,
+    ) -> dict | None:
         """Fetch a single job by id.  Returns ``None`` if not found."""
+        where = "WHERE id = :job_id"
+        params: dict = {"job_id": job_id}
+        if matter_id is not None:
+            where += " AND matter_id = :matter_id"
+            params["matter_id"] = matter_id
+
         result = await db.execute(
             text(
-                """
+                f"""
                 SELECT id, filename, status, stage, progress, error,
-                       parent_job_id, metadata_, created_at, updated_at
+                       parent_job_id, matter_id, metadata_, created_at, updated_at
                 FROM jobs
-                WHERE id = :job_id
+                {where}
                 """
             ),
-            {"job_id": job_id},
+            params,
         )
         row = result.first()
         if row is None:
@@ -131,28 +144,38 @@ class IngestionService:
         db: AsyncSession,
         offset: int = 0,
         limit: int = 50,
+        matter_id: UUID | None = None,
     ) -> tuple[list[dict], int]:
         """Return ``(items, total_count)`` with offset/limit pagination.
 
         Jobs are ordered by ``created_at DESC`` (newest first).
         """
+        where = ""
+        params: dict = {"offset": offset, "limit": limit}
+        if matter_id is not None:
+            where = "WHERE matter_id = :matter_id"
+            params["matter_id"] = matter_id
+
         # Total count
-        count_result = await db.execute(text("SELECT count(*) FROM jobs"))
+        count_result = await db.execute(
+            text(f"SELECT count(*) FROM jobs {where}"), params
+        )
         total = count_result.scalar_one()
 
         # Paginated rows
         result = await db.execute(
             text(
-                """
+                f"""
                 SELECT id, filename, status, stage, progress, error,
-                       parent_job_id, metadata_, created_at, updated_at
+                       parent_job_id, matter_id, metadata_, created_at, updated_at
                 FROM jobs
+                {where}
                 ORDER BY created_at DESC
                 OFFSET :offset
                 LIMIT :limit
                 """
             ),
-            {"offset": offset, "limit": limit},
+            params,
         )
         rows = result.all()
         items = [_row_to_dict(r) for r in rows]

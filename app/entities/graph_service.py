@@ -67,6 +67,7 @@ class GraphService:
         doc_type: str,
         page_count: int,
         minio_path: str,
+        matter_id: str | None = None,
     ) -> None:
         """Create (or update) a ``:Document`` node.
 
@@ -78,6 +79,7 @@ class GraphService:
             d.type       = $doc_type,
             d.page_count = $page_count,
             d.minio_path = $minio_path,
+            d.matter_id  = $matter_id,
             d.created_at = datetime()
         """
         try:
@@ -89,6 +91,7 @@ class GraphService:
                     "doc_type": doc_type,
                     "page_count": page_count,
                     "minio_path": minio_path,
+                    "matter_id": matter_id,
                 },
             )
             logger.info(

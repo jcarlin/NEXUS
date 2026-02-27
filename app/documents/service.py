@@ -17,7 +17,7 @@ logger = structlog.get_logger(__name__)
 # Column list shared across queries
 _COLUMNS = """id, job_id, filename, document_type, page_count, chunk_count,
               entity_count, minio_path, file_size_bytes, content_hash,
-              metadata_, created_at, updated_at"""
+              matter_id, metadata_, created_at, updated_at"""
 
 
 def _row_to_dict(row) -> dict:
@@ -40,17 +40,23 @@ class DocumentService:
         filename_search: str | None = None,
         offset: int = 0,
         limit: int = 50,
+        matter_id: UUID | None = None,
     ) -> tuple[list[dict], int]:
         """Return ``(items, total_count)`` with offset/limit pagination.
 
         Optional filters:
         - *document_type*: exact match on the ``document_type`` column.
         - *filename_search*: case-insensitive substring match via ``ILIKE``.
+        - *matter_id*: scope to a specific case matter.
 
         Documents are ordered by ``created_at DESC`` (newest first).
         """
         where_clauses: list[str] = []
         params: dict = {"offset": offset, "limit": limit}
+
+        if matter_id is not None:
+            where_clauses.append("matter_id = :matter_id")
+            params["matter_id"] = matter_id
 
         if document_type is not None:
             where_clauses.append("document_type = :document_type")
@@ -95,11 +101,21 @@ class DocumentService:
     # ------------------------------------------------------------------
 
     @staticmethod
-    async def get_document(db: AsyncSession, doc_id: UUID) -> dict | None:
+    async def get_document(
+        db: AsyncSession,
+        doc_id: UUID,
+        matter_id: UUID | None = None,
+    ) -> dict | None:
         """Fetch a single document by id.  Returns ``None`` if not found."""
+        where = "WHERE id = :doc_id"
+        params: dict = {"doc_id": doc_id}
+        if matter_id is not None:
+            where += " AND matter_id = :matter_id"
+            params["matter_id"] = matter_id
+
         result = await db.execute(
-            text(f"SELECT {_COLUMNS} FROM documents WHERE id = :doc_id"),
-            {"doc_id": doc_id},
+            text(f"SELECT {_COLUMNS} FROM documents {where}"),
+            params,
         )
         row = result.first()
         if row is None:

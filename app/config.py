@@ -63,6 +63,18 @@ class Settings(BaseSettings):
     reranker_model: str = "BAAI/bge-reranker-v2-m3"
     reranker_top_n: int = 10
 
+    # --- Sparse Embeddings ---
+    enable_sparse_embeddings: bool = False
+    sparse_embedding_model: str = "Qdrant/bm42-all-minilm-l6-v2-attentions"
+
+    # --- Auth ---
+    jwt_secret_key: str = "change-me-to-a-random-64-char-string"
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_expire_minutes: int = 30
+    jwt_refresh_token_expire_days: int = 7
+    cors_allowed_origins: str = "http://localhost:5173,http://localhost:3000"
+    require_matter_header: bool = True
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",

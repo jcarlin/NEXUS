@@ -22,6 +22,7 @@ from app.config import Settings
 from app.entities.extractor import EntityExtractor
 from app.entities.graph_service import GraphService
 from app.ingestion.embedder import TextEmbedder
+from app.ingestion.sparse_embedder import SparseEmbedder
 from app.query.reranker import Reranker
 from app.query.retriever import HybridRetriever
 
@@ -233,6 +234,24 @@ def get_reranker() -> Reranker | None:
 
 
 # ---------------------------------------------------------------------------
+# Sparse Embedder (feature-flagged)
+# ---------------------------------------------------------------------------
+
+_sparse_embedder: SparseEmbedder | None = None
+
+
+def get_sparse_embedder() -> SparseEmbedder | None:
+    """Return the ``SparseEmbedder`` singleton, or ``None`` when disabled."""
+    global _sparse_embedder
+    settings = get_settings()
+    if not settings.enable_sparse_embeddings:
+        return None
+    if _sparse_embedder is None:
+        _sparse_embedder = SparseEmbedder(model_name=settings.sparse_embedding_model)
+    return _sparse_embedder
+
+
+# ---------------------------------------------------------------------------
 # Hybrid Retriever
 # ---------------------------------------------------------------------------
 
@@ -248,6 +267,7 @@ def get_retriever() -> HybridRetriever:
             vector_store=get_qdrant(),
             entity_extractor=get_entity_extractor(),
             graph_service=get_graph_service(),
+            sparse_embedder=get_sparse_embedder(),
         )
     return _retriever
 

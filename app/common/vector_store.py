@@ -1,8 +1,12 @@
 """Qdrant vector store wrapper.
 
 Manages two collections:
-  * ``nexus_text``   -- 1024-dim dense vectors (BGE-M3 / OpenAI embeddings)
+  * ``nexus_text``   -- dense (1024d) + optional sparse (BM42) named vectors
   * ``nexus_visual`` -- placeholder for ColQwen2.5 multi-vector (deferred)
+
+When ``ENABLE_SPARSE_EMBEDDINGS`` is on, the text collection uses named
+vectors (``dense`` + ``sparse``) and queries use native Qdrant RRF fusion
+via ``prefetch`` + ``FusionQuery``.
 """
 
 from __future__ import annotations
@@ -14,7 +18,15 @@ import structlog
 from qdrant_client import QdrantClient
 from qdrant_client.models import (
     Distance,
+    FieldCondition,
+    Filter,
+    Fusion,
+    FusionQuery,
+    MatchValue,
     PointStruct,
+    Prefetch,
+    SparseVector,
+    SparseVectorParams,
     VectorParams,
 )
 
@@ -35,7 +47,8 @@ class VectorStoreClient:
         self.client = QdrantClient(url=settings.qdrant_url)
         self._embedding_dim = settings.embedding_dimensions
         self._enable_visual = settings.enable_visual_embeddings
-        logger.info("qdrant.init", url=settings.qdrant_url)
+        self._enable_sparse = settings.enable_sparse_embeddings
+        logger.info("qdrant.init", url=settings.qdrant_url, sparse=self._enable_sparse)
 
     # ------------------------------------------------------------------
     # Collection management
@@ -49,16 +62,38 @@ class VectorStoreClient:
         """
         existing = {c.name for c in self.client.get_collections().collections}
 
-        # --- Text collection (dense only for now; sparse added in Phase 2) ---
+        # --- Text collection ---
         if TEXT_COLLECTION not in existing:
-            self.client.create_collection(
-                collection_name=TEXT_COLLECTION,
-                vectors_config=VectorParams(
-                    size=self._embedding_dim,
-                    distance=Distance.COSINE,
-                ),
-            )
-            logger.info("qdrant.collection_created", name=TEXT_COLLECTION, dim=self._embedding_dim)
+            if self._enable_sparse:
+                # Named vectors: dense (1024d COSINE) + sparse (BM42)
+                self.client.create_collection(
+                    collection_name=TEXT_COLLECTION,
+                    vectors_config={
+                        "dense": VectorParams(
+                            size=self._embedding_dim,
+                            distance=Distance.COSINE,
+                        ),
+                    },
+                    sparse_vectors_config={
+                        "sparse": SparseVectorParams(),
+                    },
+                )
+                logger.info(
+                    "qdrant.collection_created",
+                    name=TEXT_COLLECTION,
+                    mode="named+sparse",
+                    dim=self._embedding_dim,
+                )
+            else:
+                # Unnamed dense vector only (backward compatible)
+                self.client.create_collection(
+                    collection_name=TEXT_COLLECTION,
+                    vectors_config=VectorParams(
+                        size=self._embedding_dim,
+                        distance=Distance.COSINE,
+                    ),
+                )
+                logger.info("qdrant.collection_created", name=TEXT_COLLECTION, mode="dense-only", dim=self._embedding_dim)
         else:
             logger.info("qdrant.collection_exists", name=TEXT_COLLECTION)
 
@@ -84,17 +119,29 @@ class VectorStoreClient:
 
         Each dict in *chunks* must contain:
           - ``id``      (str | None) -- point id, auto-generated if missing
-          - ``vector``  (list[float])
+          - ``vector``  (list[float]) -- dense embedding
           - ``payload`` (dict) -- arbitrary metadata stored alongside the vector
+          - ``sparse_vector`` (optional dict with ``indices`` and ``values``)
         """
-        points = [
-            PointStruct(
-                id=chunk.get("id") or str(uuid.uuid4()),
-                vector=chunk["vector"],
-                payload=chunk.get("payload", {}),
-            )
-            for chunk in chunks
-        ]
+        points = []
+        for chunk in chunks:
+            point_id = chunk.get("id") or str(uuid.uuid4())
+            payload = chunk.get("payload", {})
+            sparse = chunk.get("sparse_vector")
+
+            if self._enable_sparse or sparse is not None:
+                # Named vector format
+                vector: dict[str, Any] = {"dense": chunk["vector"]}
+                if sparse is not None:
+                    vector["sparse"] = SparseVector(
+                        indices=sparse["indices"],
+                        values=sparse["values"],
+                    )
+                points.append(PointStruct(id=point_id, vector=vector, payload=payload))
+            else:
+                # Unnamed vector (backward compatible)
+                points.append(PointStruct(id=point_id, vector=chunk["vector"], payload=payload))
+
         self.client.upsert(collection_name=TEXT_COLLECTION, points=points)
         logger.info("qdrant.upsert", collection=TEXT_COLLECTION, count=len(points))
 
@@ -103,10 +150,9 @@ class VectorStoreClient:
         vector: list[float],
         limit: int = 15,
         filters: dict[str, Any] | None = None,
+        sparse_vector: tuple[list[int], list[float]] | None = None,
     ) -> list[dict[str, Any]]:
-        """Dense vector search against ``nexus_text``. Returns scored payloads."""
-        from qdrant_client.models import Filter, FieldCondition, MatchValue
-
+        """Search ``nexus_text``. Uses RRF fusion when sparse vector is provided."""
         qdrant_filter: Filter | None = None
         if filters:
             conditions = [
@@ -115,13 +161,38 @@ class VectorStoreClient:
             ]
             qdrant_filter = Filter(must=conditions)
 
-        results = self.client.query_points(
-            collection_name=TEXT_COLLECTION,
-            query=vector,
-            limit=limit,
-            query_filter=qdrant_filter,
-            with_payload=True,
-        )
+        if sparse_vector is not None and self._enable_sparse:
+            # Native RRF fusion via prefetch
+            sv = SparseVector(indices=sparse_vector[0], values=sparse_vector[1])
+            results = self.client.query_points(
+                collection_name=TEXT_COLLECTION,
+                prefetch=[
+                    Prefetch(query=vector, using="dense", limit=limit * 2, filter=qdrant_filter),
+                    Prefetch(query=sv, using="sparse", limit=limit * 2, filter=qdrant_filter),
+                ],
+                query=FusionQuery(fusion=Fusion.RRF),
+                limit=limit,
+                with_payload=True,
+            )
+        elif self._enable_sparse:
+            # Sparse enabled but no sparse vector — dense-only with named vector
+            results = self.client.query_points(
+                collection_name=TEXT_COLLECTION,
+                query=vector,
+                using="dense",
+                limit=limit,
+                query_filter=qdrant_filter,
+                with_payload=True,
+            )
+        else:
+            # Unnamed vector (backward compatible)
+            results = self.client.query_points(
+                collection_name=TEXT_COLLECTION,
+                query=vector,
+                limit=limit,
+                query_filter=qdrant_filter,
+                with_payload=True,
+            )
 
         return [
             {

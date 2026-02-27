@@ -13,6 +13,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth.middleware import get_current_user, get_matter_id
 from app.common.storage import StorageClient
 from app.dependencies import get_db, get_minio
 from app.documents.schemas import (
@@ -74,6 +75,8 @@ async def list_documents(
     offset: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(50, ge=1, le=200, description="Max records to return"),
     db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+    matter_id: UUID = Depends(get_matter_id),
 ):
     """List all ingested documents with optional filters."""
     items, total = await DocumentService.list_documents(
@@ -82,6 +85,7 @@ async def list_documents(
         filename_search=q,
         offset=offset,
         limit=limit,
+        matter_id=matter_id,
     )
     return DocumentListResponse(
         items=[_row_to_response(row) for row in items],
@@ -99,9 +103,11 @@ async def list_documents(
 async def get_document(
     doc_id: UUID,
     db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+    matter_id: UUID = Depends(get_matter_id),
 ):
     """Return metadata for a single document."""
-    row = await DocumentService.get_document(db=db, doc_id=doc_id)
+    row = await DocumentService.get_document(db=db, doc_id=doc_id, matter_id=matter_id)
     if row is None:
         raise HTTPException(status_code=404, detail=f"Document {doc_id} not found")
     return _row_to_detail(row)
@@ -116,10 +122,12 @@ async def document_preview(
     doc_id: UUID,
     page: int = Query(1, ge=1, description="Page number to preview"),
     db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+    matter_id: UUID = Depends(get_matter_id),
     storage: StorageClient = Depends(get_minio),
 ):
     """Return a presigned URL to a page thumbnail for the document."""
-    row = await DocumentService.get_document(db=db, doc_id=doc_id)
+    row = await DocumentService.get_document(db=db, doc_id=doc_id, matter_id=matter_id)
     if row is None:
         raise HTTPException(status_code=404, detail=f"Document {doc_id} not found")
 
@@ -137,10 +145,12 @@ async def document_preview(
 async def document_download(
     doc_id: UUID,
     db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+    matter_id: UUID = Depends(get_matter_id),
     storage: StorageClient = Depends(get_minio),
 ):
     """Return a presigned URL to download the original uploaded file."""
-    row = await DocumentService.get_document(db=db, doc_id=doc_id)
+    row = await DocumentService.get_document(db=db, doc_id=doc_id, matter_id=matter_id)
     if row is None:
         raise HTTPException(status_code=404, detail=f"Document {doc_id} not found")
 

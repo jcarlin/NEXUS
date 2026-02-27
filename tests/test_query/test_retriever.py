@@ -127,3 +127,31 @@ async def test_extract_query_entities_uses_higher_threshold(retriever, mock_enti
     retriever.extract_query_entities("Who is Epstein?")
     _, kwargs = mock_entity_extractor.extract.call_args
     assert kwargs["threshold"] == 0.5
+
+
+async def test_retrieve_text_with_sparse_embedder(mock_embedder, mock_vector_store, mock_entity_extractor, mock_graph_service):
+    """When sparse_embedder is provided, retrieve_text generates sparse vector and passes it."""
+    mock_sparse = MagicMock()
+    mock_sparse.embed_single.return_value = ([0, 5, 10], [0.9, 0.4, 0.1])
+
+    retriever = HybridRetriever(
+        embedder=mock_embedder,
+        vector_store=mock_vector_store,
+        entity_extractor=mock_entity_extractor,
+        graph_service=mock_graph_service,
+        sparse_embedder=mock_sparse,
+    )
+
+    await retriever.retrieve_text("Who is Epstein?")
+
+    mock_sparse.embed_single.assert_called_once_with("Who is Epstein?")
+    call_kwargs = mock_vector_store.query_text.call_args.kwargs
+    assert call_kwargs["sparse_vector"] == ([0, 5, 10], [0.9, 0.4, 0.1])
+
+
+async def test_retrieve_text_without_sparse_embedder_skips_sparse(retriever, mock_vector_store):
+    """When no sparse_embedder, retrieve_text should not pass sparse_vector."""
+    await retriever.retrieve_text("Who is Epstein?")
+
+    call_kwargs = mock_vector_store.query_text.call_args.kwargs
+    assert call_kwargs.get("sparse_vector") is None

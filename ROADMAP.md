@@ -17,9 +17,9 @@
 | M4 | Chat + Streamlit + Doc Browsing | Done | 15 | — | M2, M3 |
 | M5 | Production Hardening (Core) | Done | 16 | — | M4 |
 | M5b | Tests + Reranker | Done | 27 | — | — |
-| M6 | Auth + Multi-Tenancy | TODO | — | 2 weeks | — |
+| M6 | Auth + Multi-Tenancy | Done | 15 | — | — |
 | M7 | Audit + Privilege | TODO | — | 1.5 weeks | M6 |
-| M8 | Retrieval Infrastructure | TODO | — | 1.5 weeks | — (parallel w/ M7) |
+| M8 | Retrieval Infrastructure | Done | 8 | — | — (parallel w/ M7) |
 | M9 | Evaluation Framework | TODO | — | 1.5 weeks | M8 |
 | M10 | Agentic Query Pipeline | TODO | — | 2.5 weeks | M8, M9 |
 | M11 | Knowledge Graph Enhancement | TODO | — | 1.5 weeks | M10 |
@@ -30,7 +30,7 @@
 | M16 | Visual Embeddings | TODO | — | 2 weeks | M15 (conditional) |
 | M17 | Full Local Deployment | TODO | — | 2 weeks | All |
 
-**Total tests: 187 passing** (as of M5b completion)
+**Total tests: 210 passing** (as of M8 completion)
 
 **Estimated total: ~23 weeks solo, ~18 weeks with 2 developers** (M7+M8 parallel, M12 parallel with M10-11)
 
@@ -43,6 +43,7 @@
 3. Infrastructure before features (sparse vectors before agentic query)
 4. Each milestone delivers standalone value
 5. Dependencies flow forward only
+6. Commit messages must not mention Anthropic or Claude Code (no `Co-Authored-By` lines, no tool attribution)
 
 ---
 
@@ -110,28 +111,32 @@
 - 8 reranker unit tests, 3 feature-flag node tests
 - 17 integration tests: ingest→query pipeline (5), SSE streaming E2E (5), error recovery (7)
 
+### M6: Auth + Multi-Tenancy
+- Alembic migration 002: `users`, `case_matters`, `user_case_matters` tables + NULLABLE `matter_id` FK on `jobs`, `documents`, `chat_messages`
+- Seed admin user (admin@nexus.dev) + default matter in migration
+- JWT authentication (PyJWT) with access/refresh tokens
+- API key auth fallback via `X-API-Key` header
+- RBAC: 4 roles (admin, attorney, paralegal, reviewer) via `require_role()` dependency
+- `X-Matter-ID` header required on all data endpoints, validated via `get_matter_id()` dependency
+- Matter scoping across all routers, services, ingestion pipeline, Neo4j graph, and Qdrant payloads
+- CORS lockdown: `allow_origins=["*"]` replaced with configured origins
+- Auth dependency overrides in test fixtures (existing 187 tests unaffected)
+- 15 tests: auth service (4), auth router (4), auth middleware (7)
+
+### M8: Retrieval Infrastructure
+- Sparse embeddings via FastEmbed BM42 (`app/ingestion/sparse_embedder.py`) — feature-flagged via `ENABLE_SPARSE_EMBEDDINGS`
+- Lazy-loaded `SparseTextEmbedding` (follows Reranker/EntityExtractor pattern)
+- `app/common/vector_store.py` rewritten: named vectors (`dense` + `sparse`), native RRF fusion via `prefetch` + `FusionQuery`
+- Backward compatible: unnamed vector format when sparse disabled
+- DI singleton `get_sparse_embedder()` returns `None` when flag is off
+- HybridRetriever updated: generates sparse vector when embedder available, passes to Qdrant
+- Ingestion pipeline: generates sparse embeddings in Stage 3, uses named vector format in Stage 5 upsert
+- `scripts/reembed.py` migration script: scroll → re-embed → recreate collection with named vectors
+- 8 tests: sparse embedder (2), vector store (4), retriever sparse (2)
+
 ---
 
 ## Next Up
-
-### M6: Auth + Multi-Tenancy (2 weeks)
-*The single most important missing piece for any real deployment.*
-
-- [ ] Alembic migration: `users`, `roles`, `case_matters`, `user_case_matters` tables
-- [ ] JWT authentication endpoints (login, refresh, me) — `python-jose`, `passlib` + bcrypt
-- [ ] RBAC middleware: admin, attorney, paralegal, reviewer roles
-- [ ] `matter_id` foreign key on `jobs`, `documents`, `chat_messages`
-- [ ] `X-Matter-ID` header required on all data endpoints
-- [ ] All API queries scoped to user's assigned matters
-- [ ] Qdrant metadata filtering includes `matter_id`
-- [ ] Neo4j entity/document nodes get `matter_id` property
-- [ ] API key auth option (for programmatic access)
-- [ ] CORS restricted to configured origins (replace `allow_origins=["*"]`)
-- [ ] ~15 tests (auth, role enforcement, matter scoping)
-
-**Key files:** New `app/auth/` module, Alembic migration, all routers (auth dependency injection)
-
----
 
 ### M7: Audit + Privilege (1.5 weeks)
 *Legal compliance requirements — non-negotiable for enterprise. Depends on M6.*
@@ -146,21 +151,6 @@
 - [ ] ~10 tests (privilege enforcement at all 3 data layers, audit logging)
 
 **Key files:** `app/common/middleware.py` (audit), `app/documents/router.py` (privilege endpoints), Alembic migration, `app/query/retriever.py` (privilege filters)
-
----
-
-### M8: Retrieval Infrastructure (1.5 weeks)
-*Can run in parallel with M7. Foundation for agentic query + evaluation.*
-
-- [ ] Recreate `nexus_text` Qdrant collection with named vectors: `dense` (1024d) + `sparse` (BM42)
-- [ ] Add FastEmbed sparse embedding generation to `app/ingestion/embedder.py`
-- [ ] Migration script: re-embed existing documents with sparse vectors
-- [ ] Update `app/common/vector_store.py` to use named vectors + prefetch RRF queries
-- [ ] Update `app/query/retriever.py` to use native Qdrant RRF fusion
-- [ ] `ENABLE_SPARSE_EMBEDDINGS` feature flag in config
-- [ ] ~8 tests (hybrid retrieval with both vector types)
-
-**Key files:** `app/common/vector_store.py`, `app/ingestion/embedder.py`, `app/query/retriever.py`, `app/config.py`
 
 ---
 

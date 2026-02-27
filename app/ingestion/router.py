@@ -16,6 +16,7 @@ import structlog
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth.middleware import get_current_user, get_matter_id
 from app.common.rate_limit import rate_limit_ingests
 from app.dependencies import get_db, get_minio
 from app.ingestion.schemas import (
@@ -77,6 +78,8 @@ def _job_row_to_status_response(row: dict) -> JobStatusResponse:
 async def ingest_single(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+    matter_id: UUID = Depends(get_matter_id),
     _rate_limit=Depends(rate_limit_ingests),
 ):
     """Upload a single file for ingestion.
@@ -116,6 +119,7 @@ async def ingest_single(
         filename=filename,
         minio_path=minio_path,
         job_id=job_id,
+        matter_id=matter_id,
     )
 
     # 4. Dispatch Celery task
@@ -140,6 +144,8 @@ async def ingest_single(
 async def ingest_batch(
     files: list[UploadFile] = File(...),
     db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+    matter_id: UUID = Depends(get_matter_id),
     _rate_limit=Depends(rate_limit_ingests),
 ):
     """Upload multiple files for ingestion.
@@ -175,6 +181,7 @@ async def ingest_batch(
             filename=filename,
             minio_path=minio_path,
             job_id=job_id,
+            matter_id=matter_id,
         )
 
         process_document.delay(str(job_row["id"]), minio_path)
@@ -275,9 +282,11 @@ async def ingest_webhook(
 async def get_job(
     job_id: UUID,
     db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+    matter_id: UUID = Depends(get_matter_id),
 ):
     """Return status and progress for a specific ingestion job."""
-    row = await IngestionService.get_job(db=db, job_id=job_id)
+    row = await IngestionService.get_job(db=db, job_id=job_id, matter_id=matter_id)
     if row is None:
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
     return _job_row_to_status_response(row)
@@ -292,9 +301,11 @@ async def list_jobs(
     offset: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(50, ge=1, le=200, description="Max records to return"),
     db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+    matter_id: UUID = Depends(get_matter_id),
 ):
     """List all ingestion jobs (paginated, newest first)."""
-    items, total = await IngestionService.list_jobs(db=db, offset=offset, limit=limit)
+    items, total = await IngestionService.list_jobs(db=db, offset=offset, limit=limit, matter_id=matter_id)
     return JobListResponse(
         items=[_job_row_to_status_response(row) for row in items],
         total=total,
@@ -311,6 +322,8 @@ async def list_jobs(
 async def cancel_job(
     job_id: UUID,
     db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+    matter_id: UUID = Depends(get_matter_id),
 ):
     """Cancel a running ingestion job.
 
@@ -318,7 +331,7 @@ async def cancel_job(
     Jobs that are already complete or failed are not modified.
     """
     # Verify the job exists first
-    row = await IngestionService.get_job(db=db, job_id=job_id)
+    row = await IngestionService.get_job(db=db, job_id=job_id, matter_id=matter_id)
     if row is None:
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
 
