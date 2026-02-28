@@ -17,10 +17,12 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.middleware import get_current_user, get_matter_id
+from app.common.models import JobStatus
 from app.common.rate_limit import rate_limit_ingests
 from app.dependencies import get_db, get_minio
 from app.ingestion.schemas import (
     BatchIngestResponse,
+    BulkImportStatusResponse,
     IngestResponse,
     JobListResponse,
     JobProgress,
@@ -39,6 +41,7 @@ router = APIRouter(tags=["ingestion"])
 # -----------------------------------------------------------------------
 # Helpers
 # -----------------------------------------------------------------------
+
 
 def _job_row_to_status_response(row: dict) -> JobStatusResponse:
     """Convert a raw DB row dict into a ``JobStatusResponse``."""
@@ -73,6 +76,7 @@ def _job_row_to_status_response(row: dict) -> JobStatusResponse:
 # -----------------------------------------------------------------------
 # POST /ingest — single file upload
 # -----------------------------------------------------------------------
+
 
 @router.post("/ingest", response_model=IngestResponse)
 async def ingest_single(
@@ -130,7 +134,7 @@ async def ingest_single(
     # 5. Return response
     return IngestResponse(
         job_id=job_row["id"],
-        status="pending",
+        status=JobStatus.PENDING,
         filename=filename,
         created_at=job_row["created_at"],
     )
@@ -139,6 +143,7 @@ async def ingest_single(
 # -----------------------------------------------------------------------
 # POST /ingest/batch — multi-file upload
 # -----------------------------------------------------------------------
+
 
 @router.post("/ingest/batch", response_model=BatchIngestResponse)
 async def ingest_batch(
@@ -211,6 +216,7 @@ async def ingest_batch(
 # POST /ingest/webhook — MinIO bucket notification handler
 # -----------------------------------------------------------------------
 
+
 @router.post("/ingest/webhook", response_model=WebhookResponse)
 async def ingest_webhook(
     payload: S3EventNotification,
@@ -278,6 +284,7 @@ async def ingest_webhook(
 # GET /jobs/{job_id} — job status + progress
 # -----------------------------------------------------------------------
 
+
 @router.get("/jobs/{job_id}", response_model=JobStatusResponse)
 async def get_job(
     job_id: UUID,
@@ -295,6 +302,7 @@ async def get_job(
 # -----------------------------------------------------------------------
 # GET /jobs — list all jobs (paginated)
 # -----------------------------------------------------------------------
+
 
 @router.get("/jobs", response_model=JobListResponse)
 async def list_jobs(
@@ -317,6 +325,7 @@ async def list_jobs(
 # -----------------------------------------------------------------------
 # DELETE /jobs/{job_id} — cancel running job
 # -----------------------------------------------------------------------
+
 
 @router.delete("/jobs/{job_id}")
 async def cancel_job(
@@ -343,3 +352,50 @@ async def cancel_job(
         )
 
     return {"status": "cancelled", "job_id": str(job_id)}
+
+
+# -----------------------------------------------------------------------
+# GET /bulk-imports/{import_id} — bulk import job status
+# -----------------------------------------------------------------------
+
+
+@router.get("/bulk-imports/{import_id}", response_model=BulkImportStatusResponse)
+async def get_bulk_import_status(
+    import_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+    matter_id: UUID = Depends(get_matter_id),
+):
+    """Return status and progress for a bulk import job."""
+    row = await IngestionService.get_bulk_import_job(db=db, import_id=import_id, matter_id=matter_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"Bulk import job {import_id} not found")
+
+    # Compute elapsed / estimated remaining
+    from datetime import UTC, datetime
+
+    now = datetime.now(UTC)
+    created = row["created_at"]
+    elapsed = (now - created).total_seconds() if created else None
+
+    estimated_remaining = None
+    if elapsed and row.get("total_documents") and row["processed_documents"] > 0:
+        rate = row["processed_documents"] / elapsed
+        remaining_docs = row["total_documents"] - row["processed_documents"] - row["failed_documents"]
+        if rate > 0 and remaining_docs > 0:
+            estimated_remaining = remaining_docs / rate
+
+    return BulkImportStatusResponse(
+        import_id=row["id"],
+        status=row["status"],
+        adapter_type=row.get("adapter_type"),
+        total_documents=row.get("total_documents"),
+        processed_documents=row["processed_documents"],
+        failed_documents=row["failed_documents"],
+        skipped_documents=row["skipped_documents"],
+        elapsed_seconds=elapsed,
+        estimated_remaining_seconds=estimated_remaining,
+        error=row.get("error"),
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+    )

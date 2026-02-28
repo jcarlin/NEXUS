@@ -19,6 +19,7 @@ import traceback
 import uuid
 import zipfile
 from pathlib import Path
+from typing import Any
 
 import structlog
 from celery import shared_task
@@ -30,6 +31,7 @@ logger = structlog.get_logger(__name__)
 # ---------------------------------------------------------------------------
 # Sync DB helpers (Celery tasks use the sync Postgres URL)
 # ---------------------------------------------------------------------------
+
 
 def _get_sync_engine():
     """Create a disposable sync SQLAlchemy engine for the current task."""
@@ -205,12 +207,13 @@ def _is_job_cancelled(engine, job_id: str) -> bool:
         row = result.first()
         if row is None:
             return True
-        return row.status == "failed"
+        return bool(row.status == "failed")
 
 
 # ---------------------------------------------------------------------------
 # Sync MinIO helpers
 # ---------------------------------------------------------------------------
+
 
 def _download_from_minio(settings, minio_path: str) -> bytes:
     """Download an object from MinIO using a fresh boto3 client."""
@@ -230,7 +233,7 @@ def _download_from_minio(settings, minio_path: str) -> bytes:
     )
 
     resp = client.get_object(Bucket=settings.minio_bucket, Key=minio_path)
-    return resp["Body"].read()
+    return bytes(resp["Body"].read())
 
 
 def _upload_to_minio(settings, key: str, data: bytes, content_type: str = "image/png") -> None:
@@ -262,10 +265,12 @@ def _upload_to_minio(settings, key: str, data: bytes, content_type: str = "image
 # Async helpers (for embedding + Neo4j)
 # ---------------------------------------------------------------------------
 
+
 async def _embed_chunks(settings, chunk_texts: list[str]) -> list[list[float]]:
     """Embed chunk texts using the configured embedding provider."""
-    from app.common.embedder import LocalEmbeddingProvider, OpenAIEmbeddingProvider
+    from app.common.embedder import EmbeddingProvider, LocalEmbeddingProvider, OpenAIEmbeddingProvider
 
+    provider: EmbeddingProvider
     if settings.embedding_provider == "local":
         provider = LocalEmbeddingProvider(
             model_name=settings.local_embedding_model,
@@ -359,10 +364,7 @@ async def _extract_relationships(
 
         for chunk in chunks:
             # Find entities mentioned in this chunk
-            chunk_entities = [
-                e for e in all_entities
-                if e["name"].lower() in chunk.text.lower()
-            ]
+            chunk_entities = [e for e in all_entities if e["name"].lower() in chunk.text.lower()]
             if len(chunk_entities) < 2:
                 continue
 
@@ -469,9 +471,7 @@ def process_zip(self, job_id: str, minio_path: str) -> dict:
                     )
 
                     # Create child job
-                    child_id = _create_child_job(
-                        engine, job_id, basename, child_minio_path, matter_id=zip_matter_id
-                    )
+                    child_id = _create_child_job(engine, job_id, basename, child_minio_path, matter_id=zip_matter_id)
                     child_jobs.append(child_id)
 
                     # Dispatch processing
@@ -508,7 +508,6 @@ def process_zip(self, job_id: str, minio_path: str) -> dict:
         }
 
     except Exception as exc:
-        tb = traceback.format_exc()
         logger.error("task.zip.failed", job_id=job_id, error=str(exc))
 
         try:
@@ -527,6 +526,7 @@ def process_zip(self, job_id: str, minio_path: str) -> dict:
 # ---------------------------------------------------------------------------
 # Main Celery task
 # ---------------------------------------------------------------------------
+
 
 @shared_task(
     bind=True,
@@ -568,7 +568,7 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
     ext = Path(filename).suffix.lower()
     if ext == ".zip":
         engine.dispose()
-        return process_zip(job_id, minio_path)
+        return dict(process_zip(job_id, minio_path))
 
     try:
         # ---------------------------------------------------------------
@@ -716,11 +716,13 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
                 key = (ent.text.strip().lower(), ent.type)
                 if key not in seen_entities:
                     seen_entities.add(key)
-                    all_entities.append({
-                        "name": ent.text.strip(),
-                        "type": ent.type,
-                        "page_number": chunk.metadata.get("page_number"),
-                    })
+                    all_entities.append(
+                        {
+                            "name": ent.text.strip(),
+                            "type": ent.type,
+                            "page_number": chunk.metadata.get("page_number"),
+                        }
+                    )
 
         logger.info(
             "task.entities_extracted",
@@ -732,9 +734,7 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
         relationship_count = 0
         if settings.enable_relationship_extraction and all_entities:
             try:
-                relationship_count = asyncio.run(
-                    _extract_relationships(settings, job_id, chunks, all_entities)
-                )
+                relationship_count = asyncio.run(_extract_relationships(settings, job_id, chunks, all_entities))
                 logger.info(
                     "task.relationships_extracted",
                     job_id=job_id,
@@ -780,6 +780,7 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
                 payload["matter_id"] = matter_id
 
             # Build vector: named format when sparse enabled, unnamed otherwise
+            vector: dict[str, Any] | list[float]
             if sparse_embeddings:
                 indices, values = sparse_embeddings[i]
                 vector = {
@@ -792,15 +793,15 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
             else:
                 vector = embedding
 
-            points.append(
-                PointStruct(id=point_id, vector=vector, payload=payload)
+            points.append(PointStruct(id=point_id, vector=vector, payload=payload))
+            chunk_data_for_neo4j.append(
+                {
+                    "chunk_id": point_id,
+                    "text_preview": chunk.text[:200],
+                    "page_number": chunk.metadata.get("page_number", 1),
+                    "qdrant_point_id": point_id,
+                }
             )
-            chunk_data_for_neo4j.append({
-                "chunk_id": point_id,
-                "text_preview": chunk.text[:200],
-                "page_number": chunk.metadata.get("page_number", 1),
-                "qdrant_point_id": point_id,
-            })
 
         if points:
             from app.common.vector_store import TEXT_COLLECTION
@@ -914,6 +915,328 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
         engine.dispose()
 
 
+# ---------------------------------------------------------------------------
+# Bulk import task (parse-skipping)
+# ---------------------------------------------------------------------------
+
+
+@shared_task(
+    bind=True,
+    name="ingestion.import_text_document",
+    max_retries=3,
+    default_retry_delay=30,
+    acks_late=True,
+    reject_on_worker_lost=True,
+)
+def import_text_document(
+    self,
+    job_id: str,
+    text: str,
+    filename: str,
+    content_hash: str,
+    matter_id: str | None = None,
+    doc_type: str = "document",
+    page_count: int = 1,
+    metadata: dict | None = None,
+    pre_entities: list[dict] | None = None,
+    import_source: str | None = None,
+    bulk_import_job_id: str | None = None,
+    email_headers: dict | None = None,
+) -> dict:
+    """Import a pre-parsed text document, skipping the download+parse stage.
+
+    Used by the bulk import system for pre-OCR'd text, load files, and
+    directory-based imports.  Reuses the chunking, embedding, extraction,
+    and indexing stages from ``process_document``.
+    """
+    structlog.contextvars.clear_contextvars()
+    structlog.contextvars.bind_contextvars(task_id=self.request.id, job_id=job_id)
+
+    from app.config import Settings
+
+    settings = Settings()
+    engine = _get_sync_engine()
+
+    logger.info(
+        "task.import_text.start",
+        job_id=job_id,
+        filename=filename,
+        text_length=len(text),
+    )
+
+    try:
+        # ---------------------------------------------------------------
+        # Stage 1: UPLOAD — store raw text in MinIO for /documents/{id}/download
+        # ---------------------------------------------------------------
+        _update_stage(engine, job_id, "uploading", "uploading")
+
+        minio_path = f"raw/{job_id}/{filename}"
+        _upload_to_minio(settings, minio_path, text.encode("utf-8"), "text/plain")
+        file_size = len(text.encode("utf-8"))
+
+        logger.info("task.import_text.uploaded", job_id=job_id, minio_path=minio_path)
+
+        # ---------------------------------------------------------------
+        # Stage 2: CHUNKING
+        # ---------------------------------------------------------------
+        _update_stage(engine, job_id, "chunking", "uploading")
+
+        from app.ingestion.chunker import TextChunker
+
+        chunker = TextChunker(
+            max_tokens=settings.chunk_size,
+            overlap_tokens=settings.chunk_overlap,
+        )
+
+        chunks = chunker.chunk(
+            text,
+            metadata={"source_file": filename},
+            document_type=doc_type,
+        )
+
+        logger.info("task.import_text.chunked", job_id=job_id, chunk_count=len(chunks))
+
+        progress: dict[str, Any] = {"chunks_created": len(chunks)}
+        _update_stage(engine, job_id, "embedding", "uploading", progress=progress)
+
+        # ---------------------------------------------------------------
+        # Stage 3: EMBEDDING — dense + optional sparse
+        # ---------------------------------------------------------------
+        chunk_texts = [c.text for c in chunks]
+
+        if chunk_texts:
+            embeddings = asyncio.run(_embed_chunks(settings, chunk_texts))
+        else:
+            embeddings = []
+
+        sparse_embeddings: list[tuple[list[int], list[float]]] = []
+        if settings.enable_sparse_embeddings and chunk_texts:
+            from app.ingestion.sparse_embedder import SparseEmbedder
+
+            sparse_emb = SparseEmbedder(model_name=settings.sparse_embedding_model)
+            sparse_embeddings = sparse_emb.embed_texts(chunk_texts)
+
+        logger.info("task.import_text.embedded", job_id=job_id, count=len(embeddings))
+
+        progress["embeddings_generated"] = len(embeddings)
+        _update_stage(engine, job_id, "extracting", "uploading", progress=progress)
+
+        # ---------------------------------------------------------------
+        # Stage 4: EXTRACTING — use pre_entities or run GLiNER
+        # ---------------------------------------------------------------
+        all_entities: list[dict] = []
+
+        if pre_entities:
+            all_entities = pre_entities
+        else:
+            from app.entities.extractor import EntityExtractor
+
+            extractor = EntityExtractor(model_name=settings.gliner_model)
+            seen_entities: set[tuple[str, str]] = set()
+
+            for chunk in chunks:
+                extracted = extractor.extract(chunk.text)
+                for ent in extracted:
+                    key = (ent.text.strip().lower(), ent.type)
+                    if key not in seen_entities:
+                        seen_entities.add(key)
+                        all_entities.append(
+                            {
+                                "name": ent.text.strip(),
+                                "type": ent.type,
+                                "page_number": chunk.metadata.get("page_number"),
+                            }
+                        )
+
+        logger.info(
+            "task.import_text.entities",
+            job_id=job_id,
+            entity_count=len(all_entities),
+        )
+
+        progress["entities_extracted"] = len(all_entities)
+        _update_stage(engine, job_id, "indexing", "uploading", progress=progress)
+
+        # ---------------------------------------------------------------
+        # Stage 5: INDEXING — Qdrant + Neo4j
+        # ---------------------------------------------------------------
+        from qdrant_client import QdrantClient
+        from qdrant_client.models import PointStruct, SparseVector
+
+        qdrant = QdrantClient(url=settings.qdrant_url)
+
+        points = []
+        chunk_data_for_neo4j = []
+
+        for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
+            point_id = str(uuid.uuid4())
+            payload = {
+                "source_file": filename,
+                "page_number": chunk.metadata.get("page_number", 1),
+                "section_heading": chunk.metadata.get("section_heading", ""),
+                "chunk_text": chunk.text,
+                "chunk_index": chunk.chunk_index,
+                "doc_id": job_id,
+                "token_count": chunk.token_count,
+            }
+            if matter_id is not None:
+                payload["matter_id"] = matter_id
+
+            vector: dict[str, Any] | list[float]
+            if sparse_embeddings:
+                indices, values = sparse_embeddings[i]
+                vector = {
+                    "dense": embedding,
+                    "sparse": SparseVector(indices=indices, values=values),
+                }
+            elif settings.enable_sparse_embeddings:
+                vector = {"dense": embedding}
+            else:
+                vector = embedding
+
+            points.append(PointStruct(id=point_id, vector=vector, payload=payload))
+            chunk_data_for_neo4j.append(
+                {
+                    "chunk_id": point_id,
+                    "text_preview": chunk.text[:200],
+                    "page_number": chunk.metadata.get("page_number", 1),
+                    "qdrant_point_id": point_id,
+                }
+            )
+
+        if points:
+            from app.common.vector_store import TEXT_COLLECTION
+
+            qdrant.upsert(collection_name=TEXT_COLLECTION, points=points)
+            logger.info("task.import_text.qdrant_indexed", job_id=job_id, points=len(points))
+
+        asyncio.run(
+            _index_to_neo4j(
+                settings=settings,
+                doc_id=job_id,
+                filename=filename,
+                doc_type=doc_type,
+                page_count=page_count,
+                minio_path=minio_path,
+                entities=all_entities,
+                chunk_data=chunk_data_for_neo4j,
+                matter_id=matter_id,
+            )
+        )
+
+        # ---------------------------------------------------------------
+        # Stage 6: COMPLETE — document record + post-processing
+        # ---------------------------------------------------------------
+        doc_id = _create_document_record(
+            engine=engine,
+            job_id=job_id,
+            filename=filename,
+            doc_type=doc_type,
+            page_count=page_count,
+            chunk_count=len(chunks),
+            entity_count=len(all_entities),
+            minio_path=minio_path,
+            file_size=file_size,
+            content_hash=content_hash,
+            matter_id=matter_id,
+        )
+
+        # Set import_source on the document record
+        if import_source:
+            with engine.connect() as conn:
+                conn.execute(
+                    text("UPDATE documents SET import_source = :source WHERE id = :doc_id"),
+                    {"source": import_source, "doc_id": doc_id},
+                )
+                conn.commit()
+
+        # Email threading (if email_headers provided)
+        if email_headers and settings.enable_email_threading:
+            try:
+                from app.ingestion.threading import EmailThreader
+
+                EmailThreader.assign_thread(engine, doc_id, email_headers, matter_id)
+                logger.info("task.import_text.threading_complete", job_id=job_id)
+            except Exception:
+                logger.warning("task.import_text.threading_failed", job_id=job_id, exc_info=True)
+
+        # Near-duplicate detection
+        if settings.enable_near_duplicate_detection:
+            try:
+                detect_duplicates.delay(doc_id, text, matter_id or "")
+                logger.info("task.import_text.dedup_dispatched", job_id=job_id)
+            except Exception:
+                logger.warning("task.import_text.dedup_dispatch_failed", job_id=job_id, exc_info=True)
+
+        # Increment bulk_import_jobs counter
+        if bulk_import_job_id:
+            with engine.connect() as conn:
+                conn.execute(
+                    text(
+                        """
+                        UPDATE bulk_import_jobs
+                        SET processed_documents = processed_documents + 1,
+                            updated_at = now()
+                        WHERE id = :id
+                        """
+                    ),
+                    {"id": bulk_import_job_id},
+                )
+                conn.commit()
+
+        _update_stage(engine, job_id, "complete", "complete", progress=progress)
+
+        logger.info(
+            "task.import_text.complete",
+            job_id=job_id,
+            chunks=len(chunks),
+            entities=len(all_entities),
+        )
+
+        return {
+            "job_id": job_id,
+            "status": "complete",
+            "page_count": page_count,
+            "chunk_count": len(chunks),
+            "entity_count": len(all_entities),
+        }
+
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.error("task.import_text.failed", job_id=job_id, error=str(exc), traceback=tb)
+
+        try:
+            _update_stage(engine, job_id, "failed", "failed", error=str(exc))
+        except Exception:
+            logger.error("task.import_text.failed_to_update_status", job_id=job_id)
+
+        # Increment failed counter on bulk import job
+        if bulk_import_job_id:
+            try:
+                with engine.connect() as conn:
+                    conn.execute(
+                        text(
+                            """
+                            UPDATE bulk_import_jobs
+                            SET failed_documents = failed_documents + 1,
+                                updated_at = now()
+                            WHERE id = :id
+                            """
+                        ),
+                        {"id": bulk_import_job_id},
+                    )
+                    conn.commit()
+            except Exception:
+                logger.error("task.import_text.failed_to_update_bulk_job", job_id=job_id)
+
+        if self.request.retries < self.max_retries:
+            raise self.retry(exc=exc)
+        raise
+
+    finally:
+        engine.dispose()
+
+
 @shared_task(
     bind=True,
     name="ingestion.process_batch",
@@ -931,6 +1254,7 @@ def process_batch(self, job_id: str, file_paths: list[str]) -> dict:
 # ---------------------------------------------------------------------------
 # Near-duplicate detection task
 # ---------------------------------------------------------------------------
+
 
 @shared_task(
     bind=True,
@@ -983,9 +1307,7 @@ def detect_duplicates(self, doc_id: str, text: str, matter_id: str) -> dict:
 
         version_group_id = None
         if matches and filename:
-            version_group_id = VersionDetector.detect_versions(
-                engine, doc_id, filename, matches
-            )
+            version_group_id = VersionDetector.detect_versions(engine, doc_id, filename, matches)
 
         logger.info(
             "task.detect_duplicates.complete",
@@ -1015,6 +1337,7 @@ def detect_duplicates(self, doc_id: str, text: str, matter_id: str) -> dict:
 # ---------------------------------------------------------------------------
 # Inclusive email detection task
 # ---------------------------------------------------------------------------
+
 
 @shared_task(
     bind=True,
@@ -1069,6 +1392,7 @@ def detect_inclusive_emails(self, matter_id: str | None = None) -> dict:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _infer_doc_type(filename: str) -> str:
     """Infer a broad document type from the filename extension."""

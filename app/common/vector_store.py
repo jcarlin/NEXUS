@@ -298,3 +298,45 @@ class VectorStoreClient:
             "vectors_count": info.indexed_vectors_count,
             "status": info.status.value,
         }
+
+    # ------------------------------------------------------------------
+    # HNSW index management (bulk import optimization)
+    # ------------------------------------------------------------------
+
+    def disable_hnsw_indexing(self, collection_name: str) -> None:
+        """Disable HNSW graph link construction for fast bulk inserts.
+
+        Setting ``m=0`` tells Qdrant to skip building graph links during
+        upserts, yielding 5-10x speedup for large batch imports.
+        Call ``rebuild_hnsw_index()`` after the import is complete.
+        """
+        from qdrant_client.models import HnswConfigDiff
+
+        self.client.update_collection(
+            collection_name=collection_name,
+            hnsw_config=HnswConfigDiff(m=0),
+        )
+        logger.info("qdrant.hnsw_disabled", collection=collection_name)
+
+    def rebuild_hnsw_index(
+        self,
+        collection_name: str,
+        m: int = 16,
+        ef_construct: int = 200,
+    ) -> None:
+        """Restore HNSW defaults and trigger a background index rebuild.
+
+        Qdrant rebuilds segments in the background after this call returns.
+        """
+        from qdrant_client.models import HnswConfigDiff
+
+        self.client.update_collection(
+            collection_name=collection_name,
+            hnsw_config=HnswConfigDiff(m=m, ef_construct=ef_construct),
+        )
+        logger.info(
+            "qdrant.hnsw_rebuild",
+            collection=collection_name,
+            m=m,
+            ef_construct=ef_construct,
+        )

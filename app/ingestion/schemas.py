@@ -61,7 +61,7 @@ class BatchIngestResponse(BaseModel):
 class S3EventRecord(BaseModel):
     """Single record from an S3/MinIO bucket event notification."""
 
-    eventName: str = ""
+    eventName: str = ""  # noqa: N815
     s3: dict = Field(default_factory=dict)
 
 
@@ -77,3 +77,25 @@ class WebhookResponse(BaseModel):
     status: str
     job_ids: list[str]
     total: int
+
+
+# ---------------------------------------------------------------------------
+# Bulk import schemas
+# ---------------------------------------------------------------------------
+
+
+class BulkImportStatusResponse(BaseModel):
+    """Status view of a bulk import job."""
+
+    import_id: UUID
+    status: str
+    adapter_type: str | None = None
+    total_documents: int | None = None
+    processed_documents: int = 0
+    failed_documents: int = 0
+    skipped_documents: int = 0
+    elapsed_seconds: float | None = None
+    estimated_remaining_seconds: float | None = None
+    error: str | None = None
+    created_at: datetime
+    updated_at: datetime

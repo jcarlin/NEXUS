@@ -86,6 +86,13 @@ class Settings(BaseSettings):
     audit_retention_days: int = 365
     enable_ai_audit_logging: bool = True
 
+    # --- Batch Embeddings (stub — real-time embedding used for now) ---
+    enable_batch_embeddings: bool = False
+    batch_embeddings_poll_interval: int = 60
+
+    # --- Case Intelligence ---
+    enable_case_setup_agent: bool = False
+
     # --- Auth ---
     jwt_secret_key: str = "change-me-to-a-random-64-char-string"
     jwt_algorithm: str = "HS256"
