@@ -52,6 +52,9 @@ dependencies = [
     # Entity Resolution
     "rapidfuzz",
 
+    # Near-Duplicate Detection
+    "datasketch>=1.6",
+
     # Auth
     "PyJWT[cryptography]",
     "passlib[bcrypt]",

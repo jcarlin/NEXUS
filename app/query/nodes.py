@@ -98,6 +98,7 @@ def create_nodes(
             [{"role": "user", "content": prompt}],
             max_tokens=20,
             temperature=0.0,
+            node_name="classify",
         )
 
         # Extract just the category word
@@ -123,6 +124,7 @@ def create_nodes(
             [{"role": "user", "content": prompt}],
             max_tokens=300,
             temperature=0.1,
+            node_name="rewrite",
         )
 
         rewritten = rewritten.strip()
@@ -292,6 +294,7 @@ def create_nodes(
             [{"role": "user", "content": prompt}],
             max_tokens=300,
             temperature=0.3,
+            node_name="reformulate",
         )
 
         reformulated = reformulated.strip()
@@ -341,6 +344,7 @@ def create_nodes(
             ],
             max_tokens=2048,
             temperature=0.1,
+            node_name="synthesize",
         ):
             full_response += token
             writer({"type": "token", "text": token})
@@ -399,6 +403,7 @@ def create_nodes(
             [{"role": "user", "content": prompt}],
             max_tokens=500,
             temperature=0.3,
+            node_name="generate_follow_ups",
         )
 
         # Parse lines — take first 3 non-empty lines

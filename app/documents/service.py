@@ -18,7 +18,10 @@ logger = structlog.get_logger(__name__)
 _COLUMNS = """id, job_id, filename, document_type, page_count, chunk_count,
               entity_count, minio_path, file_size_bytes, content_hash,
               matter_id, metadata_, created_at, updated_at,
-              privilege_status, privilege_reviewed_by, privilege_reviewed_at"""
+              privilege_status, privilege_reviewed_by, privilege_reviewed_at,
+              message_id, in_reply_to, references_, thread_id, thread_position,
+              is_inclusive, duplicate_cluster_id, duplicate_score,
+              version_group_id, version_number, is_final_version"""
 
 # Privilege statuses that non-privileged users (paralegal, reviewer) cannot see
 _RESTRICTED_STATUSES = ("privileged", "work_product")
@@ -206,6 +209,58 @@ class DocumentService:
             "privilege_reviewed_by": reviewed_by,
             "privilege_reviewed_at": reviewed_at,
         }
+
+    # ------------------------------------------------------------------
+    # LIST BY THREAD
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    async def list_by_thread(
+        db: AsyncSession,
+        thread_id: str,
+        matter_id: UUID | None = None,
+    ) -> list[dict]:
+        """List all documents in an email thread, ordered by thread_position."""
+        where = "WHERE thread_id = :thread_id"
+        params: dict = {"thread_id": thread_id}
+        if matter_id is not None:
+            where += " AND matter_id = :matter_id"
+            params["matter_id"] = matter_id
+
+        result = await db.execute(
+            text(
+                f"SELECT {_COLUMNS} FROM documents {where} "
+                f"ORDER BY thread_position ASC"
+            ),
+            params,
+        )
+        return [_row_to_dict(r) for r in result.all()]
+
+    # ------------------------------------------------------------------
+    # LIST BY CLUSTER
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    async def list_by_cluster(
+        db: AsyncSession,
+        cluster_id: str,
+        matter_id: UUID | None = None,
+    ) -> list[dict]:
+        """List all documents in a duplicate cluster."""
+        where = "WHERE duplicate_cluster_id = :cluster_id"
+        params: dict = {"cluster_id": cluster_id}
+        if matter_id is not None:
+            where += " AND matter_id = :matter_id"
+            params["matter_id"] = matter_id
+
+        result = await db.execute(
+            text(
+                f"SELECT {_COLUMNS} FROM documents {where} "
+                f"ORDER BY duplicate_score DESC NULLS LAST"
+            ),
+            params,
+        )
+        return [_row_to_dict(r) for r in result.all()]
 
     # ------------------------------------------------------------------
     # DELETE

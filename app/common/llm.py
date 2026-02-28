@@ -6,6 +6,8 @@ so cloud-to-local migration is a config change (URL + model name), not a code ch
 
 from __future__ import annotations
 
+import hashlib
+import time
 from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING, Any
 
@@ -46,6 +48,86 @@ class LLMClient:
         logger.info("llm.init", provider=self.provider, model=self.model)
 
     # ------------------------------------------------------------------
+    # AI audit logging (fire-and-forget)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _hash_prompt(messages: list[dict[str, str]]) -> str:
+        """Deterministic SHA-256 hash of the prompt messages."""
+        content = "".join(f"{m.get('role', '')}:{m.get('content', '')}" for m in messages)
+        return hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+    async def _log_ai_interaction(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        call_type: str = "completion",
+        latency_ms: float,
+        input_tokens: int | None = None,
+        output_tokens: int | None = None,
+        node_name: str | None = None,
+        status: str = "success",
+        error_message: str | None = None,
+    ) -> None:
+        """Write an AI audit log entry in its own session (fire-and-forget).
+
+        Same pattern as AuditLoggingMiddleware._write_audit_log: creates its own
+        session, swallows exceptions with a warning log.
+        """
+        try:
+            from app.dependencies import get_settings
+
+            settings = get_settings()
+            if not settings.enable_ai_audit_logging:
+                return
+
+            from sqlalchemy import text as sa_text
+
+            from app.dependencies import _get_session_factory
+
+            ctx = structlog.contextvars.get_contextvars()
+            request_id = ctx.get("request_id")
+            session_id = ctx.get("session_id")
+
+            prompt_hash = self._hash_prompt(messages)
+            total_tokens = None
+            if input_tokens is not None and output_tokens is not None:
+                total_tokens = input_tokens + output_tokens
+
+            factory = _get_session_factory()
+            async with factory() as session:
+                await session.execute(
+                    sa_text("""
+                        INSERT INTO ai_audit_log
+                            (request_id, session_id, call_type, provider, model,
+                             node_name, prompt_hash, input_tokens, output_tokens,
+                             total_tokens, latency_ms, status, error_message)
+                        VALUES
+                            (:request_id, :session_id, :call_type, :provider, :model,
+                             :node_name, :prompt_hash, :input_tokens, :output_tokens,
+                             :total_tokens, :latency_ms, :status, :error_message)
+                    """),
+                    {
+                        "request_id": request_id,
+                        "session_id": session_id,
+                        "call_type": call_type,
+                        "provider": self.provider,
+                        "model": self.model,
+                        "node_name": node_name,
+                        "prompt_hash": prompt_hash,
+                        "input_tokens": input_tokens,
+                        "output_tokens": output_tokens,
+                        "total_tokens": total_tokens,
+                        "latency_ms": latency_ms,
+                        "status": status,
+                        "error_message": error_message,
+                    },
+                )
+                await session.commit()
+        except Exception:
+            logger.warning("ai_audit_log.write_failed", exc_info=True)
+
+    # ------------------------------------------------------------------
     # Completion (non-streaming)
     # ------------------------------------------------------------------
 
@@ -61,11 +143,44 @@ class LLMClient:
         """Send *messages* and return the full response text."""
         logger.debug("llm.complete.start", provider=self.provider, model=self.model, message_count=len(messages))
 
-        if self.provider == "anthropic":
-            return await self._complete_anthropic(messages, max_tokens=max_tokens, temperature=temperature, **kwargs)
-        return await self._complete_openai(messages, max_tokens=max_tokens, temperature=temperature, **kwargs)
+        node_name = kwargs.pop("node_name", None)
+        start = time.perf_counter()
+        input_tokens: int | None = None
+        output_tokens: int | None = None
 
-    async def _complete_anthropic(self, messages: list[dict[str, str]], **kwargs: Any) -> str:
+        try:
+            if self.provider == "anthropic":
+                result, input_tokens, output_tokens = await self._complete_anthropic(
+                    messages, max_tokens=max_tokens, temperature=temperature, **kwargs,
+                )
+            else:
+                result, input_tokens, output_tokens = await self._complete_openai(
+                    messages, max_tokens=max_tokens, temperature=temperature, **kwargs,
+                )
+        except Exception as exc:
+            latency_ms = round((time.perf_counter() - start) * 1000, 2)
+            await self._log_ai_interaction(
+                messages,
+                latency_ms=latency_ms,
+                node_name=node_name,
+                status="error",
+                error_message=str(exc),
+            )
+            raise
+
+        latency_ms = round((time.perf_counter() - start) * 1000, 2)
+        await self._log_ai_interaction(
+            messages,
+            latency_ms=latency_ms,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            node_name=node_name,
+        )
+        return result
+
+    async def _complete_anthropic(
+        self, messages: list[dict[str, str]], **kwargs: Any,
+    ) -> tuple[str, int | None, int | None]:
         from anthropic import AsyncAnthropic
 
         client: AsyncAnthropic = self._client  # type: ignore[assignment]
@@ -86,9 +201,13 @@ class LLMClient:
             system=system_text or "You are a helpful assistant.",
             messages=chat_messages,  # type: ignore[arg-type]
         )
-        return response.content[0].text
+        input_tokens = getattr(response.usage, "input_tokens", None)
+        output_tokens = getattr(response.usage, "output_tokens", None)
+        return response.content[0].text, input_tokens, output_tokens
 
-    async def _complete_openai(self, messages: list[dict[str, str]], **kwargs: Any) -> str:
+    async def _complete_openai(
+        self, messages: list[dict[str, str]], **kwargs: Any,
+    ) -> tuple[str, int | None, int | None]:
         from openai import AsyncOpenAI
 
         client: AsyncOpenAI = self._client  # type: ignore[assignment]
@@ -99,7 +218,9 @@ class LLMClient:
             temperature=kwargs.get("temperature", 0.1),
         )
         choice = response.choices[0]
-        return choice.message.content or ""
+        input_tokens = getattr(response.usage, "prompt_tokens", None) if response.usage else None
+        output_tokens = getattr(response.usage, "completion_tokens", None) if response.usage else None
+        return choice.message.content or "", input_tokens, output_tokens
 
     # ------------------------------------------------------------------
     # Streaming
@@ -117,12 +238,35 @@ class LLMClient:
         """Yield response tokens one-at-a-time for SSE streaming."""
         logger.debug("llm.stream.start", provider=self.provider, model=self.model)
 
-        if self.provider == "anthropic":
-            async for token in self._stream_anthropic(messages, max_tokens=max_tokens, temperature=temperature, **kwargs):
-                yield token
-        else:
-            async for token in self._stream_openai(messages, max_tokens=max_tokens, temperature=temperature, **kwargs):
-                yield token
+        node_name = kwargs.pop("node_name", None)
+        start = time.perf_counter()
+
+        try:
+            if self.provider == "anthropic":
+                async for token in self._stream_anthropic(messages, max_tokens=max_tokens, temperature=temperature, **kwargs):
+                    yield token
+            else:
+                async for token in self._stream_openai(messages, max_tokens=max_tokens, temperature=temperature, **kwargs):
+                    yield token
+        except Exception as exc:
+            latency_ms = round((time.perf_counter() - start) * 1000, 2)
+            await self._log_ai_interaction(
+                messages,
+                call_type="stream",
+                latency_ms=latency_ms,
+                node_name=node_name,
+                status="error",
+                error_message=str(exc),
+            )
+            raise
+
+        latency_ms = round((time.perf_counter() - start) * 1000, 2)
+        await self._log_ai_interaction(
+            messages,
+            call_type="stream",
+            latency_ms=latency_ms,
+            node_name=node_name,
+        )
 
     async def _stream_anthropic(self, messages: list[dict[str, str]], **kwargs: Any) -> AsyncIterator[str]:
         from anthropic import AsyncAnthropic

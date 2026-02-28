@@ -21,8 +21,10 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
+        session_id = request.headers.get("X-Session-ID", str(uuid.uuid4()))
         request.state.request_id = request_id
-        structlog.contextvars.bind_contextvars(request_id=request_id)
+        request.state.session_id = session_id
+        structlog.contextvars.bind_contextvars(request_id=request_id, session_id=session_id)
         try:
             response = await call_next(request)
             response.headers["X-Request-ID"] = request_id
@@ -149,6 +151,7 @@ class AuditLoggingMiddleware(BaseHTTPMiddleware):
                     pass  # Invalid UUID in header — store as NULL
 
             request_id = getattr(request.state, "request_id", None)
+            session_id = getattr(request.state, "session_id", None)
 
             factory = _get_session_factory()
             async with factory() as session:
@@ -157,11 +160,11 @@ class AuditLoggingMiddleware(BaseHTTPMiddleware):
                         INSERT INTO audit_log
                             (user_id, user_email, action, resource, resource_type,
                              matter_id, ip_address, user_agent, status_code,
-                             duration_ms, request_id)
+                             duration_ms, request_id, session_id)
                         VALUES
                             (:user_id, :user_email, :action, :resource, :resource_type,
                              :matter_id, :ip_address, :user_agent, :status_code,
-                             :duration_ms, :request_id)
+                             :duration_ms, :request_id, :session_id)
                     """),
                     {
                         "user_id": user_id,
@@ -175,6 +178,7 @@ class AuditLoggingMiddleware(BaseHTTPMiddleware):
                         "status_code": status_code,
                         "duration_ms": duration_ms,
                         "request_id": request_id,
+                        "session_id": session_id,
                     },
                 )
                 await session.commit()

@@ -20,6 +20,10 @@ class DocumentResponse(BaseModel):
     created_at: datetime
     minio_path: str
     privilege_status: str | None = None
+    thread_id: str | None = None
+    is_inclusive: bool | None = None
+    duplicate_cluster_id: str | None = None
+    version_group_id: str | None = None
 
 
 class DocumentDetail(DocumentResponse):
@@ -32,6 +36,12 @@ class DocumentDetail(DocumentResponse):
     updated_at: datetime | None = None
     privilege_reviewed_by: UUID | None = None
     privilege_reviewed_at: datetime | None = None
+    message_id: str | None = None
+    in_reply_to: str | None = None
+    thread_position: int | None = None
+    duplicate_score: float | None = None
+    version_number: int | None = None
+    is_final_version: bool | None = None
 
 
 class DocumentListResponse(PaginatedResponse[DocumentResponse]):

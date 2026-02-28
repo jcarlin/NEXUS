@@ -355,13 +355,16 @@ class DocumentParser:
         raw_bytes = file_path.read_bytes()
         msg = email.message_from_bytes(raw_bytes, policy=email.policy.default)
 
-        # Extract headers
+        # Extract headers (including RFC 5322 threading headers)
         headers = {
             "from": str(msg.get("From", "")),
             "to": str(msg.get("To", "")),
             "cc": str(msg.get("Cc", "")),
             "subject": str(msg.get("Subject", "")),
             "date": str(msg.get("Date", "")),
+            "message_id": str(msg.get("Message-ID", "") or ""),
+            "in_reply_to": str(msg.get("In-Reply-To", "") or ""),
+            "references": str(msg.get("References", "") or ""),
         }
 
         # Extract body text
@@ -459,12 +462,33 @@ class DocumentParser:
 
         msg = extract_msg.Message(str(file_path))
         try:
+            # Extract RFC 5322 threading headers from MSG transport headers
+            message_id = ""
+            in_reply_to = ""
+            references = ""
+            transport_headers = getattr(msg, "header", None) or ""
+            if not transport_headers:
+                transport_headers = getattr(msg, "transportMessageHeaders", None) or ""
+            if transport_headers:
+                import email as _email_mod
+                import email.policy as _email_policy
+
+                parsed_headers = _email_mod.message_from_string(
+                    transport_headers, policy=_email_policy.default
+                )
+                message_id = str(parsed_headers.get("Message-ID", "") or "")
+                in_reply_to = str(parsed_headers.get("In-Reply-To", "") or "")
+                references = str(parsed_headers.get("References", "") or "")
+
             headers = {
                 "from": msg.sender or "",
                 "to": msg.to or "",
                 "cc": msg.cc or "",
                 "subject": msg.subject or "",
                 "date": str(msg.date) if msg.date else "",
+                "message_id": message_id,
+                "in_reply_to": in_reply_to,
+                "references": references,
             }
 
             body = msg.body or ""

@@ -2,42 +2,42 @@
 
 > Multimodal RAG Investigation Platform for Legal Document Intelligence
 
-**Last updated:** 2026-02-27
+**Last updated:** 2026-02-28
 
 ---
 
 ## Milestone Summary
 
-| # | Milestone | Agent? | Status | Tests | Duration | Dependencies |
-|---|---|---|---|---|---|---|
-| M0 | Skeleton + Infrastructure | — | Done | 8 | — | — |
-| M1 | Single Doc Ingestion | — | Done | 23 | — | M0 |
-| M2 | Query Pipeline (LangGraph) | — | Done | 53 | — | M1 |
-| M3 | Multi-Format + Entity Resolution | — | Done | 44 | — | M1 |
-| M4 | Chat + Streamlit + Doc Browsing | — | Done | 15 | — | M2, M3 |
-| M5 | Production Hardening (Core) | — | Done | 16 | — | M4 |
-| M5b | Tests + Reranker | — | Done | 27 | — | — |
-| M6 | Auth + Multi-Tenancy | — | Done | 15 | — | — |
-| M6b | EDRM Interop + Email Intelligence | — | TODO | — | 2 weeks | M6 |
-| M7 | Audit + Privilege | — | Done | 20 | — | M6 |
-| M7b | SOC 2 Audit Readiness | — | TODO | — | 1 week | M7 |
-| M8 | Retrieval Infrastructure | — | Done | 8 | — | — (parallel w/ M7) |
-| M8b | Embedding Abstraction Layer | — | Done | 11 | — | M8 |
-| M9 | Evaluation Framework | — | TODO | — | 2 weeks | M8 |
-| M9b | Case Intelligence Layer | ⚡ Case Setup | TODO | — | 2 weeks | M9 |
-| M10 | Agentic Query Pipeline | ⚡ Orchestrator, Citation Verifier | TODO | — | 2.5 weeks | M8, M9, M9b |
-| M10b | Sentiment + Hot Doc Detection | ⚡ Hot Doc, Completeness | TODO | — | 1.5 weeks | M10 |
-| M10c | Communication Analytics | — | TODO | — | 1 week | M10, M11 |
-| M11 | Knowledge Graph Enhancement | ⚡ Entity Resolution | TODO | — | 2.5 weeks | M10 |
-| M12 | Bulk Import + EDRM | — | TODO | — | 2 weeks | M6, M6b, M8 (parallel w/ M10-11) |
-| M13 | React Frontend | — | TODO | — | 3.5 weeks | M6, M7, M10, M10b, M10c, M9b |
-| M14 | Annotations + Export + EDRM | — | TODO | — | 2.5 weeks | M13 |
-| M14b | Redaction | — | TODO | — | 1.5 weeks | M14 |
-| M15 | Retrieval Tuning | — | TODO | — | 1 week | M9, M8b |
-| M16 | Visual Embeddings | — | TODO | — | 2 weeks | M15 (conditional) |
-| M17 | Full Local Deployment | — | TODO | — | 2 weeks | All |
+| # | Milestone | Agent? | Status | Tests | Gate | Duration | Dependencies |
+|---|---|---|---|---|---|---|---|
+| M0 | Skeleton + Infrastructure | — | Done | 8 | Regression | — | — |
+| M1 | Single Doc Ingestion | — | Done | 23 | Regression | — | M0 |
+| M2 | Query Pipeline (LangGraph) | — | Done | 53 | Regression | — | M1 |
+| M3 | Multi-Format + Entity Resolution | — | Done | 44 | Regression | — | M1 |
+| M4 | Chat + Streamlit + Doc Browsing | — | Done | 15 | Regression | — | M2, M3 |
+| M5 | Production Hardening (Core) | — | Done | 16 | Regression | — | M4 |
+| M5b | Tests + Reranker | — | Done | 27 | Regression | — | — |
+| M6 | Auth + Multi-Tenancy | — | Done | 15 | Regression | — | — |
+| M6b | EDRM Interop + Email Intelligence | — | Done | 15 | Regression + migration | 2 weeks | M6 |
+| M7 | Audit + Privilege | — | Done | 20 | Regression | — | M6 |
+| M7b | SOC 2 Audit Readiness | — | Done | 10 | Regression + migration | 1 week | M7 |
+| M8 | Retrieval Infrastructure | — | Done | 8 | Regression | — | — (parallel w/ M7) |
+| M8b | Embedding Abstraction Layer | — | Done | 11 | Regression | — | M8 |
+| M9 | Evaluation Framework | — | TODO | 9+ | Baseline metrics documented | 2 weeks | M8 |
+| M9b | Case Intelligence Layer | ⚡ Case Setup | TODO | 15 | Regression | 2 weeks | M9 |
+| M10 | Agentic Query Pipeline | ⚡ Orchestrator, Citation Verifier | TODO | 20 | Regression + eval non-regression | 2.5 weeks | M8, M9, M9b |
+| M10b | Sentiment + Hot Doc Detection | ⚡ Hot Doc, Completeness | TODO | 12 | Regression + eval non-regression | 1.5 weeks | M10 |
+| M10c | Communication Analytics | — | TODO | 10 | Regression | 1 week | M10, M11 |
+| M11 | Knowledge Graph Enhancement | ⚡ Entity Resolution | TODO | 15 | Regression + eval non-regression | 2.5 weeks | M10 |
+| M12 | Bulk Import + EDRM | — | TODO | 10 | Regression + migration | 2 weeks | M6, M6b, M8 (parallel w/ M10-11) |
+| M13 | React Frontend | — | TODO | 12+ | Frontend CI + backend regression | 3.5 weeks | M6, M7, M10, M10b, M10c, M9b |
+| M14 | Annotations + Export + EDRM | — | TODO | 10 | Regression + migration | 2.5 weeks | M13 |
+| M14b | Redaction | — | TODO | 8 | Regression | 1.5 weeks | M14 |
+| M15 | Retrieval Tuning | — | TODO | 1 + 3 eval | Eval improvement ≥ 0.03 | 1 week | M9, M8b |
+| M16 | Visual Embeddings | — | TODO | 5+ + eval | Eval lift ≥ 5% or stays disabled | 2 weeks | M15 (conditional) |
+| M17 | Full Local Deployment | — | TODO | 3+ | Health check + benchmarks | 2 weeks | All |
 
-**Total tests: 241 passing** (as of M8b completion)
+**Total tests: 266 passing** (regression baseline as of M7b/M6b completion)
 
 **6 autonomous LangGraph agents** across the pipeline (Case Setup, Investigation Orchestrator, Citation Verifier, Hot Doc Scanner, Contextual Completeness, Entity Resolution)
 
@@ -97,6 +97,42 @@ M16 (Visual Embeddings) — conditional on M9 eval showing text retrieval gaps
 
 ---
 
+## Testing Policy
+
+These rules apply to every milestone. A milestone cannot be marked Done unless its quality gate passes.
+
+### Regression Gate
+
+All existing tests must pass before a milestone is marked Done. Run `pytest tests/ -v` — zero failures, non-negotiable. Any new test failures must be fixed within the milestone that introduced them, not deferred.
+
+### Coverage Floor
+
+No milestone may decrease overall line coverage. Targets:
+- **By M10:** 60% line coverage
+- **By M13:** 70% line coverage
+- **New modules:** Every new `service.py` and `router.py` must have ≥50% line coverage on delivery
+
+### Test Categories
+
+- **Unit:** Tests a single function/class in isolation. Mocks all external dependencies. Fast (<1s each).
+- **Integration:** Tests interaction between 2+ internal modules (e.g., router → service → mock DB). May use test fixtures.
+- **Contract:** Tests that external service calls use correct parameters, payloads, and handle expected responses. Mocks the service, tests the contract.
+- **Evaluation:** Measures retrieval/generation quality against ground-truth dataset. Runs `scripts/evaluate.py`. Slower (minutes). Required for milestones touching query/retrieval after M9.
+
+### Quality Gate Definition
+
+Each milestone defines a gate — a set of pass/fail conditions. A milestone without a defined gate cannot be marked Done. Gates are listed in the Milestone Summary table and detailed in each milestone's `**Testing:**` block.
+
+### Evaluation Regression Gate (M10+)
+
+After M9 establishes baseline metrics, any milestone touching query or retrieval (M10, M10b, M10c, M11, M15, M16) must verify that no evaluation metric regresses by more than 0.05. Run `scripts/evaluate.py` before and after the milestone's changes. Metrics checked:
+- MRR@10, Recall@10, NDCG@10
+- Faithfulness, citation accuracy, hallucination rate
+
+If a metric regresses beyond the threshold, the milestone must either fix the regression or document a justified trade-off with explicit approval.
+
+---
+
 ## Done
 
 ### M0: Skeleton + Infrastructure
@@ -107,6 +143,8 @@ M16 (Visual Embeddings) — conditional on M9 eval showing text retrieval gaps
 - Health check endpoint aggregating all service statuses
 - Stub routers for all domains
 - Pydantic Settings for config management
+
+**Testing (8 tests):** `tests/test_health.py` — health endpoint response, OpenAPI spec generation, router stub status codes. Gate: regression.
 
 ### M1: Single Doc Ingestion
 - `POST /ingest` — single file upload to MinIO + Celery dispatch
@@ -119,6 +157,8 @@ M16 (Visual Embeddings) — conditional on M9 eval showing text retrieval gaps
 - Neo4j entity/relationship graph indexing
 - Job status tracking with stage progression
 
+**Testing (23 tests):** `tests/test_ingestion/test_router.py`, `test_parser.py`, `test_chunker.py`, `test_embedder.py` — ingest endpoint validation, Docling parser routing, semantic chunking boundaries, embedding batch calls, job status transitions. Gate: regression.
+
 ### M2: Query Pipeline (LangGraph)
 - `POST /query` — synchronous query with full response
 - `POST /query/stream` — SSE streaming (sources before generation, token-by-token)
@@ -126,6 +166,8 @@ M16 (Visual Embeddings) — conditional on M9 eval showing text retrieval gaps
 - HybridRetriever: Qdrant dense + Neo4j graph traversal
 - Chat persistence in PostgreSQL (JSONB for source_docs/entities)
 - `GET /chats`, `GET /chats/{thread_id}`, `DELETE /chats/{thread_id}`
+
+**Testing (53 tests):** `tests/test_query/test_router.py`, `test_nodes.py`, `test_graph.py`, `test_retriever.py`, `test_prompts.py` — graph node transitions, retriever contract (Qdrant + Neo4j calls), prompt template rendering, query/chat endpoint validation, SSE event format. Gate: regression.
 
 ### M3: Multi-Format + Entity Resolution
 - Parsers for EML, MSG, CSV, RTF, TXT
@@ -136,12 +178,16 @@ M16 (Visual Embeddings) — conditional on M9 eval showing text retrieval gaps
 - Instructor + Claude relationship extraction (feature-flagged)
 - Working entity/graph API endpoints
 
+**Testing (44 tests):** `tests/test_ingestion/test_parser_m3.py`, `test_batch.py`, `test_zip.py`, `test_webhook.py`, `tests/test_entities/` — multi-format parser dispatch (EML/MSG/CSV/RTF/TXT), ZIP extraction and child dispatch, batch upload validation, entity extraction and resolution, relationship extraction contract. Gate: regression.
+
 ### M4: Chat + Streamlit + Doc/Entity Browsing
 - DocumentService CRUD with raw SQL
 - `GET /documents` (list), `GET /documents/{id}` (detail), `GET /documents/{id}/preview`, `GET /documents/{id}/download`
 - Streamlit 3-page dashboard: Chat, Documents, Entities
 - DocumentDetail Pydantic schema
 - Frontend optional deps in pyproject.toml
+
+**Testing (15 tests):** `tests/test_documents/test_router.py`, `test_service.py` — document CRUD endpoints, presigned URL generation, pagination, MinIO service contract. Gate: regression.
 
 ### M5: Production Hardening (Core)
 - PostgresCheckpointer for multi-turn LangGraph state persistence
@@ -150,6 +196,8 @@ M16 (Visual Embeddings) — conditional on M9 eval showing text retrieval gaps
 - Redis sliding-window rate limiting
 - structlog with contextvars (request_id, task_id, job_id)
 - Configurable embedding batch size
+
+**Testing (16 tests):** `tests/test_query/test_checkpointer.py`, `test_streaming.py`, `tests/test_common/test_rate_limit.py` — checkpointer persistence, SSE stream format and token delivery, rate limit sliding window logic, webhook validation. Gate: regression.
 
 ### M5b: Tests + Reranker
 - `bge-reranker-v2-m3` cross-encoder reranker (`app/query/reranker.py`) — feature-flagged via `ENABLE_RERANKER`
@@ -160,6 +208,8 @@ M16 (Visual Embeddings) — conditional on M9 eval showing text retrieval gaps
 - Fixed pre-existing failing test (`test_query_stub_returns_not_implemented` → `test_query_requires_body`)
 - 8 reranker unit tests, 3 feature-flag node tests
 - 17 integration tests: ingest→query pipeline (5), SSE streaming E2E (5), error recovery (7)
+
+**Testing (27 tests):** `tests/test_query/test_reranker.py`, `tests/test_integration/` — reranker scoring and sorting, feature-flag toggling, cross-encoder contract, ingest→query E2E pipeline, SSE streaming E2E, error recovery paths. Gate: regression.
 
 ### M6: Auth + Multi-Tenancy
 - Alembic migration 002: `users`, `case_matters`, `user_case_matters` tables + NULLABLE `matter_id` FK on `jobs`, `documents`, `chat_messages`
@@ -172,6 +222,8 @@ M16 (Visual Embeddings) — conditional on M9 eval showing text retrieval gaps
 - CORS lockdown: `allow_origins=["*"]` replaced with configured origins
 - Auth dependency overrides in test fixtures (existing 187 tests unaffected)
 - 15 tests: auth service (4), auth router (4), auth middleware (7)
+
+**Testing (15 tests):** `tests/test_auth/test_service.py`, `test_router.py`, `test_middleware.py` — JWT issuance and validation, password hashing, role-based access control, matter scoping header enforcement, API key fallback, auth dependency overrides. Gate: regression.
 
 ### M7: Audit + Privilege
 - Alembic migration 003: `audit_log` table, `privilege_status` + `privilege_reviewed_by` + `privilege_reviewed_at` on `documents`
@@ -188,6 +240,8 @@ M16 (Visual Embeddings) — conditional on M9 eval showing text retrieval gaps
 - `GET /admin/audit-log` — paginated, filterable audit log viewer (admin-only)
 - 20 tests: privilege CRUD (4), privilege filtering (3), Qdrant must_not filter (1), Neo4j Cypher filter (1), graph traversal privilege (3), audit middleware (5), admin endpoint (2), helper functions (1)
 
+**Testing (20 tests):** `tests/test_documents/test_privilege.py`, `tests/test_common/test_audit_middleware.py`, `tests/test_auth/test_admin_router.py`, plus privilege tests in `test_query/test_nodes.py` and `test_query/test_retriever.py` — privilege CRUD, 3-layer privilege filtering (SQL + Qdrant + Neo4j), audit middleware fire-and-forget logging, admin audit-log endpoint, graph traversal privilege enforcement. Gate: regression.
+
 ### M8: Retrieval Infrastructure
 - Sparse embeddings via FastEmbed BM42 (`app/ingestion/sparse_embedder.py`) — feature-flagged via `ENABLE_SPARSE_EMBEDDINGS`
 - Lazy-loaded `SparseTextEmbedding` (follows Reranker/EntityExtractor pattern)
@@ -199,6 +253,8 @@ M16 (Visual Embeddings) — conditional on M9 eval showing text retrieval gaps
 - `scripts/reembed.py` migration script: scroll → re-embed → recreate collection with named vectors
 - 8 tests: sparse embedder (2), vector store (4), retriever sparse (2)
 
+**Testing (8 tests):** `tests/test_ingestion/test_sparse_embedder.py`, `tests/test_common/test_vector_store.py`, sparse retriever tests in `test_query/test_retriever.py` — sparse embedding generation, named vector format, native RRF fusion via prefetch, feature-flag toggling, backward compatibility with unnamed vectors. Gate: regression.
+
 ### M8b: Embedding Abstraction Layer
 - `app/common/embedder.py`: `EmbeddingProvider` protocol with `embed_texts()` and `embed_query()` methods
 - `OpenAIEmbeddingProvider`: existing OpenAI behavior behind the protocol, with audit logging (SHA-256 hash of input data on every external API call)
@@ -208,6 +264,8 @@ M16 (Visual Embeddings) — conditional on M9 eval showing text retrieval gaps
 - `app/ingestion/embedder.py` → backward-compatible re-export alias
 - 11 tests: OpenAI provider (4), local provider (4), DI factory (2), protocol check (1)
 
+**Testing (11 tests):** `tests/test_common/test_embedder.py` — OpenAI provider embed_texts/embed_query contract, local provider lazy loading and async compat, DI factory provider selection, EmbeddingProvider protocol conformance, audit logging of external API calls. Gate: regression.
+
 ---
 
 ## Next Up
@@ -215,31 +273,42 @@ M16 (Visual Embeddings) — conditional on M9 eval showing text retrieval gaps
 ### M6b: EDRM Interop + Email Intelligence (2 weeks)
 *Legal ecosystem interoperability — required for any firm using Relativity/DISCO. Depends on M6.*
 
-- [ ] Concordance DAT and Opticon OPT load file import parser
-- [ ] EDRM XML import/export support
-- [ ] Email threading engine: RFC 5322 headers (Message-ID, In-Reply-To, References) + content-based segment matching fallback
-- [ ] Inclusive email chain detection (identify most complete version of each thread)
-- [ ] Near-duplicate detection: MinHash + LSH via `datasketch` library (Jaccard threshold ≥0.80), Redis-backed
-- [ ] Document version detection: content hash + edit-distance scoring for draft/final identification
-- [ ] Alembic migration: `thread_id`, `is_inclusive`, `duplicate_cluster_id`, `version_group_id` fields on documents table
-- [ ] ~12 tests (threading accuracy, dedup precision/recall, load file round-trip)
+- [x] Concordance DAT and Opticon OPT load file import parser
+- [x] EDRM XML import/export support
+- [x] Email threading engine: RFC 5322 headers (Message-ID, In-Reply-To, References) + subject fallback
+- [x] Inclusive email chain detection (identify most complete version of each thread)
+- [x] Near-duplicate detection: MinHash + LSH via `datasketch` library (Jaccard threshold ≥0.80)
+- [x] Document version detection: filename pattern extraction (v1, draft, final, revised)
+- [x] Alembic migration 005: `thread_id`, `is_inclusive`, `duplicate_cluster_id`, `version_group_id` fields on documents table + `edrm_import_log` table
+- [x] EDRM API router: POST /edrm/import, GET /edrm/export, GET /edrm/threads, GET /edrm/duplicates
+**Testing (15 tests):**
+- Load files (4): parse DAT, parse OPT, parse EDRM XML, EDRM XML round-trip
+- Threading (7): subject normalization (3), thread by References (1), thread by In-Reply-To (1), subject fallback (1), inclusive detection (1)
+- Dedup (3): exact duplicate detected, near-duplicate above threshold, dissimilar docs not matched
+- Version (1): filename pattern extraction
+- Gate: regression + migration upgrade and downgrade succeed
 
-**Key files:** `app/ingestion/email_threading.py`, `app/ingestion/dedup.py`, `app/ingestion/load_file_parser.py`, Alembic migration
+**Key files:** `app/edrm/`, `app/ingestion/threading.py`, `app/ingestion/dedup.py`, `migrations/versions/005_edrm_email_intelligence.py`
 
 ---
 
 ### M7b: SOC 2 Audit Readiness (1 week)
 *Extends M7's audit infrastructure for SOC 2 compliance. Depends on M7.*
 
-- [ ] Immutable audit trail: append-only table, no UPDATE/DELETE permissions on audit_log
-- [ ] Audit all AI interactions: every LLM call logged with prompt hash, model, token count, latency
-- [ ] Audit all agent actions: every tool call, every agent decision, every iteration logged with agent_id and session_id
-- [ ] Session-level audit grouping: correlate all actions within a single user session
-- [ ] Audit log retention policy: configurable retention period, automated archival
-- [ ] Export audit logs as CSV/JSON for compliance review
-- [ ] ~5 tests
+- [x] Immutable audit trail: PostgreSQL RULE-based append-only enforcement on audit_log, ai_audit_log, agent_audit_log
+- [x] Audit all AI interactions: every LLM call logged with prompt hash (SHA-256), model, token count, latency, node_name
+- [x] Agent audit log schema: agent_audit_log table ready for M10+ agent action logging
+- [x] Session-level audit grouping: X-Session-ID header binding via RequestIDMiddleware, correlated across all audit tables
+- [x] Audit log retention policy: configurable retention period, dry-run/apply endpoints
+- [x] Export audit logs as CSV/JSON for compliance review (admin-only endpoints)
+- [x] Alembic migration 004: ai_audit_log, agent_audit_log tables + session_id on audit_log + immutability rules
+- [x] Admin audit API: GET /admin/audit/ai, GET /admin/audit/export, GET/POST /admin/audit/retention
+**Testing (10 tests):**
+- Unit: AI call INSERT verification (1), prompt hash determinism (2), CSV export format (1), list with filters (1), migration immutability rules (1)
+- Integration: session_id from header (1), session_id auto-generation (1), admin endpoint 200 (1), non-admin 403 (1)
+- Gate: regression + migration upgrade and downgrade succeed
 
-**Key files:** `app/common/middleware.py`, `app/common/audit.py`, Alembic migration
+**Key files:** `app/audit/`, `app/common/llm.py`, `app/common/middleware.py`, `migrations/versions/004_soc2_audit.py`
 
 ---
 
@@ -259,6 +328,11 @@ M16 (Visual Embeddings) — conditional on M9 eval showing text retrieval gaps
 - [ ] CI integration: `deepeval test run` or equivalent for regression gating on every PR
 - [ ] Baseline numbers documented as regression gates
 - [ ] Legal-specific evaluation tasks inspired by LegalBench 162-task benchmark (issue-spotting, rule-recall, rule-application, interpretation, rhetorical understanding)
+
+**Testing (9+ tests):**
+- Unit: ground-truth dataset loader and schema validation (1), retrieval metric computation — MRR@10, Recall@10, NDCG@10, Precision@10 (4), citation accuracy metric (1), hallucination rate metric (1)
+- Integration: adversarial test set runs without error (1), `scripts/evaluate.py --dry-run` exits 0 (1)
+- Gate: baseline metrics documented in this file + `scripts/evaluate.py --dry-run` exits 0
 
 **Key files:** New `evaluation/` directory, `scripts/evaluate.py`
 
@@ -289,7 +363,11 @@ M16 (Visual Embeddings) — conditional on M9 eval showing text retrieval gaps
 - [ ] `PATCH /cases/{matter_id}/context` — lawyer reviews/confirms/edits extracted objects
 - [ ] Case context resolution in query pipeline: "Claim A", "Defendant A", "the Company" auto-resolve to stored objects
 - [ ] Investigation session model: `investigation_sessions` table — accumulate structured findings across queries within a session
-- [ ] ~15 tests
+
+**Testing (15 tests):**
+- Unit: case context CRUD — create/read/update (3), claims extraction from anchor doc (2), party identification and role assignment (1), defined term resolution (1), context resolver — term/alias/party lookups (3)
+- Integration: Case Setup Agent graph compilation and e2e run (1), agent e2e with mock LLM (1), router endpoint contracts — setup/context/patch (3)
+- Gate: regression + case context resolution works in query pipeline (context resolver returns correct objects for "Claim A", "Defendant A", "the Company")
 
 **Key files:** `app/cases/agent.py` (Case Setup Agent), `app/cases/models.py`, `app/cases/router.py`, `app/cases/context_resolver.py`, Alembic migrations
 
@@ -347,7 +425,11 @@ M16 (Visual Embeddings) — conditional on M9 eval showing text retrieval gaps
   - **Result set mode** (Q6, Q7, Q8, Q10): returns a browsable, filterable, exportable document collection with metadata (dedup applied, sentiment scores, pagination, sort)
 - [ ] Investigation session state: `session_id` groups queries, each query can access prior query findings via `case_context` tool
 - [ ] Max iteration hard cap: 1 for fast, 2 for standard, 3 for deep path
-- [ ] ~20 tests
+
+**Testing (20 tests):**
+- Unit: complexity classifier — fast/standard/deep routing (3), query decomposition into sub-queries (1), tool functions — vector_search/graph_query/temporal_search/entity_lookup/document_retrieval/case_context (6), CitedClaim schema validation and serialization (2), iteration cap enforcement per tier (1)
+- Integration: CoVe agent — claim decomposition + independent retrieval + comparison (2), Self-RAG checkpoint pass/fail at each stage (2), graph compilation and node transitions (1), e2e query with mock tools (1), SSE streaming with new graph (1)
+- Gate: regression + eval non-regression (no metric regresses > 0.05 vs M9 baseline)
 
 **Key files:** `app/query/graph.py`, `app/query/nodes.py`, `app/query/schemas.py`, `app/query/prompts.py`, `app/query/tools.py`
 
@@ -375,7 +457,11 @@ M16 (Visual Embeddings) — conditional on M9 eval showing text retrieval gaps
 - [ ] Communication anomaly baseline: per-person pattern modeling (avg length, frequency, tone), flag deviations
 - [ ] Sentiment scores stored as Qdrant payload fields (filterable) and PostgreSQL columns
 - [ ] `sentiment_search`, `hot_doc_search`, `context_gap_search` tools exposed to agentic pipeline (M10)
-- [ ] ~12 tests
+
+**Testing (12 tests):**
+- Unit: sentiment classifier — 7-dimension scoring (2), Hot Document Scanning Agent — score computation and threshold (2), Contextual Completeness Agent — missing reference detection and context gap scoring (2), anomaly baseline — per-person deviation detection (2), tool contracts — sentiment_search/hot_doc_search/context_gap_search parameter and return validation (3)
+- Integration: Qdrant payload storage of sentiment scores (1)
+- Gate: regression + eval non-regression (no metric regresses > 0.05 vs M9 baseline)
 
 **Key files:** `app/analysis/sentiment.py`, `app/analysis/hot_docs_agent.py`, `app/analysis/completeness_agent.py`, `app/query/tools.py`
 
@@ -392,7 +478,10 @@ M16 (Visual Embeddings) — conditional on M9 eval showing text retrieval gaps
 - [ ] `GET /analytics/communication-matrix?matter_id=X` — returns full NxN matrix for all communicators
 - [ ] `GET /analytics/network-centrality?matter_id=X` — returns ranked entity list by centrality metric
 - [ ] `communication_matrix`, `network_analysis`, and `topic_cluster` tools exposed to agentic pipeline
-- [ ] ~10 tests
+
+**Testing (10 tests):**
+- Unit: communication matrix computation from email pairs (2), centrality metrics — betweenness/PageRank/degree (2), org hierarchy import and inference (2), BERTopic clustering with auto-labels (1), endpoint contracts — communication-matrix/network-centrality (2), tool contracts — communication_matrix parameter validation (1)
+- Gate: regression
 
 **Key files:** `app/analytics/communication.py`, `app/analytics/network.py`, `app/analytics/clustering.py`, `app/analytics/router.py`
 
@@ -424,7 +513,11 @@ M16 (Visual Embeddings) — conditional on M9 eval showing text retrieval gaps
 - [ ] `GraphService.get_reporting_chain(person, date)` — temporal org hierarchy
 - [ ] `GraphService.find_path(entity_a, entity_b, max_hops=5)` — shortest path with relationship type filtering
 - [ ] Union-find transitive closure in `app/entities/resolver.py`
-- [ ] ~15 tests
+
+**Testing (15 tests):**
+- Unit: Entity Resolution Agent — extract + deduplicate flow (1), alias resolution across documents (2), coreference resolution pronoun/anaphora (1), temporal edge properties — since/until on org relationships (2), email-as-node modeling — SENT/SENT_TO/CC/BCC (1), graph queries — get_communication_pairs/get_reporting_chain/find_path (3), union-find transitive closure (1), 9 core node types validation (1), Qdrant↔Neo4j cross-reference by entity_id (1)
+- Integration: agent e2e with mock extractor and graph (1), uncertain merge queue presentation (1)
+- Gate: regression + eval non-regression (no metric regresses > 0.05 vs M9 baseline) + existing resolver tests pass
 
 **Key files:** `app/entities/graph_service.py`, `app/entities/resolver.py`, `app/entities/extractor.py`
 
@@ -453,7 +546,11 @@ M16 (Visual Embeddings) — conditional on M9 eval showing text retrieval gaps
 - [ ] OpenAI Batch API integration for embeddings (50% cost reduction at scale)
 - [ ] Progress tracking: real-time stats (docs processed, errors, ETA) via WebSocket or polling endpoint
 - [ ] Post-ingestion agent triggers: queue Hot Document Scanning Agent (M10b) and Entity Resolution Agent (M11) as Celery batch jobs after import completes
-- [ ] ~10 tests
+
+**Testing (10 tests):**
+- Unit: import_text_document task — skip parse, reuse chunk→embed→extract→index (1), dataset adapter interface contract (1), directory adapter (1), EDRM adapter (1), content hash dedup (1), dry-run mode (1), progress tracking output (1), Qdrant HNSW disable/rebuild (1)
+- Integration: bulk e2e — directory import with multiple files (1), post-ingestion agent trigger queueing (1)
+- Gate: regression + migration upgrade and downgrade succeed + `scripts/import_dataset.py --dry-run` exits 0
 
 **Key files:** `app/ingestion/bulk_import.py`, `scripts/import_dataset.py`, Alembic migration
 
@@ -482,6 +579,12 @@ See `docs/M6-BULK-IMPORT.md` for full spec.
 - [ ] Hot document queue: ranked list of flagged documents from sentiment analysis (from M10b)
 - [ ] Org chart editor: visual hierarchy that lawyer can confirm/edit (from M10c inference or manual import)
 
+**Testing (12+ frontend tests):**
+- Framework: Vitest + React Testing Library + Playwright
+- Unit: auth context — login/logout/token refresh (3), matter selector — only assigned matters shown (1), chat panel — SSE streaming and citation rendering (2), document list — filter/sort/pagination (1), citation component — link to source with page (1), case setup wizard — upload + review flow (1), result set browser — dedup/sentiment columns (1)
+- E2E (Playwright): login flow (1), query with citation click-through (1)
+- Gate: `npm test` exits 0 + backend `pytest tests/ -v` regression passes
+
 **Key files:** New `frontend/` directory (React app, replaces Streamlit `frontend/app.py`)
 
 ---
@@ -498,7 +601,11 @@ See `docs/M6-BULK-IMPORT.md` for full spec.
 - [ ] Privilege log export: auto-generated privilege log with Bates ranges, privilege basis, reviewer
 - [ ] Production set management: define production sets, track production status per document
 - [ ] Result set export: export any query result set (from M10 result set mode) as CSV, XLSX, or PDF bundle with citation index
-- [ ] ~8 tests
+
+**Testing (10 tests):**
+- Unit: annotation CRUD — create/read/update/delete (4), annotation router endpoint contracts (2), EDRM XML export format compliance (1), privilege log auto-generation with Bates ranges (1), production set status tracking (1)
+- Integration: result set export — ZIP contains expected files (1)
+- Gate: regression + migration upgrade and downgrade succeed + export ZIP verified (contains expected structure)
 
 **Key files:** New `app/annotations/` module, export Celery task
 
@@ -514,7 +621,11 @@ See `docs/M6-BULK-IMPORT.md` for full spec.
 - [ ] PDF redaction output: produce production-ready redacted PDFs
 - [ ] `POST /documents/{id}/redact` — apply redaction set
 - [ ] `GET /documents/{id}/redaction-log` — view redaction history
-- [ ] ~8 tests
+
+**Testing (8 tests):**
+- Unit: PII/PHI detection — SSN/phone/email/DOB patterns (2), privilege-based redaction suggestion (1), redaction engine — text removal (not overlay) verification (1), redaction log immutable record (1), router endpoint contracts — redact/redaction-log (2)
+- Integration: full flow — detect PII → apply redaction → verify PDF text removed (1)
+- Gate: regression + redacted PDF verified (text actually removed from underlying data, not just visually masked)
 
 **Key files:** `app/redaction/engine.py`, `app/redaction/pii_detector.py`, `app/redaction/router.py`
 
@@ -528,6 +639,11 @@ See `docs/M6-BULK-IMPORT.md` for full spec.
 - [ ] Tune chunk size (try 256 and 1024, measure impact)
 - [ ] Tune entity extraction threshold
 - [ ] Document final parameter choices with benchmark evidence
+
+**Testing (1 unit + 3 eval runs):**
+- Unit: config verification — tuned parameters load correctly (1)
+- Evaluation: reranker impact eval run (MRR/Recall before vs after), RRF alpha sweep eval run, chunk size eval run (256 vs 512 vs 1024)
+- Gate: at least one metric improves ≥ 0.03, no metric regresses > 0.02, results documented in this file with benchmark evidence
 
 **Key files:** `app/query/nodes.py`, `app/config.py`, `evaluation/`
 
@@ -546,6 +662,11 @@ See `docs/M6-BULK-IMPORT.md` for full spec.
 - [ ] Selective visual embedding: only apply ColQwen2.5 to pages classified as visually complex during ingestion (tables, charts, degraded scans), not all pages — Docling's 97.9% table extraction accuracy means most legal docs are well-served by text alone
 - [ ] Light-ColQwen2 compression: semantic clustering at merge factor 9 (retains ~98% NDCG while keeping ~12% of tokens) + Qdrant binary quantization (16x compression)
 
+**Testing (5+ unit + 1 eval):**
+- Unit: ColQwen2.5 wrapper — embedding generation and dimension check (1), page image extraction from MinIO (1), multi-modal fusion in retrieval pipeline (1), selective embedding — only visually complex pages (1), compression — binary quantization roundtrip (1)
+- Evaluation: re-run full evaluation suite — measure lift over text-only baseline
+- Gate: regression + **decision gate: ≥ 5% lift on at least one retrieval metric (MRR@10 or Recall@10) or feature stays disabled (`ENABLE_VISUAL_EMBEDDINGS=false`)**
+
 **Key files:** `app/ingestion/embedder.py`, `app/query/retriever.py`, `app/config.py`
 
 ---
@@ -559,6 +680,12 @@ See `docs/M6-BULK-IMPORT.md` for full spec.
 - [ ] Docker Compose profile for local-only deployment (`docker-compose.local.yml`)
 - [ ] `.env.local.example` template
 - [ ] Performance benchmarks: tokens/sec, p95 query latency
+
+**Testing (3+ auto + smoke):**
+- Unit: config loading — local provider settings and env vars (1), vLLM client factory — correct base URL and model routing (1), docker compose validation — `docker compose -f docker-compose.local.yml config` exits 0 (1)
+- Smoke: manual health check — all services return 200 with local providers
+- Benchmarks: tokens/sec and p95 query latency documented
+- Gate: regression + health check returns 200 with all local providers + benchmarks documented in this file
 
 **Key files:** `docker-compose.local.yml`, `.env.local.example`
 

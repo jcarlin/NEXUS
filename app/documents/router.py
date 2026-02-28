@@ -48,6 +48,10 @@ def _row_to_response(row: dict) -> DocumentResponse:
         created_at=row["created_at"],
         minio_path=row["minio_path"],
         privilege_status=row.get("privilege_status"),
+        thread_id=row.get("thread_id"),
+        is_inclusive=row.get("is_inclusive"),
+        duplicate_cluster_id=row.get("duplicate_cluster_id"),
+        version_group_id=row.get("version_group_id"),
     )
 
 
@@ -70,6 +74,16 @@ def _row_to_detail(row: dict) -> DocumentDetail:
         privilege_status=row.get("privilege_status"),
         privilege_reviewed_by=row.get("privilege_reviewed_by"),
         privilege_reviewed_at=row.get("privilege_reviewed_at"),
+        thread_id=row.get("thread_id"),
+        is_inclusive=row.get("is_inclusive"),
+        duplicate_cluster_id=row.get("duplicate_cluster_id"),
+        version_group_id=row.get("version_group_id"),
+        message_id=row.get("message_id"),
+        in_reply_to=row.get("in_reply_to"),
+        thread_position=row.get("thread_position"),
+        duplicate_score=row.get("duplicate_score"),
+        version_number=row.get("version_number"),
+        is_final_version=row.get("is_final_version"),
     )
 
 

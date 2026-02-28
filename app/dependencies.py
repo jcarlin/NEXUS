@@ -262,6 +262,29 @@ def get_sparse_embedder() -> SparseEmbedder | None:
 
 
 # ---------------------------------------------------------------------------
+# Near-Duplicate Detector (feature-flagged)
+# ---------------------------------------------------------------------------
+
+_dedup_detector = None
+
+
+def get_dedup_detector():
+    """Return the ``NearDuplicateDetector`` singleton, or ``None`` when disabled."""
+    global _dedup_detector
+    settings = get_settings()
+    if not settings.enable_near_duplicate_detection:
+        return None
+    if _dedup_detector is None:
+        from app.ingestion.dedup import NearDuplicateDetector
+
+        _dedup_detector = NearDuplicateDetector(
+            threshold=settings.dedup_jaccard_threshold,
+            num_perm=settings.dedup_num_permutations,
+        )
+    return _dedup_detector
+
+
+# ---------------------------------------------------------------------------
 # Hybrid Retriever
 # ---------------------------------------------------------------------------
 

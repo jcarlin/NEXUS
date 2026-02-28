@@ -828,7 +828,7 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
         # ---------------------------------------------------------------
         # Stage 6: COMPLETE — create document record, mark job done
         # ---------------------------------------------------------------
-        _create_document_record(
+        doc_id = _create_document_record(
             engine=engine,
             job_id=job_id,
             filename=filename,
@@ -841,6 +841,30 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
             content_hash=content_hash,
             matter_id=matter_id,
         )
+
+        # --- Email threading (inline, feature-flagged) ---
+        if document_type == "email" and settings.enable_email_threading:
+            try:
+                from app.ingestion.threading import EmailThreader
+
+                email_headers = {
+                    "message_id": parse_result.metadata.get("message_id", ""),
+                    "in_reply_to": parse_result.metadata.get("in_reply_to", ""),
+                    "references": parse_result.metadata.get("references", ""),
+                    "subject": parse_result.metadata.get("subject", ""),
+                }
+                EmailThreader.assign_thread(engine, doc_id, email_headers, matter_id)
+                logger.info("task.threading_complete", job_id=job_id, doc_id=doc_id)
+            except Exception:
+                logger.warning("task.threading_failed", job_id=job_id, exc_info=True)
+
+        # --- Near-duplicate detection (async dispatch, feature-flagged) ---
+        if settings.enable_near_duplicate_detection:
+            try:
+                detect_duplicates.delay(doc_id, parse_result.text, matter_id or "")
+                logger.info("task.dedup_dispatched", job_id=job_id, doc_id=doc_id)
+            except Exception:
+                logger.warning("task.dedup_dispatch_failed", job_id=job_id, exc_info=True)
 
         _update_stage(
             engine,
@@ -902,6 +926,144 @@ def process_batch(self, job_id: str, file_paths: list[str]) -> dict:
     Not yet implemented — planned for M3.
     """
     raise NotImplementedError("Batch ingestion not yet implemented")
+
+
+# ---------------------------------------------------------------------------
+# Near-duplicate detection task
+# ---------------------------------------------------------------------------
+
+@shared_task(
+    bind=True,
+    name="ingestion.detect_duplicates",
+    max_retries=1,
+    default_retry_delay=30,
+    acks_late=True,
+)
+def detect_duplicates(self, doc_id: str, text: str, matter_id: str) -> dict:
+    """Detect near-duplicate documents using MinHash + LSH.
+
+    Runs asynchronously after document creation. Assigns duplicate
+    cluster IDs and detects version groups.
+    """
+    structlog.contextvars.clear_contextvars()
+    structlog.contextvars.bind_contextvars(task_id=self.request.id, doc_id=doc_id)
+
+    from app.config import Settings
+
+    settings = Settings()
+    engine = _get_sync_engine()
+
+    try:
+        if not settings.enable_near_duplicate_detection:
+            return {"doc_id": doc_id, "status": "skipped", "reason": "disabled"}
+
+        from app.ingestion.dedup import NearDuplicateDetector, VersionDetector
+
+        detector = NearDuplicateDetector(
+            threshold=settings.dedup_jaccard_threshold,
+            num_perm=settings.dedup_num_permutations,
+        )
+
+        matches = detector.find_duplicates(doc_id, text, matter_id or "default")
+
+        cluster_id = None
+        if matches:
+            cluster_id = NearDuplicateDetector.assign_cluster(engine, doc_id, matches)
+
+        # Version detection
+        with engine.connect() as conn:
+            from sqlalchemy import text as sa_text
+
+            result = conn.execute(
+                sa_text("SELECT filename FROM documents WHERE id = :doc_id"),
+                {"doc_id": doc_id},
+            )
+            row = result.first()
+            filename = row.filename if row else ""
+
+        version_group_id = None
+        if matches and filename:
+            version_group_id = VersionDetector.detect_versions(
+                engine, doc_id, filename, matches
+            )
+
+        logger.info(
+            "task.detect_duplicates.complete",
+            doc_id=doc_id,
+            match_count=len(matches),
+            cluster_id=cluster_id,
+            version_group_id=version_group_id,
+        )
+
+        return {
+            "doc_id": doc_id,
+            "status": "complete",
+            "match_count": len(matches),
+            "cluster_id": cluster_id,
+            "version_group_id": version_group_id,
+        }
+
+    except Exception as exc:
+        logger.error("task.detect_duplicates.failed", doc_id=doc_id, error=str(exc))
+        if self.request.retries < self.max_retries:
+            raise self.retry(exc=exc)
+        raise
+    finally:
+        engine.dispose()
+
+
+# ---------------------------------------------------------------------------
+# Inclusive email detection task
+# ---------------------------------------------------------------------------
+
+@shared_task(
+    bind=True,
+    name="ingestion.detect_inclusive_emails",
+    max_retries=1,
+    default_retry_delay=30,
+    acks_late=True,
+)
+def detect_inclusive_emails(self, matter_id: str | None = None) -> dict:
+    """Mark inclusive emails in each thread.
+
+    Post-batch task: should be run after all emails in a batch are ingested.
+    """
+    structlog.contextvars.clear_contextvars()
+    structlog.contextvars.bind_contextvars(task_id=self.request.id)
+
+    from app.config import Settings
+
+    settings = Settings()
+
+    if not settings.enable_email_threading:
+        return {"status": "skipped", "reason": "threading disabled"}
+
+    engine = _get_sync_engine()
+
+    try:
+        from app.ingestion.threading import EmailThreader
+
+        count = EmailThreader.detect_inclusive_emails(engine, matter_id)
+
+        logger.info(
+            "task.detect_inclusive.complete",
+            inclusive_count=count,
+            matter_id=matter_id,
+        )
+
+        return {
+            "status": "complete",
+            "inclusive_count": count,
+            "matter_id": matter_id,
+        }
+
+    except Exception as exc:
+        logger.error("task.detect_inclusive.failed", error=str(exc))
+        if self.request.retries < self.max_retries:
+            raise self.retry(exc=exc)
+        raise
+    finally:
+        engine.dispose()
 
 
 # ---------------------------------------------------------------------------

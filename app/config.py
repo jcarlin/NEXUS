@@ -68,6 +68,18 @@ class Settings(BaseSettings):
     enable_sparse_embeddings: bool = False
     sparse_embedding_model: str = "Qdrant/bm42-all-minilm-l6-v2-attentions"
 
+    # --- Email Threading ---
+    enable_email_threading: bool = True
+
+    # --- Near-Duplicate Detection ---
+    enable_near_duplicate_detection: bool = False
+    dedup_jaccard_threshold: float = 0.80
+    dedup_num_permutations: int = 128
+
+    # --- Audit (SOC 2) ---
+    audit_retention_days: int = 365
+    enable_ai_audit_logging: bool = True
+
     # --- Auth ---
     jwt_secret_key: str = "change-me-to-a-random-64-char-string"
     jwt_algorithm: str = "HS256"
