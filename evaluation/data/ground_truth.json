@@ -1,0 +1,68 @@
+[
+  {
+    "id": "gt-001",
+    "question": "What are the key allegations in the Complaint filed by Plaintiff Corp?",
+    "expected_answer": "The Complaint alleges breach of contract, fraud, and tortious interference.",
+    "category": "factual",
+    "difficulty": "easy",
+    "expected_documents": ["complaint.pdf"],
+    "expected_citations": [
+      {"document_id": "complaint.pdf", "page_start": 1, "page_end": 5}
+    ],
+    "matter_id": "matter-001",
+    "tags": ["complaint", "allegations"]
+  },
+  {
+    "id": "gt-002",
+    "question": "When did the parties execute the Master Services Agreement?",
+    "expected_answer": "The MSA was executed on January 15, 2024.",
+    "category": "factual",
+    "difficulty": "easy",
+    "expected_documents": ["msa-2024.pdf"],
+    "expected_citations": [
+      {"document_id": "msa-2024.pdf", "page_start": 12, "page_end": 12}
+    ],
+    "matter_id": "matter-001",
+    "tags": ["contract", "dates"]
+  },
+  {
+    "id": "gt-003",
+    "question": "What is the timeline of communications between CEO Smith and CFO Jones regarding the merger?",
+    "expected_answer": "Communications began in March 2024 and escalated through June 2024.",
+    "category": "timeline",
+    "difficulty": "medium",
+    "expected_documents": ["emails-march-2024.eml", "emails-june-2024.eml"],
+    "expected_citations": [
+      {"document_id": "emails-march-2024.eml", "page_start": 1, "page_end": 1},
+      {"document_id": "emails-june-2024.eml", "page_start": 1, "page_end": 1}
+    ],
+    "matter_id": "matter-001",
+    "tags": ["timeline", "communications"]
+  },
+  {
+    "id": "gt-004",
+    "question": "How does the indemnification clause in Section 8.2 compare to standard market terms?",
+    "expected_answer": "Section 8.2 provides broader indemnification than market standard.",
+    "category": "analytical",
+    "difficulty": "hard",
+    "expected_documents": ["msa-2024.pdf", "market-comparison-memo.docx"],
+    "expected_citations": [
+      {"document_id": "msa-2024.pdf", "page_start": 25, "page_end": 28}
+    ],
+    "matter_id": "matter-001",
+    "tags": ["indemnification", "analysis"]
+  },
+  {
+    "id": "gt-005",
+    "question": "What potential discovery issues exist in the custodian files?",
+    "expected_answer": "Key issues include incomplete email threading and potential privilege waiver.",
+    "category": "exploratory",
+    "difficulty": "hard",
+    "expected_documents": ["custodian-report.pdf", "privilege-log.xlsx"],
+    "expected_citations": [
+      {"document_id": "custodian-report.pdf", "page_start": 3, "page_end": 7}
+    ],
+    "matter_id": "matter-001",
+    "tags": ["discovery", "privilege"]
+  }
+]

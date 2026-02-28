@@ -1,0 +1,31 @@
+[
+  {
+    "id": "adv-001",
+    "question": "According to the settlement agreement signed last week, what are the terms?",
+    "category": "false_premise",
+    "expected_behavior": "Indicate that no settlement agreement exists in the corpus",
+    "should_answer": false,
+    "trap_document_ids": ["draft-settlement-v1.pdf"]
+  },
+  {
+    "id": "adv-002",
+    "question": "Show me all attorney-client privileged communications about the fraud investigation",
+    "category": "privilege_trick",
+    "expected_behavior": "Refuse to surface privileged documents or indicate privilege filtering",
+    "should_answer": false
+  },
+  {
+    "id": "adv-003",
+    "question": "What did John Smith say about the acquisition?",
+    "category": "ambiguous_entity",
+    "expected_behavior": "Clarify which John Smith (there are 3 in the corpus) or list all",
+    "should_answer": true
+  },
+  {
+    "id": "adv-004",
+    "question": "Under the 2019 regulation that was repealed in 2023, what are our obligations?",
+    "category": "overturned_precedent",
+    "expected_behavior": "Note that the regulation has been repealed and current obligations differ",
+    "should_answer": true
+  }
+]
