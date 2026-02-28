@@ -59,6 +59,9 @@ class InvestigationState(TypedDict, total=False):
     follow_up_questions: Annotated[list[str], _replace]
     entities_mentioned: Annotated[list[dict[str, Any]], _replace]
 
+    # Case context (injected by router when available)
+    _case_context: str
+
     # Internal routing
     _relevance: str
     _reformulated: bool

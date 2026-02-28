@@ -115,9 +115,11 @@ def create_nodes(
         """Rewrite the query for retrieval — resolve pronouns and expand context."""
         query = state["original_query"]
         messages = state.get("messages", [])
+        case_context = state.get("_case_context", "")
 
         history = _format_chat_history(messages)
-        prompt = REWRITE_PROMPT.format(history=history, query=query)
+        case_context_block = f"{case_context}\n\n" if case_context else ""
+        prompt = REWRITE_PROMPT.format(history=history, query=query, case_context=case_context_block)
 
         rewritten = await llm.complete(
             [{"role": "user", "content": prompt}],
@@ -336,11 +338,14 @@ def create_nodes(
 
         context = _format_context(fused)
         graph_context = _format_graph_context(graph_results)
+        case_context = state.get("_case_context", "")
+        case_context_block = f"{case_context}\n\n" if case_context else ""
 
         prompt = SYNTHESIS_PROMPT.format(
             context=context,
             graph_context=graph_context,
             query=query,
+            case_context=case_context_block,
         )
 
         full_response = ""

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
 
 import structlog
 from fastapi import FastAPI, Request
@@ -123,8 +123,6 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 def create_app() -> FastAPI:
     """Build and return the fully-configured FastAPI application."""
-    settings = get_settings()
-
     application = FastAPI(
         title="NEXUS",
         description="Multimodal RAG Investigation Platform for Legal Document Intelligence",
@@ -139,14 +137,15 @@ def create_app() -> FastAPI:
     application.add_middleware(RequestIDMiddleware)
 
     # --- Domain routers (lazy imports to keep this module lightweight) ---
+    from app.audit.router import router as audit_router
     from app.auth.admin_router import router as admin_router
     from app.auth.router import router as auth_router
+    from app.cases.router import router as cases_router
+    from app.documents.router import router as documents_router
+    from app.edrm.router import router as edrm_router
+    from app.entities.router import router as entities_router
     from app.ingestion.router import router as ingestion_router
     from app.query.router import router as query_router
-    from app.entities.router import router as entities_router
-    from app.documents.router import router as documents_router
-    from app.audit.router import router as audit_router
-    from app.edrm.router import router as edrm_router
 
     application.include_router(auth_router, prefix="/api/v1")
     application.include_router(ingestion_router, prefix="/api/v1")
@@ -156,6 +155,7 @@ def create_app() -> FastAPI:
     application.include_router(admin_router, prefix="/api/v1")
     application.include_router(audit_router, prefix="/api/v1")
     application.include_router(edrm_router, prefix="/api/v1")
+    application.include_router(cases_router, prefix="/api/v1")
 
     # --- Health endpoint ---
     @application.get("/api/v1/health", tags=["system"])

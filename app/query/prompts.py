@@ -26,11 +26,12 @@ Given the conversation history and current question, rewrite the question to be:
 1. Self-contained (no pronouns referencing chat history)
 2. Specific (include full names, dates, locations mentioned in context)
 3. Optimized for both keyword search AND semantic similarity
+4. If case context is provided, resolve any defined terms, party aliases, or claim references
 
 Conversation:
 {history}
 
-Current question: {query}
+{case_context}Current question: {query}
 
 Rewritten query:"""
 
@@ -45,8 +46,9 @@ RULES:
 - Use precise legal/investigative language
 - If the query involves a timeline, present events chronologically
 - Cross-reference entities across multiple documents when relevant
+- Use case context (if provided) to correctly identify parties, claims, and defined terms
 
-EVIDENCE:
+{case_context}EVIDENCE:
 {context}
 
 KNOWLEDGE GRAPH CONNECTIONS:

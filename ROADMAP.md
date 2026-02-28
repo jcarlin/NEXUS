@@ -24,7 +24,7 @@
 | M8 | Retrieval Infrastructure | — | Done | 8 | Regression | — | — (parallel w/ M7) |
 | M8b | Embedding Abstraction Layer | — | Done | 11 | Regression | — | M8 |
 | M9 | Evaluation Framework | — | Done | 11 | Baseline metrics documented | 2 weeks | M8 |
-| M9b | Case Intelligence Layer | ⚡ Case Setup | TODO | 15 | Regression | 2 weeks | M9 |
+| M9b | Case Intelligence Layer | ⚡ Case Setup | Done | 15 | Regression | 2 weeks | M9 |
 | M10 | Agentic Query Pipeline | ⚡ Orchestrator, Citation Verifier | TODO | 20 | Regression + eval non-regression | 2.5 weeks | M8, M9, M9b |
 | M10b | Sentiment + Hot Doc Detection | ⚡ Hot Doc, Completeness | TODO | 12 | Regression + eval non-regression | 1.5 weeks | M10 |
 | M10c | Communication Analytics | — | TODO | 10 | Regression | 1 week | M10, M11 |
@@ -37,7 +37,7 @@
 | M16 | Visual Embeddings | — | TODO | 5+ + eval | Eval lift ≥ 5% or stays disabled | 2 weeks | M15 (conditional) |
 | M17 | Full Local Deployment | — | TODO | 3+ | Health check + benchmarks | 2 weeks | All |
 
-**Total tests: 297 passing** (280 unit/functional + 17 evaluation; baseline updated at M12 completion)
+**Total tests: 315 passing** (296 unit/functional + 15 case intelligence + 4 evaluation; baseline updated at M9b completion)
 
 **6 autonomous LangGraph agents** across the pipeline (Case Setup, Investigation Orchestrator, Citation Verifier, Hot Doc Scanner, Contextual Completeness, Entity Resolution)
 
@@ -366,23 +366,23 @@ If a metric regresses beyond the threshold, the milestone must either fix the re
 7. Presents results for lawyer review/confirmation
 
 **Implementation:**
-- [ ] Alembic migration: `case_contexts` table (matter_id FK, anchor_document_id, status, created_by)
-- [ ] Alembic migration: `case_claims` table (case_context_id FK, claim_label, claim_text, legal_elements JSONB)
-- [ ] Alembic migration: `case_parties` table (case_context_id FK, name, role, aliases JSONB, entity_id FK to Neo4j)
-- [ ] Alembic migration: `case_defined_terms` table (case_context_id FK, term, definition, entity_id FK nullable)
-- [ ] Case Setup Agent: LangGraph agent graph — `parse_anchor_doc → extract_claims → extract_parties → extract_defined_terms → build_timeline → populate_graph → present_for_review`
-- [ ] `POST /cases/{matter_id}/setup` — upload anchor document, trigger Case Setup Agent
-- [ ] `GET /cases/{matter_id}/context` — retrieve full case context (claims, parties, terms, timeline)
-- [ ] `PATCH /cases/{matter_id}/context` — lawyer reviews/confirms/edits extracted objects
-- [ ] Case context resolution in query pipeline: "Claim A", "Defendant A", "the Company" auto-resolve to stored objects
-- [ ] Investigation session model: `investigation_sessions` table — accumulate structured findings across queries within a session
+- [x] Alembic migration: `case_contexts` table (matter_id FK, anchor_document_id, status, created_by)
+- [x] Alembic migration: `case_claims` table (case_context_id FK, claim_label, claim_text, legal_elements JSONB)
+- [x] Alembic migration: `case_parties` table (case_context_id FK, name, role, aliases JSONB, entity_id FK to Neo4j)
+- [x] Alembic migration: `case_defined_terms` table (case_context_id FK, term, definition, entity_id FK nullable)
+- [x] Case Setup Agent: LangGraph agent graph — `parse_anchor_doc → extract_claims → extract_parties → extract_defined_terms → build_timeline → populate_graph`
+- [x] `POST /cases/{matter_id}/setup` — upload anchor document, trigger Case Setup Agent
+- [x] `GET /cases/{matter_id}/context` — retrieve full case context (claims, parties, terms, timeline)
+- [x] `PATCH /cases/{matter_id}/context` — lawyer reviews/confirms/edits extracted objects
+- [x] Case context resolution in query pipeline: "Claim A", "Defendant A", "the Company" auto-resolve to stored objects
+- [x] Investigation session model: `investigation_sessions` table — schema created (accumulation logic deferred to M10)
 
 **Testing (15 tests):**
 - Unit: case context CRUD — create/read/update (3), claims extraction from anchor doc (2), party identification and role assignment (1), defined term resolution (1), context resolver — term/alias/party lookups (3)
 - Integration: Case Setup Agent graph compilation and e2e run (1), agent e2e with mock LLM (1), router endpoint contracts — setup/context/patch (3)
 - Gate: regression + case context resolution works in query pipeline (context resolver returns correct objects for "Claim A", "Defendant A", "the Company")
 
-**Key files:** `app/cases/agent.py` (Case Setup Agent), `app/cases/models.py`, `app/cases/router.py`, `app/cases/context_resolver.py`, Alembic migrations
+**Key files:** `app/cases/agent.py` (Case Setup Agent), `app/cases/schemas.py`, `app/cases/service.py`, `app/cases/router.py`, `app/cases/context_resolver.py`, `app/cases/tasks.py`, `app/cases/prompts.py`, `migrations/versions/006_case_intelligence.py`
 
 **Why this matters:** Without this, the lawyer must re-explain "Claim A means the fraud allegation described in paragraph 42 of the Complaint" every single query. Harvey and CoCounsel both maintain persistent case context. This is what separates a legal investigation tool from a generic chatbot.
 

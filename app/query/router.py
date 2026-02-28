@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -87,7 +87,7 @@ async def _save_message(
             "entities_mentioned": json.dumps(entities_mentioned or []),
             "follow_up_questions": json.dumps(follow_up_questions or []),
             "matter_id": matter_id,
-            "created_at": datetime.now(timezone.utc),
+            "created_at": datetime.now(UTC),
         },
     )
     return message_id
@@ -119,7 +119,7 @@ async def _load_thread_messages(
     return [dict(r) for r in rows]
 
 
-def _parse_jsonb(val: Any) -> list:
+def _parse_jsonb(val: Any) -> list[Any]:
     """Safely parse a JSONB column that may be a string, list, or None."""
     if val is None:
         return []
@@ -127,7 +127,8 @@ def _parse_jsonb(val: Any) -> list:
         return val
     if isinstance(val, str):
         try:
-            return json.loads(val)
+            parsed = json.loads(val)
+            return list(parsed) if isinstance(parsed, list) else []
         except (json.JSONDecodeError, TypeError):
             return []
     return []
@@ -154,10 +155,18 @@ async def query(
     messages: list[dict[str, Any]] = []
     if request.thread_id:
         rows = await _load_thread_messages(db, thread_id, matter_id=matter_id)
-        messages = [
-            {"role": r["role"], "content": r["content"]}
-            for r in rows
-        ]
+        messages = [{"role": r["role"], "content": r["content"]} for r in rows]
+
+    # Load case context for this matter (if exists)
+    case_context_text = ""
+    try:
+        from app.cases.context_resolver import CaseContextResolver
+
+        ctx = await CaseContextResolver.get_context_for_matter(db, str(matter_id))
+        if ctx:
+            case_context_text = CaseContextResolver.format_context_for_prompt(ctx)
+    except Exception:
+        logger.debug("query.case_context_load_skipped")
 
     # Build initial state
     initial_state = {
@@ -175,10 +184,13 @@ async def query(
         "source_documents": [],
         "follow_up_questions": [],
         "entities_mentioned": [],
+        "_case_context": case_context_text,
         "_relevance": "",
         "_reformulated": False,
         "_filters": {**(request.filters or {}), "matter_id": str(matter_id)},
-        "_exclude_privilege": ["privileged", "work_product"] if current_user["role"] not in ("admin", "attorney") else [],
+        "_exclude_privilege": ["privileged", "work_product"]
+        if current_user["role"] not in ("admin", "attorney")
+        else [],
     }
 
     # Run the graph with checkpointer config
@@ -205,15 +217,9 @@ async def query(
 
     return QueryResponse(
         response=final_state.get("response", ""),
-        source_documents=[
-            SourceDocument(**doc)
-            for doc in final_state.get("source_documents", [])
-        ],
+        source_documents=[SourceDocument(**doc) for doc in final_state.get("source_documents", [])],
         follow_up_questions=final_state.get("follow_up_questions", []),
-        entities_mentioned=[
-            EntityMention(**ent)
-            for ent in final_state.get("entities_mentioned", [])
-        ],
+        entities_mentioned=[EntityMention(**ent) for ent in final_state.get("entities_mentioned", [])],
         thread_id=uuid.UUID(thread_id),
         message_id=uuid.UUID(message_id),
     )
@@ -248,6 +254,17 @@ async def query_stream(
         rows = await _load_thread_messages(db, thread_id, matter_id=matter_id)
         messages = [{"role": r["role"], "content": r["content"]} for r in rows]
 
+    # Load case context for this matter (if exists)
+    stream_case_context = ""
+    try:
+        from app.cases.context_resolver import CaseContextResolver
+
+        ctx = await CaseContextResolver.get_context_for_matter(db, str(matter_id))
+        if ctx:
+            stream_case_context = CaseContextResolver.format_context_for_prompt(ctx)
+    except Exception:
+        logger.debug("query_stream.case_context_load_skipped")
+
     initial_state = {
         "messages": messages,
         "thread_id": thread_id,
@@ -263,10 +280,13 @@ async def query_stream(
         "source_documents": [],
         "follow_up_questions": [],
         "entities_mentioned": [],
+        "_case_context": stream_case_context,
         "_relevance": "",
         "_reformulated": False,
         "_filters": {**(request.filters or {}), "matter_id": str(matter_id)},
-        "_exclude_privilege": ["privileged", "work_product"] if current_user["role"] not in ("admin", "attorney") else [],
+        "_exclude_privilege": ["privileged", "work_product"]
+        if current_user["role"] not in ("admin", "attorney")
+        else [],
     }
 
     config = {"configurable": {"thread_id": thread_id}}
@@ -274,9 +294,7 @@ async def query_stream(
     async def event_generator():
         final_state: dict[str, Any] = {}
 
-        async for stream_mode, chunk in graph.astream(
-            initial_state, config, stream_mode=["updates", "custom"]
-        ):
+        async for stream_mode, chunk in graph.astream(initial_state, config, stream_mode=["updates", "custom"]):
             if stream_mode == "updates":
                 for node_name, update in chunk.items():
                     # Emit status event for each node
@@ -322,11 +340,13 @@ async def query_stream(
         # Done event
         yield {
             "event": "done",
-            "data": json.dumps({
-                "thread_id": thread_id,
-                "follow_ups": final_state.get("follow_up_questions", []),
-                "entities": final_state.get("entities_mentioned", []),
-            }),
+            "data": json.dumps(
+                {
+                    "thread_id": thread_id,
+                    "follow_ups": final_state.get("follow_up_questions", []),
+                    "entities": final_state.get("entities_mentioned", []),
+                }
+            ),
         }
 
     return EventSourceResponse(event_generator())
@@ -398,14 +418,8 @@ async def get_chat(
         ChatMessage(
             role=r["role"],
             content=r["content"],
-            source_documents=[
-                SourceDocument(**doc)
-                for doc in _parse_jsonb(r.get("source_documents"))
-            ],
-            entities_mentioned=[
-                EntityMention(**ent)
-                for ent in _parse_jsonb(r.get("entities_mentioned"))
-            ],
+            source_documents=[SourceDocument(**doc) for doc in _parse_jsonb(r.get("source_documents"))],
+            entities_mentioned=[EntityMention(**ent) for ent in _parse_jsonb(r.get("entities_mentioned"))],
             follow_up_questions=_parse_jsonb(r.get("follow_up_questions")),
             timestamp=r["created_at"],
         )
@@ -437,7 +451,7 @@ async def delete_chat(
     )
     await db.commit()
 
-    deleted = result.rowcount
+    deleted: int = result.rowcount or 0  # type: ignore[attr-defined]
     if deleted == 0:
         return JSONResponse(status_code=404, content={"detail": "Thread not found"})
 

@@ -42,9 +42,17 @@ def test_followup_prompt_requests_three_questions():
     assert "3" in FOLLOWUP_PROMPT
 
 
+def test_rewrite_prompt_has_case_context_placeholder():
+    assert "{case_context}" in REWRITE_PROMPT
+
+
+def test_synthesis_prompt_has_case_context_placeholder():
+    assert "{case_context}" in SYNTHESIS_PROMPT
+
+
 def test_prompts_are_formattable():
     """Verify all prompts can be formatted without KeyError."""
     CLASSIFY_PROMPT.format(query="test query")
-    REWRITE_PROMPT.format(history="User: hello", query="test")
-    SYNTHESIS_PROMPT.format(context="evidence", graph_context="graph", query="test")
+    REWRITE_PROMPT.format(history="User: hello", query="test", case_context="")
+    SYNTHESIS_PROMPT.format(context="evidence", graph_context="graph", query="test", case_context="")
     FOLLOWUP_PROMPT.format(query="test", response="answer", entities="person A")
