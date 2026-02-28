@@ -174,6 +174,10 @@ class EvaluationResult(BaseModel):
 
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     mode: EvaluationMode
+    config_overrides: dict[str, str] = Field(
+        default_factory=dict,
+        description="Config overrides applied for this run (empty = baseline)",
+    )
     retrieval: list[RetrievalMetrics] = Field(default_factory=list)
     generation: GenerationMetrics | None = None
     citation: CitationMetrics | None = None
@@ -181,3 +185,40 @@ class EvaluationResult(BaseModel):
     legalbench_summary: LegalBenchSummary | None = None
     passed: bool = False
     gate_failures: list[str] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Tuning comparison schemas
+# ---------------------------------------------------------------------------
+
+
+class TuningConfig(BaseModel):
+    """A named configuration for a tuning experiment."""
+
+    name: str = Field(..., description="Human-readable config name (e.g., 'reranker-on')")
+    overrides: dict[str, str] = Field(
+        default_factory=dict,
+        description="Config key=value overrides to apply",
+    )
+
+
+class TuningComparison(BaseModel):
+    """Result of one config compared against baseline."""
+
+    config_name: str
+    overrides: dict[str, str] = Field(default_factory=dict)
+    metrics: RetrievalMetrics
+    delta_mrr: float = Field(..., description="MRR@10 minus baseline")
+    delta_recall: float = Field(..., description="Recall@10 minus baseline")
+    delta_ndcg: float = Field(..., description="NDCG@10 minus baseline")
+    delta_precision: float = Field(..., description="Precision@10 minus baseline")
+
+
+class TuningReport(BaseModel):
+    """Complete tuning experiment report."""
+
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    baseline: RetrievalMetrics
+    comparisons: list[TuningComparison] = Field(default_factory=list)
+    best_config: str = Field(..., description="Config name with best overall improvement")
+    recommendation: str = Field(..., description="Human-readable tuning recommendation")

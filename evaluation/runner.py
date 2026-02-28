@@ -63,13 +63,19 @@ def _check_gates(
 # ---------------------------------------------------------------------------
 
 
-def run_dry(verbose: bool = False) -> EvaluationResult:
+def run_dry(
+    verbose: bool = False,
+    config_overrides: dict[str, str] | None = None,
+) -> EvaluationResult:
     """Execute a dry-run evaluation using synthetic data.
 
     No infrastructure, no LLM calls, no cost. Exercises all metric
     computations and validates the evaluation pipeline.
+
+    *config_overrides* are recorded in the result for documentation
+    but do not affect synthetic metric computation.
     """
-    logger.info("eval.dry_run.start")
+    logger.info("eval.dry_run.start", config_overrides=config_overrides or {})
 
     # 1. Generate synthetic dataset
     dataset = generate_synthetic_dataset()
@@ -129,6 +135,7 @@ def run_dry(verbose: bool = False) -> EvaluationResult:
 
     result = EvaluationResult(
         mode=EvaluationMode.DRY_RUN,
+        config_overrides=config_overrides or {},
         retrieval=retrieval,
         generation=generation,
         citation=citation,

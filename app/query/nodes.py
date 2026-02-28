@@ -11,7 +11,6 @@ nodes *and* the streaming router (which calls nodes directly).
 
 from __future__ import annotations
 
-import re
 from typing import TYPE_CHECKING, Any
 
 import structlog
@@ -138,16 +137,21 @@ def create_nodes(
 
     async def retrieve(state: dict) -> dict:
         """Run hybrid retrieval (text + graph) in parallel."""
+        from app.dependencies import get_settings
+
         query = state.get("rewritten_query") or state["original_query"]
         filters = state.get("_filters")
         exclude_privilege = state.get("_exclude_privilege", [])
 
+        settings = get_settings()
         text_results, graph_results = await retriever.retrieve_all(
             query,
-            text_limit=20,
-            graph_limit=20,
+            text_limit=settings.retrieval_text_limit,
+            graph_limit=settings.retrieval_graph_limit,
             filters=filters,
             exclude_privilege_statuses=exclude_privilege or None,
+            prefetch_multiplier=settings.retrieval_prefetch_multiplier,
+            entity_threshold=settings.query_entity_threshold,
         )
 
         logger.debug(
@@ -164,7 +168,6 @@ def create_nodes(
 
     async def rerank(state: dict) -> dict:
         """Rerank text results via cross-encoder (if enabled) or score sort."""
-        from app.config import Settings
         from app.dependencies import get_reranker, get_settings
 
         text_results = state.get("text_results", [])
@@ -192,7 +195,7 @@ def create_nodes(
                 text_results,
                 key=lambda r: r.get("score", 0),
                 reverse=True,
-            )[:settings.reranker_top_n]
+            )[: settings.reranker_top_n]
 
         # Build fused_context for synthesis
         fused_context = sorted_results
@@ -200,15 +203,17 @@ def create_nodes(
         # Build source_documents for the response
         source_documents: list[dict[str, Any]] = []
         for result in sorted_results:
-            source_documents.append({
-                "id": result.get("id", ""),
-                "filename": result.get("source_file", "unknown"),
-                "page": result.get("page_number"),
-                "chunk_text": result.get("chunk_text", ""),
-                "relevance_score": round(result.get("score", 0), 4),
-                "preview_url": None,
-                "download_url": None,
-            })
+            source_documents.append(
+                {
+                    "id": result.get("id", ""),
+                    "filename": result.get("source_file", "unknown"),
+                    "page": result.get("page_number"),
+                    "chunk_text": result.get("chunk_text", ""),
+                    "relevance_score": round(result.get("score", 0), 4),
+                    "preview_url": None,
+                    "download_url": None,
+                }
+            )
 
         logger.debug("node.rerank", fused_count=len(fused_context))
         return {
@@ -263,7 +268,8 @@ def create_nodes(
                 continue
             try:
                 connections = await graph_service.get_entity_connections(
-                    entity_name, limit=10,
+                    entity_name,
+                    limit=10,
                     exclude_privilege_statuses=state.get("_exclude_privilege") or None,
                 )
                 new_graph.extend(connections)
@@ -318,6 +324,7 @@ def create_nodes(
         """
         try:
             from langgraph.config import get_stream_writer
+
             writer = get_stream_writer()
         except RuntimeError:
             # Outside of a runnable context (e.g., direct call in tests)
@@ -364,12 +371,14 @@ def create_nodes(
                 name_lower = ent.text.lower()
                 if name_lower not in seen_names:
                     seen_names.add(name_lower)
-                    entities_mentioned.append({
-                        "name": ent.text,
-                        "type": ent.type,
-                        "kg_id": None,
-                        "connections": 0,
-                    })
+                    entities_mentioned.append(
+                        {
+                            "name": ent.text,
+                            "type": ent.type,
+                            "kg_id": None,
+                            "connections": 0,
+                        }
+                    )
         except Exception:
             logger.warning("node.synthesize.entity_extraction_failed")
 
@@ -407,11 +416,7 @@ def create_nodes(
         )
 
         # Parse lines — take first 3 non-empty lines
-        lines = [
-            line.strip().lstrip("0123456789.-) ")
-            for line in raw.strip().splitlines()
-            if line.strip()
-        ]
+        lines = [line.strip().lstrip("0123456789.-) ") for line in raw.strip().splitlines() if line.strip()]
         follow_ups = [line for line in lines if len(line) > 10][:3]
 
         logger.debug("node.generate_follow_ups", count=len(follow_ups))

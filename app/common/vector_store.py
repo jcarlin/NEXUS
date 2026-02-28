@@ -175,6 +175,7 @@ class VectorStoreClient:
         filters: dict[str, Any] | None = None,
         sparse_vector: tuple[list[int], list[float]] | None = None,
         exclude_privilege_statuses: list[str] | None = None,
+        prefetch_multiplier: int = 2,
     ) -> list[dict[str, Any]]:
         """Search ``nexus_text``. Uses RRF fusion when sparse vector is provided."""
         must_conditions: list[FieldCondition] = []
@@ -200,8 +201,8 @@ class VectorStoreClient:
             results = self.client.query_points(
                 collection_name=TEXT_COLLECTION,
                 prefetch=[
-                    Prefetch(query=vector, using="dense", limit=limit * 2, filter=qdrant_filter),
-                    Prefetch(query=sv, using="sparse", limit=limit * 2, filter=qdrant_filter),
+                    Prefetch(query=vector, using="dense", limit=limit * prefetch_multiplier, filter=qdrant_filter),
+                    Prefetch(query=sv, using="sparse", limit=limit * prefetch_multiplier, filter=qdrant_filter),
                 ],
                 query=FusionQuery(fusion=Fusion.RRF),
                 limit=limit,
