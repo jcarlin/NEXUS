@@ -97,6 +97,22 @@ class StorageClient:
 
         return await asyncio.to_thread(_presign)
 
+    async def get_presigned_put_url(
+        self, key: str, content_type: str = "application/octet-stream", expires: int = 3600
+    ) -> str:
+        """Generate a presigned PUT URL for direct upload."""
+
+        def _presign() -> str:
+            return str(
+                self._client.generate_presigned_url(
+                    "put_object",
+                    Params={"Bucket": self._bucket, "Key": key, "ContentType": content_type},
+                    ExpiresIn=expires,
+                )
+            )
+
+        return await asyncio.to_thread(_presign)
+
     async def list_objects(self, prefix: str = "") -> list[dict]:
         """List objects under *prefix*. Returns list of ``{"key": ..., "size": ..., "last_modified": ...}``."""
 

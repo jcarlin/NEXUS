@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 from httpx import AsyncClient
+
+from app.dependencies import get_graph_service
 
 
 @pytest.mark.asyncio
@@ -19,8 +21,12 @@ async def test_list_entities(client: AsyncClient) -> None:
         )
     )
 
-    with patch("app.dependencies._graph_service", mock_gs):
+    app = client._transport.app
+    app.dependency_overrides[get_graph_service] = lambda: mock_gs
+    try:
         response = await client.get("/api/v1/entities")
+    finally:
+        app.dependency_overrides.pop(get_graph_service, None)
 
     assert response.status_code == 200
     body = response.json()
@@ -37,8 +43,12 @@ async def test_get_entity(client: AsyncClient) -> None:
         return_value={"name": "Alice", "type": "person", "mention_count": 5, "aliases": []}
     )
 
-    with patch("app.dependencies._graph_service", mock_gs):
+    app = client._transport.app
+    app.dependency_overrides[get_graph_service] = lambda: mock_gs
+    try:
         response = await client.get("/api/v1/entities/Alice")
+    finally:
+        app.dependency_overrides.pop(get_graph_service, None)
 
     assert response.status_code == 200
     assert response.json()["name"] == "Alice"
@@ -50,8 +60,12 @@ async def test_get_entity_not_found(client: AsyncClient) -> None:
     mock_gs = AsyncMock()
     mock_gs.get_entity_by_name = AsyncMock(return_value=None)
 
-    with patch("app.dependencies._graph_service", mock_gs):
+    app = client._transport.app
+    app.dependency_overrides[get_graph_service] = lambda: mock_gs
+    try:
         response = await client.get("/api/v1/entities/NonExistent")
+    finally:
+        app.dependency_overrides.pop(get_graph_service, None)
 
     assert response.status_code == 404
 
@@ -69,8 +83,12 @@ async def test_graph_stats(client: AsyncClient) -> None:
         }
     )
 
-    with patch("app.dependencies._graph_service", mock_gs):
+    app = client._transport.app
+    app.dependency_overrides[get_graph_service] = lambda: mock_gs
+    try:
         response = await client.get("/api/v1/graph/stats")
+    finally:
+        app.dependency_overrides.pop(get_graph_service, None)
 
     assert response.status_code == 200
     body = response.json()
@@ -83,11 +101,15 @@ async def test_graph_explore_rejects_write_queries(client: AsyncClient) -> None:
     """GET /graph/explore should reject queries with write keywords."""
     mock_gs = AsyncMock()
 
-    with patch("app.dependencies._graph_service", mock_gs):
+    app = client._transport.app
+    app.dependency_overrides[get_graph_service] = lambda: mock_gs
+    try:
         response = await client.get(
             "/api/v1/graph/explore",
             params={"cypher": "CREATE (n:Entity {name: 'hack'})"},
         )
+    finally:
+        app.dependency_overrides.pop(get_graph_service, None)
 
     assert response.status_code == 400
     assert "Write operations" in response.json()["detail"]

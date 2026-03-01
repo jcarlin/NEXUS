@@ -24,10 +24,14 @@ from app.dependencies import get_db, get_minio
 from app.ingestion.schemas import (
     BatchIngestResponse,
     BulkImportStatusResponse,
+    DryRunRequest,
+    DryRunResponse,
     IngestResponse,
     JobListResponse,
     JobProgress,
     JobStatusResponse,
+    PresignedUploadRequest,
+    PresignedUploadResponse,
     S3EventNotification,
     WebhookResponse,
 )
@@ -211,6 +215,44 @@ async def ingest_batch(
         filenames=filenames,
         total_files=len(job_ids),
     )
+
+
+# -----------------------------------------------------------------------
+# POST /ingest/presigned-upload — presigned PUT URL for direct S3 upload
+# -----------------------------------------------------------------------
+
+
+@router.post("/ingest/presigned-upload", response_model=PresignedUploadResponse)
+async def get_presigned_upload_url(
+    request: PresignedUploadRequest,
+    current_user: UserRecord = Depends(get_current_user),
+) -> PresignedUploadResponse:
+    """Generate a presigned PUT URL for direct S3 upload from the browser."""
+    storage = get_minio()
+    job_id = uuid4()
+    object_key = f"raw/{job_id}/{request.filename}"
+    upload_url = await storage.get_presigned_put_url(
+        key=object_key,
+        content_type=request.content_type,
+    )
+    return PresignedUploadResponse(
+        upload_url=upload_url,
+        object_key=object_key,
+    )
+
+
+# -----------------------------------------------------------------------
+# POST /ingest/import/dry-run — estimate import results
+# -----------------------------------------------------------------------
+
+
+@router.post("/ingest/import/dry-run", response_model=DryRunResponse)
+async def import_dry_run(
+    request: DryRunRequest,
+    _user: UserRecord = Depends(get_current_user),
+) -> DryRunResponse:
+    """Estimate import results without actually processing."""
+    return IngestionService.estimate_import(request)
 
 
 # -----------------------------------------------------------------------

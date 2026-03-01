@@ -1,0 +1,73 @@
+MEMORANDUM OF UNDERSTANDING
+
+Between: Acme Corporation ("Acme")
+And: Smith & Associates, LLP ("Smith")
+Date: January 15, 2024
+Matter No.: 2024-CV-00892
+
+RE: Consulting Agreement for Regulatory Compliance Review
+
+I. BACKGROUND AND PURPOSE
+
+This Memorandum of Understanding ("MOU") sets forth the terms under which Smith & Associates, LLP will provide legal consulting services to Acme Corporation regarding regulatory compliance matters arising from the Federal Trade Commission investigation initiated on November 3, 2023 (Docket No. FTC-2023-0047).
+
+Acme Corporation, a Delaware corporation with principal offices at 1200 Market Street, Suite 400, San Francisco, California 94102, is engaged in the development and distribution of consumer technology products. The company is led by Chief Executive Officer James Richardson and Chief Legal Officer Margaret Chen.
+
+Smith & Associates, LLP, a New York limited liability partnership located at 500 Fifth Avenue, 30th Floor, New York, New York 10110, specializes in regulatory compliance and government investigations. The lead partner on this engagement is Robert Martinez, with associate counsel Sarah Kim providing day-to-day support.
+
+II. SCOPE OF SERVICES
+
+Smith & Associates shall provide the following services:
+
+(a) Review and analysis of all documents responsive to the FTC's Civil Investigative Demand dated December 1, 2023, estimated at approximately 50,000 pages of corporate records, email communications, and internal memoranda.
+
+(b) Preparation of privilege logs in accordance with Federal Rule of Civil Procedure 26(b)(5) and applicable case law, including In re Grand Jury Subpoena, 341 F.3d 331 (4th Cir. 2003).
+
+(c) Coordination with Acme's internal legal team, specifically Margaret Chen and Deputy General Counsel Thomas Park, regarding document production timelines and privilege determinations.
+
+(d) Preparation of written reports summarizing findings related to Acme's compliance with Section 5 of the Federal Trade Commission Act, 15 U.S.C. § 45, and the Children's Online Privacy Protection Act ("COPPA"), 15 U.S.C. §§ 6501-6506.
+
+III. COMPENSATION
+
+Smith & Associates shall be compensated at the following hourly rates:
+
+- Robert Martinez, Partner: $850/hour
+- Sarah Kim, Associate: $450/hour
+- Paralegals: $225/hour
+
+The initial retainer shall be $250,000, payable within 30 days of execution of this MOU. Monthly invoices shall be submitted to Acme's accounts payable department, attention: David Wilson, Chief Financial Officer, at billing@acmecorp.com.
+
+IV. CONFIDENTIALITY
+
+All information exchanged pursuant to this MOU shall be treated as confidential and subject to attorney-client privilege and work product protection under Federal Rule of Civil Procedure 26(b)(3). Neither party shall disclose privileged communications without the express written consent of the other party.
+
+V. TIMELINE
+
+Key milestones for this engagement include:
+
+- February 15, 2024: Complete initial document review (Phase 1: 10,000 pages)
+- March 30, 2024: Complete privilege review and produce privilege log
+- April 15, 2024: Submit response to FTC Civil Investigative Demand
+- June 1, 2024: Deliver final compliance assessment report
+
+VI. GOVERNING LAW
+
+This MOU shall be governed by and construed in accordance with the laws of the State of New York, without regard to its conflict of laws principles. Any disputes arising under this MOU shall be resolved through binding arbitration administered by the American Arbitration Association in New York City.
+
+VII. SIGNATURES
+
+For Acme Corporation:
+
+James Richardson
+Chief Executive Officer
+Date: January 15, 2024
+
+Margaret Chen
+Chief Legal Officer
+Date: January 15, 2024
+
+For Smith & Associates, LLP:
+
+Robert Martinez
+Partner
+Date: January 15, 2024

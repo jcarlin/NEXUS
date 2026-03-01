@@ -12,6 +12,8 @@ from uuid import uuid4
 import pytest
 from httpx import AsyncClient
 
+from app.dependencies import get_minio
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -138,15 +140,17 @@ async def test_document_preview_returns_url(client: AsyncClient) -> None:
     mock_storage = MagicMock()
     mock_storage.get_presigned_url = AsyncMock(return_value="http://minio:9000/documents/pages/preview.png?sig=abc")
 
-    with (
-        patch(
+    app = client._transport.app
+    app.dependency_overrides[get_minio] = lambda: mock_storage
+    try:
+        with patch(
             "app.documents.service.DocumentService.get_document",
             new_callable=AsyncMock,
             return_value=row,
-        ),
-        patch("app.dependencies._storage_client", mock_storage),
-    ):
-        response = await client.get(f"/api/v1/documents/{doc_id}/preview?page=2")
+        ):
+            response = await client.get(f"/api/v1/documents/{doc_id}/preview?page=2")
+    finally:
+        app.dependency_overrides.pop(get_minio, None)
 
     assert response.status_code == 200
     body = response.json()
@@ -183,15 +187,17 @@ async def test_document_download_returns_url(client: AsyncClient) -> None:
     mock_storage = MagicMock()
     mock_storage.get_presigned_url = AsyncMock(return_value="http://minio:9000/documents/raw/abc/report.pdf?sig=xyz")
 
-    with (
-        patch(
+    app = client._transport.app
+    app.dependency_overrides[get_minio] = lambda: mock_storage
+    try:
+        with patch(
             "app.documents.service.DocumentService.get_document",
             new_callable=AsyncMock,
             return_value=row,
-        ),
-        patch("app.dependencies._storage_client", mock_storage),
-    ):
-        response = await client.get(f"/api/v1/documents/{doc_id}/download")
+        ):
+            response = await client.get(f"/api/v1/documents/{doc_id}/download")
+    finally:
+        app.dependency_overrides.pop(get_minio, None)
 
     assert response.status_code == 200
     body = response.json()

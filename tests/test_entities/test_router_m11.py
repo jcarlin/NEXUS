@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 from httpx import AsyncClient
+
+from app.dependencies import get_graph_service
 
 
 @pytest.mark.asyncio
@@ -29,11 +31,15 @@ async def test_communication_pairs_endpoint(client: AsyncClient) -> None:
         ]
     )
 
-    with patch("app.dependencies._graph_service", mock_gs):
+    app = client._transport.app
+    app.dependency_overrides[get_graph_service] = lambda: mock_gs
+    try:
         response = await client.get(
             "/api/v1/graph/communication-pairs",
             params={"person_a": "Alice", "person_b": "Bob"},
         )
+    finally:
+        app.dependency_overrides.pop(get_graph_service, None)
 
     assert response.status_code == 200
     body = response.json()
@@ -55,8 +61,12 @@ async def test_reporting_chain_endpoint(client: AsyncClient) -> None:
         ]
     )
 
-    with patch("app.dependencies._graph_service", mock_gs):
+    app = client._transport.app
+    app.dependency_overrides[get_graph_service] = lambda: mock_gs
+    try:
         response = await client.get("/api/v1/graph/reporting-chain/Alice")
+    finally:
+        app.dependency_overrides.pop(get_graph_service, None)
 
     assert response.status_code == 200
     body = response.json()

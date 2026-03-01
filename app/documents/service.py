@@ -52,6 +52,8 @@ class DocumentService:
         db: AsyncSession,
         document_type: str | None = None,
         filename_search: str | None = None,
+        hot_doc_score_min: float | None = None,
+        anomaly_score_min: float | None = None,
         offset: int = 0,
         limit: int = 50,
         matter_id: UUID | None = None,
@@ -62,6 +64,8 @@ class DocumentService:
         Optional filters:
         - *document_type*: exact match on the ``document_type`` column.
         - *filename_search*: case-insensitive substring match via ``ILIKE``.
+        - *hot_doc_score_min*: minimum hot_doc_score threshold.
+        - *anomaly_score_min*: minimum anomaly_score threshold.
         - *matter_id*: scope to a specific case matter.
         - *user_role*: when not admin/attorney, filters out privileged/work_product docs.
 
@@ -81,6 +85,14 @@ class DocumentService:
         if filename_search is not None:
             where_clauses.append("filename ILIKE :filename_search")
             params["filename_search"] = f"%{filename_search}%"
+
+        if hot_doc_score_min is not None:
+            where_clauses.append("hot_doc_score >= :hot_doc_score_min")
+            params["hot_doc_score_min"] = hot_doc_score_min
+
+        if anomaly_score_min is not None:
+            where_clauses.append("anomaly_score >= :anomaly_score_min")
+            params["anomaly_score_min"] = anomaly_score_min
 
         # Privilege filtering: non-admin/attorney users cannot see restricted docs
         if user_role not in ("admin", "attorney"):

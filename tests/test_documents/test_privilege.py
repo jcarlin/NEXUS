@@ -10,6 +10,7 @@ import pytest
 from httpx import AsyncClient
 
 from app.auth.schemas import UserRecord
+from app.dependencies import get_graph_service, get_qdrant
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -58,25 +59,31 @@ async def test_patch_privilege_attorney_200(client: AsyncClient) -> None:
     mock_gs = MagicMock()
     mock_gs.update_document_privilege = AsyncMock()
 
-    with (
-        patch("app.documents.service.DocumentService.get_document", new_callable=AsyncMock, return_value=row),
-        patch(
-            "app.documents.service.DocumentService.update_privilege",
-            new_callable=AsyncMock,
-            return_value={
-                "id": doc_id,
-                "privilege_status": "privileged",
-                "privilege_reviewed_by": UUID("00000000-0000-0000-0000-000000000099"),
-                "privilege_reviewed_at": reviewed_at,
-            },
-        ),
-        patch("app.dependencies._qdrant_client", mock_qdrant),
-        patch("app.dependencies._graph_service", mock_gs),
-    ):
-        response = await client.patch(
-            f"/api/v1/documents/{doc_id}/privilege",
-            json={"privilege_status": "privileged"},
-        )
+    app = client._transport.app
+    app.dependency_overrides[get_qdrant] = lambda: mock_qdrant
+    app.dependency_overrides[get_graph_service] = lambda: mock_gs
+
+    try:
+        with (
+            patch("app.documents.service.DocumentService.get_document", new_callable=AsyncMock, return_value=row),
+            patch(
+                "app.documents.service.DocumentService.update_privilege",
+                new_callable=AsyncMock,
+                return_value={
+                    "id": doc_id,
+                    "privilege_status": "privileged",
+                    "privilege_reviewed_by": UUID("00000000-0000-0000-0000-000000000099"),
+                    "privilege_reviewed_at": reviewed_at,
+                },
+            ),
+        ):
+            response = await client.patch(
+                f"/api/v1/documents/{doc_id}/privilege",
+                json={"privilege_status": "privileged"},
+            )
+    finally:
+        app.dependency_overrides.pop(get_qdrant, None)
+        app.dependency_overrides.pop(get_graph_service, None)
 
     assert response.status_code == 200
     body = response.json()
@@ -112,8 +119,11 @@ async def test_patch_privilege_paralegal_200(client: AsyncClient) -> None:
     mock_gs = MagicMock()
     mock_gs.update_document_privilege = AsyncMock()
 
+    app = client._transport.app
     # Temporarily override the current_user to be a paralegal
-    client._transport.app.dependency_overrides[get_current_user] = lambda: paralegal_user
+    app.dependency_overrides[get_current_user] = lambda: paralegal_user
+    app.dependency_overrides[get_qdrant] = lambda: mock_qdrant
+    app.dependency_overrides[get_graph_service] = lambda: mock_gs
 
     try:
         with (
@@ -128,8 +138,6 @@ async def test_patch_privilege_paralegal_200(client: AsyncClient) -> None:
                     "privilege_reviewed_at": reviewed_at,
                 },
             ),
-            patch("app.dependencies._qdrant_client", mock_qdrant),
-            patch("app.dependencies._graph_service", mock_gs),
         ):
             response = await client.patch(
                 f"/api/v1/documents/{doc_id}/privilege",
@@ -139,7 +147,9 @@ async def test_patch_privilege_paralegal_200(client: AsyncClient) -> None:
         # Restore default admin user
         from tests.conftest import _TEST_USER
 
-        client._transport.app.dependency_overrides[get_current_user] = lambda: _TEST_USER
+        app.dependency_overrides[get_current_user] = lambda: _TEST_USER
+        app.dependency_overrides.pop(get_qdrant, None)
+        app.dependency_overrides.pop(get_graph_service, None)
 
     assert response.status_code == 200
     body = response.json()
@@ -237,7 +247,6 @@ async def test_reviewer_cannot_see_privileged_docs(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_qdrant_query_builds_must_not_filter() -> None:
     """query_text() builds must_not conditions for excluded privilege statuses."""
-    from unittest.mock import MagicMock
 
     from app.common.vector_store import VectorStoreClient
 

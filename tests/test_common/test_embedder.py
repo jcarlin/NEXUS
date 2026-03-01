@@ -159,8 +159,8 @@ def test_factory_selects_openai_provider():
     """get_embedder() should return OpenAIEmbeddingProvider when provider is openai."""
     import app.dependencies as deps
 
-    # Reset singleton
-    deps._embedder = None
+    # Reset cached singleton
+    deps.get_embedder.cache_clear()
 
     mock_settings = MagicMock()
     mock_settings.embedding_provider = "openai"
@@ -174,16 +174,16 @@ def test_factory_selects_openai_provider():
 
     assert isinstance(embedder, OpenAIEmbeddingProvider)
 
-    # Clean up singleton
-    deps._embedder = None
+    # Clean up cached singleton
+    deps.get_embedder.cache_clear()
 
 
 def test_factory_selects_local_provider():
     """get_embedder() should return LocalEmbeddingProvider when provider is local."""
     import app.dependencies as deps
 
-    # Reset singleton
-    deps._embedder = None
+    # Reset cached singleton
+    deps.get_embedder.cache_clear()
 
     mock_settings = MagicMock()
     mock_settings.embedding_provider = "local"
@@ -195,8 +195,8 @@ def test_factory_selects_local_provider():
 
     assert isinstance(embedder, LocalEmbeddingProvider)
 
-    # Clean up singleton
-    deps._embedder = None
+    # Clean up cached singleton
+    deps.get_embedder.cache_clear()
 
 
 def test_protocol_is_runtime_checkable():

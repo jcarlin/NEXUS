@@ -98,6 +98,8 @@ def _row_to_detail(row: dict) -> DocumentDetail:
 async def list_documents(
     document_type: str | None = Query(None, description="Filter by document type"),
     q: str | None = Query(None, description="Search by filename (case-insensitive)"),
+    hot_doc_score_min: float | None = Query(None, ge=0.0, le=1.0, description="Minimum hot doc score"),
+    anomaly_score_min: float | None = Query(None, ge=0.0, le=1.0, description="Minimum anomaly score"),
     offset: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(50, ge=1, le=200, description="Max records to return"),
     db: AsyncSession = Depends(get_db),
@@ -109,6 +111,8 @@ async def list_documents(
         db=db,
         document_type=document_type,
         filename_search=q,
+        hot_doc_score_min=hot_doc_score_min,
+        anomaly_score_min=anomaly_score_min,
         offset=offset,
         limit=limit,
         matter_id=matter_id,

@@ -89,17 +89,17 @@ async def test_graph_compiled_with_checkpointer():
         patch("app.dependencies.get_entity_extractor", return_value=MagicMock()),
         patch("app.query.graph.build_graph_v1", return_value=mock_graph_builder),
     ):
-        # Reset the singleton so it rebuilds
+        # Reset the cached singleton so it rebuilds
         import app.dependencies as deps
 
-        deps._query_graph = None
+        deps.get_query_graph.cache_clear()
 
         try:
             result = deps.get_query_graph()
             mock_graph_builder.compile.assert_called_once_with(checkpointer=mock_checkpointer)
             assert result is mock_compiled
         finally:
-            deps._query_graph = None
+            deps.get_query_graph.cache_clear()
 
 
 @pytest.mark.asyncio

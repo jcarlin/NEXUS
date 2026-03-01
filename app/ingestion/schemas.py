@@ -99,3 +99,49 @@ class BulkImportStatusResponse(BaseModel):
     error: str | None = None
     created_at: datetime
     updated_at: datetime
+
+
+# ---------------------------------------------------------------------------
+# Dry-run schemas
+# ---------------------------------------------------------------------------
+
+
+class DryRunRequest(BaseModel):
+    """Request body for estimating import results without processing."""
+
+    source_type: str = Field(..., pattern="^(upload|s3|load_file)$")
+    file_count: int | None = Field(None, ge=1)
+    total_size_bytes: int | None = Field(None, ge=0)
+    s3_prefix: str | None = None
+    load_file_path: str | None = None
+
+
+class DryRunResponse(BaseModel):
+    """Estimated import results."""
+
+    estimated_documents: int
+    estimated_chunks: int
+    estimated_duration_minutes: float
+    estimated_storage_mb: float
+    warnings: list[str] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Presigned upload schemas
+# ---------------------------------------------------------------------------
+
+
+class PresignedUploadRequest(BaseModel):
+    """Request body for generating a presigned PUT URL."""
+
+    filename: str = Field(..., min_length=1, max_length=500)
+    content_type: str = Field(default="application/octet-stream")
+    matter_id: UUID
+
+
+class PresignedUploadResponse(BaseModel):
+    """Presigned PUT URL and associated metadata."""
+
+    upload_url: str
+    object_key: str
+    expires_in: int = 3600

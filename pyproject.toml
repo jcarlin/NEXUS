@@ -131,3 +131,7 @@ addopts = "--durations=10"
 filterwarnings = [
     "ignore::DeprecationWarning",
 ]
+markers = [
+    "e2e: End-to-end tests requiring real Docker services",
+    "slow: Tests that take more than 10 seconds",
+]
