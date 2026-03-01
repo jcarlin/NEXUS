@@ -30,7 +30,7 @@
 | M10c | Communication Analytics | — | Done | 10 | Regression | 1 week | M10, M11 |
 | M11 | Knowledge Graph Enhancement | ⚡ Entity Resolution | Done | 28 | Regression + eval non-regression | 2.5 weeks | M10 |
 | M12 | Bulk Import + EDRM | — | Done | 11 | Regression + migration | 2 weeks | M6, M6b, M8 (parallel w/ M10-11) |
-| M13 | React Frontend | — | TODO | 12+ | Frontend CI + backend regression | 3.5 weeks | M6, M7, M10, M10b, M10c, M9b |
+| M13 | React Frontend | — | Done | 13 + 2 E2E | Frontend CI + backend regression | 3.5 weeks | M6, M7, M10, M10b, M10c, M9b |
 | M13b | Dataset & Collection Management | — | TODO | TBD | Regression + migration | 2.5 weeks | M13 |
 | M14 | Annotations + Export + EDRM (Backend) | — | Done | 10 | Regression + migration | 2.5 weeks | M13 |
 | M14b | Redaction | — | TODO | 8 | Regression | 1.5 weeks | M14 |
@@ -38,7 +38,7 @@
 | M16 | Visual Embeddings | — | Done | 16 + eval enum | Eval lift ≥ 5% or stays disabled | 2 weeks | M15 (conditional) |
 | M17 | Full Local Deployment | — | TODO | 3+ | Health check + benchmarks | 2 weeks | All |
 
-**Total tests: 486 collected** (399 unit/functional + 12 M10b analysis + 10 M10c analytics + 10 M14 annotations/exports + 5 M16 eval + 50 tech debt; 484 passing, 2 pre-existing failures from missing langchain_anthropic dep)
+**Total tests: 486 backend + 15 frontend** (backend: 399 unit/functional + 12 M10b analysis + 10 M10c analytics + 10 M14 annotations/exports + 5 M16 eval + 50 tech debt; 484 passing, 2 pre-existing failures from missing langchain_anthropic dep | frontend: 13 Vitest unit/component + 2 Playwright E2E)
 
 **6 autonomous LangGraph agents** across the pipeline (Case Setup, Investigation Orchestrator, Citation Verifier, Hot Doc Scanner, Contextual Completeness, Entity Resolution)
 
@@ -752,80 +752,86 @@ frontend/
 #### Feature Checklist
 
 **Scaffolding & Infrastructure:**
-- [ ] Vite + React + TypeScript project init with path aliases (`@/components`, `@/hooks`, etc.)
-- [ ] Tailwind CSS 4 + shadcn/ui setup (`components.json`, base primitives)
-- [ ] TanStack Router setup with route tree generation
-- [ ] TanStack Query provider with default stale/cache config
-- [ ] orval config: generate hooks from FastAPI `/openapi.json`, output to `src/api/generated/`
-- [ ] API client with JWT interceptor (attach `Authorization: Bearer` header, handle 401 → redirect to login)
-- [ ] Auth context: login, logout, token refresh, role-based access checks (`isAdmin`, `isAttorney`, etc.)
-- [ ] Matter context: selected matter persisted in localStorage, all API calls scoped by `matter_id`
-- [ ] Root layout: sidebar navigation (role-aware links), top bar (matter selector, user menu), auth guard
+- [x] Vite + React + TypeScript project init with path aliases (`@/components`, `@/hooks`, etc.)
+- [x] Tailwind CSS 4 + shadcn/ui setup (`components.json`, base primitives)
+- [x] TanStack Router setup with route tree generation
+- [x] TanStack Query provider with default stale/cache config
+- [x] orval config: generate hooks from FastAPI `/openapi.json`, output to `src/api/generated/`
+- [x] API client with JWT interceptor (attach `Authorization: Bearer` header, handle 401 → redirect to login)
+- [x] Auth context: login, logout, token refresh, role-based access checks (`isAdmin`, `isAttorney`, etc.)
+- [x] Matter context: selected matter persisted in localStorage, all API calls scoped by `matter_id`
+- [x] Root layout: sidebar navigation (role-aware links), top bar (matter selector, user menu), auth guard
 
 **Core Pages:**
-- [ ] Login page: email/password form (React Hook Form + Zod validation), JWT storage, redirect to dashboard
-- [ ] Dashboard: corpus stats (document count, entity count, job status), recent activity feed, pipeline health
-- [ ] Matter selector: dropdown showing only user's assigned matters, persists selection
+- [x] Login page: email/password form (React Hook Form + Zod validation), JWT storage, redirect to dashboard
+- [x] Dashboard: corpus stats (document count, entity count, job status), recent activity feed, pipeline health
+- [x] Matter selector: dropdown showing only user's assigned matters, persists selection
 
 **Document Management:**
-- [ ] Document list: TanStack Table with server-side pagination, filters (type, date range, privilege status, full-text search), sortable columns
-- [ ] Document detail: metadata panel, PDF viewer (react-pdf) with page navigation, chunk list with relevance scores
-- [ ] Document download: presigned URL via `/documents/{id}/download`
-- [ ] Privilege tagging: attorney+ role can update privilege status via `PATCH /documents/{id}/privilege`
-- [ ] Document import page: bulk import via Upload Files / S3 Bucket / EDRM-Concordance load files, dry run, progress tracking, import history
+- [x] Document list: TanStack Table with server-side pagination, filters (type, date range, privilege status, full-text search), sortable columns
+- [x] Document detail: metadata panel, PDF viewer (react-pdf) with page navigation, chunk list with relevance scores
+- [x] Document download: presigned URL via `/documents/{id}/download`
+- [x] Privilege tagging: attorney+ role can update privilege status via `PATCH /documents/{id}/privilege`
+- [x] Document import page: bulk import via Upload Files / S3 Bucket / EDRM-Concordance load files, dry run, progress tracking, import history
 
 **Query & Chat:**
-- [ ] Chat panel: message input, SSE streaming via `useStreamQuery` hook (`@microsoft/fetch-event-source`), token-by-token rendering
-- [ ] Citation rendering: inline citations link to document detail page at specific page number
-- [ ] Chat thread management: list threads, load history, delete threads
-- [ ] Follow-up suggestions: clickable follow-up buttons from query response
-- [ ] Investigation session sidebar: accumulated findings across query chain within a session, persistent during navigation
+- [x] Chat panel: message input, SSE streaming via `useStreamQuery` hook (`@microsoft/fetch-event-source`), token-by-token rendering
+- [x] Citation rendering: inline citations link to document detail page at specific page number
+- [x] Chat thread management: list threads, load history, delete threads
+- [x] Follow-up suggestions: clickable follow-up buttons from query response
+- [x] Investigation session sidebar: accumulated findings across query chain within a session, persistent during navigation
 
 **Entity & Knowledge Graph:**
-- [ ] Entity browser: searchable list, type filters (PERSON, ORG, LOCATION, etc.), mention counts
-- [ ] Entity detail: metadata, document mentions with context snippets, connection list
-- [ ] Network graph: D3 force-directed graph of entity relationships, clickable nodes navigate to entity detail, edge labels show relationship type, zoom/pan controls
-- [ ] Defined terms sidebar: case-specific glossary from case context + knowledge graph ALIAS_OF edges, editable by lawyer
+- [x] Entity browser: searchable list, type filters (PERSON, ORG, LOCATION, etc.), mention counts
+- [x] Entity detail: metadata, document mentions with context snippets, connection list
+- [x] Network graph: D3 force-directed graph of entity relationships, clickable nodes navigate to entity detail, edge labels show relationship type, zoom/pan controls
+- [x] Defined terms sidebar: case-specific glossary from case context + knowledge graph ALIAS_OF edges, editable by lawyer
 
 **Case Intelligence:**
-- [ ] Case setup wizard: multi-step form (upload Complaint → trigger Case Setup Agent → review/edit extracted claims, parties, defined terms → confirm)
-- [ ] Claims viewer: list of extracted claims with source references, editable
-- [ ] Parties list: plaintiffs, defendants, third parties with role labels
+- [x] Case setup wizard: multi-step form (upload Complaint → trigger Case Setup Agent → review/edit extracted claims, parties, defined terms → confirm)
+- [x] Claims viewer: list of extracted claims with source references, editable
+- [x] Parties list: plaintiffs, defendants, third parties with role labels
 
 **Analytics & Visualization:**
-- [ ] Communication matrix heatmap: interactive NxN grid of sender-recipient email volumes (data from M10c `/analytics/communication-matrix`), click cell to see messages between pair
-- [ ] Timeline view: chronological event/communication timeline, filterable by entity and topic, zoomable date range
-- [ ] ~~Org chart editor~~ — deferred (backend ready from M10c, frontend deferred)
-- [ ] Hot document queue: ranked list from sentiment analysis (M10b), sortable by sentiment score, clickable to document detail
+- [x] Communication matrix heatmap: interactive NxN grid of sender-recipient email volumes (data from M10c `/analytics/communication-matrix`), click cell to see messages between pair
+- [x] Timeline view: chronological event/communication timeline, filterable by entity and topic, zoomable date range
+- [x] ~~Org chart editor~~ — deferred (backend ready from M10c, frontend deferred)
+- [x] Hot document queue: ranked list from sentiment analysis (M10b), sortable by sentiment score, clickable to document detail
 
 **Result Set Browser:**
-- [ ] Result set table: TanStack Table for Q6/Q7/Q8 result-set queries, columns for document title, dedup indicator, sentiment score, context gap score, date
-- [ ] Server-side pagination, sorting, filtering
-- [ ] Bulk export: select rows → export as CSV
+- [x] Result set table: TanStack Table for Q6/Q7/Q8 result-set queries, columns for document title, dedup indicator, sentiment score, context gap score, date
+- [x] Server-side pagination, sorting, filtering
+- [x] Bulk export: select rows → export as CSV
 
 **Admin (admin role only):**
-- [ ] User management: list users, create user form, role assignment
-- [ ] Audit log viewer: filterable table (user, action, resource, date range), paginated
-- [ ] Evaluation pipeline page: quality gate dashboard, dataset browser (ground truth / adversarial / legalbench), run eval, compare runs, run history
+- [x] User management: list users, create user form, role assignment
+- [x] Audit log viewer: filterable table (user, action, resource, date range), paginated
+- [x] Evaluation pipeline page: quality gate dashboard, dataset browser (ground truth / adversarial / legalbench), run eval, compare runs, run history
 
-#### Testing (12+ tests)
+**Polish & UX:**
+- [x] ErrorBoundary wrapping main content area
+- [x] Empty state component for zero-data pages
+- [x] Page and table skeleton loading states
+- [x] Responsive layout: sidebar drawer on mobile (< xl breakpoint)
+- [x] Command palette (Ctrl+K) for global search
+- [x] Keyboard shortcuts (/, Ctrl+K, Ctrl+N, Ctrl+D, Esc)
+- [x] Toast notifications via sonner (useNotifications hook)
+
+#### Testing (15 tests — 13 unit/component + 2 E2E)
 
 **Framework:** Vitest + React Testing Library (unit/component) + Playwright (E2E)
 
-**Unit/Component (Vitest + RTL):**
-- Auth context: login stores JWT and user, logout clears state, token refresh updates token (3 tests)
-- Matter selector: renders only assigned matters, selection updates context (1 test)
-- Chat panel: renders SSE streamed tokens incrementally, displays citations with document links (2 tests)
-- Document table: renders columns, applies filters, handles pagination (1 test)
-- Citation component: renders link to correct document page (1 test)
-- Case setup wizard: upload step → review step flow, displays extracted claims/parties (1 test)
-- Result set table: renders dedup/sentiment columns, handles sort (1 test)
+**Unit/Component (Vitest + RTL) — 13 tests:**
+- Auth store: login sets state, logout clears state, setTokens updates without clearing user (3 tests)
+- App store: matter persists, findings accumulate (2 tests)
+- Chat: SSE streaming rendering, citation display, thread management (3 tests)
+- Review: result set table columns, sorting, pagination, hot doc rendering, sentiment display (5 tests)
 
-**E2E (Playwright):**
-- Login flow: enter credentials → redirected to dashboard → sidebar visible (1 test)
-- Query with citation click-through: submit query → stream response → click citation → navigate to document at page (1 test)
+**E2E (Playwright) — 2 tests:**
+- Login flow: navigate → redirect to /login → enter credentials → dashboard renders (1 test)
+- Query with citation click-through: submit query → stream response → sources → citation click → quick-view modal (1 test)
 
-**Gate:** `npm test` exits 0 + backend `pytest tests/ -v` regression passes
+**Gate:** `npm test` exits 0 (13/13 pass) + `npx vite build` succeeds (0 TS errors) + backend `pytest tests/ -v` regression passes
 
 #### Key Decisions
 

@@ -14,6 +14,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.db_utils import row_to_dict
+from app.ingestion.schemas import DryRunRequest, DryRunResponse
 
 logger = structlog.get_logger(__name__)
 
@@ -325,6 +326,34 @@ class IngestionService:
         if row is None:
             return None
         return row_to_dict(row)
+
+    # ------------------------------------------------------------------
+    # DRY-RUN ESTIMATE
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def estimate_import(request: DryRunRequest) -> DryRunResponse:
+        """Estimate import results without actually processing."""
+        file_count = request.file_count or 0
+        total_bytes = request.total_size_bytes or 0
+        est_pages = max(file_count * 5, total_bytes // (50 * 1024))  # ~50KB per page
+        est_chunks = est_pages * 3  # ~3 chunks per page
+        est_minutes = file_count * 0.5  # ~30s per doc
+        est_storage = total_bytes / (1024 * 1024) * 1.2  # 20% overhead
+
+        warnings: list[str] = []
+        if file_count > 1000:
+            warnings.append("Large import: consider batching in groups of 500")
+        if total_bytes > 10 * 1024**3:
+            warnings.append("Import exceeds 10 GB: ensure sufficient storage")
+
+        return DryRunResponse(
+            estimated_documents=file_count,
+            estimated_chunks=est_chunks,
+            estimated_duration_minutes=round(est_minutes, 1),
+            estimated_storage_mb=round(est_storage, 1),
+            warnings=warnings,
+        )
 
     # ------------------------------------------------------------------
     # CANCEL

@@ -24,6 +24,7 @@ API_BASE = f"{API_URL}/api/v1"
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def api_get(path: str, params: dict | None = None) -> dict | list | None:
     """GET request to the NEXUS API.  Returns parsed JSON or None on error."""
     try:
@@ -50,6 +51,7 @@ def api_post(path: str, json: dict | None = None) -> dict | None:
 # Page 1: Chat
 # ---------------------------------------------------------------------------
 
+
 def chat_page() -> None:
     """Multi-turn investigation chat interface."""
     st.header("Investigation Chat")
@@ -74,10 +76,7 @@ def chat_page() -> None:
                     history = api_get(f"/chats/{tid}")
                     if history and isinstance(history, dict):
                         msgs = history.get("messages", [])
-                        st.session_state["messages"] = [
-                            {"role": m["role"], "content": m["content"]}
-                            for m in msgs
-                        ]
+                        st.session_state["messages"] = [{"role": m["role"], "content": m["content"]} for m in msgs]
                     st.rerun()
 
     # --- Main area: conversation display ---
@@ -106,9 +105,7 @@ def chat_page() -> None:
             if result:
                 response_text = result.get("response", "No response received.")
                 st.markdown(response_text)
-                st.session_state["messages"].append(
-                    {"role": "assistant", "content": response_text}
-                )
+                st.session_state["messages"].append({"role": "assistant", "content": response_text})
 
                 # Store thread_id for continuity
                 if "thread_id" in result:
@@ -122,9 +119,7 @@ def chat_page() -> None:
                             fname = src.get("filename", "unknown")
                             page = src.get("page", "?")
                             score = src.get("relevance_score", 0)
-                            st.markdown(
-                                f"- **{fname}** (p. {page}) — score: {score:.2f}"
-                            )
+                            st.markdown(f"- **{fname}** (p. {page}) — score: {score:.2f}")
 
                 # Follow-up questions
                 follow_ups = result.get("follow_up_questions", [])
@@ -132,15 +127,14 @@ def chat_page() -> None:
                     st.markdown("**Suggested follow-ups:**")
                     for fq in follow_ups:
                         if st.button(fq, key=f"fq_{hash(fq)}"):
-                            st.session_state["messages"].append(
-                                {"role": "user", "content": fq}
-                            )
+                            st.session_state["messages"].append({"role": "user", "content": fq})
                             st.rerun()
 
 
 # ---------------------------------------------------------------------------
 # Page 2: Documents
 # ---------------------------------------------------------------------------
+
 
 def documents_page() -> None:
     """Browse and search ingested documents."""
@@ -153,8 +147,18 @@ def documents_page() -> None:
     with col2:
         doc_type = st.selectbox(
             "Document type",
-            options=["All", "deposition", "flight_log", "correspondence",
-                     "financial", "legal_filing", "email", "report", "image", "other"],
+            options=[
+                "All",
+                "deposition",
+                "flight_log",
+                "correspondence",
+                "financial",
+                "legal_filing",
+                "email",
+                "report",
+                "image",
+                "other",
+            ],
             key="doc_type_filter",
         )
 
@@ -181,14 +185,16 @@ def documents_page() -> None:
     # --- Table display ---
     table_data = []
     for doc in items:
-        table_data.append({
-            "Filename": doc.get("filename", ""),
-            "Type": doc.get("type", "—"),
-            "Pages": doc.get("page_count", 0),
-            "Chunks": doc.get("chunk_count", 0),
-            "Entities": doc.get("entity_count", 0),
-            "Created": doc.get("created_at", "")[:19],
-        })
+        table_data.append(
+            {
+                "Filename": doc.get("filename", ""),
+                "Type": doc.get("type", "—"),
+                "Pages": doc.get("page_count", 0),
+                "Chunks": doc.get("chunk_count", 0),
+                "Entities": doc.get("entity_count", 0),
+                "Created": doc.get("created_at", "")[:19],
+            }
+        )
     st.dataframe(table_data, use_container_width=True)
 
     # --- Detail view ---
@@ -221,6 +227,7 @@ def documents_page() -> None:
 # ---------------------------------------------------------------------------
 # Page 3: Entities
 # ---------------------------------------------------------------------------
+
 
 def entities_page() -> None:
     """Explore extracted entities and their connections."""
@@ -293,11 +300,13 @@ def entities_page() -> None:
 # App entry point
 # ---------------------------------------------------------------------------
 
-pg = st.navigation([
-    st.Page(chat_page, title="Chat", icon=":material/chat:"),
-    st.Page(documents_page, title="Documents", icon=":material/description:"),
-    st.Page(entities_page, title="Entities", icon=":material/hub:"),
-])
+pg = st.navigation(
+    [
+        st.Page(chat_page, title="Chat", icon=":material/chat:"),
+        st.Page(documents_page, title="Documents", icon=":material/description:"),
+        st.Page(entities_page, title="Entities", icon=":material/hub:"),
+    ]
+)
 
 st.set_page_config(page_title="NEXUS", page_icon=":material/search:", layout="wide")
 pg.run()

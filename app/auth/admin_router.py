@@ -1,18 +1,31 @@
 """Admin-only API endpoints.
 
-GET /admin/audit-log  -- filterable audit log viewer (admin-only)
+GET  /admin/audit-log  -- filterable audit log viewer (admin-only)
+GET  /admin/users      -- list users (admin-only)
+POST /admin/users      -- create user (admin-only)
+PATCH /admin/users/{id} -- update user (admin-only)
+DELETE /admin/users/{id} -- deactivate user (admin-only)
 """
 
 from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.middleware import require_role
-from app.auth.schemas import AuditLogEntry, AuditLogListResponse, UserRecord
+from app.auth.schemas import (
+    AuditLogEntry,
+    AuditLogListResponse,
+    UserCreateRequest,
+    UserListResponse,
+    UserRecord,
+    UserResponse,
+    UserUpdateRequest,
+)
+from app.auth.service import AuthService
 from app.dependencies import get_db
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -96,3 +109,136 @@ async def list_audit_log(
         offset=offset,
         limit=limit,
     )
+
+
+# ------------------------------------------------------------------
+# User CRUD
+# ------------------------------------------------------------------
+
+
+@router.get("/users", response_model=UserListResponse)
+async def list_users(
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    _current_user: UserRecord = Depends(require_role("admin")),
+) -> UserListResponse:
+    """List all users. Admin-only."""
+    count_result = await db.execute(text("SELECT count(*) FROM users"))
+    total = count_result.scalar_one()
+
+    result = await db.execute(
+        text("""
+            SELECT id, email, full_name, role, is_active, created_at
+            FROM users
+            ORDER BY created_at DESC
+            OFFSET :offset LIMIT :limit
+        """),
+        {"offset": offset, "limit": limit},
+    )
+    rows = result.mappings().all()
+    items = [UserResponse(**dict(r)) for r in rows]
+    return UserListResponse(items=items, total=total, offset=offset, limit=limit)
+
+
+@router.post("/users", response_model=UserResponse, status_code=201)
+async def create_user(
+    request: UserCreateRequest,
+    db: AsyncSession = Depends(get_db),
+    _current_user: UserRecord = Depends(require_role("admin")),
+) -> UserResponse:
+    """Create a new user. Admin-only."""
+    existing = await AuthService.get_user_by_email(db, request.email)
+    if existing:
+        raise HTTPException(status_code=409, detail="Email already registered")
+
+    user = await AuthService.create_user(
+        db,
+        email=request.email,
+        password=request.password,
+        full_name=request.full_name,
+        role=request.role,
+    )
+    await db.commit()
+    return UserResponse(
+        id=user.id,
+        email=user.email,
+        full_name=user.full_name,
+        role=user.role,
+        is_active=user.is_active,
+        created_at=user.created_at,
+    )
+
+
+@router.patch("/users/{user_id}", response_model=UserResponse)
+async def update_user(
+    user_id: UUID,
+    request: UserUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+    _current_user: UserRecord = Depends(require_role("admin")),
+) -> UserResponse:
+    """Update user fields. Admin-only."""
+    user = await AuthService.get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    set_clauses: list[str] = []
+    params: dict = {"user_id": user_id}
+
+    if request.email is not None:
+        set_clauses.append("email = :email")
+        params["email"] = request.email
+    if request.full_name is not None:
+        set_clauses.append("full_name = :full_name")
+        params["full_name"] = request.full_name
+    if request.role is not None:
+        set_clauses.append("role = :role")
+        params["role"] = request.role
+    if request.is_active is not None:
+        set_clauses.append("is_active = :is_active")
+        params["is_active"] = request.is_active
+    if request.password is not None:
+        set_clauses.append("password_hash = :password_hash")
+        params["password_hash"] = AuthService.hash_password(request.password)
+
+    if not set_clauses:
+        raise HTTPException(status_code=400, detail="No fields to update")
+
+    set_clauses.append("updated_at = now()")
+    set_sql = ", ".join(set_clauses)
+
+    await db.execute(
+        text(f"UPDATE users SET {set_sql} WHERE id = :user_id"),
+        params,
+    )
+    await db.commit()
+
+    updated = await AuthService.get_user_by_id(db, user_id)
+    if not updated:
+        raise HTTPException(status_code=404, detail="User not found after update")
+    return UserResponse(
+        id=updated.id,
+        email=updated.email,
+        full_name=updated.full_name,
+        role=updated.role,
+        is_active=updated.is_active,
+        created_at=updated.created_at,
+    )
+
+
+@router.delete("/users/{user_id}", status_code=204)
+async def deactivate_user(
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _current_user: UserRecord = Depends(require_role("admin")),
+) -> None:
+    """Deactivate a user (soft delete). Admin-only."""
+    user = await AuthService.get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    await db.execute(
+        text("UPDATE users SET is_active = false, updated_at = now() WHERE id = :user_id"),
+        {"user_id": user_id},
+    )
+    await db.commit()

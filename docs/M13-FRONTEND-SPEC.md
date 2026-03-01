@@ -1,0 +1,1466 @@
+# M13 Frontend Feature Spec & Master Build Plan
+
+> React frontend for the NEXUS Legal Intelligence Platform.
+> Replaces the Streamlit prototype (`frontend/app.py`) with a full SPA.
+>
+> **Tech stack:** Vite + React 19 + TypeScript 5.x + TanStack Router/Query + Zustand + Uppy + orval + shadcn/ui + D3.js
+> **See also:** `ROADMAP.md` § M13 for tech stack table, project structure, feature checklist, and testing plan.
+
+---
+
+## User Roles & Permissions
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│  ROLE        │ DOCUMENTS │ QUERY │ ENTITIES │ CASE  │ ADMIN │ EVAL     │
+├──────────────┼───────────┼───────┼──────────┼───────┼───────┼──────────┤
+│  admin       │ full      │ full  │ full     │ full  │ full  │ full     │
+│  attorney    │ full+priv │ full  │ full     │ setup │ —     │ —        │
+│  paralegal   │ read+priv │ full  │ read     │ view  │ —     │ —        │
+│  reviewer    │ read-only │ query │ read     │ view  │ —     │ —        │
+└──────────────────────────────────────────────────────────────────────────┘
+priv = can tag privilege status
+setup = can run case setup wizard, edit claims/parties/terms
+```
+
+---
+
+## Information Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  LOGIN                                                       │
+│  └── MATTER SELECT (post-login, persists in localStorage)    │
+│       │                                                      │
+│       ├── DASHBOARD ─────────────── home, corpus stats       │
+│       │                                                      │
+│       ├── CHAT ─────────────────── "Ask the Evidence"        │
+│       │   ├── /chat                  new conversation        │
+│       │   └── /chat/:threadId        existing thread         │
+│       │                                                      │
+│       ├── DOCUMENTS ────────────── document management       │
+│       │   ├── /documents             list + filters          │
+│       │   ├── /documents/:id         detail + PDF viewer     │
+│       │   └── /documents/import      bulk import wizard      │
+│       │                                                      │
+│       ├── ENTITIES ─────────────── knowledge graph           │
+│       │   ├── /entities              browser + search        │
+│       │   ├── /entities/:id          detail + connections    │
+│       │   └── /entities/network      full graph viz          │
+│       │                                                      │
+│       ├── ANALYTICS ────────────── investigation insights    │
+│       │   ├── /analytics/comms       communication matrix    │
+│       │   ├── /analytics/timeline    chronological view      │
+│       │   └── /analytics/network     centrality rankings     │
+│       │                                                      │
+│       ├── REVIEW ───────────────── prioritized review        │
+│       │   ├── /review/hot-docs       flagged documents       │
+│       │   └── /review/result-set     query result sets       │
+│       │                                                      │
+│       ├── CASE SETUP ───────────── case intelligence         │
+│       │   └── /case-setup            wizard + context editor │
+│       │                                                      │
+│       ├── DATASETS ─────────────── (M13b) collection mgmt   │
+│       │   └── /datasets              tree browser + tags     │
+│       │                                                      │
+│       └── ADMIN (admin only) ───── system management         │
+│           ├── /admin/users           user CRUD               │
+│           ├── /admin/audit-log       audit trail             │
+│           └── /admin/evaluation      eval pipeline + datasets│
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Global Layout
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│  ┌──────┐  NEXUS                    [Matter: Acme v. Smith ▼]  [JD ▼]  │
+│  │ logo │  Legal Intelligence                                           │
+├──┴──────┴───────────────────────────────────────────────────────────────┤
+│  │           │                                                          │
+│  │  ≡ NAV   │   MAIN CONTENT AREA                                      │
+│  │           │                                                          │
+│  │  ◉ Dash   │                                                          │
+│  │  💬 Chat  │   (varies per route)                                     │
+│  │  📄 Docs  │                                                          │
+│  │  🔗 Ents  │                                                          │
+│  │  📊 Anlyt │                                                          │
+│  │  🔍 Review│                                                          │
+│  │  ⚙ Case  │                                                          │
+│  │  ─────── │                                                          │
+│  │  👤 Admin │  (admin only)                                            │
+│  │           │                                                          │
+│  │           │                                                          │
+│  │  [?]Help  │                                                          │
+│  │           │                                                          │
+└──┴───────────┴──────────────────────────────────────────────────────────┘
+```
+
+- **Sidebar**: Collapsible (icon-only mode). Role-aware — Admin section hidden for non-admins.
+- **Top bar**: Matter selector dropdown (shows only assigned matters), user avatar menu (profile, logout).
+- **Content area**: Full-width, scrollable. No fixed footer.
+- **Responsive**: Desktop-first. Sidebar collapses to hamburger on narrow viewports. Minimum supported: 1280px wide.
+
+---
+
+## Page Specifications
+
+---
+
+### 1. LOGIN (`/login`)
+
+**Purpose:** Authenticate user, obtain JWT tokens.
+
+```
+┌──────────────────────────────────────────┐
+│                                          │
+│              NEXUS                       │
+│       Legal Intelligence Platform        │
+│                                          │
+│     ┌──────────────────────────┐         │
+│     │  Email                   │         │
+│     └──────────────────────────┘         │
+│     ┌──────────────────────────┐         │
+│     │  Password            👁  │         │
+│     └──────────────────────────┘         │
+│                                          │
+│     [ Sign In ─────────────── ]          │
+│                                          │
+│     Invalid credentials. ← (error msg)   │
+│                                          │
+└──────────────────────────────────────────┘
+```
+
+**Behavior:**
+- `POST /auth/login` → store `access_token` + `refresh_token` in memory (not localStorage — XSS risk)
+- On success: redirect to `/` (Dashboard)
+- Token refresh: silent background refresh via `POST /auth/refresh` before expiry
+- On 401 from any API call: redirect to `/login`
+
+**Form validation (Zod):**
+- Email: valid email format, required
+- Password: required, min 1 char (server validates strength)
+
+---
+
+### 2. DASHBOARD (`/`)
+
+**Purpose:** At-a-glance matter overview. Entry point after login.
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  Dashboard                                          [Refresh]│
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────┐│
+│  │  📄 1,247    │ │  🔗 2,450   │ │  🔥 23      │ │ ⚠ 5     ││
+│  │  Documents   │ │  Entities   │ │  Hot Docs   │ │ Jobs    ││
+│  │              │ │              │ │              │ │ Running ││
+│  └─────────────┘ └─────────────┘ └─────────────┘ └─────────┘│
+│                                                              │
+│  ┌─────────────────────────────┐ ┌──────────────────────────┐│
+│  │  RECENT ACTIVITY            │ │  PIPELINE STATUS          ││
+│  │                             │ │                            ││
+│  │  • 12:30 — Query: "Who..."  │ │  job-abc  parsing  ██░ 60%││
+│  │  • 12:15 — Ingested: x.pdf │ │  job-def  embedding ███ 90%││
+│  │  • 11:45 — Privilege: ...   │ │  job-ghi  complete  ████  ││
+│  │  • 11:30 — Query: "When..." │ │                            ││
+│  │                             │ │  [View All Jobs →]         ││
+│  └─────────────────────────────┘ └──────────────────────────┘│
+│                                                              │
+│  ┌─────────────────────────────┐ ┌──────────────────────────┐│
+│  │  CASE STATUS                │ │  GRAPH OVERVIEW           ││
+│  │                             │ │                            ││
+│  │  Status: Confirmed ✓       │ │  Nodes: 2,450             ││
+│  │  Claims: 5                  │ │  Edges: 12,850            ││
+│  │  Parties: 8                 │ │  PERSON: 1,200            ││
+│  │  Defined Terms: 12          │ │  ORG: 450                 ││
+│  │  [Edit Case Setup →]       │ │  [Explore Graph →]        ││
+│  └─────────────────────────────┘ └──────────────────────────┘│
+└──────────────────────────────────────────────────────────────┘
+```
+
+**Data sources:**
+- Stat cards: `GET /documents` (total), `GET /graph/stats`, `GET /documents?hot_doc_score_min=0.7` (count), `GET /jobs` (running count)
+- Recent activity: `GET /admin/audit-log?limit=10` (current user's actions)
+- Pipeline status: `GET /jobs?limit=5` (active jobs, poll every 10s while jobs are running)
+- Case status: `GET /cases/{matter_id}/context`
+- Graph overview: `GET /graph/stats`
+
+**Interactions:**
+- Stat cards are clickable → navigate to respective page
+- Pipeline jobs show real-time progress (poll every 10s)
+- "Edit Case Setup" → `/case-setup`
+- "Explore Graph" → `/entities/network`
+
+---
+
+### 3. CHAT — "Ask the Evidence" (`/chat`, `/chat/:threadId`)
+
+**Purpose:** Core investigation interface. Multi-turn conversation with the agentic query pipeline. Streaming responses with cited claims and source documents.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  ┌─────────────────┐  ┌──────────────────────────────────────────────────┐  │
+│  │  THREADS         │  │  CONVERSATION                                    │  │
+│  │                  │  │                                                  │  │
+│  │  [+ New Chat]    │  │  ┌─────────────────────────────────────────────┐ │  │
+│  │                  │  │  │ 👤 Who was responsible for the data breach   │ │  │
+│  │  ● Breach resp.  │  │  │    in Q3 2020?                              │ │  │
+│  │    12 messages    │  │  └─────────────────────────────────────────────┘ │  │
+│  │    2h ago         │  │                                                  │  │
+│  │                  │  │  ┌─────────────────────────────────────────────┐ │  │
+│  │  ○ Timeline of   │  │  │ 🤖 Based on the documents reviewed...       │ │  │
+│  │    events         │  │  │                                             │ │  │
+│  │    5 messages     │  │  │  John Smith, as VP of Operations, was      │ │  │
+│  │    yesterday      │  │  │  directly responsible for the breach.       │ │  │
+│  │                  │  │  │  [1] The incident report states "Smith      │ │  │
+│  │  ○ Financial     │  │  │  authorized the access change on June 15"   │ │  │
+│  │    analysis       │  │  │  [2] Email from Smith to IT: "proceed      │ │  │
+│  │    3 messages     │  │  │  without the security review" [3]           │ │  │
+│  │    3 days ago     │  │  │                                             │ │  │
+│  │                  │  │  │  ── CITED CLAIMS ──────────────────────────  │ │  │
+│  │                  │  │  │  [1] breach_report.pdf p.3 (DOC-001-003)   │ │  │
+│  │                  │  │  │      "Smith authorized the access change"   │ │  │
+│  │                  │  │  │      Grounding: 0.92 ✓                      │ │  │
+│  │                  │  │  │  [2] email_2020-06-14.eml p.1              │ │  │
+│  │                  │  │  │      "proceed without security review"      │ │  │
+│  │                  │  │  │      Grounding: 0.88 ✓                      │ │  │
+│  │                  │  │  │                                             │ │  │
+│  │                  │  │  │  ── SOURCES (5) ──────────── [Expand All]   │ │  │
+│  │                  │  │  │  📄 breach_report.pdf        0.95 relevance │ │  │
+│  │                  │  │  │  📧 email_2020-06-14.eml     0.91          │ │  │
+│  │                  │  │  │  📄 security_audit.pdf       0.87          │ │  │
+│  │                  │  │  │  📧 email_2020-06-15.eml     0.83          │ │  │
+│  │                  │  │  │  📄 hr_investigation.docx    0.78          │ │  │
+│  │                  │  │  │                                             │ │  │
+│  │                  │  │  │  ── ENTITIES ──────────────────────────────  │ │  │
+│  │                  │  │  │  [John Smith](PERSON) [Acme Corp](ORG)     │ │  │
+│  │                  │  │  │  [IT Department](ORG)                       │ │  │
+│  │                  │  │  │                                             │ │  │
+│  │                  │  │  │  ── FOLLOW UP ─────────────────────────     │ │  │
+│  │                  │  │  │  [What was the scope of the breach?]        │ │  │
+│  │                  │  │  │  [When was the breach discovered?]          │ │  │
+│  │                  │  │  │  [Who else was involved?]                   │ │  │
+│  │                  │  │  └─────────────────────────────────────────────┘ │  │
+│  │                  │  │                                                  │  │
+│  │                  │  │  ┌──────────────────────────────────── [Send] ┐  │  │
+│  │                  │  │  │  Ask a question about the evidence...       │  │  │
+│  │                  │  │  └────────────────────────────────────────────┘  │  │
+│  └─────────────────┘  └──────────────────────────────────────────────────┘  │
+│                                                                             │
+│                        ┌──────────────────────────────────────────────────┐  │
+│                        │  FINDINGS (this session)                 [Pin]   │  │
+│                        │  • Smith authorized access change (p.3, 0.92)   │  │
+│                        │  • IT bypassed security review (email, 0.88)    │  │
+│                        │  • Breach detected Oct 2020 (audit, 0.87)       │  │
+│                        └──────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Three-panel layout:**
+1. **Thread sidebar** (left, collapsible): list of chat threads, newest first. Shows first query as title, message count, recency. "New Chat" button at top.
+2. **Conversation** (center): messages with full metadata. Scrollable, newest at bottom.
+3. **Findings bar** (bottom, collapsible): accumulated cited claims across the session. Persists as user navigates between threads. Draggable to reorder. Pinnable.
+
+**Streaming UX flow:**
+
+```
+User types question
+        │
+        ▼
+┌──────────────────┐
+│  Input disabled   │  ← disable input while streaming
+│  Spinner appears  │
+└────────┬─────────┘
+         │
+         ▼  SSE: event "status" → "classifying"
+┌──────────────────┐
+│  Stage indicator: │  "Classifying query..."
+│  ⟳ Classifying   │  "Resolving case context..."
+│  ⟳ Retrieving    │  "Searching 1,247 documents..."
+│  ⟳ Reranking     │  "Ranking results..."
+│  ⟳ Analyzing     │  "Synthesizing answer..."
+└────────┬─────────┘
+         │
+         ▼  SSE: event "sources"
+┌──────────────────┐
+│  Sources panel    │  ← sources appear BEFORE answer text
+│  renders with 5   │     (user can browse sources while
+│  source docs      │      answer is still generating)
+└────────┬─────────┘
+         │
+         ▼  SSE: event "token" (repeated)
+┌──────────────────┐
+│  Answer text      │  ← tokens stream in, character by character
+│  appears token    │     inline citation markers [1] [2] appear
+│  by token         │     as they're generated
+└────────┬─────────┘
+         │
+         ▼  SSE: event "done"
+┌──────────────────┐
+│  Cited claims     │  ← structured claims with grounding scores
+│  Follow-ups       │  ← clickable follow-up question chips
+│  Entities         │  ← linked entity mentions
+│  Input re-enabled │
+└──────────────────┘
+```
+
+**Citation interactions:**
+- `[1]` markers in answer text → hover shows excerpt tooltip, click scrolls to citation detail below
+- Citation detail `[1] breach_report.pdf p.3` → click opens document detail at that page
+- Entity chips `[John Smith]` → click navigates to `/entities/:id`
+- Follow-up chips → click populates input and auto-submits
+
+**Thread management:**
+- `GET /chats` — load thread list on mount
+- `GET /chats/:threadId` — load history when thread selected
+- `DELETE /chats/:threadId` — swipe-to-delete or context menu
+- New thread: `POST /query/stream` without `thread_id` → response includes new `thread_id`
+- Continue thread: `POST /query/stream` with `thread_id`
+
+---
+
+### 4. DOCUMENTS (`/documents`, `/documents/:id`)
+
+#### 4a. Document List (`/documents`)
+
+**Purpose:** Browse, search, filter, and sort the document corpus.
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│  Documents (1,247)                           [Import ▲]  [Upload ▲]    │
+├──────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  Filters: [Type ▼] [Date Range 📅] [Privilege ▼] [Search... 🔍]        │
+│           [Hot Doc Score ≥ ___] [Anomaly Score ≥ ___]  [Clear Filters]  │
+│                                                                          │
+│  ┌──────┬──────────────────────┬────────┬──────┬───────┬──────┬────────┐│
+│  │  ☐   │ Filename             │ Type   │Pages │🔥 Hot │⚠ Anom│Priv    ││
+│  ├──────┼──────────────────────┼────────┼──────┼───────┼──────┼────────┤│
+│  │  ☐   │ breach_report.pdf    │ report │ 45   │ 0.92  │ 0.78 │ —      ││
+│  │  ☐   │ email_2020-06-14.eml │ email  │  1   │ 0.88  │ 0.65 │ —      ││
+│  │  ☐   │ nda_draft_v3.docx    │ legal  │ 12   │ 0.15  │ 0.10 │ priv   ││
+│  │  ☐   │ q3_financials.xlsx   │ fin.   │  8   │ 0.45  │ 0.30 │ w/p    ││
+│  │  ☐   │ depo_smith.pdf       │ depo.  │ 180  │ 0.72  │ 0.55 │ —      ││
+│  │  ...                                                                  │
+│  └──────┴──────────────────────┴────────┴──────┴───────┴──────┴────────┘│
+│                                                                          │
+│  Showing 1-50 of 1,247          [◀ Prev]  Page 1 of 25  [Next ▶]       │
+│                                                                          │
+│  Selected: 3    [Tag Privilege ▼] [Export CSV] [Bulk Actions ▼]         │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+**Columns (TanStack Table):**
+
+| Column | Source | Sortable | Notes |
+|---|---|---|---|
+| Checkbox | — | — | Bulk selection |
+| Filename | `filename` | Yes | Click → `/documents/:id` |
+| Type | `type` | Yes | Document type enum |
+| Pages | `page_count` | Yes | |
+| Hot Doc | `hot_doc_score` | Yes | Color-coded: red ≥0.7, yellow ≥0.4, green <0.4 |
+| Anomaly | `anomaly_score` | Yes | Same color coding |
+| Privilege | `privilege_status` | Yes | Badge: priv, w/p, conf, — |
+| Date | `created_at` | Yes | Ingestion date |
+
+**Filters (URL search params via TanStack Router):**
+- `type`: dropdown multi-select (email, legal_filing, deposition, financial, report, etc.)
+- `dateFrom` / `dateTo`: date picker range
+- `privilege`: dropdown (all, privileged, work_product, confidential, not_privileged)
+- `q`: text search on filename
+- `hotDocMin`: number input (0.0-1.0)
+- `anomalyMin`: number input (0.0-1.0)
+
+**Bulk actions (when rows selected):**
+- Tag Privilege → dropdown to set privilege status on all selected
+- Export CSV → download selected rows as CSV
+
+#### 4b. Document Detail (`/documents/:id`)
+
+**Purpose:** Full document view with PDF, metadata, and analysis scores.
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│  ← Back to Documents    breach_report.pdf              [Download ⬇]    │
+├──────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  ┌────────────────────────────────────┐  ┌──────────────────────────────┐│
+│  │                                    │  │  METADATA                    ││
+│  │                                    │  │                              ││
+│  │         PDF VIEWER                 │  │  Type: Report                ││
+│  │         (react-pdf)                │  │  Pages: 45                   ││
+│  │                                    │  │  Chunks: 156                 ││
+│  │                                    │  │  Entities: 89                ││
+│  │    ┌───────────────────────┐       │  │  Ingested: Jan 1, 2025      ││
+│  │    │                       │       │  │  Hash: abc123...             ││
+│  │    │    Page content        │       │  │                              ││
+│  │    │    rendered here       │       │  │  PRIVILEGE                   ││
+│  │    │                       │       │  │  Status: [Not Privileged ▼]  ││
+│  │    │                       │       │  │  Reviewed by: —              ││
+│  │    │                       │       │  │                              ││
+│  │    └───────────────────────┘       │  │  ANALYSIS SCORES             ││
+│  │                                    │  │  ┌────────────────────────┐  ││
+│  │    [◀ Prev]  Page 3 of 45 [Next ▶]│  │  │ 🔥 Hot Doc:    0.92   │  ││
+│  │                                    │  │  │ ⚠  Anomaly:   0.78   │  ││
+│  └────────────────────────────────────┘  │  │ 🔴 Negative:  0.85   │  ││
+│                                          │  │ 🟡 Pressure:  0.72   │  ││
+│                                          │  │ 🟡 Opportunity:0.68   │  ││
+│                                          │  │ 🟢 Positive:  0.15   │  ││
+│                                          │  │ 🔴 Intent:    0.81   │  ││
+│                                          │  │ 🔴 Concealment:0.77  │  ││
+│                                          │  └────────────────────────┘  ││
+│                                          │                              ││
+│                                          │  EMAIL METADATA (if email)   ││
+│                                          │  From: john@acme.com         ││
+│                                          │  To: jane@acme.com           ││
+│                                          │  Date: Jun 14, 2020          ││
+│                                          │  Thread: [View Thread →]     ││
+│                                          │  Position: 3 of 12           ││
+│                                          │                              ││
+│                                          │  DEDUP INFO                  ││
+│                                          │  Cluster: dup_123            ││
+│                                          │  Score: 0.98                 ││
+│                                          │  Inclusive: Yes              ││
+│                                          │                              ││
+│                                          │  CONTEXT GAPS (if email)     ││
+│                                          │  ⚠ Missing attachment (0.9) ││
+│                                          │  ⚠ Prior conversation (0.7) ││
+│                                          │  Evidence: "As per the       ││
+│                                          │  attached spreadsheet..."    ││
+│                                          └──────────────────────────────┘│
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+**PDF viewer behavior:**
+- `react-pdf` renders pages
+- Page navigation: prev/next buttons, page number input, keyboard arrows
+- Citation deep-link: arriving from `/chat` with `?page=3` scrolls to page 3 and highlights
+- Zoom controls: fit-width, fit-page, 50%-200%
+
+**Privilege tagging:**
+- Dropdown selector (attorney/paralegal/admin only)
+- Calls `PATCH /documents/:id/privilege`
+- Shows who reviewed and when
+
+**Sentiment radar:**
+- 7 sentiment dimensions displayed as a vertical bar list with color-coded scores
+- Scores come from document metadata columns (`sentiment_positive`, `sentiment_negative`, etc.)
+
+#### 4c. Document Import (`/documents/import`)
+
+**Purpose:** Bulk import wizard for loading large document sets via multiple sources.
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│  Import Documents                                                        │
+├──────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  ┌── IMPORT MODE ────────────────────────────────────────────────────┐  │
+│  │  (●) Upload Files     ( ) S3 Bucket      ( ) Load File           │  │
+│  │      Uppy widget          Prefix scan        EDRM XML /          │  │
+│  │      (drag-and-drop)      (s3://bucket/       Concordance DAT    │  │
+│  │                            prefix/)                               │  │
+│  └────────────────────────────────────────────────────────────────────┘  │
+│                                                                          │
+│  ┌── OPTIONS ────────────────────────────────────────────────────────┐  │
+│  │  ☑ Resume (skip by content hash)                                  │  │
+│  │  ☐ Disable HNSW during import (faster bulk indexing)              │  │
+│  │  Batch size: [100 ▼]                                              │  │
+│  └────────────────────────────────────────────────────────────────────┘  │
+│                                                                          │
+│  ┌── DRY RUN ────────────────────────────────────────────────────────┐  │
+│  │  Documents:  1,247            Chunks (est.):  ~15,800             │  │
+│  │  Tokens (est.):  ~4.2M       Cost (est.):  ~$0.42 (embeddings)   │  │
+│  │                                                                    │  │
+│  │  [Run Dry Run]                                [Start Import →]    │  │
+│  └────────────────────────────────────────────────────────────────────┘  │
+│                                                                          │
+│  ┌── IMPORT PROGRESS ───────────────────────────────────────────────┐  │
+│  │  Status: Running       ████████████░░░░░ 72%                      │  │
+│  │  Processed: 898 / 1,247    Skipped: 23    Failed: 2               │  │
+│  │  Rate: ~12 docs/min        ETA: ~29 min                           │  │
+│  │                                                                    │  │
+│  │  Recent jobs:                                                      │  │
+│  │    job-abc  breach_report.pdf     ✅ complete                      │  │
+│  │    job-def  email_archive.zip     ⟳  embedding (stage 3/6)        │  │
+│  │    job-ghi  deposition.pdf        ⟳  parsing (stage 1/6)          │  │
+│  └────────────────────────────────────────────────────────────────────┘  │
+│                                                                          │
+│  ┌── IMPORT HISTORY ────────────────────────────────────────────────┐  │
+│  │  ┌──────────┬────────────┬──────┬─────────┬─────────┬──────────┐ │  │
+│  │  │ Date      │ Source      │ Docs │ Skipped │ Failed  │ Status   │ │  │
+│  │  ├──────────┼────────────┼──────┼─────────┼─────────┼──────────┤ │  │
+│  │  │ Feb 28    │ S3 prefix  │ 500  │ 12      │ 0       │ complete │ │  │
+│  │  │ Feb 25    │ EDRM XML   │ 1200 │ 0       │ 3       │ complete │ │  │
+│  │  │ Feb 20    │ Upload     │ 50   │ 0       │ 0       │ complete │ │  │
+│  │  └──────────┴────────────┴──────┴─────────┴─────────┴──────────┘ │  │
+│  └────────────────────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+**Import modes:**
+- **Upload Files**: Opens Uppy widget for drag-and-drop multi-file upload
+- **S3 Bucket**: Enter `s3://bucket/prefix/` → scans for supported file types
+- **Load File**: Upload EDRM XML or Concordance DAT load file → imports referenced documents with metadata
+
+**Data sources:**
+- Dry run: `POST /ingest/import/dry-run`
+- Start import: `POST /ingest/import`
+- Import history: `GET /bulk-imports?matter_id={matter_id}`
+- Job progress: poll `GET /jobs` during import
+
+---
+
+### 5. ENTITIES (`/entities`, `/entities/:id`, `/entities/network`)
+
+#### 5a. Entity Browser (`/entities`)
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│  Entities (2,450)                                                        │
+├──────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  [Search entities... 🔍]      [Type: All ▼]                             │
+│                                                                          │
+│  ┌──────────────────────┬──────────┬────────┬──────────┬───────────────┐│
+│  │ Name                 │ Type     │Mentions│First Seen│ Connections   ││
+│  ├──────────────────────┼──────────┼────────┼──────────┼───────────────┤│
+│  │ John Smith           │ PERSON   │  156   │ Jan 2020 │ 45            ││
+│  │  aka: J. Smith, JS   │          │        │          │               ││
+│  │ Acme Corp            │ ORG      │  312   │ Jan 2020 │ 89            ││
+│  │ Jane Doe             │ PERSON   │   98   │ Mar 2020 │ 34            ││
+│  │ Board of Directors   │ ORG      │   45   │ Jun 2020 │ 12            ││
+│  └──────────────────────┴──────────┴────────┴──────────┴───────────────┘│
+│                                                                          │
+│  [◀ Prev]  Page 1 of 49  [Next ▶]           [View Network Graph →]     │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+#### 5b. Entity Detail (`/entities/:id`)
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│  ← Entities     John Smith                                    PERSON    │
+├──────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  Aliases: J. Smith, JS, John R. Smith                                   │
+│  First seen: Jan 15, 2020  │  Last seen: Dec 31, 2021                   │
+│  Description: Former VP of Operations at Acme Corp                      │
+│  Mentions: 156 across 45 documents                                      │
+│                                                                          │
+│  ┌─── CONNECTIONS (45) ──────────────────────────────────────────────┐  │
+│  │                                                                    │  │
+│  │  ┌──────────────┐  WORKS_WITH  ┌──────────────┐                   │  │
+│  │  │  John Smith   │─────────────▶│  Jane Doe    │                   │  │
+│  │  └──────────────┘              └──────────────┘                   │  │
+│  │         │                                                          │  │
+│  │         │ EMPLOYED_BY                                              │  │
+│  │         ▼                                                          │  │
+│  │  ┌──────────────┐  REPORTS_TO  ┌──────────────┐                   │  │
+│  │  │  Acme Corp    │◀────────────│  IT Dept      │                   │  │
+│  │  └──────────────┘              └──────────────┘                   │  │
+│  │                                                                    │  │
+│  │  (D3 force-directed subgraph — clickable nodes)                   │  │
+│  └────────────────────────────────────────────────────────────────────┘  │
+│                                                                          │
+│  ┌─── DOCUMENT MENTIONS ─────────────────────────────────────────────┐  │
+│  │  📄 breach_report.pdf p.3     "Smith authorized the access..."    │  │
+│  │  📧 email_2020-06-14.eml p.1  "proceed without security review"  │  │
+│  │  📄 hr_investigation.docx p.7  "Smith was interviewed on..."      │  │
+│  │  ... (paginated, 10 per page)                                     │  │
+│  └────────────────────────────────────────────────────────────────────┘  │
+│                                                                          │
+│  ┌─── TIMELINE ──────────────────────────────────────────────────────┐  │
+│  │  Jan 2020 ─●─ Hired as VP Operations                              │  │
+│  │  Jun 2020 ─●─ Authorized access change                            │  │
+│  │  Oct 2020 ─●─ Breach detected                                     │  │
+│  │  Nov 2020 ─●─ HR investigation initiated                          │  │
+│  │  Dec 2021 ─●─ Last document mention                               │  │
+│  └────────────────────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+**Data sources:**
+- Entity info: `GET /entities/:id`
+- Connections: `GET /entities/:id/connections`
+- Timeline: `GET /graph/timeline/:entityName`
+
+#### 5c. Network Graph (`/entities/network`)
+
+**Purpose:** Full knowledge graph visualization. D3 force-directed layout.
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│  Entity Network                    [Centrality: PageRank ▼] [Filter ▼] │
+├──────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│         ┌───────┐                                                        │
+│        ╱ Acme   ╲         ┌──────┐                                      │
+│       │  Corp    │────────│ Board │                                      │
+│        ╲  (89)  ╱    ╱    └──────┘                                      │
+│         └───┬───┘   ╱                                                    │
+│             │      ╱                                                     │
+│         ┌───┴───┐ ╱     ┌──────────┐                                    │
+│         │ John  │╱──────│ Jane Doe │                                    │
+│         │ Smith │       │   (34)   │                                    │
+│         │ (45)  │       └────┬─────┘                                    │
+│         └───┬───┘            │                                           │
+│             │            ┌───┴────┐                                      │
+│         ┌───┴───┐        │  IT    │                                      │
+│         │ Legal │        │  Dept  │                                      │
+│         │ Team  │        │  (28)  │                                      │
+│         └───────┘        └────────┘                                      │
+│                                                                          │
+│  Node size = connection count    Edge thickness = relationship weight    │
+│  Color: 🔵 PERSON  🟢 ORG  🟡 LOCATION  🔴 EVENT                       │
+│                                                                          │
+│  [Zoom +] [Zoom -] [Fit] [Reset]    Hover: entity details tooltip       │
+│                                       Click: navigate to entity detail   │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+**Controls:**
+- Centrality dropdown: degree / pagerank / betweenness → resizes nodes by score (`GET /analytics/network-centrality`)
+- Type filter: show/hide entity types
+- Zoom/pan: mouse wheel + drag
+- Click node → navigate to `/entities/:id`
+- Hover node → tooltip with name, type, connection count
+
+---
+
+### 6. ANALYTICS (`/analytics/*`)
+
+#### 6a. Communication Matrix (`/analytics/comms`)
+
+**Purpose:** NxN heatmap of sender-recipient email volumes.
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│  Communication Matrix                          [Filter by Entity ▼]     │
+├──────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│              │ J.Smith │ J.Doe  │ IT Dept│ Legal  │ Board  │ CFO    │   │
+│  ────────────┼─────────┼────────┼────────┼────────┼────────┼────────│   │
+│  J.Smith     │         │ ██ 45  │ ██ 38  │ ░░  5  │ ░░  3  │ ██ 28 │   │
+│  J.Doe       │ ██ 42   │        │ ██ 31  │ ░░  8  │ ░░  2  │ ░░  7 │   │
+│  IT Dept     │ ██ 35   │ ██ 29  │        │ ░░  4  │ ░░  1  │ ░░  3 │   │
+│  Legal       │ ░░  6   │ ░░  9  │ ░░  5  │        │ ██ 22  │ ░░  4 │   │
+│  Board       │ ░░  4   │ ░░  3  │ ░░  2  │ ██ 20  │        │ ██ 15 │   │
+│  CFO         │ ██ 25   │ ░░  8  │ ░░  4  │ ░░  5  │ ██ 14  │       │   │
+│                                                                          │
+│  ██ = high volume (>20)   ▓▓ = medium (10-20)   ░░ = low (<10)         │
+│                                                                          │
+│  Click cell → see message list between sender/recipient pair             │
+│                                                                          │
+│  ┌─── SELECTED: J.Smith → J.Doe (45 messages) ──────────────────────┐  │
+│  │  📧 Jun 14, 2020 — "Re: Q4 Planning"                    [View →] │  │
+│  │  📧 Jun 15, 2020 — "Fwd: Security Review"               [View →] │  │
+│  │  📧 Jun 18, 2020 — "Re: Access Changes"                 [View →] │  │
+│  │  ... (paginated)                                                   │  │
+│  └────────────────────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+**Data source:** `GET /analytics/communication-matrix`
+**Interaction:** Click cell → filter documents list to emails between that pair → show in expandable panel below
+
+#### 6b. Timeline (`/analytics/timeline`)
+
+**Purpose:** Chronological view of events and communications across the matter.
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│  Timeline                    [Date Range: Jan 2020 — Dec 2021]          │
+│                              [Entity Filter ▼] [Topic Filter ▼]         │
+├──────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  Jan 2020 ─────────────────────────────────────────────────────────     │
+│       15 │ ● John Smith hired as VP Operations                          │
+│          │   └─ employment_contract.pdf p.1                             │
+│                                                                          │
+│  Mar 2020 ─────────────────────────────────────────────────────────     │
+│       03 │ ● NDA executed between Acme and DataCo                       │
+│          │   └─ nda_draft_v3.docx p.12                                  │
+│                                                                          │
+│  Jun 2020 ─────────────────────────────────────────────────────────     │
+│       14 │ 📧 Smith → Doe: "proceed without security review"  🔥 0.88  │
+│          │   └─ email_2020-06-14.eml                                    │
+│       15 │ 📧 Smith → IT: "authorize access change"           🔥 0.92  │
+│          │   └─ email_2020-06-15.eml                                    │
+│       30 │ ● Q2 financial planning meeting                              │
+│          │   └─ meeting_notes.pdf p.2                                   │
+│                                                                          │
+│  Oct 2020 ─────────────────────────────────────────────────────────     │
+│       12 │ ⚠ Data breach detected                                       │
+│          │   └─ breach_report.pdf p.1                                   │
+│       15 │ ● Security audit initiated                                   │
+│          │   └─ security_audit.pdf p.1                                  │
+│                                                                          │
+│  ← Scroll timeline ──────────────────────────────────── Scroll → →     │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+**Data source:** `GET /graph/timeline/:entityName` for each filtered entity, merged chronologically
+**Interactions:**
+- Date range picker narrows the view
+- Entity filter: multi-select entities to show events for
+- Topic filter: if topic clustering enabled, filter by topic
+- Click document reference → navigate to `/documents/:id`
+- Hot doc indicators on high-scoring events
+
+#### 6c. Org Chart — Deferred
+
+Deferred — backend ready from M10c (`POST /cases/{matter_id}/org-chart`, `GET /analytics/communication-matrix` inference), but frontend complexity (drag-to-rearrange tree, inferred vs. manual node styling, CSV import) is out of scope for M13. Will revisit as a future enhancement.
+
+---
+
+### 7. REVIEW (`/review/*`)
+
+#### 7a. Hot Document Queue (`/review/hot-docs`)
+
+**Purpose:** Prioritized list of documents flagged by sentiment analysis.
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│  Hot Documents (23 flagged)                    [Score Threshold: 0.7 ▼]  │
+├──────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  ┌────┬──────────────────────┬──────┬──────────────────────────┬───────┐│
+│  │Rank│ Document             │  Hot │ Sentiment Breakdown      │Action ││
+│  ├────┼──────────────────────┼──────┼──────────────────────────┼───────┤│
+│  │ 1  │ email_2020-06-15.eml │ 0.92 │ ███░░░░ neg:0.85 int:0.81│[View]││
+│  │ 2  │ breach_report.pdf    │ 0.88 │ ██░░░░░ neg:0.72 con:0.77│[View]││
+│  │ 3  │ memo_2020-07-03.pdf  │ 0.85 │ ██░░░░░ prs:0.80 opp:0.75│[View]││
+│  │ 4  │ email_2020-08-12.eml │ 0.81 │ ██░░░░░ neg:0.68 rat:0.72│[View]││
+│  │ ...                                                                   │
+│  └────┴──────────────────────┴──────┴──────────────────────────┴───────┘│
+│                                                                          │
+│  ┌─── EXPANDED: email_2020-06-15.eml ───────────────────────────────┐  │
+│  │                                                                    │  │
+│  │  From: john@acme.com → it-admin@acme.com                         │  │
+│  │  Date: Jun 15, 2020                                               │  │
+│  │                                                                    │  │
+│  │  Supplementary Signals:                                            │  │
+│  │    ⚠ Deliberate vagueness detected                                │  │
+│  │    ⚠ Inappropriate enthusiasm                                     │  │
+│  │                                                                    │  │
+│  │  Context Gaps:                                                     │  │
+│  │    ⚠ Prior conversation referenced (score: 0.80)                  │  │
+│  │    Evidence: "As we discussed on the call yesterday..."           │  │
+│  │                                                                    │  │
+│  │  [Open Document →]  [Tag Privilege ▼]  [Add to Findings]         │  │
+│  └────────────────────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+**Key features:**
+- Sorted by `hot_doc_score` descending
+- Inline sentiment dimension breakdown (mini sparkline bars)
+- Expandable rows show supplementary signals + context gaps
+- Adjustable score threshold filter
+- "Add to Findings" → adds to the investigation findings sidebar (shared with chat)
+
+#### 7b. Result Set Browser (`/review/result-set`)
+
+**Purpose:** Browse and export result sets from structured queries (the agent's Q6/Q7/Q8 patterns — find-all-documents-matching-criteria queries).
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│  Result Sets                                                             │
+├──────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  ┌─── Recent Result Sets ────────────────────────────────────────────┐  │
+│  │  "All emails between Smith and Doe in Q3 2020"    34 docs  [Open]│  │
+│  │  "Documents mentioning security review"           12 docs  [Open]│  │
+│  │  "High-sentiment documents in June 2020"          8 docs   [Open]│  │
+│  └────────────────────────────────────────────────────────────────────┘  │
+│                                                                          │
+│  ┌─── VIEWING: "All emails between Smith and Doe in Q3 2020" ────────┐ │
+│  │                                                                    │ │
+│  │  [Select All] [Export CSV] [Export PDF Bundle]                     │ │
+│  │                                                                    │ │
+│  │  ┌──┬────────────────────┬────────┬──────┬──────┬───────┬───────┐ │ │
+│  │  │☐ │ Document           │ Date   │ Hot  │ Gap  │Dedup  │Relev. │ │ │
+│  │  ├──┼────────────────────┼────────┼──────┼──────┼───────┼───────┤ │ │
+│  │  │☐ │ email_2020-07-01   │ Jul 1  │ 0.45 │ 0.20 │ —     │ 0.95  │ │ │
+│  │  │☐ │ email_2020-07-03   │ Jul 3  │ 0.38 │ 0.15 │ dup#2 │ 0.91  │ │ │
+│  │  │☐ │ email_2020-07-15   │ Jul 15 │ 0.72 │ 0.55 │ —     │ 0.88  │ │ │
+│  │  │...                                                              │ │
+│  │  └──┴────────────────────┴────────┴──────┴──────┴───────┴───────┘ │ │
+│  │                                                                    │ │
+│  │  [◀ Prev]  Page 1 of 2  [Next ▶]                                 │ │
+│  └────────────────────────────────────────────────────────────────────┘ │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 8. CASE SETUP (`/case-setup`)
+
+**Purpose:** Multi-step wizard to establish case context. Upload the anchor document (complaint/petition), let the Case Setup Agent extract claims, parties, defined terms, and timeline, then review and edit.
+
+```
+WIZARD FLOW:
+┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
+│  STEP 1   │───▶│  STEP 2   │───▶│  STEP 3   │───▶│  STEP 4   │───▶│  STEP 5   │
+│  Upload   │    │  Process  │    │  Review   │    │  Edit     │    │  Confirm  │
+│           │    │  (auto)   │    │  Claims   │    │  Parties  │    │           │
+└──────────┘    └──────────┘    └──────────┘    └──────────┘    └──────────┘
+```
+
+#### Step 1: Upload Anchor Document
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  Case Setup                                    Step 1 of 5   │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│  Upload the anchor document for this matter (e.g., the       │
+│  Complaint, Petition, or key pleading). The system will      │
+│  automatically extract claims, parties, defined terms,       │
+│  and a preliminary timeline.                                 │
+│                                                              │
+│  ┌──────────────────────────────────────────────────────┐    │
+│  │                                                      │    │
+│  │          Drag & drop file here                        │    │
+│  │          or [Browse Files]  [Google Drive]  [URL]     │    │
+│  │                                                      │    │
+│  │          PDF, DOCX supported                          │    │
+│  │          (powered by Uppy)                            │    │
+│  │                                                      │    │
+│  └──────────────────────────────────────────────────────┘    │
+│                                                              │
+│                                          [Next: Process →]   │
+└──────────────────────────────────────────────────────────────┘
+```
+
+#### Step 2: Processing (automatic)
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  Case Setup                                    Step 2 of 5   │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│  Processing complaint.pdf...                                 │
+│                                                              │
+│  ✅ Document parsed (45 pages)                               │
+│  ✅ Text extracted                                           │
+│  ⟳  Extracting claims...                                    │
+│  ○  Identifying parties                                      │
+│  ○  Extracting defined terms                                 │
+│  ○  Building timeline                                        │
+│                                                              │
+│  Estimated time remaining: ~30 seconds                       │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+```
+
+Polls `GET /cases/{matter_id}/context` until status changes from `processing` to `draft`.
+
+#### Step 3: Review Claims
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  Case Setup                                    Step 3 of 5   │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│  The system extracted 5 claims. Review and edit below.        │
+│                                                              │
+│  ┌────────────────────────────────────────────────────────┐  │
+│  │  Claim 1: Fraud                              [Edit]    │  │
+│  │  "Defendant engaged in fraudulent misrepresentation    │  │
+│  │   by concealing material facts..."                     │  │
+│  │  Elements: misrepresentation, reliance, damages        │  │
+│  │  Source: pages 1, 2, 5                                 │  │
+│  └────────────────────────────────────────────────────────┘  │
+│  ┌────────────────────────────────────────────────────────┐  │
+│  │  Claim 2: Breach of Fiduciary Duty           [Edit]    │  │
+│  │  "Defendant breached fiduciary duties owed..."         │  │
+│  │  Elements: duty, breach, causation, damages            │  │
+│  │  Source: pages 3, 4                                    │  │
+│  └────────────────────────────────────────────────────────┘  │
+│  ... (more claims)                                           │
+│                                                              │
+│  [+ Add Claim]                                               │
+│                                                              │
+│  [← Back]                            [Next: Parties →]      │
+└──────────────────────────────────────────────────────────────┘
+```
+
+#### Step 4: Review Parties + Defined Terms
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  Case Setup                                    Step 4 of 5   │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│  PARTIES (8)                                                 │
+│  ┌─────────────┬────────────┬──────────────────────────────┐│
+│  │ Name         │ Role       │ Description                   ││
+│  ├─────────────┼────────────┼──────────────────────────────┤│
+│  │ John Smith   │ Defendant  │ Former VP of Operations  [✏] ││
+│  │ Acme Corp    │ Plaintiff  │ Technology company       [✏] ││
+│  │ Jane Doe     │ Witness    │ Director of IT           [✏] ││
+│  │ ...                                                       │
+│  └─────────────┴────────────┴──────────────────────────────┘│
+│  [+ Add Party]                                               │
+│                                                              │
+│  DEFINED TERMS (12)                                          │
+│  ┌─────────────────────┬────────────────────────────────────┐│
+│  │ Term                 │ Definition                          ││
+│  ├─────────────────────┼────────────────────────────────────┤│
+│  │ Confidential Info    │ Any non-public information... [✏]  ││
+│  │ Relevant Period      │ January 2020 to December 2021 [✏]  ││
+│  │ ...                                                       │
+│  └─────────────────────┴────────────────────────────────────┘│
+│  [+ Add Term]                                                │
+│                                                              │
+│  [← Back]                           [Next: Confirm →]       │
+└──────────────────────────────────────────────────────────────┘
+```
+
+#### Step 5: Confirm
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  Case Setup                                    Step 5 of 5   │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│  Review your case context before confirming:                 │
+│                                                              │
+│  ✅ 5 claims defined                                         │
+│  ✅ 8 parties identified                                     │
+│  ✅ 12 defined terms extracted                               │
+│  ✅ 15 timeline events                                       │
+│                                                              │
+│  Once confirmed, this case context will be used by the       │
+│  investigation engine to scope queries, resolve entities,    │
+│  and provide case-aware answers.                             │
+│                                                              │
+│  You can edit the case context at any time from this page.   │
+│                                                              │
+│  [← Back]                           [Confirm & Activate ✓]  │
+└──────────────────────────────────────────────────────────────┘
+```
+
+**Confirm** → `PATCH /cases/{matter_id}/context` with `status: "confirmed"`.
+
+After confirmation, this page becomes an editor (not a wizard) where the user can modify claims/parties/terms at any time.
+
+---
+
+### 9. ADMIN (`/admin/*`) — Admin Role Only
+
+#### 9a. User Management (`/admin/users`)
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  Users                                        [+ Create User]│
+├──────────────────────────────────────────────────────────────┤
+│  ┌────────────────────┬──────────────┬────────┬────────────┐│
+│  │ Email              │ Name          │ Role   │ Status     ││
+│  ├────────────────────┼──────────────┼────────┼────────────┤│
+│  │ john@firm.com      │ John Doe      │ attorney│ active    ││
+│  │ jane@firm.com      │ Jane Smith    │ paralegal│ active   ││
+│  │ bob@firm.com       │ Bob Lee       │ reviewer│ active    ││
+│  └────────────────────┴──────────────┴────────┴────────────┘│
+└──────────────────────────────────────────────────────────────┘
+```
+
+#### 9b. Audit Log (`/admin/audit-log`)
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│  Audit Log                                               [Export CSV ⬇] │
+├──────────────────────────────────────────────────────────────────────────┤
+│  Filters: [User ▼] [Action ▼] [Resource ▼] [Date Range 📅] [Status ▼] │
+├──────────────────────────────────────────────────────────────────────────┤
+│  ┌───────────┬──────────┬────────┬─────────────┬──────┬──────┬────────┐│
+│  │ Timestamp  │ User     │ Action │ Resource     │Status│ IP   │ ms    ││
+│  ├───────────┼──────────┼────────┼─────────────┼──────┼──────┼────────┤│
+│  │ 12:30:15   │ john@... │ POST   │ /query       │ 200  │ 10.. │ 3500  ││
+│  │ 12:29:45   │ jane@... │ GET    │ /documents   │ 200  │ 10.. │  125  ││
+│  │ 12:28:30   │ john@... │ PATCH  │ /docs/priv   │ 200  │ 10.. │   85  ││
+│  └───────────┴──────────┴────────┴─────────────┴──────┴──────┴────────┘│
+│  [◀ Prev]  Page 1 of 900  [Next ▶]                                     │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+#### 9c. Evaluation Pipeline (`/admin/evaluation`) — Admin Only
+
+**Purpose:** Quality assurance dashboard for the RAG pipeline. Manage evaluation datasets, run evaluations, compare runs, and monitor quality gates.
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│  Evaluation Pipeline                                      [Run Eval ▶]  │
+├──────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  ┌── QUALITY GATES ──────────────────────────────────────────────────┐  │
+│  │  ✅ Faithfulness:        0.91  (threshold: 0.85)                   │  │
+│  │  ✅ Citation Accuracy:   0.88  (threshold: 0.80)                   │  │
+│  │  ⚠  Hallucination Rate:  0.09  (threshold: 0.10)                  │  │
+│  │  ✅ Post-Rationalization: 0.03  (threshold: 0.05)                  │  │
+│  │                                                                    │  │
+│  │  Last run: Feb 28, 2026 14:30    Status: passed                    │  │
+│  └────────────────────────────────────────────────────────────────────┘  │
+│                                                                          │
+│  ┌── DATASETS ───────────────────────────────────────────────────────┐  │
+│  │  [Ground Truth (24)] [Adversarial (8)] [LegalBench (12)]          │  │
+│  │                                                                    │  │
+│  │  ┌─────┬──────────────────────────────┬────────────┬────────────┐ │  │
+│  │  │ ID  │ Question                      │ Expected   │ Actions    │ │  │
+│  │  ├─────┼──────────────────────────────┼────────────┼────────────┤ │  │
+│  │  │ GT1 │ Who authorized the access...  │ John Smith │ [Edit][×]  │ │  │
+│  │  │ GT2 │ When was the breach detected? │ Oct 12...  │ [Edit][×]  │ │  │
+│  │  │ GT3 │ What was Smith's role?         │ VP of Ops  │ [Edit][×]  │ │  │
+│  │  │ ... │                                │            │            │ │  │
+│  │  └─────┴──────────────────────────────┴────────────┴────────────┘ │  │
+│  │                                                                    │  │
+│  │  [+ Add Item]            [Upload JSON ▲]  [Download JSON ⬇]       │  │
+│  └────────────────────────────────────────────────────────────────────┘  │
+│                                                                          │
+│  ┌── RETRIEVAL METRICS ──────────────────────────────────────────────┐  │
+│  │  ┌──────────┬────────┬──────────┬──────────┬──────────┬─────────┐ │  │
+│  │  │ Mode      │ MRR@10 │ Recall@5 │ Recall@10│ Recall@20│ NDCG@10│ │  │
+│  │  ├──────────┼────────┼──────────┼──────────┼──────────┼─────────┤ │  │
+│  │  │ Dense     │ 0.72   │ 0.65     │ 0.78     │ 0.85     │ 0.74   │ │  │
+│  │  │ Sparse    │ 0.68   │ 0.60     │ 0.73     │ 0.81     │ 0.70   │ │  │
+│  │  │ Hybrid    │ 0.81   │ 0.74     │ 0.85     │ 0.91     │ 0.82   │ │  │
+│  │  │ Visual    │ 0.75   │ 0.69     │ 0.80     │ 0.87     │ 0.77   │ │  │
+│  │  └──────────┴────────┴──────────┴──────────┴──────────┴─────────┘ │  │
+│  └────────────────────────────────────────────────────────────────────┘  │
+│                                                                          │
+│  ┌── RUN COMPARISON ────────────────────────────────────────────────┐  │
+│  │  Compare: [Run #12 (Feb 28) ▼]  vs  [Run #11 (Feb 25) ▼]        │  │
+│  │                                                                    │  │
+│  │  Faithfulness:     0.91 → 0.91  (Δ 0.00)                          │  │
+│  │  Citation Acc:     0.85 → 0.88  (Δ +0.03 ✅)                      │  │
+│  │  Hallucination:    0.11 → 0.09  (Δ −0.02 ✅)                      │  │
+│  │  MRR@10 (hybrid):  0.79 → 0.81  (Δ +0.02 ✅)                     │  │
+│  │                                                                    │  │
+│  │  Config diff: reranker_weight 0.3→0.4, prefetch_multiplier 2→3   │  │
+│  └────────────────────────────────────────────────────────────────────┘  │
+│                                                                          │
+│  ┌── RUN HISTORY ───────────────────────────────────────────────────┐  │
+│  │  ┌─────┬──────────┬────────┬──────────┬─────────┬───────────────┐ │  │
+│  │  │ Run │ Date      │ Status │ Faith.   │ MRR@10  │ Duration      │ │  │
+│  │  ├─────┼──────────┼────────┼──────────┼─────────┼───────────────┤ │  │
+│  │  │ #12 │ Feb 28    │ passed │ 0.91     │ 0.81    │ 4m 32s        │ │  │
+│  │  │ #11 │ Feb 25    │ passed │ 0.91     │ 0.79    │ 4m 18s        │ │  │
+│  │  │ #10 │ Feb 20    │ failed │ 0.82     │ 0.75    │ 4m 45s        │ │  │
+│  │  └─────┴──────────┴────────┴──────────┴─────────┴───────────────┘ │  │
+│  └────────────────────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+**Run Eval dialog:**
+- Dry run vs full run toggle
+- Config overrides: reranker weight, prefetch multiplier, entity threshold
+- Select dataset subset (ground truth only, adversarial only, all)
+
+**Data sources:**
+- Quality gates: `GET /evaluation/latest`
+- Datasets: `GET /evaluation/datasets`, `POST/PUT/DELETE /evaluation/datasets/{id}/items`
+- Run eval: `POST /evaluation/run`
+- Run history: `GET /evaluation/runs`
+- Compare: `GET /evaluation/runs/{id1}/compare/{id2}`
+
+---
+
+## Key User Workflows
+
+### Workflow 1: New Case Setup
+
+```
+Login ──▶ Select Matter ──▶ Dashboard ──▶ Case Setup (wizard)
+                                              │
+                                    Step 1: Upload complaint
+                                    Step 2: Auto-extraction (wait)
+                                    Step 3: Review claims
+                                    Step 4: Review parties + terms
+                                    Step 5: Confirm
+                                              │
+                                              ▼
+                                         Dashboard (case status = confirmed)
+```
+
+### Workflow 2: Investigation Query
+
+```
+Dashboard ──▶ Chat ──▶ Type question ──▶ Watch streaming response
+                                              │
+                                    Sources appear first (browse while waiting)
+                                    Answer streams token-by-token
+                                    Citations rendered inline [1] [2]
+                                    Follow-up suggestions appear
+                                              │
+                                    Click [1] ──▶ Document Detail (page 3)
+                                    Click [John Smith] ──▶ Entity Detail
+                                    Click follow-up ──▶ auto-submits next query
+                                    Findings accumulate in bottom bar
+```
+
+### Workflow 3: Document Review
+
+```
+Dashboard ──▶ Documents ──▶ Filter (type=email, hot_doc≥0.7) ──▶ Sort by hot_doc
+                                              │
+                                    Click document ──▶ Document Detail
+                                              │
+                                    View PDF ──▶ Read content
+                                    Check sentiment scores
+                                    Check context gaps
+                                    Tag privilege ──▶ Select status ──▶ Saved
+                                              │
+                                    ← Back to list ──▶ Next document
+```
+
+### Workflow 4: Hot Document Triage
+
+```
+Dashboard ──▶ Review ──▶ Hot Docs ──▶ Ranked list (score ≥ 0.7)
+                                              │
+                                    Expand row ──▶ See sentiment breakdown
+                                                   See supplementary signals
+                                                   See context gaps
+                                              │
+                                    [Open Document] ──▶ Document Detail
+                                    [Tag Privilege] ──▶ Quick privilege tag
+                                    [Add to Findings] ──▶ Investigation sidebar
+```
+
+### Workflow 5: Communication Pattern Analysis
+
+```
+Dashboard ──▶ Analytics ──▶ Communication Matrix
+                                    │
+                          Heatmap shows sender × recipient volumes
+                          Click cell (Smith → Doe, 45 msgs)
+                                    │
+                          Drill-down panel shows message list
+                          Click message ──▶ Document Detail (email)
+                                    │
+                          Notice: high volume in Jun-Jul 2020
+                          Switch to Timeline view ──▶ Filter Jun-Jul 2020
+                          See events in context
+```
+
+### Workflow 6: Entity Investigation
+
+```
+Dashboard ──▶ Entities ──▶ Search "Smith" ──▶ Click John Smith
+                                    │
+                          Entity detail: aliases, dates, description
+                          Connections graph: see WORKS_WITH, EMPLOYED_BY
+                          Document mentions: 156 across 45 docs
+                          Timeline: chronological events
+                                    │
+                          Click connected entity (Jane Doe) ──▶ Her detail
+                          Click document mention ──▶ Document Detail
+                          [View in Network] ──▶ Full graph centered on Smith
+```
+
+---
+
+## Cross-Cutting UX Patterns
+
+### Defined Terms Sidebar
+
+Available globally when case context is confirmed. Toggled via keyboard shortcut or sidebar icon.
+
+```
+┌─────────────────────────────┐
+│  DEFINED TERMS          [×] │
+│                             │
+│  Search terms...            │
+│                             │
+│  Confidential Information   │
+│  Any non-public info...     │
+│                             │
+│  Relevant Period            │
+│  Jan 2020 — Dec 2021       │
+│                             │
+│  Agreement                  │
+│  The NDA executed on...     │
+│                             │
+│  ... (scrollable)           │
+│                             │
+│  Source: Case Context        │
+│  + Knowledge Graph aliases  │
+└─────────────────────────────┘
+```
+
+Populated from `GET /cases/{matter_id}/context` (defined_terms) + knowledge graph ALIAS_OF edges. Editable by attorneys.
+
+### Document Quick-View (Modal)
+
+When clicking a source document from chat or any document link, option to open in a modal overlay instead of full navigation:
+
+```
+┌──────────────────────────────────────────────────────────┐
+│  breach_report.pdf                    Page 3    [×] [↗]  │
+├──────────────────────────────────────────────────────────┤
+│                                                          │
+│  ┌────────────────────────────────────────────────────┐  │
+│  │                                                    │  │
+│  │    PDF page rendered here                          │  │
+│  │    with highlighted excerpt                        │  │
+│  │                                                    │  │
+│  │    >>> "Smith authorized the access change         │  │
+│  │         on June 15, 2020" <<<                      │  │
+│  │                                                    │  │
+│  └────────────────────────────────────────────────────┘  │
+│                                                          │
+│  [◀ Prev Page]  3 of 45  [Next Page ▶]    [Full View ↗] │
+└──────────────────────────────────────────────────────────┘
+```
+
+- [↗] opens full document detail page
+- Highlighted excerpt from the citation
+
+### Upload Widget (Uppy)
+
+Shared upload component built on Uppy, used in:
+- Case Setup (Step 1: anchor document upload)
+- Document list header ([Upload] button)
+- Import page (bulk file upload)
+
+Upload sources:
+- Local files: drag-and-drop + file picker (multi-select)
+- S3/MinIO direct: @uppy/aws-s3 plugin — bypass API server for large files
+- Google Drive: @uppy/google-drive via Uppy Companion (OAuth)
+- Remote URL: @uppy/url plugin
+
+Size limits: 500 MB per file, 2 GB for ZIP archives.
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│  Upload Documents                                            [×]        │
+├──────────────────────────────────────────────────────────────────────────┤
+│  ┌────────────────────────────────────────────────────────────────────┐  │
+│  │         Drag & drop files here                                     │  │
+│  │         or [Browse Files]  [Google Drive]  [Import from URL]       │  │
+│  │         Max: 500 MB per file, 2 GB for ZIP                        │  │
+│  └────────────────────────────────────────────────────────────────────┘  │
+│  ┌─── UPLOAD QUEUE ──────────────────────────────────────────────────┐  │
+│  │  ✅ breach_report.pdf         4.2 MB     Uploaded                  │  │
+│  │  ⟳  email_archive.zip       180 MB     ████████░░ 82%            │  │
+│  │  ⬚  deposition_smith.pdf     22 MB     Queued                     │  │
+│  │  ❌ corrupt_file.xyz          1 MB     Unsupported format [Remove]│  │
+│  └────────────────────────────────────────────────────────────────────┘  │
+│  ┌─── POST-UPLOAD JOBS ──────────────────────────────────────────────┐  │
+│  │  job-abc  breach_report.pdf     ✅ parsing ✅ chunking ⟳ embedding│  │
+│  │  job-def  email_1.eml           ✅ parsing ⟳ chunking ○ embedding │  │
+│  └────────────────────────────────────────────────────────────────────┘  │
+│  [Cancel All]                                    [Done — Close]          │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+### Loading & Error States
+
+Every data-fetching component has three states:
+- **Loading**: Skeleton shimmer (shadcn skeleton component)
+- **Empty**: Illustration + message ("No documents yet. Upload your first document.")
+- **Error**: Red alert banner with retry button. Never shows raw stack traces.
+
+### Keyboard Shortcuts
+
+| Shortcut | Action |
+|---|---|
+| `/` | Focus search in current page |
+| `Ctrl+K` | Global command palette (navigate anywhere) |
+| `Ctrl+N` | New chat |
+| `Ctrl+D` | Toggle defined terms sidebar |
+| `Esc` | Close modal/sidebar |
+| `←` / `→` | Navigate PDF pages (when viewer focused) |
+
+---
+
+## Master Build Plan
+
+### Phase 1: Scaffolding (4-5 days)
+
+**Goal:** Working app shell with auth, routing, state management, upload framework, and API client generation.
+
+1. Initialize Vite + React + TypeScript project in `frontend/`
+2. Configure Tailwind CSS 4 + shadcn/ui (install base primitives: button, input, card, dialog, dropdown, table, skeleton, toast, badge, tabs, separator)
+3. Set up TanStack Router with route tree (all routes stubbed as empty pages)
+4. Set up TanStack Query provider
+5. Configure orval: connect to FastAPI `/openapi.json`, generate hooks to `src/api/generated/`
+6. Build API client with JWT interceptor (attach Bearer token, handle 401 redirect)
+7. Build Zustand stores: `useAuthStore` (ephemeral — JWT + user + role), `useAppStore` (persist — matter, dataset scope, findings, sidebar, defined terms toggle)
+8. Build root layout: sidebar nav (role-aware), top bar (matter selector, user menu), auth guard
+9. Build login page with React Hook Form + Zod
+10. Configure Uppy: `@uppy/core`, `@uppy/dashboard`, `@uppy/aws-s3`, `@uppy/google-drive`, `@uppy/url`; build `use-uppy.ts` hook
+11. Write tests: auth store (3), matter selector (1), findings persist to localStorage (1)
+
+**Files created:** ~28 files (project config + src scaffolding + stores + Uppy)
+
+### Phase 2: Core Data Pages (5-6 days)
+
+**Goal:** Dashboard, document list, document detail, import page — the bread and butter.
+
+1. Dashboard page: stat cards, recent activity, pipeline status, case status, graph overview
+2. Document list: TanStack Table with all columns, filters in URL search params, server-side pagination
+3. Document detail: metadata panel, PDF viewer (react-pdf), privilege tagging, sentiment scores, context gaps, email metadata, dedup info
+4. Upload widget (Uppy modal): drag-and-drop, S3 direct, Google Drive, URL — shared across document list, case setup, import
+5. Import page (`/documents/import`): three import modes (Upload Files / S3 Bucket / Load File), dry run panel, progress tracking, import history
+6. Write tests: document table filter/sort/pagination (1)
+
+**Files created:** ~15 files (pages + components)
+
+### Phase 3: Chat (4-5 days)
+
+**Goal:** Full "Ask the Evidence" experience with SSE streaming.
+
+1. Chat thread sidebar (list, create, delete)
+2. Message input with send button
+3. SSE streaming via `@microsoft/fetch-event-source` — custom `useStreamQuery` hook
+4. Stage indicators during streaming (classifying, retrieving, reranking, analyzing)
+5. Source documents panel (appears before answer)
+6. Token-by-token answer rendering with inline citation markers
+7. Cited claims section with grounding scores and document links
+8. Entity mention chips (clickable → entity detail)
+9. Follow-up question chips (clickable → auto-submit)
+10. Investigation findings bar (bottom, accumulated claims across session)
+11. Document quick-view modal (click citation → PDF modal with highlighted excerpt)
+12. Write tests: chat panel SSE + citations (2), citation component (1)
+
+**Files created:** ~10 files (chat components + hooks)
+
+### Phase 4: Entities & Graph (3-4 days)
+
+**Goal:** Entity browser, detail pages, and D3 network visualization.
+
+1. Entity list with search and type filter (TanStack Table)
+2. Entity detail: metadata, aliases, description, mention count
+3. Connections subgraph (D3 force-directed, small — just this entity's neighborhood)
+4. Document mentions list (paginated)
+5. Entity timeline (from `/graph/timeline/:entity`)
+6. Full network graph page (D3 force-directed, all entities)
+7. Centrality controls (degree/pagerank/betweenness dropdown → resize nodes)
+8. Graph controls: zoom, pan, fit, type filter, click-to-navigate
+
+**Files created:** ~8 files (entity pages + D3 components)
+
+### Phase 5: Analytics & Review (2-3 days)
+
+**Goal:** Communication matrix, timeline, hot docs, result sets. *(Org chart deferred.)*
+
+1. Communication matrix heatmap (D3 or custom SVG grid)
+2. Cell click drill-down (message list between pair)
+3. Timeline view: chronological events, date range picker, entity/topic filters
+4. Hot document queue: ranked table, expandable rows, sentiment breakdown, context gaps
+5. Result set browser: table with scores, bulk export
+6. Write tests: case setup wizard (1), result set table (1)
+
+**Files created:** ~8 files (analytics + review components)
+
+### Phase 6: Case Setup, Admin & Evaluation (3.5-4.5 days)
+
+**Goal:** Case setup wizard, admin pages, evaluation pipeline, polishing.
+
+1. Case setup wizard: 5-step flow (upload → process → claims → parties/terms → confirm)
+2. Post-confirmation editor mode (same page, but editable fields instead of wizard)
+3. Defined terms sidebar (global, toggleable)
+4. Admin user management page (list, create form)
+5. Admin audit log page (filterable table, export CSV)
+6. Evaluation pipeline page: quality gates, dataset browser (3 tabs), retrieval metrics table, run comparison, run history, run eval dialog
+7. Global command palette (Ctrl+K → navigate anywhere)
+
+**Files created:** ~10 files (case setup + admin + eval pages)
+
+### Phase 7: Testing & Polish (2-3 days)
+
+**Goal:** E2E tests, responsive tweaks, error states, final polish.
+
+1. Playwright setup + config
+2. E2E: login flow (1 test)
+3. E2E: query with citation click-through (1 test)
+4. Loading skeletons on all data-fetching pages
+5. Empty states on all list pages
+6. Error boundaries with retry
+7. Responsive sidebar (collapse to hamburger on narrow viewports)
+8. Toast notifications (ingestion complete, privilege updated, etc.)
+9. Final regression: `npm test` + `pytest tests/ -v`
+
+**Files created:** ~5 files (E2E tests + utilities)
+
+---
+
+### Build Order Summary
+
+```
+Phase 1 (days 1-5)     ██████████░░░░░░░░░░░░░░░░░░░ Scaffolding + Zustand + Uppy
+Phase 2 (days 6-11)    ░░░░░░░░░░████████████░░░░░░░░ Data Pages + Import
+Phase 3 (days 12-16)   ░░░░░░░░░░░░░░░░░░░░░░████████ Chat + SSE
+Phase 4 (days 17-20)   ████████░░░░░░░░░░░░░░░░░░░░░░ Entities + Graph
+Phase 5 (days 21-23)   ░░░░░░░░██████░░░░░░░░░░░░░░░░ Analytics + Review (no org chart)
+Phase 6 (days 24-28)   ░░░░░░░░░░░░░░████████████░░░░ Case Setup + Admin + Eval
+Phase 7 (days 28-29)   ░░░░░░░░░░░░░░░░░░░░░░░░░░████ Testing + Polish
+```
+
+**Total: ~29 working days (~6 weeks)**
+
+Note: Expanded from original 25-day estimate. Added: Zustand + Uppy setup (+0.5d), import page (+1d), evaluation pipeline page (+1.5d). Saved: org chart deferral (−1d). Net increase: +2 days. Two developers could parallelize Phases 2+3 and Phases 4+5 to reduce to ~4.5 weeks.
+
+---
+
+## Backend Prerequisites
+
+The following backend work is required before or during frontend implementation:
+
+### Presigned PUT URLs (for Uppy S3 direct upload)
+
+- `POST /api/v1/ingest/presigned-upload` — returns presigned PUT URL + fields for direct S3/MinIO upload
+- `StorageClient.get_presigned_put_url(bucket, key, content_type, expires)` method on MinIO client
+- Required for Uppy `@uppy/aws-s3` plugin to bypass the API server for large file uploads
+
+### Bulk Import API (for Import page)
+
+- `POST /api/v1/ingest/import` — start bulk import (wraps CLI as Celery task)
+- `POST /api/v1/ingest/import/dry-run` — estimate document count, chunks, tokens, cost without importing
+- `GET /api/v1/bulk-imports` — list past imports for a matter (import history table)
+- Reuses existing Celery ingestion pipeline; new endpoints orchestrate batch submission
+
+### Evaluation API Module (for Evaluation page)
+
+New `app/evaluation/` module (router.py, service.py, schemas.py) with endpoints:
+- `GET /api/v1/evaluation/latest` — latest evaluation result (quality gates)
+- `GET /api/v1/evaluation/datasets` — list evaluation datasets
+- `POST /api/v1/evaluation/datasets` — create dataset
+- `GET /api/v1/evaluation/datasets/{id}/items` — list items in dataset
+- `POST /api/v1/evaluation/datasets/{id}/items` — add item to dataset
+- `PUT /api/v1/evaluation/datasets/{id}/items/{item_id}` — update item
+- `DELETE /api/v1/evaluation/datasets/{id}/items/{item_id}` — delete item
+- `POST /api/v1/evaluation/run` — trigger evaluation run
+- `GET /api/v1/evaluation/runs` — list past runs
+- `GET /api/v1/evaluation/runs/{id1}/compare/{id2}` — compare two runs
+
+Requires Alembic migration: `evaluation_runs`, `evaluation_datasets`, `evaluation_dataset_items` tables.
+
+---
+
+## Verification Plan
+
+1. **Unit/component tests:** `npm test` — all 15+ tests pass
+2. **E2E tests:** `npx playwright test` — login + query-citation flows pass
+3. **Backend regression:** `pytest tests/ -v` — all existing tests still pass
+4. **Manual smoke test checklist:**
+   - [ ] Login → Dashboard loads with stats
+   - [ ] Upload document (Uppy modal) → job progress visible → document appears in list
+   - [ ] Query → SSE streaming → citations → click citation → document at page
+   - [ ] Entity search → detail → connections graph → click related entity
+   - [ ] Communication matrix → click cell → see messages
+   - [ ] Hot docs → expand → see sentiment breakdown
+   - [ ] Case setup wizard → upload → review → confirm
+   - [ ] Privilege tag → status updates
+   - [ ] Matter switch → all data re-scopes
+   - [ ] Logout → redirect to login → can't access protected pages
+   - [ ] Import page → dry run → shows estimates → start import → progress updates
+   - [ ] Evaluation page → view quality gates → browse datasets → compare runs
+   - [ ] Findings bar persists across navigation (Zustand persist)

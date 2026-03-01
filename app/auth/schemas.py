@@ -64,6 +64,18 @@ class UserCreateRequest(BaseModel):
     role: Role = Role.REVIEWER
 
 
+class UserUpdateRequest(BaseModel):
+    email: EmailStr | None = None
+    full_name: str | None = None
+    role: Role | None = None
+    is_active: bool | None = None
+    password: str | None = Field(None, min_length=8)
+
+
+class UserListResponse(PaginatedResponse[UserResponse]):
+    """Paginated list of users."""
+
+
 class MatterResponse(BaseModel):
     id: UUID
     name: str

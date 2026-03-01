@@ -1,0 +1,129 @@
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { Network } from "lucide-react";
+import { apiClient } from "@/api/client";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { EntityTable } from "@/components/entities/entity-table";
+import type { EntityResponse, PaginatedResponse } from "@/types";
+
+export const Route = createFileRoute("/entities/")({
+  component: EntitiesPage,
+});
+
+const ENTITY_TYPES = [
+  { value: "all", label: "All Types" },
+  { value: "PERSON", label: "Person" },
+  { value: "ORG", label: "Organization" },
+  { value: "LOCATION", label: "Location" },
+  { value: "DATE", label: "Date" },
+  { value: "MONEY", label: "Money" },
+];
+
+function EntitiesPage() {
+  const [search, setSearch] = useState("");
+  const [entityType, setEntityType] = useState("all");
+  const [offset, setOffset] = useState(0);
+  const limit = 50;
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["entities", search, entityType, offset],
+    queryFn: () =>
+      apiClient<PaginatedResponse<EntityResponse>>({
+        url: "/api/v1/entities",
+        method: "GET",
+        params: {
+          q: search || undefined,
+          entity_type: entityType !== "all" ? entityType : undefined,
+          offset,
+          limit,
+        },
+      }),
+  });
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Entities</h1>
+          <p className="text-sm text-muted-foreground">
+            {data ? `${data.total} entities` : "Loading..."}
+          </p>
+        </div>
+        <Button variant="outline" asChild>
+          <Link to="/entities/network">
+            <Network className="mr-2 h-4 w-4" />
+            Network Graph
+          </Link>
+        </Button>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <Input
+          placeholder="Search entities..."
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setOffset(0);
+          }}
+          className="max-w-sm"
+        />
+        <Select
+          value={entityType}
+          onValueChange={(v) => {
+            setEntityType(v);
+            setOffset(0);
+          }}
+        >
+          <SelectTrigger className="w-[180px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {ENTITY_TYPES.map((t) => (
+              <SelectItem key={t.value} value={t.value}>
+                {t.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <EntityTable data={data?.items ?? []} loading={isLoading} />
+
+      {data && data.total > limit && (
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-muted-foreground">
+            Showing {offset + 1}--{Math.min(offset + limit, data.total)} of{" "}
+            {data.total}
+          </span>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={offset === 0}
+              onClick={() => setOffset(Math.max(0, offset - limit))}
+            >
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={offset + limit >= data.total}
+              onClick={() => setOffset(offset + limit)}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

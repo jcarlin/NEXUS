@@ -1,0 +1,10 @@
+node_modules/
+dist/
+build/
+.vite/
+*.local
+coverage/
+test-results/
+playwright-report/
+src/routeTree.gen.ts
+src/api/generated/

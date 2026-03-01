@@ -152,6 +152,7 @@ def create_app() -> FastAPI:
     from app.documents.router import router as documents_router
     from app.edrm.router import router as edrm_router
     from app.entities.router import router as entities_router
+    from app.evaluation.router import router as evaluation_router
     from app.exports.router import router as exports_router
     from app.ingestion.router import router as ingestion_router
     from app.query.router import router as query_router
@@ -170,6 +171,7 @@ def create_app() -> FastAPI:
     application.include_router(annotations_router, prefix="/api/v1")
     application.include_router(exports_router, prefix="/api/v1")
     application.include_router(redaction_router, prefix="/api/v1")
+    application.include_router(evaluation_router, prefix="/api/v1")
 
     # --- Health endpoint ---
     @application.get("/api/v1/health", tags=["system"])
