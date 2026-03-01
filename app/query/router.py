@@ -29,6 +29,7 @@ from app.query.schemas import (
     ChatHistoryResponse,
     ChatMessage,
     ChatThread,
+    CitedClaim,
     EntityMention,
     QueryRequest,
     QueryResponse,
@@ -40,6 +41,7 @@ router = APIRouter(tags=["query"])
 
 # Map LangGraph node names to SSE stage names for the client
 _STAGE_MAP = {
+    # V1 nodes
     "classify": "classifying",
     "rewrite": "rewriting",
     "retrieve": "retrieving",
@@ -49,7 +51,91 @@ _STAGE_MAP = {
     "reformulate": "reformulating",
     "synthesize": "analyzing",
     "generate_follow_ups": "generating_follow_ups",
+    # Agentic nodes
+    "case_context_resolve": "resolving_context",
+    "investigation_agent": "investigating",
+    "verify_citations": "verifying_citations",
 }
+
+
+# ------------------------------------------------------------------
+# State construction helpers
+# ------------------------------------------------------------------
+
+
+def _build_agentic_state(
+    *,
+    query: str,
+    messages: list[dict[str, Any]],
+    thread_id: str,
+    user_id: str,
+    matter_id: str,
+    filters: dict | None,
+    exclude_privilege: list[str],
+) -> dict[str, Any]:
+    """Build initial state for the agentic graph (MessagesState format)."""
+    from langchain_core.messages import HumanMessage
+
+    # Convert chat history to LangChain message objects + append current query
+    lc_messages = []
+    for msg in messages:
+        if msg["role"] == "user":
+            lc_messages.append(HumanMessage(content=msg["content"]))
+        else:
+            from langchain_core.messages import AIMessage
+
+            lc_messages.append(AIMessage(content=msg["content"]))
+    lc_messages.append(HumanMessage(content=query))
+
+    return {
+        "messages": lc_messages,
+        "original_query": query,
+        "thread_id": thread_id,
+        "user_id": user_id,
+        "_case_context": "",  # populated by case_context_resolve
+        "_term_map": {},
+        "_filters": {**(filters or {}), "matter_id": matter_id},
+        "_exclude_privilege": exclude_privilege,
+        "_tier": "standard",
+        "_skip_verification": False,
+        "response": "",
+        "source_documents": [],
+        "cited_claims": [],
+        "follow_up_questions": [],
+        "entities_mentioned": [],
+    }
+
+
+def _build_graph_config(thread_id: str, settings: Any) -> dict[str, Any]:
+    """Build the LangGraph config dict with checkpointer thread_id and recursion_limit."""
+    config: dict[str, Any] = {"configurable": {"thread_id": thread_id}}
+    if settings.enable_agentic_pipeline:
+        config["recursion_limit"] = settings.agentic_recursion_limit_standard
+    return config
+
+
+def _extract_response(final_state: dict[str, Any], is_agentic: bool) -> str:
+    """Extract the response text from the final graph state.
+
+    For the agentic graph, the response is in the last AIMessage's content.
+    For v1, it's in the ``response`` field directly.
+    """
+    if final_state.get("response"):
+        return final_state["response"]
+
+    if is_agentic:
+        messages = final_state.get("messages", [])
+        for msg in reversed(messages):
+            content = ""
+            if hasattr(msg, "content"):
+                content = msg.content if isinstance(msg.content, str) else str(msg.content)
+            elif isinstance(msg, dict):
+                content = msg.get("content", "")
+            role = getattr(msg, "type", None) or (msg.get("role") if isinstance(msg, dict) else None)
+            if role in ("ai", "assistant") and content:
+                return content
+
+    return ""
 
 
 # ------------------------------------------------------------------
@@ -149,6 +235,9 @@ async def query(
     _rate_limit=Depends(rate_limit_queries),
 ):
     """Execute a single investigation query and return the full response."""
+    from app.dependencies import get_settings
+
+    settings = get_settings()
     thread_id = str(request.thread_id) if request.thread_id else str(uuid.uuid4())
 
     # Load chat history if continuing a thread
@@ -157,45 +246,57 @@ async def query(
         rows = await _load_thread_messages(db, thread_id, matter_id=matter_id)
         messages = [{"role": r["role"], "content": r["content"]} for r in rows]
 
-    # Load case context for this matter (if exists)
-    case_context_text = ""
-    try:
-        from app.cases.context_resolver import CaseContextResolver
+    exclude_privilege = ["privileged", "work_product"] if current_user["role"] not in ("admin", "attorney") else []
 
-        ctx = await CaseContextResolver.get_context_for_matter(db, str(matter_id))
-        if ctx:
-            case_context_text = CaseContextResolver.format_context_for_prompt(ctx)
-    except Exception:
-        logger.debug("query.case_context_load_skipped")
+    if settings.enable_agentic_pipeline:
+        initial_state = _build_agentic_state(
+            query=request.query,
+            messages=messages,
+            thread_id=thread_id,
+            user_id=str(current_user["id"]),
+            matter_id=str(matter_id),
+            filters=request.filters,
+            exclude_privilege=exclude_privilege,
+        )
+    else:
+        # V1 state
+        case_context_text = ""
+        try:
+            from app.cases.context_resolver import CaseContextResolver
 
-    # Build initial state
-    initial_state = {
-        "messages": messages,
-        "thread_id": thread_id,
-        "user_id": str(current_user["id"]),
-        "original_query": request.query,
-        "rewritten_query": "",
-        "query_type": "",
-        "text_results": [],
-        "visual_results": [],
-        "graph_results": [],
-        "fused_context": [],
-        "response": "",
-        "source_documents": [],
-        "follow_up_questions": [],
-        "entities_mentioned": [],
-        "_case_context": case_context_text,
-        "_relevance": "",
-        "_reformulated": False,
-        "_filters": {**(request.filters or {}), "matter_id": str(matter_id)},
-        "_exclude_privilege": ["privileged", "work_product"]
-        if current_user["role"] not in ("admin", "attorney")
-        else [],
-    }
+            ctx = await CaseContextResolver.get_context_for_matter(db, str(matter_id))
+            if ctx:
+                case_context_text = CaseContextResolver.format_context_for_prompt(ctx)
+        except Exception:
+            logger.debug("query.case_context_load_skipped")
 
-    # Run the graph with checkpointer config
-    config = {"configurable": {"thread_id": thread_id}}
+        initial_state = {
+            "messages": messages,
+            "thread_id": thread_id,
+            "user_id": str(current_user["id"]),
+            "original_query": request.query,
+            "rewritten_query": "",
+            "query_type": "",
+            "text_results": [],
+            "visual_results": [],
+            "graph_results": [],
+            "fused_context": [],
+            "response": "",
+            "source_documents": [],
+            "follow_up_questions": [],
+            "entities_mentioned": [],
+            "_case_context": case_context_text,
+            "_relevance": "",
+            "_reformulated": False,
+            "_filters": {**(request.filters or {}), "matter_id": str(matter_id)},
+            "_exclude_privilege": exclude_privilege,
+        }
+
+    config = _build_graph_config(thread_id, settings)
     final_state = await graph.ainvoke(initial_state, config)
+
+    # Extract response (agentic: from last AI message; v1: from response field)
+    response_text = _extract_response(final_state, settings.enable_agentic_pipeline)
 
     # Save user message
     await _save_message(db, thread_id, "user", request.query, matter_id=matter_id)
@@ -205,23 +306,24 @@ async def query(
         db,
         thread_id,
         "assistant",
-        final_state.get("response", ""),
+        response_text,
         source_documents=final_state.get("source_documents", []),
         entities_mentioned=final_state.get("entities_mentioned", []),
         follow_up_questions=final_state.get("follow_up_questions", []),
         matter_id=matter_id,
     )
 
-    # Flush to DB
     await db.commit()
 
     return QueryResponse(
-        response=final_state.get("response", ""),
+        response=response_text,
         source_documents=[SourceDocument(**doc) for doc in final_state.get("source_documents", [])],
         follow_up_questions=final_state.get("follow_up_questions", []),
         entities_mentioned=[EntityMention(**ent) for ent in final_state.get("entities_mentioned", [])],
         thread_id=uuid.UUID(thread_id),
         message_id=uuid.UUID(message_id),
+        cited_claims=[CitedClaim(**c) for c in final_state.get("cited_claims", []) if "claim_text" in c],
+        tier=final_state.get("_tier"),
     )
 
 
@@ -241,11 +343,13 @@ async def query_stream(
 ):
     """Execute a query with Server-Sent Events streaming.
 
-    Uses ``graph.astream()`` with ``stream_mode=["updates", "custom"]``:
-    - "updates" channel emits node outputs (used for status + sources events)
-    - "custom" channel emits token-level data from ``get_stream_writer()``
-      inside the synthesize node
+    Supports both v1 and agentic graph variants:
+    - v1: ``stream_mode=["updates", "custom"]``
+    - agentic: ``stream_mode=["messages", "updates", "custom"]``
     """
+    from app.dependencies import get_settings
+
+    settings = get_settings()
     thread_id = str(request.thread_id) if request.thread_id else str(uuid.uuid4())
 
     # Load chat history
@@ -254,102 +358,185 @@ async def query_stream(
         rows = await _load_thread_messages(db, thread_id, matter_id=matter_id)
         messages = [{"role": r["role"], "content": r["content"]} for r in rows]
 
-    # Load case context for this matter (if exists)
-    stream_case_context = ""
-    try:
-        from app.cases.context_resolver import CaseContextResolver
+    exclude_privilege = ["privileged", "work_product"] if current_user["role"] not in ("admin", "attorney") else []
 
-        ctx = await CaseContextResolver.get_context_for_matter(db, str(matter_id))
-        if ctx:
-            stream_case_context = CaseContextResolver.format_context_for_prompt(ctx)
-    except Exception:
-        logger.debug("query_stream.case_context_load_skipped")
-
-    initial_state = {
-        "messages": messages,
-        "thread_id": thread_id,
-        "user_id": str(current_user["id"]),
-        "original_query": request.query,
-        "rewritten_query": "",
-        "query_type": "",
-        "text_results": [],
-        "visual_results": [],
-        "graph_results": [],
-        "fused_context": [],
-        "response": "",
-        "source_documents": [],
-        "follow_up_questions": [],
-        "entities_mentioned": [],
-        "_case_context": stream_case_context,
-        "_relevance": "",
-        "_reformulated": False,
-        "_filters": {**(request.filters or {}), "matter_id": str(matter_id)},
-        "_exclude_privilege": ["privileged", "work_product"]
-        if current_user["role"] not in ("admin", "attorney")
-        else [],
-    }
-
-    config = {"configurable": {"thread_id": thread_id}}
-
-    async def event_generator():
-        final_state: dict[str, Any] = {}
-
-        async for stream_mode, chunk in graph.astream(initial_state, config, stream_mode=["updates", "custom"]):
-            if stream_mode == "updates":
-                for node_name, update in chunk.items():
-                    # Emit status event for each node
-                    stage = _STAGE_MAP.get(node_name, node_name)
-                    yield {
-                        "event": "status",
-                        "data": json.dumps({"stage": stage}),
-                    }
-                    # Emit sources after rerank node
-                    if node_name == "rerank" and "source_documents" in update:
-                        yield {
-                            "event": "sources",
-                            "data": json.dumps({"documents": update["source_documents"]}),
-                        }
-                    # Accumulate state from all nodes
-                    final_state.update(update)
-
-            elif stream_mode == "custom":
-                # Custom channel: token events from synthesize node
-                if isinstance(chunk, dict) and chunk.get("type") == "token":
-                    yield {
-                        "event": "token",
-                        "data": json.dumps({"text": chunk["text"]}),
-                    }
-
-        # Save messages to DB
+    if settings.enable_agentic_pipeline:
+        initial_state = _build_agentic_state(
+            query=request.query,
+            messages=messages,
+            thread_id=thread_id,
+            user_id=str(current_user["id"]),
+            matter_id=str(matter_id),
+            filters=request.filters,
+            exclude_privilege=exclude_privilege,
+        )
+    else:
+        stream_case_context = ""
         try:
-            await _save_message(db, thread_id, "user", request.query, matter_id=matter_id)
-            await _save_message(
-                db,
-                thread_id,
-                "assistant",
-                final_state.get("response", ""),
-                source_documents=final_state.get("source_documents", []),
-                entities_mentioned=final_state.get("entities_mentioned", []),
-                follow_up_questions=final_state.get("follow_up_questions", []),
-                matter_id=matter_id,
-            )
-            await db.commit()
-        except Exception:
-            logger.error("query_stream.save_failed")
+            from app.cases.context_resolver import CaseContextResolver
 
-        # Done event
-        yield {
-            "event": "done",
-            "data": json.dumps(
-                {
-                    "thread_id": thread_id,
-                    "follow_ups": final_state.get("follow_up_questions", []),
-                    "entities": final_state.get("entities_mentioned", []),
-                }
-            ),
+            ctx = await CaseContextResolver.get_context_for_matter(db, str(matter_id))
+            if ctx:
+                stream_case_context = CaseContextResolver.format_context_for_prompt(ctx)
+        except Exception:
+            logger.debug("query_stream.case_context_load_skipped")
+
+        initial_state = {
+            "messages": messages,
+            "thread_id": thread_id,
+            "user_id": str(current_user["id"]),
+            "original_query": request.query,
+            "rewritten_query": "",
+            "query_type": "",
+            "text_results": [],
+            "visual_results": [],
+            "graph_results": [],
+            "fused_context": [],
+            "response": "",
+            "source_documents": [],
+            "follow_up_questions": [],
+            "entities_mentioned": [],
+            "_case_context": stream_case_context,
+            "_relevance": "",
+            "_reformulated": False,
+            "_filters": {**(request.filters or {}), "matter_id": str(matter_id)},
+            "_exclude_privilege": exclude_privilege,
         }
 
-    return EventSourceResponse(event_generator())
+    config = _build_graph_config(thread_id, settings)
+
+    if settings.enable_agentic_pipeline:
+        return EventSourceResponse(
+            _agentic_event_generator(graph, initial_state, config, db, thread_id, request.query, matter_id)
+        )
+    else:
+        return EventSourceResponse(
+            _v1_event_generator(graph, initial_state, config, db, thread_id, request.query, matter_id)
+        )
+
+
+async def _v1_event_generator(graph, initial_state, config, db, thread_id, query_text, matter_id):
+    """SSE event generator for the v1 graph."""
+    final_state: dict[str, Any] = {}
+
+    async for stream_mode, chunk in graph.astream(initial_state, config, stream_mode=["updates", "custom"]):
+        if stream_mode == "updates":
+            for node_name, update in chunk.items():
+                stage = _STAGE_MAP.get(node_name, node_name)
+                yield {"event": "status", "data": json.dumps({"stage": stage})}
+                if node_name == "rerank" and "source_documents" in update:
+                    yield {"event": "sources", "data": json.dumps({"documents": update["source_documents"]})}
+                final_state.update(update)
+        elif stream_mode == "custom":
+            if isinstance(chunk, dict) and chunk.get("type") == "token":
+                yield {"event": "token", "data": json.dumps({"text": chunk["text"]})}
+
+    try:
+        await _save_message(db, thread_id, "user", query_text, matter_id=matter_id)
+        await _save_message(
+            db,
+            thread_id,
+            "assistant",
+            final_state.get("response", ""),
+            source_documents=final_state.get("source_documents", []),
+            entities_mentioned=final_state.get("entities_mentioned", []),
+            follow_up_questions=final_state.get("follow_up_questions", []),
+            matter_id=matter_id,
+        )
+        await db.commit()
+    except Exception:
+        logger.error("query_stream.save_failed")
+
+    yield {
+        "event": "done",
+        "data": json.dumps(
+            {
+                "thread_id": thread_id,
+                "follow_ups": final_state.get("follow_up_questions", []),
+                "entities": final_state.get("entities_mentioned", []),
+            }
+        ),
+    }
+
+
+async def _agentic_event_generator(graph, initial_state, config, db, thread_id, query_text, matter_id):
+    """SSE event generator for the agentic graph.
+
+    Uses ``stream_mode=["messages", "updates", "custom"]``:
+    - "messages": yields AI message chunks (filter for content, not tool calls)
+    - "updates": yields node completion events → SSE status events
+    - "custom": yields progress events from verify_citations / case_context_resolve
+    """
+    final_state: dict[str, Any] = {}
+    sources_emitted = False
+
+    async for stream_mode, chunk in graph.astream(initial_state, config, stream_mode=["messages", "updates", "custom"]):
+        if stream_mode == "updates":
+            for node_name, update in chunk.items():
+                stage = _STAGE_MAP.get(node_name, node_name)
+                yield {"event": "status", "data": json.dumps({"stage": stage})}
+
+                # Emit sources when the agent finishes (source_documents populated)
+                if not sources_emitted and update.get("source_documents"):
+                    yield {
+                        "event": "sources",
+                        "data": json.dumps({"documents": update["source_documents"]}),
+                    }
+                    sources_emitted = True
+
+                final_state.update(update)
+
+        elif stream_mode == "messages":
+            # Messages channel: (message_chunk, metadata) tuples
+            msg_chunk, metadata = chunk
+            # Only emit content tokens from the agent's final response
+            # (not tool call chunks)
+            if hasattr(msg_chunk, "content") and msg_chunk.content:
+                # Skip tool call messages
+                tool_calls = getattr(msg_chunk, "tool_call_chunks", None)
+                if not tool_calls:
+                    content = msg_chunk.content
+                    if isinstance(content, str) and content:
+                        yield {"event": "token", "data": json.dumps({"text": content})}
+
+        elif stream_mode == "custom":
+            if isinstance(chunk, dict) and chunk.get("type") == "token":
+                yield {"event": "token", "data": json.dumps({"text": chunk["text"]})}
+
+    # Extract response
+    from app.dependencies import get_settings
+
+    settings = get_settings()
+    response_text = _extract_response(final_state, settings.enable_agentic_pipeline)
+
+    try:
+        await _save_message(db, thread_id, "user", query_text, matter_id=matter_id)
+        await _save_message(
+            db,
+            thread_id,
+            "assistant",
+            response_text,
+            source_documents=final_state.get("source_documents", []),
+            entities_mentioned=final_state.get("entities_mentioned", []),
+            follow_up_questions=final_state.get("follow_up_questions", []),
+            matter_id=matter_id,
+        )
+        await db.commit()
+    except Exception:
+        logger.error("query_stream.save_failed")
+
+    yield {
+        "event": "done",
+        "data": json.dumps(
+            {
+                "thread_id": thread_id,
+                "follow_ups": final_state.get("follow_up_questions", []),
+                "entities": final_state.get("entities_mentioned", []),
+                "cited_claims": final_state.get("cited_claims", []),
+                "tier": final_state.get("_tier"),
+            }
+        ),
+    }
 
 
 # ------------------------------------------------------------------

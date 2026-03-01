@@ -21,7 +21,14 @@ class Settings(BaseSettings):
     embedding_model: str = "text-embedding-3-large"
     embedding_dimensions: int = 1024
     local_embedding_model: str = "BAAI/bge-large-en-v1.5"
-    enable_visual_embeddings: bool = False  # ColQwen2.5 deferred
+    enable_visual_embeddings: bool = False  # ColQwen2.5 visual reranking
+    visual_embedding_model: str = "vidore/colqwen2.5-v0.2"
+    visual_embedding_device: str = "mps"  # mps | cuda | cpu
+    visual_embedding_batch_size: int = 4  # 3B param model, small batches
+    visual_embedding_dim: int = 128  # Per-token dimension
+    visual_rerank_weight: float = 0.3  # Blend factor for score fusion
+    visual_rerank_top_n: int = 20  # Candidates to visually rerank
+    visual_page_dpi: int = 144  # DPI for PDF page rendering
 
     # --- PostgreSQL ---
     postgres_url: str = "postgresql+asyncpg://nexus:changeme@localhost:5432/nexus"
@@ -92,6 +99,13 @@ class Settings(BaseSettings):
 
     # --- Case Intelligence ---
     enable_case_setup_agent: bool = False
+
+    # --- Agentic Pipeline ---
+    enable_agentic_pipeline: bool = True
+    enable_citation_verification: bool = True
+    agentic_recursion_limit_fast: int = 6
+    agentic_recursion_limit_standard: int = 12
+    agentic_recursion_limit_deep: int = 20
 
     # --- Auth ---
     jwt_secret_key: str = "change-me-to-a-random-64-char-string"

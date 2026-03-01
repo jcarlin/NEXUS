@@ -11,7 +11,9 @@ class QueryRequest(BaseModel):
 
     query: str = Field(..., min_length=1, max_length=4000, description="The user's natural-language question.")
     thread_id: UUID | None = Field(default=None, description="Existing conversation thread to continue.")
-    filters: dict | None = Field(default=None, description="Optional metadata filters (document_type, date_range, etc.).")
+    filters: dict | None = Field(
+        default=None, description="Optional metadata filters (document_type, date_range, etc.)."
+    )
 
 
 class SourceDocument(BaseModel):
@@ -44,6 +46,8 @@ class QueryResponse(BaseModel):
     entities_mentioned: list[EntityMention] = Field(default_factory=list)
     thread_id: UUID
     message_id: UUID
+    cited_claims: list["CitedClaim"] = Field(default_factory=list)
+    tier: str | None = None
 
 
 class ChatMessage(BaseModel):
@@ -64,6 +68,28 @@ class ChatThread(BaseModel):
     message_count: int
     last_message_at: datetime
     first_query: str
+
+
+class CitedClaim(BaseModel):
+    """A factual assertion with source provenance."""
+
+    claim_text: str
+    document_id: str
+    filename: str
+    page_number: int | None = None
+    bates_range: str | None = None
+    excerpt: str = Field(max_length=500)
+    grounding_score: float = Field(ge=0.0, le=1.0)
+    verification_status: str = "unverified"  # unverified | verified | flagged
+
+
+class VerificationJudgment(BaseModel):
+    """Instructor extraction model for CoVe claim verification."""
+
+    claim_index: int
+    supported: bool
+    confidence: float = Field(ge=0.0, le=1.0)
+    rationale: str
 
 
 class ChatHistoryResponse(BaseModel):

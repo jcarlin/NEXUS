@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -19,6 +19,7 @@ def _reset_sse_status():
     """
     try:
         from sse_starlette.sse import AppStatus
+
         AppStatus.should_exit_event = asyncio.Event()
     except Exception:
         pass
@@ -57,8 +58,11 @@ async def stream_client():
         test_app.dependency_overrides[rate_limit_queries] = lambda: None
         test_app.dependency_overrides[get_current_user] = lambda: {
             "id": UUID("00000000-0000-0000-0000-000000000099"),
-            "email": "test@nexus.dev", "full_name": "Test", "role": "admin",
-            "is_active": True, "created_at": "2025-01-01T00:00:00+00:00",
+            "email": "test@nexus.dev",
+            "full_name": "Test",
+            "role": "admin",
+            "is_active": True,
+            "created_at": "2025-01-01T00:00:00+00:00",
         }
         test_app.dependency_overrides[get_matter_id] = lambda: UUID("00000000-0000-0000-0000-000000000001")
 
@@ -69,9 +73,11 @@ async def stream_client():
 
 def _make_astream(events):
     """Create an async generator from a list of (stream_mode, chunk) tuples."""
+
     async def astream(*args, **kwargs):
         for event in events:
             yield event
+
     return astream
 
 
@@ -99,7 +105,7 @@ async def test_stream_emits_status_events(stream_client):
     assert response.status_code == 200
 
     lines = response.text.strip().split("\n")
-    status_events = [l for l in lines if l.startswith("event: status")]
+    status_events = [line for line in lines if line.startswith("event: status")]
     # Should have at least one status event per node
     assert len(status_events) >= 8
 
@@ -109,9 +115,17 @@ async def test_stream_emits_sources_after_rerank(stream_client):
     """The stream should emit a sources event after the rerank node."""
     client, mock_db, mock_graph = stream_client
 
-    source_docs = [{"id": "p1", "filename": "doc.pdf", "page": 1,
-                     "chunk_text": "test", "relevance_score": 0.9,
-                     "preview_url": None, "download_url": None}]
+    source_docs = [
+        {
+            "id": "p1",
+            "filename": "doc.pdf",
+            "page": 1,
+            "chunk_text": "test",
+            "relevance_score": 0.9,
+            "preview_url": None,
+            "download_url": None,
+        }
+    ]
 
     events = [
         ("updates", {"classify": {"query_type": "factual"}}),
@@ -131,7 +145,7 @@ async def test_stream_emits_sources_after_rerank(stream_client):
     )
 
     lines = response.text.strip().split("\n")
-    sources_lines = [l for l in lines if l.startswith("event: sources")]
+    sources_lines = [line for line in lines if line.startswith("event: sources")]
     assert len(sources_lines) == 1
 
     # Find the data line after the sources event
@@ -172,7 +186,7 @@ async def test_stream_emits_tokens(stream_client):
     )
 
     lines = response.text.strip().split("\n")
-    token_events = [l for l in lines if l.startswith("event: token")]
+    token_events = [line for line in lines if line.startswith("event: token")]
     assert len(token_events) == 2
 
 
@@ -202,7 +216,7 @@ async def test_stream_emits_done_event(stream_client):
     )
 
     lines = response.text.strip().split("\n")
-    done_lines = [l for l in lines if l.startswith("event: done")]
+    done_lines = [line for line in lines if line.startswith("event: done")]
     assert len(done_lines) == 1
 
     # Find the data for the done event
@@ -216,3 +230,46 @@ async def test_stream_emits_done_event(stream_client):
                     assert data["entities"] == entities
                     break
             break
+
+
+@pytest.mark.asyncio
+async def test_stream_emits_agentic_status_events(stream_client):
+    """Agentic pipeline node names map to correct SSE status events."""
+    client, mock_db, mock_graph = stream_client
+
+    events = [
+        (
+            "updates",
+            {
+                "case_context_resolve": {
+                    "_case_context": "ctx",
+                    "_term_map": {},
+                    "_tier": "standard",
+                    "_skip_verification": False,
+                }
+            },
+        ),
+        ("updates", {"investigation_agent": {"response": "answer", "source_documents": [], "entities_mentioned": []}}),
+        ("updates", {"verify_citations": {"cited_claims": []}}),
+        ("updates", {"generate_follow_ups": {"follow_up_questions": ["Q1?", "Q2?"]}}),
+    ]
+    mock_graph.astream = _make_astream(events)
+
+    response = await client.post(
+        "/api/v1/query/stream",
+        json={"query": "test question"},
+    )
+    assert response.status_code == 200
+
+    lines = response.text.strip().split("\n")
+    status_events = [line for line in lines if line.startswith("event: status")]
+    # Should have status events for each node
+    assert len(status_events) >= 4
+
+    # Check that agentic stage names appear in the data
+    data_lines = [line for line in lines if line.startswith("data: ") and "stage" in line]
+    stage_names = [json.loads(line[6:])["stage"] for line in data_lines]
+    assert "resolving_context" in stage_names
+    assert "investigating" in stage_names
+    assert "verifying_citations" in stage_names
+    assert "generating_follow_ups" in stage_names

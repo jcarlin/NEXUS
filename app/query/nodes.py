@@ -1,16 +1,18 @@
 """LangGraph node functions for the investigation query pipeline.
 
-``create_nodes()`` is a factory that accepts shared clients (LLM, retriever,
-graph service, entity extractor) and returns a dict of async node functions.
-Each node takes an ``InvestigationState`` and returns a partial state update.
+**V1 nodes** (``create_nodes_v1``): Factory that returns the 9-node chain.
+**Agentic nodes** (``case_context_resolve``, ``verify_citations``,
+``generate_follow_ups_agentic``, ``audit_log_hook``, ``build_system_prompt``):
+Standalone async functions used by the agentic parent graph.
 
 Helper functions (``_format_chat_history``, ``_format_context``,
-``_format_graph_context``) are module-level exports used by both the graph
-nodes *and* the streaming router (which calls nodes directly).
+``_format_graph_context``) are module-level exports used by both variants
+and the streaming router.
 """
 
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING, Any
 
 import structlog
@@ -18,8 +20,11 @@ import structlog
 from app.query.prompts import (
     CLASSIFY_PROMPT,
     FOLLOWUP_PROMPT,
+    INVESTIGATION_SYSTEM_PROMPT,
     REWRITE_PROMPT,
     SYNTHESIS_PROMPT,
+    VERIFY_CLAIMS_PROMPT,
+    VERIFY_JUDGMENT_PROMPT,
 )
 
 if TYPE_CHECKING:
@@ -70,11 +75,11 @@ def _format_graph_context(graph_results: list[dict[str, Any]]) -> str:
 
 
 # ------------------------------------------------------------------
-# Node factory
+# V1 Node factory (preserved for feature-flag fallback)
 # ------------------------------------------------------------------
 
 
-def create_nodes(
+def create_nodes_v1(
     llm: LLMClient,
     retriever: HybridRetriever,
     graph_service: GraphService,
@@ -169,7 +174,7 @@ def create_nodes(
     # --- rerank ---
 
     async def rerank(state: dict) -> dict:
-        """Rerank text results via cross-encoder (if enabled) or score sort."""
+        """Rerank text results via cross-encoder (if enabled) or score sort, then visual rerank."""
         from app.dependencies import get_reranker, get_settings
 
         text_results = state.get("text_results", [])
@@ -199,6 +204,23 @@ def create_nodes(
                 reverse=True,
             )[: settings.reranker_top_n]
 
+        # Visual reranking (feature-flagged)
+        visual_results: list[dict[str, Any]] = []
+        if settings.enable_visual_embeddings:
+            try:
+                query = state.get("rewritten_query") or state.get("original_query", "")
+                sorted_results = await retriever.rerank_visual(
+                    query,
+                    sorted_results,
+                    weight=settings.visual_rerank_weight,
+                    top_n=settings.visual_rerank_top_n,
+                    filters=state.get("_filters"),
+                )
+                visual_results = [r for r in sorted_results if r.get("_visual_reranked")]
+                logger.debug("node.rerank.visual", reranked=len(visual_results))
+            except Exception:
+                logger.warning("node.rerank.visual_failed", exc_info=True)
+
         # Build fused_context for synthesis
         fused_context = sorted_results
 
@@ -221,6 +243,7 @@ def create_nodes(
         return {
             "fused_context": fused_context,
             "source_documents": source_documents,
+            "visual_results": visual_results,
         }
 
     # --- check_relevance ---
@@ -318,18 +341,12 @@ def create_nodes(
     # --- synthesize ---
 
     async def synthesize(state: dict) -> dict:
-        """Generate the answer with citations from evidence and graph context.
-
-        Uses ``get_stream_writer()`` to emit tokens on the custom channel
-        when invoked via ``graph.astream()``.  When called via ``graph.ainvoke()``
-        the writer is a no-op, so this node works for both paths.
-        """
+        """Generate the answer with citations from evidence and graph context."""
         try:
             from langgraph.config import get_stream_writer
 
             writer = get_stream_writer()
         except RuntimeError:
-            # Outside of a runnable context (e.g., direct call in tests)
             writer = lambda x: None  # noqa: E731
 
         query = state.get("rewritten_query") or state["original_query"]
@@ -363,7 +380,6 @@ def create_nodes(
 
         response = full_response.strip()
 
-        # Extract entities from the response for linking
         entities_mentioned: list[dict[str, Any]] = []
         try:
             raw_entities = entity_extractor.extract(
@@ -438,3 +454,367 @@ def create_nodes(
         "synthesize": synthesize,
         "generate_follow_ups": generate_follow_ups,
     }
+
+
+# Backward-compatible alias
+create_nodes = create_nodes_v1
+
+
+# ------------------------------------------------------------------
+# Agentic node functions (M10)
+# ------------------------------------------------------------------
+
+
+def build_system_prompt(state: dict) -> str:
+    """Build system prompt with dynamic case context injection.
+
+    Passed as the ``prompt`` parameter to ``create_react_agent`` — it
+    accepts a callable ``(state) -> str``.
+    """
+    case_context = state.get("_case_context", "")
+    case_context_block = f"\n\n{case_context}" if case_context else ""
+    return INVESTIGATION_SYSTEM_PROMPT.format(case_context=case_context_block)
+
+
+async def case_context_resolve(state: dict) -> dict:
+    """Load case context for the matter and classify query tier.
+
+    - Loads case context via ``CaseContextResolver``
+    - Builds a term map for alias resolution
+    - Expands references in the user's query
+    - Classifies the query tier (fast / standard / deep)
+    """
+    from app.dependencies import get_db
+
+    filters = state.get("_filters", {}) or {}
+    matter_id = filters.get("matter_id", "")
+
+    case_context_text = ""
+    term_map: dict[str, str] = {}
+
+    if matter_id:
+        try:
+            from app.cases.context_resolver import CaseContextResolver
+
+            db_gen = get_db()
+            db = await db_gen.__anext__()
+            try:
+                ctx = await CaseContextResolver.get_context_for_matter(db, matter_id)
+                if ctx:
+                    case_context_text = CaseContextResolver.format_context_for_prompt(ctx)
+                    term_map = CaseContextResolver.build_term_map(ctx)
+            finally:
+                try:
+                    await db_gen.aclose()
+                except Exception:
+                    pass
+        except Exception:
+            logger.debug("node.case_context_resolve.skipped")
+
+    # Classify tier based on query complexity heuristic
+    original_query = state.get("original_query", "")
+    tier = _classify_tier(original_query)
+
+    # Determine if verification should be skipped (fast tier)
+    from app.dependencies import get_settings
+
+    settings = get_settings()
+    skip_verification = tier == "fast" or not settings.enable_citation_verification
+
+    logger.debug(
+        "node.case_context_resolve",
+        has_context=bool(case_context_text),
+        term_count=len(term_map),
+        tier=tier,
+    )
+
+    return {
+        "_case_context": case_context_text,
+        "_term_map": term_map,
+        "_tier": tier,
+        "_skip_verification": skip_verification,
+    }
+
+
+def _classify_tier(query: str) -> str:
+    """Lightweight heuristic tier classification.
+
+    - **fast**: Short factual queries (< 15 words, no analytical markers)
+    - **deep**: Complex analytical queries (multi-clause, comparison words)
+    - **standard**: Everything else
+    """
+    words = query.split()
+    word_count = len(words)
+    query_lower = query.lower()
+
+    deep_markers = [
+        "compare",
+        "contrast",
+        "analyze",
+        "relationship between",
+        "pattern",
+        "timeline of",
+        "all mentions",
+        "summarize all",
+        "how does",
+        "what is the connection",
+        "explain the",
+    ]
+
+    if any(marker in query_lower for marker in deep_markers) or word_count > 30:
+        return "deep"
+    if word_count <= 15 and "?" in query:
+        return "fast"
+    return "standard"
+
+
+async def verify_citations(state: dict) -> dict:
+    """Decompose the agent's response into cited claims and verify each.
+
+    Uses the Chain-of-Verification (CoVe) pattern:
+    1. Decompose response into atomic claims with cited sources
+    2. For each claim, run independent retrieval to find verification evidence
+    3. Judge whether the evidence supports the claim
+
+    Skipped for fast-tier queries (``_skip_verification=True``).
+    """
+    if state.get("_skip_verification", False):
+        logger.debug("node.verify_citations.skipped", reason="fast_tier")
+        return {"cited_claims": []}
+
+    response = state.get("response", "")
+    if not response:
+        return {"cited_claims": []}
+
+    from app.dependencies import get_llm, get_retriever
+
+    llm = get_llm()
+    retriever = get_retriever()
+
+    # Stage 1: Decompose response into claims
+    # Build evidence context from source_documents in state
+    source_docs = state.get("source_documents", [])
+    evidence_text = "\n".join(
+        f"[{d.get('filename', '?')}, p{d.get('page', '?')}]: {d.get('chunk_text', '')[:300]}" for d in source_docs[:10]
+    )
+
+    decompose_prompt = VERIFY_CLAIMS_PROMPT.format(
+        response=response[:2000],
+        evidence=evidence_text[:3000],
+    )
+
+    try:
+        claims_raw = await llm.complete(
+            [{"role": "user", "content": decompose_prompt}],
+            max_tokens=2000,
+            temperature=0.0,
+            node_name="verify_claims_decompose",
+        )
+    except Exception:
+        logger.warning("node.verify_citations.decompose_failed")
+        return {"cited_claims": []}
+
+    # Parse claims from LLM response (best-effort JSON parsing)
+    claims = _parse_claims(claims_raw)
+    if not claims:
+        logger.debug("node.verify_citations.no_claims_parsed")
+        return {"cited_claims": []}
+
+    # Stage 2+3: Verify each claim with independent retrieval
+    verified_claims: list[dict[str, Any]] = []
+    filters = state.get("_filters")
+    exclude_privilege = state.get("_exclude_privilege", [])
+
+    for i, claim in enumerate(claims[:10]):  # Cap at 10 claims
+        claim_text = claim.get("claim_text", "")
+        if not claim_text:
+            continue
+
+        try:
+            # Independent retrieval for verification
+            verification_results = await retriever.retrieve_text(
+                claim_text,
+                limit=5,
+                filters=filters,
+                exclude_privilege_statuses=exclude_privilege or None,
+            )
+
+            verification_evidence = "\n".join(
+                f"[{r.get('source_file', '?')}, p{r.get('page_number', '?')}]: {r.get('chunk_text', '')[:200]}"
+                for r in verification_results[:3]
+            )
+
+            # Judge claim
+            judgment_prompt = VERIFY_JUDGMENT_PROMPT.format(
+                claim_text=claim_text,
+                filename=claim.get("filename", "unknown"),
+                page_number=claim.get("page_number", "?"),
+                evidence=verification_evidence or "(no supporting evidence found)",
+            )
+
+            judgment_raw = await llm.complete(
+                [{"role": "user", "content": judgment_prompt}],
+                max_tokens=300,
+                temperature=0.0,
+                node_name="verify_claims_judge",
+            )
+
+            # Parse judgment (simple heuristic)
+            supported = "supported" in judgment_raw.lower() or "true" in judgment_raw.lower()[:50]
+            status = "verified" if supported else "flagged"
+
+        except Exception:
+            logger.warning("node.verify_citations.claim_error", claim_index=i)
+            status = "unverified"
+
+        claim["verification_status"] = status
+        claim["claim_index"] = i
+        verified_claims.append(claim)
+
+    logger.debug(
+        "node.verify_citations",
+        total_claims=len(verified_claims),
+        verified=sum(1 for c in verified_claims if c.get("verification_status") == "verified"),
+        flagged=sum(1 for c in verified_claims if c.get("verification_status") == "flagged"),
+    )
+
+    return {"cited_claims": verified_claims}
+
+
+def _parse_claims(raw: str) -> list[dict[str, Any]]:
+    """Best-effort parse claims from LLM output."""
+    # Try JSON parsing first
+    try:
+        parsed = json.loads(raw)
+        if isinstance(parsed, list):
+            return parsed
+    except (json.JSONDecodeError, TypeError):
+        pass
+
+    # Try to find JSON array in the response
+    start = raw.find("[")
+    end = raw.rfind("]")
+    if start != -1 and end != -1 and end > start:
+        try:
+            parsed = json.loads(raw[start : end + 1])
+            if isinstance(parsed, list):
+                return parsed
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    return []
+
+
+async def generate_follow_ups_agentic(state: dict) -> dict:
+    """Generate follow-up questions for the agentic pipeline.
+
+    Extracts the response from the last AI message in state, then uses
+    the same prompt pattern as v1.
+    """
+    from app.dependencies import get_llm
+
+    llm = get_llm()
+
+    # Extract response from the last AI message
+    response = state.get("response", "")
+    if not response:
+        # Fall back to last AI message content
+        messages = state.get("messages", [])
+        for msg in reversed(messages):
+            content = ""
+            if hasattr(msg, "content"):
+                content = msg.content if isinstance(msg.content, str) else str(msg.content)
+            elif isinstance(msg, dict):
+                content = msg.get("content", "")
+            role = getattr(msg, "type", None) or (msg.get("role") if isinstance(msg, dict) else None)
+            if role in ("ai", "assistant") and content:
+                response = content
+                break
+
+    if not response:
+        return {"follow_up_questions": []}
+
+    query = state.get("original_query", "")
+    entities = state.get("entities_mentioned", [])
+    entity_names = ", ".join((e.get("name", "") if isinstance(e, dict) else str(e)) for e in entities[:10])
+
+    prompt = FOLLOWUP_PROMPT.format(
+        query=query,
+        response=response[:2000],
+        entities=entity_names or "none detected",
+    )
+
+    try:
+        raw = await llm.complete(
+            [{"role": "user", "content": prompt}],
+            max_tokens=500,
+            temperature=0.3,
+            node_name="generate_follow_ups",
+        )
+    except Exception:
+        logger.warning("node.generate_follow_ups_agentic.failed")
+        return {"follow_up_questions": []}
+
+    lines = [line.strip().lstrip("0123456789.-) ") for line in raw.strip().splitlines() if line.strip()]
+    follow_ups = [line for line in lines if len(line) > 10][:3]
+
+    logger.debug("node.generate_follow_ups_agentic", count=len(follow_ups))
+    return {"follow_up_questions": follow_ups}
+
+
+async def audit_log_hook(state: dict) -> dict:
+    """Post-model hook for ``create_react_agent``.
+
+    Logs each LLM call to the ``ai_audit_log`` table, preserving the SOC 2
+    audit trail even though the agent bypasses ``LLMClient``.
+    """
+    try:
+        from app.dependencies import _get_session_factory, get_settings
+
+        settings = get_settings()
+        if not settings.enable_ai_audit_logging:
+            return state
+
+        from sqlalchemy import text as sa_text
+
+        ctx = structlog.contextvars.get_contextvars()
+        request_id = ctx.get("request_id")
+
+        # Extract token usage from the last AI message
+        messages = state.get("messages", [])
+        last_msg = messages[-1] if messages else None
+
+        input_tokens = None
+        output_tokens = None
+        if last_msg and hasattr(last_msg, "usage_metadata") and last_msg.usage_metadata:
+            usage = last_msg.usage_metadata
+            input_tokens = usage.get("input_tokens")
+            output_tokens = usage.get("output_tokens")
+
+        factory = _get_session_factory()
+        async with factory() as session:
+            await session.execute(
+                sa_text("""
+                    INSERT INTO ai_audit_log
+                        (request_id, call_type, provider, model, node_name,
+                         input_tokens, output_tokens, total_tokens,
+                         latency_ms, status)
+                    VALUES
+                        (:request_id, 'agent_step', :provider, :model,
+                         'investigation_agent', :input_tokens, :output_tokens,
+                         :total_tokens, 0, 'success')
+                """),
+                {
+                    "request_id": request_id,
+                    "provider": "anthropic",
+                    "model": settings.llm_model,
+                    "input_tokens": input_tokens,
+                    "output_tokens": output_tokens,
+                    "total_tokens": (input_tokens or 0) + (output_tokens or 0) if input_tokens is not None else None,
+                },
+            )
+            await session.commit()
+    except Exception:
+        logger.warning("audit_log_hook.write_failed", exc_info=True)
+
+    return state

@@ -8,25 +8,26 @@ FastAPI ``Depends()`` callables.
 from __future__ import annotations
 
 import functools
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 import redis.asyncio as aioredis
 import structlog
 from neo4j import AsyncGraphDatabase
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from app.common.embedder import (
+    EmbeddingProvider,
+    LocalEmbeddingProvider,
+    OpenAIEmbeddingProvider,
+)
 from app.common.llm import LLMClient
 from app.common.storage import StorageClient
 from app.common.vector_store import VectorStoreClient
 from app.config import Settings
 from app.entities.extractor import EntityExtractor
 from app.entities.graph_service import GraphService
-from app.common.embedder import (
-    EmbeddingProvider,
-    LocalEmbeddingProvider,
-    OpenAIEmbeddingProvider,
-)
 from app.ingestion.sparse_embedder import SparseEmbedder
+from app.ingestion.visual_embedder import VisualEmbedder
 from app.query.reranker import Reranker
 from app.query.retriever import HybridRetriever
 
@@ -262,6 +263,27 @@ def get_sparse_embedder() -> SparseEmbedder | None:
 
 
 # ---------------------------------------------------------------------------
+# Visual Embedder (feature-flagged)
+# ---------------------------------------------------------------------------
+
+_visual_embedder: VisualEmbedder | None = None
+
+
+def get_visual_embedder() -> VisualEmbedder | None:
+    """Return the ``VisualEmbedder`` singleton, or ``None`` when disabled."""
+    global _visual_embedder
+    settings = get_settings()
+    if not settings.enable_visual_embeddings:
+        return None
+    if _visual_embedder is None:
+        _visual_embedder = VisualEmbedder(
+            model_name=settings.visual_embedding_model,
+            device=settings.visual_embedding_device,
+        )
+    return _visual_embedder
+
+
+# ---------------------------------------------------------------------------
 # Near-Duplicate Detector (feature-flagged)
 # ---------------------------------------------------------------------------
 
@@ -301,6 +323,7 @@ def get_retriever() -> HybridRetriever:
             entity_extractor=get_entity_extractor(),
             graph_service=get_graph_service(),
             sparse_embedder=get_sparse_embedder(),
+            visual_embedder=get_visual_embedder(),
         )
     return _retriever
 
@@ -340,23 +363,34 @@ _query_graph = None
 
 
 def get_query_graph():
-    """Return the compiled investigation ``StateGraph`` singleton."""
+    """Return the compiled investigation ``StateGraph`` singleton.
+
+    Uses the agentic pipeline when ``enable_agentic_pipeline`` is set,
+    otherwise falls back to the v1 9-node chain.
+    """
     global _query_graph
     if _query_graph is None:
-        from app.query.graph import build_graph
+        settings = get_settings()
+        if settings.enable_agentic_pipeline:
+            from app.query.graph import build_agentic_graph
 
-        _query_graph = build_graph(
-            llm=get_llm(),
-            retriever=get_retriever(),
-            graph_service=get_graph_service(),
-            entity_extractor=get_entity_extractor(),
-        ).compile(checkpointer=get_checkpointer())
+            _query_graph = build_agentic_graph(settings, get_checkpointer())
+        else:
+            from app.query.graph import build_graph_v1
+
+            _query_graph = build_graph_v1(
+                llm=get_llm(),
+                retriever=get_retriever(),
+                graph_service=get_graph_service(),
+                entity_extractor=get_entity_extractor(),
+            ).compile(checkpointer=get_checkpointer())
     return _query_graph
 
 
 # ---------------------------------------------------------------------------
 # Cleanup (called from lifespan shutdown)
 # ---------------------------------------------------------------------------
+
 
 async def close_all() -> None:
     """Gracefully tear down all shared clients."""

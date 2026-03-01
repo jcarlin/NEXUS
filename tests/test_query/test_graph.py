@@ -7,8 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.query.graph import InvestigationState, _route_relevance, build_graph
-
+from app.query.graph import _route_relevance, build_graph
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -103,9 +102,39 @@ def test_compiled_graph_has_expected_nodes(mock_llm, mock_retriever, mock_graph_
     compiled = graph.compile()
     # The compiled graph should have our node names
     node_names = set(compiled.get_graph().nodes.keys())
-    expected = {"classify", "rewrite", "retrieve", "rerank", "check_relevance",
-                "graph_lookup", "reformulate", "synthesize", "generate_follow_ups"}
+    expected = {
+        "classify",
+        "rewrite",
+        "retrieve",
+        "rerank",
+        "check_relevance",
+        "graph_lookup",
+        "reformulate",
+        "synthesize",
+        "generate_follow_ups",
+    }
     # LangGraph adds __start__ and __end__ nodes
+    assert expected.issubset(node_names)
+
+
+def test_agentic_graph_has_expected_nodes():
+    """The agentic graph should have the 4 expected parent nodes."""
+    from app.query.graph import build_agentic_graph
+
+    mock_settings = MagicMock()
+    mock_settings.llm_model = "claude-sonnet-4-5-20250929"
+    mock_settings.anthropic_api_key = "test-key"
+    mock_settings.enable_citation_verification = True
+
+    compiled = build_agentic_graph(mock_settings, checkpointer=False)
+    node_names = set(compiled.get_graph().nodes.keys())
+
+    expected = {
+        "case_context_resolve",
+        "investigation_agent",
+        "verify_citations",
+        "generate_follow_ups",
+    }
     assert expected.issubset(node_names)
 
 

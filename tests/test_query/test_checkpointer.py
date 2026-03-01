@@ -27,12 +27,14 @@ async def checkpointer_client():
         mock_db.commit = AsyncMock()
 
         mock_graph = AsyncMock()
-        mock_graph.ainvoke = AsyncMock(return_value={
-            "response": "Test response",
-            "source_documents": [],
-            "follow_up_questions": [],
-            "entities_mentioned": [],
-        })
+        mock_graph.ainvoke = AsyncMock(
+            return_value={
+                "response": "Test response",
+                "source_documents": [],
+                "follow_up_questions": [],
+                "entities_mentioned": [],
+            }
+        )
 
         from app import dependencies
 
@@ -50,8 +52,11 @@ async def checkpointer_client():
         test_app.dependency_overrides[rate_limit_queries] = lambda: None
         test_app.dependency_overrides[get_current_user] = lambda: {
             "id": UUID("00000000-0000-0000-0000-000000000099"),
-            "email": "test@nexus.dev", "full_name": "Test", "role": "admin",
-            "is_active": True, "created_at": "2025-01-01T00:00:00+00:00",
+            "email": "test@nexus.dev",
+            "full_name": "Test",
+            "role": "admin",
+            "is_active": True,
+            "created_at": "2025-01-01T00:00:00+00:00",
         }
         test_app.dependency_overrides[get_matter_id] = lambda: UUID("00000000-0000-0000-0000-000000000001")
 
@@ -68,16 +73,21 @@ async def test_graph_compiled_with_checkpointer():
     mock_compiled = MagicMock()
     mock_graph_builder.compile.return_value = mock_compiled
 
+    mock_settings = MagicMock()
+    mock_settings.enable_agentic_pipeline = False
+
     with (
         patch("app.dependencies.get_checkpointer", return_value=mock_checkpointer),
+        patch("app.dependencies.get_settings", return_value=mock_settings),
         patch("app.dependencies.get_llm", return_value=MagicMock()),
         patch("app.dependencies.get_retriever", return_value=MagicMock()),
         patch("app.dependencies.get_graph_service", return_value=MagicMock()),
         patch("app.dependencies.get_entity_extractor", return_value=MagicMock()),
-        patch("app.query.graph.build_graph", return_value=mock_graph_builder),
+        patch("app.query.graph.build_graph_v1", return_value=mock_graph_builder),
     ):
         # Reset the singleton so it rebuilds
         import app.dependencies as deps
+
         deps._query_graph = None
 
         try:
