@@ -50,7 +50,6 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             return response
         finally:
             elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
-            request_id = getattr(request.state, "request_id", "unknown")
             status = response.status_code if response else 500
             logger.info(
                 "request",
@@ -58,7 +57,6 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                 path=request.url.path,
                 status=status,
                 duration_ms=elapsed_ms,
-                request_id=request_id,
             )
 
 

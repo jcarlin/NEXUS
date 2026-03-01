@@ -493,7 +493,7 @@ def _stage_parse(ctx: _PipelineContext) -> None:
     ctx.content_hash = hashlib.sha256(file_bytes).hexdigest()[:16]
     ctx.file_size = len(file_bytes)
 
-    logger.info("task.downloaded", job_id=ctx.job_id, size=ctx.file_size)
+    logger.info("task.downloaded", size=ctx.file_size)
 
     # Write to temp file for parser
     suffix = Path(ctx.filename).suffix
@@ -514,7 +514,6 @@ def _stage_parse(ctx: _PipelineContext) -> None:
 
     logger.info(
         "task.parsed",
-        job_id=ctx.job_id,
         page_count=ctx.parse_result.page_count,
         text_length=len(ctx.parse_result.text),
     )
@@ -561,11 +560,11 @@ def _stage_parse(ctx: _PipelineContext) -> None:
                 for page_num, img_bytes in enumerate(ctx.rendered_page_images, 1):
                     page_key = f"pages/{doc_id_for_pages}/page_{page_num:03d}.png"
                     _upload_to_minio(ctx.settings, page_key, img_bytes)
-                logger.info("task.pdf_pages_rendered", job_id=ctx.job_id, pages=len(ctx.rendered_page_images))
+                logger.info("task.pdf_pages_rendered", pages=len(ctx.rendered_page_images))
             finally:
                 pdf_tmp_path.unlink(missing_ok=True)
         except Exception:
-            logger.warning("task.pdf_page_rendering_failed", job_id=ctx.job_id, exc_info=True)
+            logger.warning("task.pdf_page_rendering_failed", exc_info=True)
             ctx.rendered_page_images = []
     else:
         # Fallback: store Docling-provided page images (if any)
@@ -598,7 +597,7 @@ def _stage_chunk(ctx: _PipelineContext) -> None:
         document_type=ctx.document_type,
     )
 
-    logger.info("task.chunked", job_id=ctx.job_id, chunk_count=len(ctx.chunks))
+    logger.info("task.chunked", chunk_count=len(ctx.chunks))
 
     ctx.progress["chunks_created"] = len(ctx.chunks)
     _update_stage(ctx.engine, ctx.job_id, "embedding", "uploading", progress=ctx.progress)
@@ -620,7 +619,7 @@ def _stage_embed(ctx: _PipelineContext) -> None:
 
         sparse_emb = SparseEmbedder(model_name=ctx.settings.sparse_embedding_model)
         ctx.sparse_embeddings = sparse_emb.embed_texts(chunk_texts)
-        logger.info("task.sparse_embedded", job_id=ctx.job_id, count=len(ctx.sparse_embeddings))
+        logger.info("task.sparse_embedded", count=len(ctx.sparse_embeddings))
 
     # Visual embeddings (feature-flagged, experimental).
     # Acceptable degradation: visual embeddings are optional enrichment
@@ -683,15 +682,14 @@ def _stage_embed(ctx: _PipelineContext) -> None:
 
                 logger.info(
                     "task.visual_embedded",
-                    job_id=ctx.job_id,
                     complex_pages=len(complex_pages),
                     total_pages=len(ctx.rendered_page_images),
                 )
         except Exception:
-            logger.warning("task.visual_embedding_failed", job_id=ctx.job_id, exc_info=True)
+            logger.warning("task.visual_embedding_failed", exc_info=True)
             ctx.visual_page_embeddings = []
 
-    logger.info("task.embedded", job_id=ctx.job_id, embedding_count=len(ctx.embeddings))
+    logger.info("task.embedded", embedding_count=len(ctx.embeddings))
 
     ctx.progress["embeddings_generated"] = len(ctx.embeddings)
     _update_stage(ctx.engine, ctx.job_id, "extracting", "uploading", progress=ctx.progress)
@@ -722,7 +720,6 @@ def _stage_extract(ctx: _PipelineContext) -> None:
 
     logger.info(
         "task.entities_extracted",
-        job_id=ctx.job_id,
         unique_entities=len(ctx.all_entities),
     )
 
@@ -738,13 +735,11 @@ def _stage_extract(ctx: _PipelineContext) -> None:
             )
             logger.info(
                 "task.relationships_extracted",
-                job_id=ctx.job_id,
                 count=ctx.relationship_count,
             )
         except Exception:
             logger.warning(
                 "task.relationship_extraction_failed",
-                job_id=ctx.job_id,
                 exc_info=True,
             )
 
@@ -805,7 +800,7 @@ def _stage_index(ctx: _PipelineContext) -> None:
         from app.common.vector_store import TEXT_COLLECTION
 
         qdrant.upsert(collection_name=TEXT_COLLECTION, points=points)
-        logger.info("task.qdrant_indexed", job_id=ctx.job_id, points=len(points))
+        logger.info("task.qdrant_indexed", points=len(points))
 
     # 5b. Visual Qdrant upsert (feature-flagged).
     # Acceptable degradation: visual index is optional; text index above
@@ -819,9 +814,9 @@ def _stage_index(ctx: _PipelineContext) -> None:
                 for vpe in ctx.visual_page_embeddings
             ]
             qdrant.upsert(collection_name=VISUAL_COLLECTION, points=vis_points)
-            logger.info("task.visual_indexed", job_id=ctx.job_id, pages=len(vis_points))
+            logger.info("task.visual_indexed", pages=len(vis_points))
         except Exception:
-            logger.warning("task.visual_indexing_failed", job_id=ctx.job_id, exc_info=True)
+            logger.warning("task.visual_indexing_failed", exc_info=True)
 
     # 5c. Neo4j graph indexing
     # M11: Pass email metadata for email-as-node modeling
@@ -852,7 +847,7 @@ def _stage_index(ctx: _PipelineContext) -> None:
         )
     )
 
-    logger.info("task.neo4j_indexed", job_id=ctx.job_id, entities=len(ctx.all_entities))
+    logger.info("task.neo4j_indexed", entities=len(ctx.all_entities))
 
 
 def _stage_complete(ctx: _PipelineContext) -> None:
@@ -886,9 +881,9 @@ def _stage_complete(ctx: _PipelineContext) -> None:
                 "subject": ctx.parse_result.metadata.get("subject", ""),
             }
             EmailThreader.assign_thread(ctx.engine, doc_id, email_headers, ctx.matter_id)
-            logger.info("task.threading_complete", job_id=ctx.job_id, doc_id=doc_id)
+            logger.info("task.threading_complete", doc_id=doc_id)
         except Exception:
-            logger.warning("task.threading_failed", job_id=ctx.job_id, exc_info=True)
+            logger.warning("task.threading_failed", exc_info=True)
 
     # Acceptable degradation: communication pair computation is incremental
     # post-processing for the analytics module.
@@ -902,18 +897,18 @@ def _stage_complete(ctx: _PipelineContext) -> None:
                     await AnalyticsService.compute_communication_pairs(db, ctx.matter_id)
 
             asyncio.run(_compute_pairs())
-            logger.info("task.comm_pairs_updated", job_id=ctx.job_id, doc_id=doc_id)
+            logger.info("task.comm_pairs_updated", doc_id=doc_id)
         except Exception:
-            logger.warning("task.comm_pairs_failed", job_id=ctx.job_id, exc_info=True)
+            logger.warning("task.comm_pairs_failed", exc_info=True)
 
     # Acceptable degradation: near-duplicate detection is a fire-and-forget
     # async task dispatch.  Failure to dispatch does not affect the document.
     if ctx.settings.enable_near_duplicate_detection:
         try:
             detect_duplicates.delay(doc_id, ctx.parse_result.text, ctx.matter_id or "")
-            logger.info("task.dedup_dispatched", job_id=ctx.job_id, doc_id=doc_id)
+            logger.info("task.dedup_dispatched", doc_id=doc_id)
         except Exception:
-            logger.warning("task.dedup_dispatch_failed", job_id=ctx.job_id, exc_info=True)
+            logger.warning("task.dedup_dispatch_failed", exc_info=True)
 
     # Acceptable degradation: hot document detection is a fire-and-forget
     # async task dispatch (feature-flagged).
@@ -922,9 +917,9 @@ def _stage_complete(ctx: _PipelineContext) -> None:
             from app.analysis.tasks import scan_document_sentiment
 
             scan_document_sentiment.delay(doc_id, ctx.matter_id or "")
-            logger.info("task.hot_doc_dispatched", job_id=ctx.job_id, doc_id=doc_id)
+            logger.info("task.hot_doc_dispatched", doc_id=doc_id)
         except Exception:
-            logger.warning("task.hot_doc_dispatch_failed", job_id=ctx.job_id, exc_info=True)
+            logger.warning("task.hot_doc_dispatch_failed", exc_info=True)
 
     _update_stage(
         ctx.engine,
@@ -936,7 +931,6 @@ def _stage_complete(ctx: _PipelineContext) -> None:
 
     logger.info(
         "task.complete",
-        job_id=ctx.job_id,
         pages=ctx.parse_result.page_count,
         chunks=len(ctx.chunks),
         entities=len(ctx.all_entities),
@@ -1068,6 +1062,7 @@ def process_zip(self, job_id: str, minio_path: str) -> dict:
     settings = Settings()
     engine = _get_sync_engine()
     zip_matter_id = _get_job_matter_id(engine, job_id)
+    structlog.contextvars.bind_contextvars(matter_id=zip_matter_id)
 
     try:
         _update_stage(engine, job_id, "parsing", "uploading")
@@ -1088,7 +1083,6 @@ def process_zip(self, job_id: str, minio_path: str) -> dict:
                         if Path(member).suffix.lower() == ".zip" and not member.endswith("/"):
                             logger.warning(
                                 "task.zip.nested_zip_skipped",
-                                job_id=job_id,
                                 member=member,
                             )
                         continue
@@ -1119,7 +1113,6 @@ def process_zip(self, job_id: str, minio_path: str) -> dict:
 
         logger.info(
             "task.zip.complete",
-            job_id=job_id,
             children=len(child_jobs),
         )
 
@@ -1130,14 +1123,14 @@ def process_zip(self, job_id: str, minio_path: str) -> dict:
         }
 
     except Exception as exc:
-        logger.error("task.zip.failed", job_id=job_id, error=str(exc))
+        logger.error("task.zip.failed", error=str(exc))
 
         # Acceptable degradation: if updating the job status itself fails,
         # the original error is still raised/retried below.
         try:
             _update_stage(engine, job_id, "failed", "failed", error=str(exc))
         except Exception:
-            logger.error("task.zip.failed_to_update_status", job_id=job_id, exc_info=True)
+            logger.error("task.zip.failed_to_update_status", exc_info=True)
 
         if self.request.retries < self.max_retries:
             raise self.retry(exc=exc)
@@ -1183,10 +1176,11 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
     engine = _get_sync_engine()
     filename = minio_path.rsplit("/", 1)[-1]
 
-    logger.info("task.start", job_id=job_id, minio_path=minio_path, filename=filename)
+    logger.info("task.start", minio_path=minio_path, filename=filename)
 
     # Read matter_id from the job record (set by the API router at ingest time)
     matter_id = _get_job_matter_id(engine, job_id)
+    structlog.contextvars.bind_contextvars(matter_id=matter_id)
 
     # Detect ZIP files — delegate to process_zip
     ext = Path(filename).suffix.lower()
@@ -1215,7 +1209,7 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
     try:
         for stage_fn in stages:
             if _is_job_cancelled(engine, job_id):
-                logger.warning("task.cancelled_during_processing", job_id=job_id)
+                logger.warning("task.cancelled_during_processing")
                 return {"job_id": job_id, "status": "cancelled"}
             stage_fn(ctx)
 
@@ -1229,14 +1223,14 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
 
     except Exception as exc:
         tb = traceback.format_exc()
-        logger.error("task.failed", job_id=job_id, error=str(exc), traceback=tb)
+        logger.error("task.failed", error=str(exc), traceback=tb)
 
         # Acceptable degradation: if updating the job status itself fails,
         # the original error is still raised/retried below.
         try:
             _update_stage(engine, job_id, "failed", "failed", error=str(exc))
         except Exception:
-            logger.error("task.failed_to_update_status", job_id=job_id, exc_info=True)
+            logger.error("task.failed_to_update_status", exc_info=True)
 
         # Let Celery retry on transient errors
         if self.request.retries < self.max_retries:
@@ -1282,7 +1276,7 @@ def import_text_document(
     and indexing stages from ``process_document``.
     """
     structlog.contextvars.clear_contextvars()
-    structlog.contextvars.bind_contextvars(task_id=self.request.id, job_id=job_id)
+    structlog.contextvars.bind_contextvars(task_id=self.request.id, job_id=job_id, matter_id=matter_id)
 
     from app.config import Settings
 
@@ -1291,7 +1285,6 @@ def import_text_document(
 
     logger.info(
         "task.import_text.start",
-        job_id=job_id,
         filename=filename,
         text_length=len(text),
     )
@@ -1306,7 +1299,7 @@ def import_text_document(
         _upload_to_minio(settings, minio_path, text.encode("utf-8"), "text/plain")
         file_size = len(text.encode("utf-8"))
 
-        logger.info("task.import_text.uploaded", job_id=job_id, minio_path=minio_path)
+        logger.info("task.import_text.uploaded", minio_path=minio_path)
 
         # ---------------------------------------------------------------
         # Stage 2: CHUNKING
@@ -1326,7 +1319,7 @@ def import_text_document(
             document_type=doc_type,
         )
 
-        logger.info("task.import_text.chunked", job_id=job_id, chunk_count=len(chunks))
+        logger.info("task.import_text.chunked", chunk_count=len(chunks))
 
         progress: dict[str, Any] = {"chunks_created": len(chunks)}
         _update_stage(engine, job_id, "embedding", "uploading", progress=progress)
@@ -1348,7 +1341,7 @@ def import_text_document(
             sparse_emb = SparseEmbedder(model_name=settings.sparse_embedding_model)
             sparse_embeddings = sparse_emb.embed_texts(chunk_texts)
 
-        logger.info("task.import_text.embedded", job_id=job_id, count=len(embeddings))
+        logger.info("task.import_text.embedded", count=len(embeddings))
 
         progress["embeddings_generated"] = len(embeddings)
         _update_stage(engine, job_id, "extracting", "uploading", progress=progress)
@@ -1382,7 +1375,6 @@ def import_text_document(
 
         logger.info(
             "task.import_text.entities",
-            job_id=job_id,
             entity_count=len(all_entities),
         )
 
@@ -1440,7 +1432,7 @@ def import_text_document(
             from app.common.vector_store import TEXT_COLLECTION
 
             qdrant.upsert(collection_name=TEXT_COLLECTION, points=points)
-            logger.info("task.import_text.qdrant_indexed", job_id=job_id, points=len(points))
+            logger.info("task.import_text.qdrant_indexed", points=len(points))
 
         asyncio.run(
             _index_to_neo4j(
@@ -1490,18 +1482,18 @@ def import_text_document(
                 from app.ingestion.threading import EmailThreader
 
                 EmailThreader.assign_thread(engine, doc_id, email_headers, matter_id)
-                logger.info("task.import_text.threading_complete", job_id=job_id)
+                logger.info("task.import_text.threading_complete")
             except Exception:
-                logger.warning("task.import_text.threading_failed", job_id=job_id, exc_info=True)
+                logger.warning("task.import_text.threading_failed", exc_info=True)
 
         # Acceptable degradation: near-duplicate detection is a fire-and-forget
         # async task dispatch.
         if settings.enable_near_duplicate_detection:
             try:
                 detect_duplicates.delay(doc_id, text, matter_id or "")
-                logger.info("task.import_text.dedup_dispatched", job_id=job_id)
+                logger.info("task.import_text.dedup_dispatched")
             except Exception:
-                logger.warning("task.import_text.dedup_dispatch_failed", job_id=job_id, exc_info=True)
+                logger.warning("task.import_text.dedup_dispatch_failed", exc_info=True)
 
         # Acceptable degradation: hot document detection is a fire-and-forget
         # async task dispatch (feature-flagged).
@@ -1510,9 +1502,9 @@ def import_text_document(
                 from app.analysis.tasks import scan_document_sentiment
 
                 scan_document_sentiment.delay(doc_id, matter_id or "")
-                logger.info("task.import_text.hot_doc_dispatched", job_id=job_id, doc_id=doc_id)
+                logger.info("task.import_text.hot_doc_dispatched", doc_id=doc_id)
             except Exception:
-                logger.warning("task.import_text.hot_doc_dispatch_failed", job_id=job_id, exc_info=True)
+                logger.warning("task.import_text.hot_doc_dispatch_failed", exc_info=True)
 
         # Increment bulk_import_jobs counter
         if bulk_import_job_id:
@@ -1534,7 +1526,6 @@ def import_text_document(
 
         logger.info(
             "task.import_text.complete",
-            job_id=job_id,
             chunks=len(chunks),
             entities=len(all_entities),
         )
@@ -1549,14 +1540,14 @@ def import_text_document(
 
     except Exception as exc:
         tb = traceback.format_exc()
-        logger.error("task.import_text.failed", job_id=job_id, error=str(exc), traceback=tb)
+        logger.error("task.import_text.failed", error=str(exc), traceback=tb)
 
         # Acceptable degradation: if updating the job status itself fails,
         # the original error is still raised/retried below.
         try:
             _update_stage(engine, job_id, "failed", "failed", error=str(exc))
         except Exception:
-            logger.error("task.import_text.failed_to_update_status", job_id=job_id, exc_info=True)
+            logger.error("task.import_text.failed_to_update_status", exc_info=True)
 
         # Acceptable degradation: if updating the bulk import counter fails,
         # the individual job error is still raised/retried below.
@@ -1576,7 +1567,7 @@ def import_text_document(
                     )
                     conn.commit()
             except Exception:
-                logger.error("task.import_text.failed_to_update_bulk_job", job_id=job_id, exc_info=True)
+                logger.error("task.import_text.failed_to_update_bulk_job", exc_info=True)
 
         if self.request.retries < self.max_retries:
             raise self.retry(exc=exc)
@@ -1619,7 +1610,7 @@ def detect_duplicates(self, doc_id: str, text: str, matter_id: str) -> dict:
     cluster IDs and detects version groups.
     """
     structlog.contextvars.clear_contextvars()
-    structlog.contextvars.bind_contextvars(task_id=self.request.id, doc_id=doc_id)
+    structlog.contextvars.bind_contextvars(task_id=self.request.id, doc_id=doc_id, matter_id=matter_id)
 
     from app.config import Settings
 
@@ -1667,7 +1658,6 @@ def detect_duplicates(self, doc_id: str, text: str, matter_id: str) -> dict:
 
         logger.info(
             "task.detect_duplicates.complete",
-            doc_id=doc_id,
             match_count=len(matches),
             cluster_id=cluster_id,
             version_group_id=version_group_id,
@@ -1682,7 +1672,7 @@ def detect_duplicates(self, doc_id: str, text: str, matter_id: str) -> dict:
         }
 
     except Exception as exc:
-        logger.error("task.detect_duplicates.failed", doc_id=doc_id, error=str(exc))
+        logger.error("task.detect_duplicates.failed", error=str(exc))
         if self.request.retries < self.max_retries:
             raise self.retry(exc=exc)
         raise

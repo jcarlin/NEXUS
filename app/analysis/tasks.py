@@ -74,7 +74,7 @@ def scan_document_sentiment(self, doc_id: str, matter_id: str = "") -> dict:
         )
 
         if not points:
-            logger.warning("analysis.sentiment.no_chunks", doc_id=doc_id)
+            logger.warning("analysis.sentiment.no_chunks")
             return {"doc_id": doc_id, "status": "skipped", "reason": "no_chunks"}
 
         # Sort by chunk_index and concatenate
@@ -175,11 +175,7 @@ def scan_document_sentiment(self, doc_id: str, matter_id: str = "") -> dict:
                 if baseline.message_count >= 3:
                     anomaly_result = CommunicationBaseline.compute_anomaly_score(result.sentiment, baseline)
             except Exception:
-                logger.warning(
-                    "analysis.anomaly.skipped",
-                    doc_id=doc_id,
-                    exc_info=True,
-                )
+                logger.warning("analysis.anomaly.skipped", exc_info=True)
 
         # -----------------------------------------------------------------
         # 5. Persist to PostgreSQL
@@ -253,7 +249,7 @@ def scan_document_sentiment(self, doc_id: str, matter_id: str = "") -> dict:
         }
 
     except Exception as exc:
-        logger.error("analysis.sentiment.failed", doc_id=doc_id, error=str(exc), exc_info=True)
+        logger.error("analysis.sentiment.failed", error=str(exc), exc_info=True)
         raise self.retry(exc=exc)
 
 

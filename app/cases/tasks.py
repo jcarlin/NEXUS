@@ -180,7 +180,7 @@ def run_case_setup(
     settings = Settings()
     engine = _get_sync_engine()
 
-    logger.info("case_setup.start", job_id=job_id, minio_path=minio_path)
+    logger.info("case_setup.start", minio_path=minio_path)
 
     try:
         _update_stage(engine, job_id, "parsing", "uploading")
@@ -231,7 +231,6 @@ def run_case_setup(
 
         logger.info(
             "case_setup.complete",
-            job_id=job_id,
             claims=len(final_state.get("claims", [])),
             parties=len(final_state.get("parties", [])),
             terms=len(final_state.get("defined_terms", [])),
@@ -250,13 +249,13 @@ def run_case_setup(
 
     except Exception as exc:
         tb = traceback.format_exc()
-        logger.error("case_setup.failed", job_id=job_id, error=str(exc), traceback=tb)
+        logger.error("case_setup.failed", error=str(exc), traceback=tb)
 
         try:
             _update_stage(engine, job_id, "failed", "failed", error=str(exc))
             _update_case_context_status(engine, case_context_id, "failed")
         except Exception:
-            logger.error("case_setup.failed_to_update_status", job_id=job_id)
+            logger.error("case_setup.failed_to_update_status")
 
         if self.request.retries < self.max_retries:
             raise self.retry(exc=exc)
