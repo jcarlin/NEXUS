@@ -50,3 +50,28 @@ class TimelineEvent(BaseModel):
 
 class EntityListResponse(PaginatedResponse[EntityResponse]):
     """Paginated list of entities."""
+
+
+class CommunicationPairRecord(BaseModel):
+    email_id: str
+    subject: str | None = None
+    date: str | None = None
+    message_id: str | None = None
+
+
+class CommunicationPairsResponse(BaseModel):
+    person_a: str
+    person_b: str
+    emails: list[CommunicationPairRecord] = Field(default_factory=list)
+    total: int = 0
+
+
+class ReportingChainResponse(BaseModel):
+    person: str
+    chains: list[dict] = Field(default_factory=list)
+
+
+class PathResponse(BaseModel):
+    entity_a: str
+    entity_b: str
+    paths: list[dict] = Field(default_factory=list)

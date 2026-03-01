@@ -122,3 +122,40 @@ def resolve_entities(self, entity_type: str | None = None) -> dict:
         if self.request.retries < self.max_retries:
             raise self.retry(exc=exc)
         raise
+
+
+@shared_task(
+    bind=True,
+    name="agents.entity_resolution_agent",
+    max_retries=1,
+    default_retry_delay=60,
+    acks_late=True,
+)
+def entity_resolution_agent(self, matter_id: str) -> dict:
+    """Run the LangGraph entity resolution pipeline.
+
+    Enhanced version of ``resolve_entities`` that also infers org hierarchy,
+    links defined terms, and flags uncertain merges for review.
+
+    Parameters
+    ----------
+    matter_id:
+        The matter to resolve entities for.
+
+    Returns
+    -------
+    Dict with pipeline summary (merges, hierarchy edges, linked terms, etc.).
+    """
+    logger.info("task.entity_resolution_agent.start", matter_id=matter_id)
+
+    try:
+        from app.entities.resolution_agent import run_resolution_agent
+
+        result = asyncio.run(run_resolution_agent(matter_id))
+        logger.info("task.entity_resolution_agent.complete", **result)
+        return result
+    except Exception as exc:
+        logger.error("task.entity_resolution_agent.failed", error=str(exc))
+        if self.request.retries < self.max_retries:
+            raise self.retry(exc=exc)
+        raise

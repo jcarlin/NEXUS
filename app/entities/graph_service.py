@@ -1086,6 +1086,46 @@ class GraphService:
             logger.error("graph.entities_by_names.failed", count=len(names))
             raise
 
+    async def mark_pending_merge(
+        self,
+        entity_name: str,
+        entity_type: str,
+        merge_candidates: list[dict],
+        matter_id: str | None = None,
+    ) -> None:
+        """Flag an entity for manual merge review.
+
+        Sets ``pending_merge = true`` and stores the candidate list as a
+        JSON-encoded property on the Entity node.
+        """
+        import json as _json
+
+        query = """
+        MATCH (e:Entity {name: $name, type: $entity_type})
+        SET e.pending_merge = true,
+            e.merge_candidates = $candidates
+        """
+        try:
+            await self._run_write(
+                query,
+                {
+                    "name": entity_name,
+                    "entity_type": entity_type,
+                    "candidates": _json.dumps(merge_candidates),
+                },
+            )
+            logger.info(
+                "graph.entity.marked_pending_merge",
+                entity=entity_name,
+                candidates=len(merge_candidates),
+            )
+        except Exception:
+            logger.error(
+                "graph.entity.mark_pending_merge_failed",
+                entity=entity_name,
+            )
+            raise
+
     # ------------------------------------------------------------------
     # Graph statistics
     # ------------------------------------------------------------------

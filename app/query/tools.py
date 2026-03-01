@@ -397,12 +397,15 @@ async def context_gap_search(
 @tool
 async def communication_matrix(
     entity_name: str | None = None,
+    person_b: str | None = None,
     state: Annotated[dict, InjectedState] = {},  # noqa: B006
 ) -> str:
     """Analyze communication patterns between entities.
 
     Returns sender-recipient pairs with message counts. Optionally filter
-    to communications involving a specific entity.
+    to communications involving a specific entity. When both entity_name
+    and person_b are provided, also returns graph-level email details
+    between the two people.
     """
     from app.analytics.service import AnalyticsService
     from app.dependencies import get_db
@@ -418,7 +421,21 @@ async def communication_matrix(
             matter_id,
             entity_name=entity_name,
         )
-        return json.dumps(result.model_dump(), default=str)
+        output = result.model_dump()
+
+        # When both persons specified, enrich with graph-level email detail
+        if entity_name and person_b:
+            from app.dependencies import get_graph_service
+
+            gs = get_graph_service()
+            emails = await gs.get_communication_pairs(
+                entity_name,
+                person_b,
+                matter_id=matter_id,
+            )
+            output["graph_emails"] = emails
+
+        return json.dumps(output, default=str)
     finally:
         try:
             await db_gen.aclose()

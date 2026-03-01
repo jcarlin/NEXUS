@@ -125,3 +125,64 @@ async def graph_stats(
     """Return high-level graph statistics (node and edge counts)."""
     stats = await gs.get_graph_stats()
     return stats
+
+
+@router.get("/graph/communication-pairs")
+async def communication_pairs(
+    person_a: str = Query(..., description="First person name"),
+    person_b: str = Query(..., description="Second person name"),
+    date_from: str | None = Query(None, description="Start date filter (YYYY-MM-DD)"),
+    date_to: str | None = Query(None, description="End date filter (YYYY-MM-DD)"),
+    gs: GraphService = Depends(get_graph_service),
+    current_user: UserRecord = Depends(get_current_user),
+    matter_id: UUID = Depends(get_matter_id),
+):
+    """Return emails exchanged between two people."""
+    emails = await gs.get_communication_pairs(
+        person_a,
+        person_b,
+        date_from,
+        date_to,
+        matter_id=str(matter_id),
+    )
+    return {
+        "person_a": person_a,
+        "person_b": person_b,
+        "emails": emails,
+        "total": len(emails),
+    }
+
+
+@router.get("/graph/reporting-chain/{person}")
+async def reporting_chain(
+    person: str,
+    date: str | None = Query(None, description="Point-in-time filter (YYYY-MM-DD)"),
+    gs: GraphService = Depends(get_graph_service),
+    current_user: UserRecord = Depends(get_current_user),
+    matter_id: UUID = Depends(get_matter_id),
+):
+    """Return the REPORTS_TO chain for a person."""
+    chains = await gs.get_reporting_chain(person, date, matter_id=str(matter_id))
+    return {"person": person, "chains": chains}
+
+
+@router.get("/graph/path")
+async def graph_path(
+    entity_a: str = Query(..., description="Start entity name"),
+    entity_b: str = Query(..., description="End entity name"),
+    max_hops: int = Query(5, ge=1, le=10, description="Maximum path length"),
+    relationship_types: str | None = Query(None, description="Comma-separated relationship types"),
+    gs: GraphService = Depends(get_graph_service),
+    current_user: UserRecord = Depends(get_current_user),
+    matter_id: UUID = Depends(get_matter_id),
+):
+    """Find shortest path between two entities."""
+    rel_types = [t.strip() for t in relationship_types.split(",")] if relationship_types else None
+    paths = await gs.find_path(
+        entity_a,
+        entity_b,
+        max_hops,
+        rel_types,
+        matter_id=str(matter_id),
+    )
+    return {"entity_a": entity_a, "entity_b": entity_b, "paths": paths}

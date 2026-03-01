@@ -28,7 +28,7 @@
 | M10 | Agentic Query Pipeline | ⚡ Orchestrator, Citation Verifier | Done | 20 | Regression + eval non-regression | 2.5 weeks | M8, M9, M9b |
 | M10b | Sentiment + Hot Doc Detection | ⚡ Hot Doc, Completeness | Done | 12 | Regression + eval non-regression | 1.5 weeks | M10 |
 | M10c | Communication Analytics | — | Done | 10 | Regression | 1 week | M10, M11 |
-| M11 | Knowledge Graph Enhancement | ⚡ Entity Resolution | **Prep Done** | 28 | Regression + eval non-regression | 2.5 weeks | M10 |
+| M11 | Knowledge Graph Enhancement | ⚡ Entity Resolution | Done | 28 | Regression + eval non-regression | 2.5 weeks | M10 |
 | M12 | Bulk Import + EDRM | — | Done | 11 | Regression + migration | 2 weeks | M6, M6b, M8 (parallel w/ M10-11) |
 | M13 | React Frontend | — | TODO | 12+ | Frontend CI + backend regression | 3.5 weeks | M6, M7, M10, M10b, M10c, M9b |
 | M14 | Annotations + Export + EDRM | — | TODO | 10 | Regression + migration | 2.5 weeks | M13 |
@@ -531,16 +531,17 @@ If a metric regresses beyond the threshold, the milestone must either fix the re
 - [x] `GraphService.get_entities_by_names()` — batch fetch for Qdrant↔Neo4j cross-reference
 - [x] Coreference resolution module: `CoreferenceResolver` (spaCy + coreferee), feature-flagged `ENABLE_COREFERENCE_RESOLUTION`
 - [x] Neo4j GDS centrality: `compute_centrality()` — degree/pagerank/betweenness per matter (feature-flagged `ENABLE_GRAPH_CENTRALITY`)
-- [ ] Entity Resolution Agent: LangGraph agent — `extract → deduplicate → resolve_coreferences → merge → infer_hierarchy → link_defined_terms → present_uncertain` (post-M10)
-- [ ] Router + schema updates: `/graph/communication-pairs`, `/graph/reporting-chain/{person}`, `/graph/path` endpoints (post-M10)
-- [ ] Query tool integration: replace stub `communication_matrix` tool with real GraphService calls (post-M10)
+- [x] Entity Resolution Agent: LangGraph deterministic pipeline — `extract → deduplicate → resolve_coreferences → merge → infer_hierarchy → link_defined_terms → present_uncertain` in `app/entities/resolution_agent.py`
+- [x] Router + schema updates: `/graph/communication-pairs`, `/graph/reporting-chain/{person}`, `/graph/path` endpoints + `CommunicationPairsResponse`, `ReportingChainResponse`, `PathResponse` schemas
+- [x] Query tool integration: `communication_matrix` tool enhanced with `person_b` param for graph-level email detail via `GraphService.get_communication_pairs()`
 
-**Testing (28 tests — 23 prep + 5 remaining):**
-- Unit (done): 9 core node types validation (1), entity type mapping (1), dual-label creation (3), email-as-node SENT/SENT_TO/CC/BCC (1), email parsing (4), temporal relationships + validation (2), communication pairs (1), reporting chain (1), find_path (1), topic/discusses (2), alias_of (2), batch entity lookup (2), union-find (3), merge groups (2), coreference (1)
-- Remaining: Entity Resolution Agent flow (3), router endpoints (2)
+**Testing (28 tests — all passing):**
+- Unit: 9 core node types validation (1), entity type mapping (1), dual-label creation (3), email-as-node SENT/SENT_TO/CC/BCC (1), email parsing (4), temporal relationships + validation (2), communication pairs (1), reporting chain (1), find_path (1), topic/discusses (2), alias_of (2), batch entity lookup (2), union-find (3), merge groups (2), coreference (1)
+- Resolution Agent: full pipeline flow (1), uncertain merge flagging (1), Celery task wrapper (1)
+- Router: communication-pairs endpoint (1), reporting-chain endpoint (1)
 - Gate: regression + eval non-regression (no metric regresses > 0.05 vs M9 baseline) + existing resolver tests pass
 
-**Key files:** `app/entities/graph_service.py`, `app/entities/resolver.py`, `app/entities/schema.py`, `app/entities/coreference.py`
+**Key files:** `app/entities/graph_service.py`, `app/entities/resolver.py`, `app/entities/schema.py`, `app/entities/coreference.py`, `app/entities/resolution_agent.py`
 
 **Neo4j Schema (target state):**
 - Node types: `:Person`, `:Organization`, `:Department`, `:Role`, `:Email`, `:Document`, `:Event`, `:Allegation`, `:Topic`
@@ -582,29 +583,208 @@ See `docs/M6-BULK-IMPORT.md` for full spec.
 ### M13: React Frontend (3.5 weeks)
 *Replace Streamlit prototype. Depends on M6 (auth), M7 (privilege UI), M10 (agentic query), M10b (sentiment), M10c (analytics), M9b (case context).*
 
-- [ ] Vite + React + TypeScript + Tailwind + shadcn/ui
-- [ ] Auth flow: login page, JWT management, role-aware navigation
-- [ ] Matter selector: users see only their assigned case matters
-- [ ] Dashboard: corpus stats, recent activity, pipeline status
-- [ ] Document list with filters (type, date range, privilege status, full-text search)
-- [ ] Document detail page with PDF viewer (react-pdf)
-- [ ] "Ask the Evidence" chat panel: SSE streaming, citations with document links, follow-up buttons
-- [ ] Entity browser: search, detail page with connections and document mentions
-- [ ] Case setup wizard: upload Complaint, review/edit Case Setup Agent's extracted claims/parties/terms (M9b)
-- [ ] Defined terms sidebar: case-specific glossary auto-populated from case context + knowledge graph ALIAS_OF edges, editable by lawyer
-- [ ] Investigation session UI: persistent sidebar showing accumulated findings across query chain within a session
-- [ ] Result set browser: for Q6/Q7/Q8 queries — browsable, filterable, sortable document list with dedup indicators, sentiment scores, context gap scores, pagination, bulk export
-- [ ] Communication matrix heatmap: interactive NxN grid of sender-recipient volumes (from M10c)
-- [ ] Network graph visualization: D3/vis.js force-directed graph of entity relationships with clickable nodes
-- [ ] Timeline view: chronological event/communication timeline with entity and topic filters
-- [ ] Hot document queue: ranked list of flagged documents from sentiment analysis (from M10b)
-- [ ] Org chart editor: visual hierarchy that lawyer can confirm/edit (from M10c inference or manual import)
+#### Tech Stack
 
-**Testing (12+ frontend tests):**
-- Framework: Vitest + React Testing Library + Playwright
-- Unit: auth context — login/logout/token refresh (3), matter selector — only assigned matters shown (1), chat panel — SSE streaming and citation rendering (2), document list — filter/sort/pagination (1), citation component — link to source with page (1), case setup wizard — upload + review flow (1), result set browser — dedup/sentiment columns (1)
-- E2E (Playwright): login flow (1), query with citation click-through (1)
-- Gate: `npm test` exits 0 + backend `pytest tests/ -v` regression passes
+| Concern | Choice | Notes |
+|---|---|---|
+| Build / Dev Server | Vite + React 19 + TypeScript 5.x | SPA — static build, no Node.js runtime in prod |
+| Styling | Tailwind CSS 4 + shadcn/ui | Utility-first + accessible component primitives |
+| Routing | TanStack Router | Type-safe route params and search params; URL-driven filter/pagination state |
+| Server State | TanStack Query v5 | Cache, refetch, optimistic updates, infinite scroll pagination |
+| Client State | React Context + useReducer | Auth (JWT + user + role), selected matter, UI toggles — lightweight, no external store |
+| API Client | orval | Generates TanStack Query hooks + request/response types from FastAPI's `/openapi.json`; `npm run generate-api` script |
+| Forms | React Hook Form + Zod | Login, case setup wizard, filter panels, privilege tagging, annotation creation |
+| SSE Streaming | @microsoft/fetch-event-source | Supports POST + auth headers (native EventSource does not); wrapped in custom `useStreamQuery` hook |
+| Data Tables | TanStack Table (headless) + shadcn/ui table | Document list, result set browser, audit log, hot doc queue |
+| PDF Viewer | react-pdf | Document detail page, page-level citation click-through |
+| Graph Visualization | D3.js (force-directed) | Entity relationship network, clickable nodes, zoom/pan |
+| Date/Time | date-fns | Tree-shakeable, immutable, well-typed |
+| Testing | Vitest + React Testing Library + Playwright | Unit/component + E2E |
+
+#### API Contract Workflow
+
+- FastAPI auto-generates OpenAPI 3.1 spec at `/openapi.json`
+- orval reads the spec and generates:
+  - TypeScript interfaces for every request/response schema
+  - TanStack Query hooks for every endpoint (`useGetDocuments`, `usePostQuery`, `useGetEntities`, etc.)
+  - Axios or fetch instance with base URL and interceptors (JWT auth header, 401 redirect)
+- Regeneration: `npm run generate-api` pulls latest spec from running backend (or checked-in `openapi.json` snapshot)
+- CI gate: generated code must be up-to-date with spec (diff check in CI)
+
+#### Project Structure
+
+```
+frontend/
+├── index.html
+├── package.json
+├── vite.config.ts
+├── tsconfig.json
+├── orval.config.ts                        # OpenAPI → TanStack Query hook generation
+├── tailwind.config.ts
+├── components.json                        # shadcn/ui config
+├── public/
+├── src/
+│   ├── main.tsx                           # App entry, provider tree (QueryClient, Router, AuthContext)
+│   ├── routes/                            # TanStack Router route definitions
+│   │   ├── __root.tsx                     # Root layout: sidebar nav, matter selector, auth guard
+│   │   ├── login.tsx
+│   │   ├── index.tsx                      # Dashboard
+│   │   ├── documents/
+│   │   │   ├── index.tsx                  # Document list (filterable, paginated)
+│   │   │   └── $documentId.tsx            # Document detail + PDF viewer
+│   │   ├── chat/
+│   │   │   ├── index.tsx                  # New chat
+│   │   │   └── $threadId.tsx              # Existing chat thread
+│   │   ├── entities/
+│   │   │   ├── index.tsx                  # Entity browser
+│   │   │   └── $entityId.tsx              # Entity detail + connections
+│   │   ├── case-setup.tsx                 # Case setup wizard
+│   │   ├── analytics/
+│   │   │   ├── communication.tsx          # Communication matrix heatmap
+│   │   │   ├── network.tsx                # Force-directed entity graph
+│   │   │   └── timeline.tsx               # Chronological timeline
+│   │   ├── review/
+│   │   │   ├── hot-docs.tsx               # Hot document queue
+│   │   │   └── result-set.tsx             # Result set browser
+│   │   └── admin/
+│   │       ├── users.tsx                  # User management (admin-only)
+│   │       └── audit-log.tsx              # Audit log viewer (admin-only)
+│   ├── api/                               # orval-generated hooks + custom fetch instance
+│   │   ├── client.ts                      # Configured fetch/axios with JWT interceptor
+│   │   └── generated/                     # Auto-generated by orval (do not edit)
+│   ├── hooks/
+│   │   ├── use-auth.ts                    # Auth context hook (login, logout, refresh, role checks)
+│   │   ├── use-matter.ts                  # Selected matter context
+│   │   └── use-stream-query.ts            # SSE streaming hook (fetch-event-source wrapper)
+│   ├── components/
+│   │   ├── ui/                            # shadcn/ui primitives (button, dialog, input, etc.)
+│   │   ├── layout/
+│   │   │   ├── sidebar.tsx                # Main nav sidebar, role-aware links
+│   │   │   ├── header.tsx                 # Top bar: matter selector, user menu
+│   │   │   └── auth-guard.tsx             # Redirect to login if no valid JWT
+│   │   ├── chat/
+│   │   │   ├── chat-panel.tsx             # SSE streaming, message list, input
+│   │   │   ├── citation.tsx               # Clickable citation → document page
+│   │   │   └── findings-sidebar.tsx       # Accumulated investigation findings
+│   │   ├── documents/
+│   │   │   ├── document-table.tsx         # TanStack Table: filters, sort, pagination
+│   │   │   ├── pdf-viewer.tsx             # react-pdf wrapper with page navigation
+│   │   │   └── privilege-badge.tsx        # Privilege status indicator
+│   │   ├── entities/
+│   │   │   ├── entity-table.tsx           # Entity list with search
+│   │   │   └── connection-graph.tsx       # D3 force-directed graph
+│   │   ├── analytics/
+│   │   │   ├── comm-matrix.tsx            # NxN heatmap (D3 or custom SVG)
+│   │   │   ├── timeline.tsx               # Chronological event timeline
+│   │   │   └── org-chart.tsx              # Editable org hierarchy
+│   │   ├── case-setup/
+│   │   │   ├── upload-step.tsx            # Complaint upload
+│   │   │   ├── review-step.tsx            # Review extracted claims/parties/terms
+│   │   │   └── terms-sidebar.tsx          # Defined terms glossary
+│   │   └── review/
+│   │       ├── hot-doc-queue.tsx           # Ranked flagged documents
+│   │       └── result-set-table.tsx        # Filterable result set with scores
+│   ├── lib/
+│   │   ├── auth.ts                        # JWT decode, token storage, refresh logic
+│   │   └── utils.ts                       # Shared utilities (cn(), formatDate, etc.)
+│   └── types/
+│       └── index.ts                       # App-level types not covered by orval generation
+├── e2e/                                   # Playwright E2E tests
+│   ├── login.spec.ts
+│   └── query-citation.spec.ts
+└── __tests__/                             # Vitest unit/component tests
+    ├── auth-context.test.tsx
+    ├── matter-selector.test.tsx
+    ├── chat-panel.test.tsx
+    ├── citation.test.tsx
+    ├── document-table.test.tsx
+    ├── case-setup-wizard.test.tsx
+    └── result-set-table.test.tsx
+```
+
+#### Feature Checklist
+
+**Scaffolding & Infrastructure:**
+- [ ] Vite + React + TypeScript project init with path aliases (`@/components`, `@/hooks`, etc.)
+- [ ] Tailwind CSS 4 + shadcn/ui setup (`components.json`, base primitives)
+- [ ] TanStack Router setup with route tree generation
+- [ ] TanStack Query provider with default stale/cache config
+- [ ] orval config: generate hooks from FastAPI `/openapi.json`, output to `src/api/generated/`
+- [ ] API client with JWT interceptor (attach `Authorization: Bearer` header, handle 401 → redirect to login)
+- [ ] Auth context: login, logout, token refresh, role-based access checks (`isAdmin`, `isAttorney`, etc.)
+- [ ] Matter context: selected matter persisted in localStorage, all API calls scoped by `matter_id`
+- [ ] Root layout: sidebar navigation (role-aware links), top bar (matter selector, user menu), auth guard
+
+**Core Pages:**
+- [ ] Login page: email/password form (React Hook Form + Zod validation), JWT storage, redirect to dashboard
+- [ ] Dashboard: corpus stats (document count, entity count, job status), recent activity feed, pipeline health
+- [ ] Matter selector: dropdown showing only user's assigned matters, persists selection
+
+**Document Management:**
+- [ ] Document list: TanStack Table with server-side pagination, filters (type, date range, privilege status, full-text search), sortable columns
+- [ ] Document detail: metadata panel, PDF viewer (react-pdf) with page navigation, chunk list with relevance scores
+- [ ] Document download: presigned URL via `/documents/{id}/download`
+- [ ] Privilege tagging: attorney+ role can update privilege status via `PATCH /documents/{id}/privilege`
+
+**Query & Chat:**
+- [ ] Chat panel: message input, SSE streaming via `useStreamQuery` hook (`@microsoft/fetch-event-source`), token-by-token rendering
+- [ ] Citation rendering: inline citations link to document detail page at specific page number
+- [ ] Chat thread management: list threads, load history, delete threads
+- [ ] Follow-up suggestions: clickable follow-up buttons from query response
+- [ ] Investigation session sidebar: accumulated findings across query chain within a session, persistent during navigation
+
+**Entity & Knowledge Graph:**
+- [ ] Entity browser: searchable list, type filters (PERSON, ORG, LOCATION, etc.), mention counts
+- [ ] Entity detail: metadata, document mentions with context snippets, connection list
+- [ ] Network graph: D3 force-directed graph of entity relationships, clickable nodes navigate to entity detail, edge labels show relationship type, zoom/pan controls
+- [ ] Defined terms sidebar: case-specific glossary from case context + knowledge graph ALIAS_OF edges, editable by lawyer
+
+**Case Intelligence:**
+- [ ] Case setup wizard: multi-step form (upload Complaint → trigger Case Setup Agent → review/edit extracted claims, parties, defined terms → confirm)
+- [ ] Claims viewer: list of extracted claims with source references, editable
+- [ ] Parties list: plaintiffs, defendants, third parties with role labels
+
+**Analytics & Visualization:**
+- [ ] Communication matrix heatmap: interactive NxN grid of sender-recipient email volumes (data from M10c `/analytics/communication-matrix`), click cell to see messages between pair
+- [ ] Timeline view: chronological event/communication timeline, filterable by entity and topic, zoomable date range
+- [ ] Org chart editor: visual hierarchy inferred from M10c, drag-to-rearrange, lawyer can confirm/edit reporting lines
+- [ ] Hot document queue: ranked list from sentiment analysis (M10b), sortable by sentiment score, clickable to document detail
+
+**Result Set Browser:**
+- [ ] Result set table: TanStack Table for Q6/Q7/Q8 result-set queries, columns for document title, dedup indicator, sentiment score, context gap score, date
+- [ ] Server-side pagination, sorting, filtering
+- [ ] Bulk export: select rows → export as CSV
+
+**Admin (admin role only):**
+- [ ] User management: list users, create user form, role assignment
+- [ ] Audit log viewer: filterable table (user, action, resource, date range), paginated
+
+#### Testing (12+ tests)
+
+**Framework:** Vitest + React Testing Library (unit/component) + Playwright (E2E)
+
+**Unit/Component (Vitest + RTL):**
+- Auth context: login stores JWT and user, logout clears state, token refresh updates token (3 tests)
+- Matter selector: renders only assigned matters, selection updates context (1 test)
+- Chat panel: renders SSE streamed tokens incrementally, displays citations with document links (2 tests)
+- Document table: renders columns, applies filters, handles pagination (1 test)
+- Citation component: renders link to correct document page (1 test)
+- Case setup wizard: upload step → review step flow, displays extracted claims/parties (1 test)
+- Result set table: renders dedup/sentiment columns, handles sort (1 test)
+
+**E2E (Playwright):**
+- Login flow: enter credentials → redirected to dashboard → sidebar visible (1 test)
+- Query with citation click-through: submit query → stream response → click citation → navigate to document at page (1 test)
+
+**Gate:** `npm test` exits 0 + backend `pytest tests/ -v` regression passes
+
+#### Key Decisions
+
+- **SPA, not SSR**: Every page is behind auth. No SEO requirements. Static build served from nginx or FastAPI `StaticFiles` mount. No Node.js runtime in prod.
+- **orval for API contract**: Single source of truth is FastAPI's OpenAPI spec. Frontend types are generated, never hand-written. Drift between backend and frontend is caught by CI diff check.
+- **URL-driven state**: Filter selections, pagination cursors, and sort orders live in URL search params via TanStack Router. Every view is bookmarkable and shareable.
+- **Matter scoping at the client layer**: Every API call includes `matter_id`. The matter selector sets this globally via context. Backend enforces scoping independently — client scoping is for UX, not security.
+- **No global state library**: Auth + matter context via React Context. All server data via TanStack Query cache. No Redux, no Zustand — complexity not justified for this app.
 
 **Key files:** New `frontend/` directory (React app, replaces Streamlit `frontend/app.py`)
 
