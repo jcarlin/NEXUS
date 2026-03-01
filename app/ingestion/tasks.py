@@ -18,6 +18,7 @@ import tempfile
 import traceback
 import uuid
 import zipfile
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -430,6 +431,614 @@ async def _extract_relationships(
 
 
 # ---------------------------------------------------------------------------
+# Pipeline context (shared mutable state for stage functions)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class _PipelineContext:
+    """Mutable state bag passed between pipeline stage functions.
+
+    Populated incrementally: ``settings``, ``engine``, ``job_id``,
+    ``minio_path``, ``filename``, and ``matter_id`` are set by the
+    orchestrator before calling any stage.  Each stage then populates the
+    remaining fields relevant to downstream stages.
+    """
+
+    # Set by orchestrator
+    settings: Any
+    engine: Any
+    job_id: str
+    minio_path: str
+    filename: str
+    matter_id: str | None
+
+    # Populated by _stage_parse
+    parse_result: Any = None
+    content_hash: str = ""
+    file_size: int = 0
+    doc_type: str = ""
+    document_type: str = ""
+    rendered_page_images: list[bytes] = field(default_factory=list)
+
+    # Populated by _stage_chunk
+    chunks: list[Any] = field(default_factory=list)
+
+    # Populated by _stage_embed
+    embeddings: list[list[float]] = field(default_factory=list)
+    sparse_embeddings: list[tuple[list[int], list[float]]] = field(default_factory=list)
+    visual_page_embeddings: list[dict[str, Any]] = field(default_factory=list)
+
+    # Populated by _stage_extract
+    all_entities: list[dict] = field(default_factory=list)
+    relationship_count: int = 0
+
+    # Populated by _stage_index
+    chunk_data_for_neo4j: list[dict] = field(default_factory=list)
+
+    # Progress dict shared across stages
+    progress: dict[str, Any] = field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
+# Pipeline stage functions
+# ---------------------------------------------------------------------------
+
+
+def _stage_parse(ctx: _PipelineContext) -> None:
+    """Stage 1: Download from MinIO, parse, handle email attachments, render pages."""
+    _update_stage(ctx.engine, ctx.job_id, "parsing", "uploading")
+
+    file_bytes = _download_from_minio(ctx.settings, ctx.minio_path)
+    ctx.content_hash = hashlib.sha256(file_bytes).hexdigest()[:16]
+    ctx.file_size = len(file_bytes)
+
+    logger.info("task.downloaded", job_id=ctx.job_id, size=ctx.file_size)
+
+    # Write to temp file for parser
+    suffix = Path(ctx.filename).suffix
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+        tmp.write(file_bytes)
+        tmp_path = Path(tmp.name)
+
+    try:
+        from app.ingestion.parser import DocumentParser
+
+        parser = DocumentParser()
+        ctx.parse_result = parser.parse(tmp_path, ctx.filename)
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+    # Free file bytes from memory
+    del file_bytes
+
+    logger.info(
+        "task.parsed",
+        job_id=ctx.job_id,
+        page_count=ctx.parse_result.page_count,
+        text_length=len(ctx.parse_result.text),
+    )
+
+    # Handle email attachments — spawn child jobs
+    attachment_data = ctx.parse_result.metadata.get("attachment_data", [])
+    if attachment_data:
+        for att in attachment_data:
+            att_filename = att["filename"]
+            att_minio_path = f"raw/{ctx.job_id}/{att_filename}"
+            _upload_to_minio(
+                ctx.settings,
+                att_minio_path,
+                att["data"],
+                content_type=att.get("content_type", "application/octet-stream"),
+            )
+            child_id = _create_child_job(ctx.engine, ctx.job_id, att_filename, att_minio_path, matter_id=ctx.matter_id)
+            process_document.delay(child_id, att_minio_path)
+            logger.info(
+                "task.email_attachment_dispatched",
+                parent_id=ctx.job_id,
+                child_id=child_id,
+                filename=att_filename,
+            )
+
+        # Strip binary attachment data from metadata before DB storage
+        ctx.parse_result.metadata.pop("attachment_data", None)
+
+    # Store page images in MinIO
+    ext = Path(ctx.filename).suffix.lower()
+    doc_id_for_pages = ctx.job_id
+    ctx.rendered_page_images = []
+
+    # Acceptable degradation: PDF page rendering is only needed for
+    # visual embeddings (ENABLE_VISUAL_EMBEDDINGS), which is experimental.
+    # Text-based indexing is the core pipeline and is unaffected.
+    if ctx.settings.enable_visual_embeddings and ext == ".pdf":
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as pdf_tmp:
+                pdf_tmp.write(_download_from_minio(ctx.settings, ctx.minio_path))
+                pdf_tmp_path = Path(pdf_tmp.name)
+            try:
+                ctx.rendered_page_images = _render_pdf_pages(str(pdf_tmp_path), dpi=ctx.settings.visual_page_dpi)
+                for page_num, img_bytes in enumerate(ctx.rendered_page_images, 1):
+                    page_key = f"pages/{doc_id_for_pages}/page_{page_num:03d}.png"
+                    _upload_to_minio(ctx.settings, page_key, img_bytes)
+                logger.info("task.pdf_pages_rendered", job_id=ctx.job_id, pages=len(ctx.rendered_page_images))
+            finally:
+                pdf_tmp_path.unlink(missing_ok=True)
+        except Exception:
+            logger.warning("task.pdf_page_rendering_failed", job_id=ctx.job_id, exc_info=True)
+            ctx.rendered_page_images = []
+    else:
+        # Fallback: store Docling-provided page images (if any)
+        for page in ctx.parse_result.pages:
+            for img_idx, img_bytes in enumerate(page.images):
+                if img_bytes:
+                    page_key = f"pages/{doc_id_for_pages}/page_{page.page_number:03d}_{img_idx}.png"
+                    _upload_to_minio(ctx.settings, page_key, img_bytes)
+
+    ctx.progress["pages_parsed"] = ctx.parse_result.page_count
+    _update_stage(ctx.engine, ctx.job_id, "chunking", "uploading", progress=ctx.progress)
+
+
+def _stage_chunk(ctx: _PipelineContext) -> None:
+    """Stage 2: Semantic chunking + document type inference."""
+    from app.ingestion.chunker import TextChunker
+
+    chunker = TextChunker(
+        max_tokens=ctx.settings.chunk_size,
+        overlap_tokens=ctx.settings.chunk_overlap,
+    )
+
+    # Determine document type for format-specific chunking
+    ctx.doc_type = _infer_doc_type(ctx.filename)
+    ctx.document_type = ctx.parse_result.metadata.get("document_type", ctx.doc_type)
+
+    ctx.chunks = chunker.chunk(
+        ctx.parse_result.text,
+        metadata={"source_file": ctx.filename},
+        document_type=ctx.document_type,
+    )
+
+    logger.info("task.chunked", job_id=ctx.job_id, chunk_count=len(ctx.chunks))
+
+    ctx.progress["chunks_created"] = len(ctx.chunks)
+    _update_stage(ctx.engine, ctx.job_id, "embedding", "uploading", progress=ctx.progress)
+
+
+def _stage_embed(ctx: _PipelineContext) -> None:
+    """Stage 3: Dense + sparse (feature-flagged) + visual (feature-flagged) embeddings."""
+    chunk_texts = [c.text for c in ctx.chunks]
+
+    if chunk_texts:
+        ctx.embeddings = asyncio.run(_embed_chunks(ctx.settings, chunk_texts))
+    else:
+        ctx.embeddings = []
+
+    # Sparse embeddings (feature-flagged)
+    ctx.sparse_embeddings = []
+    if ctx.settings.enable_sparse_embeddings and chunk_texts:
+        from app.ingestion.sparse_embedder import SparseEmbedder
+
+        sparse_emb = SparseEmbedder(model_name=ctx.settings.sparse_embedding_model)
+        ctx.sparse_embeddings = sparse_emb.embed_texts(chunk_texts)
+        logger.info("task.sparse_embedded", job_id=ctx.job_id, count=len(ctx.sparse_embeddings))
+
+    # Visual embeddings (feature-flagged, experimental).
+    # Acceptable degradation: visual embeddings are optional enrichment
+    # that supplements text-based retrieval.
+    ctx.visual_page_embeddings = []
+    if ctx.settings.enable_visual_embeddings and ctx.rendered_page_images:
+        try:
+            import io
+
+            from PIL import Image
+
+            from app.ingestion.visual_embedder import VisualEmbedder
+
+            visual_emb = VisualEmbedder(
+                model_name=ctx.settings.visual_embedding_model,
+                device=ctx.settings.visual_embedding_device,
+            )
+
+            # Identify visually complex pages
+            complex_pages: list[tuple[int, bytes]] = []
+            for page_idx, page_img_bytes in enumerate(ctx.rendered_page_images):
+                page_num = page_idx + 1
+                # Get page text (if available from parse result)
+                page_text = ""
+                has_tables = False
+                for p in ctx.parse_result.pages:
+                    if p.page_number == page_num:
+                        page_text = p.text if hasattr(p, "text") else ""
+                        has_tables = bool(getattr(p, "tables", []))
+                        break
+
+                if _is_visually_complex(page_text, ctx.filename, has_tables=has_tables):
+                    complex_pages.append((page_num, page_img_bytes))
+
+            # Batch embed visually complex pages
+            if complex_pages:
+                pil_images = [Image.open(io.BytesIO(img)) for _, img in complex_pages]
+                batch_size = ctx.settings.visual_embedding_batch_size
+                all_embeddings: list[list[list[float]]] = []
+
+                for batch_start in range(0, len(pil_images), batch_size):
+                    batch = pil_images[batch_start : batch_start + batch_size]
+                    batch_embs = visual_emb.embed_images(batch)
+                    all_embeddings.extend(batch_embs)
+
+                for (page_num, _), emb in zip(complex_pages, all_embeddings):
+                    point_id = f"{ctx.job_id}_page_{page_num}"
+                    ctx.visual_page_embeddings.append(
+                        {
+                            "id": point_id,
+                            "vectors": emb,
+                            "payload": {
+                                "doc_id": ctx.job_id,
+                                "page_number": page_num,
+                                "source_file": ctx.filename,
+                                **({"matter_id": ctx.matter_id} if ctx.matter_id else {}),
+                            },
+                        }
+                    )
+
+                logger.info(
+                    "task.visual_embedded",
+                    job_id=ctx.job_id,
+                    complex_pages=len(complex_pages),
+                    total_pages=len(ctx.rendered_page_images),
+                )
+        except Exception:
+            logger.warning("task.visual_embedding_failed", job_id=ctx.job_id, exc_info=True)
+            ctx.visual_page_embeddings = []
+
+    logger.info("task.embedded", job_id=ctx.job_id, embedding_count=len(ctx.embeddings))
+
+    ctx.progress["embeddings_generated"] = len(ctx.embeddings)
+    _update_stage(ctx.engine, ctx.job_id, "extracting", "uploading", progress=ctx.progress)
+
+
+def _stage_extract(ctx: _PipelineContext) -> None:
+    """Stage 4: GLiNER zero-shot NER + optional relationship extraction."""
+    from app.entities.extractor import EntityExtractor
+
+    extractor = EntityExtractor(model_name=ctx.settings.gliner_model)
+
+    ctx.all_entities = []
+    seen_entities: set[tuple[str, str]] = set()  # (name, type) dedup within doc
+
+    for chunk in ctx.chunks:
+        extracted = extractor.extract(chunk.text)
+        for ent in extracted:
+            key = (ent.text.strip().lower(), ent.type)
+            if key not in seen_entities:
+                seen_entities.add(key)
+                ctx.all_entities.append(
+                    {
+                        "name": ent.text.strip(),
+                        "type": ent.type,
+                        "page_number": chunk.metadata.get("page_number"),
+                    }
+                )
+
+    logger.info(
+        "task.entities_extracted",
+        job_id=ctx.job_id,
+        unique_entities=len(ctx.all_entities),
+    )
+
+    # Tier 2: Relationship extraction (feature-flagged).
+    # Acceptable degradation: relationship extraction is optional
+    # enrichment via LLM (ENABLE_RELATIONSHIP_EXTRACTION).  Core
+    # entity nodes and MENTIONED_IN edges are created regardless.
+    ctx.relationship_count = 0
+    if ctx.settings.enable_relationship_extraction and ctx.all_entities:
+        try:
+            ctx.relationship_count = asyncio.run(
+                _extract_relationships(ctx.settings, ctx.job_id, ctx.chunks, ctx.all_entities)
+            )
+            logger.info(
+                "task.relationships_extracted",
+                job_id=ctx.job_id,
+                count=ctx.relationship_count,
+            )
+        except Exception:
+            logger.warning(
+                "task.relationship_extraction_failed",
+                job_id=ctx.job_id,
+                exc_info=True,
+            )
+
+    ctx.progress["entities_extracted"] = len(ctx.all_entities)
+    _update_stage(ctx.engine, ctx.job_id, "indexing", "uploading", progress=ctx.progress)
+
+
+def _stage_index(ctx: _PipelineContext) -> None:
+    """Stage 5: Qdrant upsert (dense/sparse/visual) + Neo4j graph indexing."""
+    # 5a. Qdrant upsert
+    from qdrant_client import QdrantClient
+    from qdrant_client.models import PointStruct, SparseVector
+
+    qdrant = QdrantClient(url=ctx.settings.qdrant_url)
+
+    points = []
+    ctx.chunk_data_for_neo4j = []
+
+    for i, (chunk, embedding) in enumerate(zip(ctx.chunks, ctx.embeddings)):
+        point_id = str(uuid.uuid4())
+        payload = {
+            "source_file": ctx.filename,
+            "page_number": chunk.metadata.get("page_number", 1),
+            "section_heading": chunk.metadata.get("section_heading", ""),
+            "chunk_text": chunk.text,
+            "chunk_index": chunk.chunk_index,
+            "doc_id": ctx.job_id,
+            "token_count": chunk.token_count,
+        }
+        if ctx.matter_id is not None:
+            payload["matter_id"] = ctx.matter_id
+
+        # Build vector: named format when sparse enabled, unnamed otherwise
+        vector: dict[str, Any] | list[float]
+        if ctx.sparse_embeddings:
+            indices, values = ctx.sparse_embeddings[i]
+            vector = {
+                "dense": embedding,
+                "sparse": SparseVector(indices=indices, values=values),
+            }
+        elif ctx.settings.enable_sparse_embeddings:
+            # Sparse enabled but no sparse vectors (e.g. empty text)
+            vector = {"dense": embedding}
+        else:
+            vector = embedding
+
+        points.append(PointStruct(id=point_id, vector=vector, payload=payload))
+        ctx.chunk_data_for_neo4j.append(
+            {
+                "chunk_id": point_id,
+                "text_preview": chunk.text[:200],
+                "page_number": chunk.metadata.get("page_number", 1),
+                "qdrant_point_id": point_id,
+            }
+        )
+
+    if points:
+        from app.common.vector_store import TEXT_COLLECTION
+
+        qdrant.upsert(collection_name=TEXT_COLLECTION, points=points)
+        logger.info("task.qdrant_indexed", job_id=ctx.job_id, points=len(points))
+
+    # 5b. Visual Qdrant upsert (feature-flagged).
+    # Acceptable degradation: visual index is optional; text index above
+    # is the core data path.
+    if ctx.visual_page_embeddings:
+        try:
+            from app.common.vector_store import VISUAL_COLLECTION
+
+            vis_points = [
+                PointStruct(id=vpe["id"], vector=vpe["vectors"], payload=vpe["payload"])
+                for vpe in ctx.visual_page_embeddings
+            ]
+            qdrant.upsert(collection_name=VISUAL_COLLECTION, points=vis_points)
+            logger.info("task.visual_indexed", job_id=ctx.job_id, pages=len(vis_points))
+        except Exception:
+            logger.warning("task.visual_indexing_failed", job_id=ctx.job_id, exc_info=True)
+
+    # 5c. Neo4j graph indexing
+    # M11: Pass email metadata for email-as-node modeling
+    email_meta = None
+    if ctx.document_type == "email":
+        email_meta = {
+            "message_id": ctx.parse_result.metadata.get("message_id", ""),
+            "subject": ctx.parse_result.metadata.get("subject", ""),
+            "date": ctx.parse_result.metadata.get("date"),
+            "from": ctx.parse_result.metadata.get("from", ""),
+            "to": ctx.parse_result.metadata.get("to", ""),
+            "cc": ctx.parse_result.metadata.get("cc", ""),
+            "bcc": ctx.parse_result.metadata.get("bcc", ""),
+        }
+
+    asyncio.run(
+        _index_to_neo4j(
+            settings=ctx.settings,
+            doc_id=ctx.job_id,
+            filename=ctx.filename,
+            doc_type=ctx.doc_type,
+            page_count=ctx.parse_result.page_count,
+            minio_path=ctx.minio_path,
+            entities=ctx.all_entities,
+            chunk_data=ctx.chunk_data_for_neo4j,
+            matter_id=ctx.matter_id,
+            email_metadata=email_meta,
+        )
+    )
+
+    logger.info("task.neo4j_indexed", job_id=ctx.job_id, entities=len(ctx.all_entities))
+
+
+def _stage_complete(ctx: _PipelineContext) -> None:
+    """Stage 6: Create document record + dispatch post-processing tasks."""
+    doc_id = _create_document_record(
+        engine=ctx.engine,
+        job_id=ctx.job_id,
+        filename=ctx.filename,
+        doc_type=ctx.doc_type,
+        page_count=ctx.parse_result.page_count,
+        chunk_count=len(ctx.chunks),
+        entity_count=len(ctx.all_entities),
+        minio_path=ctx.minio_path,
+        file_size=ctx.file_size,
+        content_hash=ctx.content_hash,
+        matter_id=ctx.matter_id,
+        metadata=ctx.parse_result.metadata,
+    )
+
+    # Acceptable degradation: email threading is feature-flagged
+    # post-processing that does not affect the core document record
+    # or search index.  The document is fully ingested at this point.
+    if ctx.document_type == "email" and ctx.settings.enable_email_threading:
+        try:
+            from app.ingestion.threading import EmailThreader
+
+            email_headers = {
+                "message_id": ctx.parse_result.metadata.get("message_id", ""),
+                "in_reply_to": ctx.parse_result.metadata.get("in_reply_to", ""),
+                "references": ctx.parse_result.metadata.get("references", ""),
+                "subject": ctx.parse_result.metadata.get("subject", ""),
+            }
+            EmailThreader.assign_thread(ctx.engine, doc_id, email_headers, ctx.matter_id)
+            logger.info("task.threading_complete", job_id=ctx.job_id, doc_id=doc_id)
+        except Exception:
+            logger.warning("task.threading_failed", job_id=ctx.job_id, exc_info=True)
+
+    # Acceptable degradation: communication pair computation is incremental
+    # post-processing for the analytics module.
+    if ctx.document_type == "email" and ctx.matter_id:
+        try:
+            from app.analytics.service import AnalyticsService
+            from app.dependencies import get_db
+
+            async def _compute_pairs():
+                async for db in get_db():
+                    await AnalyticsService.compute_communication_pairs(db, ctx.matter_id)
+
+            asyncio.run(_compute_pairs())
+            logger.info("task.comm_pairs_updated", job_id=ctx.job_id, doc_id=doc_id)
+        except Exception:
+            logger.warning("task.comm_pairs_failed", job_id=ctx.job_id, exc_info=True)
+
+    # Acceptable degradation: near-duplicate detection is a fire-and-forget
+    # async task dispatch.  Failure to dispatch does not affect the document.
+    if ctx.settings.enable_near_duplicate_detection:
+        try:
+            detect_duplicates.delay(doc_id, ctx.parse_result.text, ctx.matter_id or "")
+            logger.info("task.dedup_dispatched", job_id=ctx.job_id, doc_id=doc_id)
+        except Exception:
+            logger.warning("task.dedup_dispatch_failed", job_id=ctx.job_id, exc_info=True)
+
+    # Acceptable degradation: hot document detection is a fire-and-forget
+    # async task dispatch (feature-flagged).
+    if ctx.settings.enable_hot_doc_detection:
+        try:
+            from app.analysis.tasks import scan_document_sentiment
+
+            scan_document_sentiment.delay(doc_id, ctx.matter_id or "")
+            logger.info("task.hot_doc_dispatched", job_id=ctx.job_id, doc_id=doc_id)
+        except Exception:
+            logger.warning("task.hot_doc_dispatch_failed", job_id=ctx.job_id, exc_info=True)
+
+    _update_stage(
+        ctx.engine,
+        ctx.job_id,
+        "complete",
+        "complete",
+        progress=ctx.progress,
+    )
+
+    logger.info(
+        "task.complete",
+        job_id=ctx.job_id,
+        pages=ctx.parse_result.page_count,
+        chunks=len(ctx.chunks),
+        entities=len(ctx.all_entities),
+        embeddings=len(ctx.embeddings),
+    )
+
+    # Trigger entity resolution (async, non-blocking)
+    from app.entities.tasks import resolve_entities
+
+    resolve_entities.delay()
+
+
+# ---------------------------------------------------------------------------
+# ZIP helpers
+# ---------------------------------------------------------------------------
+
+
+def _should_skip_zip_member(member: str) -> bool:
+    """Return True if the ZIP member should be skipped during extraction.
+
+    Skips directories, OS artifacts (__MACOSX, .DS_Store, Thumbs.db),
+    dotfiles, and nested ZIP archives.
+    """
+    # Directories
+    if member.endswith("/"):
+        return True
+
+    # OS artifacts
+    parts = Path(member).parts
+    if any(p in _ZIP_SKIP_PATTERNS for p in parts):
+        return True
+
+    # Dotfiles
+    basename = Path(member).name
+    if basename.startswith("."):
+        return True
+
+    # Nested ZIPs
+    ext = Path(basename).suffix.lower()
+    if ext == ".zip":
+        return True
+
+    return False
+
+
+def _process_zip_member(
+    engine: Any,
+    zip_ref: zipfile.ZipFile,
+    member: str,
+    job_id: str,
+    matter_id: str | None,
+    minio_path_prefix: str,
+    child_index: int,
+    settings: Any,
+) -> str | None:
+    """Extract a single file from the ZIP, upload to MinIO, and dispatch.
+
+    Returns the child job ID on success, or None if the file type is
+    unsupported.
+    """
+    from app.ingestion.parser import PARSER_ROUTES
+
+    basename = Path(member).name
+    ext = Path(basename).suffix.lower()
+
+    backend = PARSER_ROUTES.get(ext)
+    if backend is None or backend == "unsupported":
+        logger.warning(
+            "task.zip.unsupported_extension",
+            job_id=job_id,
+            member=member,
+            ext=ext,
+        )
+        return None
+
+    # Extract and upload to MinIO
+    data = zip_ref.read(member)
+    child_minio_path = f"raw/{job_id}/{basename}"
+    _upload_to_minio(
+        settings,
+        child_minio_path,
+        data,
+        content_type="application/octet-stream",
+    )
+
+    # Create child job
+    child_id = _create_child_job(engine, job_id, basename, child_minio_path, matter_id=matter_id)
+
+    # Dispatch processing
+    process_document.delay(child_id, child_minio_path)
+
+    logger.info(
+        "task.zip.child_dispatched",
+        parent_id=job_id,
+        child_id=child_id,
+        filename=basename,
+    )
+
+    return child_id
+
+
+# ---------------------------------------------------------------------------
 # ZIP extraction task
 # ---------------------------------------------------------------------------
 
@@ -455,7 +1064,6 @@ def process_zip(self, job_id: str, minio_path: str) -> dict:
     structlog.contextvars.bind_contextvars(task_id=self.request.id, job_id=job_id)
 
     from app.config import Settings
-    from app.ingestion.parser import PARSER_ROUTES
 
     settings = Settings()
     engine = _get_sync_engine()
@@ -475,64 +1083,28 @@ def process_zip(self, job_id: str, minio_path: str) -> dict:
 
         try:
             with zipfile.ZipFile(tmp_path, "r") as zf:
-                for member in zf.namelist():
-                    # Skip directories
-                    if member.endswith("/"):
+                for idx, member in enumerate(zf.namelist()):
+                    if _should_skip_zip_member(member):
+                        if Path(member).suffix.lower() == ".zip" and not member.endswith("/"):
+                            logger.warning(
+                                "task.zip.nested_zip_skipped",
+                                job_id=job_id,
+                                member=member,
+                            )
                         continue
 
-                    # Skip OS artifacts
-                    parts = Path(member).parts
-                    if any(p in _ZIP_SKIP_PATTERNS for p in parts):
-                        continue
-
-                    # Skip dotfiles
-                    basename = Path(member).name
-                    if basename.startswith("."):
-                        continue
-
-                    # Check extension is supported (skip nested ZIPs)
-                    ext = Path(basename).suffix.lower()
-                    if ext == ".zip":
-                        logger.warning(
-                            "task.zip.nested_zip_skipped",
-                            job_id=job_id,
-                            member=member,
-                        )
-                        continue
-
-                    backend = PARSER_ROUTES.get(ext)
-                    if backend is None or backend == "unsupported":
-                        logger.warning(
-                            "task.zip.unsupported_extension",
-                            job_id=job_id,
-                            member=member,
-                            ext=ext,
-                        )
-                        continue
-
-                    # Extract and upload to MinIO
-                    data = zf.read(member)
-                    child_minio_path = f"raw/{job_id}/{basename}"
-                    _upload_to_minio(
-                        settings,
-                        child_minio_path,
-                        data,
-                        content_type="application/octet-stream",
+                    child_id = _process_zip_member(
+                        engine=engine,
+                        zip_ref=zf,
+                        member=member,
+                        job_id=job_id,
+                        matter_id=zip_matter_id,
+                        minio_path_prefix=f"raw/{job_id}",
+                        child_index=idx,
+                        settings=settings,
                     )
-
-                    # Create child job
-                    child_id = _create_child_job(engine, job_id, basename, child_minio_path, matter_id=zip_matter_id)
-                    child_jobs.append(child_id)
-
-                    # Dispatch processing
-                    process_document.delay(child_id, child_minio_path)
-
-                    logger.info(
-                        "task.zip.child_dispatched",
-                        parent_id=job_id,
-                        child_id=child_id,
-                        filename=basename,
-                    )
+                    if child_id is not None:
+                        child_jobs.append(child_id)
 
         finally:
             tmp_path.unlink(missing_ok=True)
@@ -622,486 +1194,37 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
         engine.dispose()
         return dict(process_zip(job_id, minio_path))
 
+    ctx = _PipelineContext(
+        settings=settings,
+        engine=engine,
+        job_id=job_id,
+        minio_path=minio_path,
+        filename=filename,
+        matter_id=matter_id,
+    )
+
+    stages = [
+        _stage_parse,
+        _stage_chunk,
+        _stage_embed,
+        _stage_extract,
+        _stage_index,
+        _stage_complete,
+    ]
+
     try:
-        # ---------------------------------------------------------------
-        # Stage 1: PARSING — download file, parse
-        # ---------------------------------------------------------------
-        _update_stage(engine, job_id, "parsing", "uploading")
-
-        file_bytes = _download_from_minio(settings, minio_path)
-        content_hash = hashlib.sha256(file_bytes).hexdigest()[:16]
-        file_size = len(file_bytes)
-
-        logger.info("task.downloaded", job_id=job_id, size=file_size)
-
-        # Write to temp file for parser
-        suffix = Path(filename).suffix
-        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-            tmp.write(file_bytes)
-            tmp_path = Path(tmp.name)
-
-        try:
-            from app.ingestion.parser import DocumentParser
-
-            parser = DocumentParser()
-            parse_result = parser.parse(tmp_path, filename)
-        finally:
-            tmp_path.unlink(missing_ok=True)
-
-        # Free file bytes from memory
-        del file_bytes
-
-        logger.info(
-            "task.parsed",
-            job_id=job_id,
-            page_count=parse_result.page_count,
-            text_length=len(parse_result.text),
-        )
-
-        # Handle email attachments — spawn child jobs
-        attachment_data = parse_result.metadata.get("attachment_data", [])
-        if attachment_data:
-            for att in attachment_data:
-                att_filename = att["filename"]
-                att_minio_path = f"raw/{job_id}/{att_filename}"
-                _upload_to_minio(
-                    settings,
-                    att_minio_path,
-                    att["data"],
-                    content_type=att.get("content_type", "application/octet-stream"),
-                )
-                child_id = _create_child_job(engine, job_id, att_filename, att_minio_path, matter_id=matter_id)
-                process_document.delay(child_id, att_minio_path)
-                logger.info(
-                    "task.email_attachment_dispatched",
-                    parent_id=job_id,
-                    child_id=child_id,
-                    filename=att_filename,
-                )
-
-            # Strip binary attachment data from metadata before DB storage
-            parse_result.metadata.pop("attachment_data", None)
-
-        # Store page images in MinIO (render via pdf2image when visual embeddings enabled)
-        doc_id_for_pages = job_id  # Use job_id as doc namespace for page images
-        rendered_page_images: list[bytes] = []
-        # Acceptable degradation: PDF page rendering is only needed for
-        # visual embeddings (ENABLE_VISUAL_EMBEDDINGS), which is experimental.
-        # Text-based indexing is the core pipeline and is unaffected.
-        if settings.enable_visual_embeddings and ext == ".pdf":
-            try:
-                with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as pdf_tmp:
-                    pdf_tmp.write(_download_from_minio(settings, minio_path))
-                    pdf_tmp_path = Path(pdf_tmp.name)
-                try:
-                    rendered_page_images = _render_pdf_pages(str(pdf_tmp_path), dpi=settings.visual_page_dpi)
-                    for page_num, img_bytes in enumerate(rendered_page_images, 1):
-                        page_key = f"pages/{doc_id_for_pages}/page_{page_num:03d}.png"
-                        _upload_to_minio(settings, page_key, img_bytes)
-                    logger.info("task.pdf_pages_rendered", job_id=job_id, pages=len(rendered_page_images))
-                finally:
-                    pdf_tmp_path.unlink(missing_ok=True)
-            except Exception:
-                logger.warning("task.pdf_page_rendering_failed", job_id=job_id, exc_info=True)
-                rendered_page_images = []
-        else:
-            # Fallback: store Docling-provided page images (if any)
-            for page in parse_result.pages:
-                for img_idx, img_bytes in enumerate(page.images):
-                    if img_bytes:
-                        page_key = f"pages/{doc_id_for_pages}/page_{page.page_number:03d}_{img_idx}.png"
-                        _upload_to_minio(settings, page_key, img_bytes)
-
-        progress = {"pages_parsed": parse_result.page_count}
-        _update_stage(engine, job_id, "chunking", "uploading", progress=progress)
-
-        if _is_job_cancelled(engine, job_id):
-            logger.warning("task.cancelled_during_processing", job_id=job_id)
-            return {"job_id": job_id, "status": "cancelled"}
-
-        # ---------------------------------------------------------------
-        # Stage 2: CHUNKING — semantic chunking
-        # ---------------------------------------------------------------
-        from app.ingestion.chunker import TextChunker
-
-        chunker = TextChunker(
-            max_tokens=settings.chunk_size,
-            overlap_tokens=settings.chunk_overlap,
-        )
-
-        # Determine document type for format-specific chunking
-        doc_type = _infer_doc_type(filename)
-        document_type = parse_result.metadata.get("document_type", doc_type)
-
-        chunks = chunker.chunk(
-            parse_result.text,
-            metadata={"source_file": filename},
-            document_type=document_type,
-        )
-
-        logger.info("task.chunked", job_id=job_id, chunk_count=len(chunks))
-
-        progress["chunks_created"] = len(chunks)
-        _update_stage(engine, job_id, "embedding", "uploading", progress=progress)
-
-        if _is_job_cancelled(engine, job_id):
-            return {"job_id": job_id, "status": "cancelled"}
-
-        # ---------------------------------------------------------------
-        # Stage 3: EMBEDDING — dense (OpenAI) + optional sparse (BM42)
-        # ---------------------------------------------------------------
-        chunk_texts = [c.text for c in chunks]
-
-        if chunk_texts:
-            embeddings = asyncio.run(_embed_chunks(settings, chunk_texts))
-        else:
-            embeddings = []
-
-        # Sparse embeddings (feature-flagged)
-        sparse_embeddings: list[tuple[list[int], list[float]]] = []
-        if settings.enable_sparse_embeddings and chunk_texts:
-            from app.ingestion.sparse_embedder import SparseEmbedder
-
-            sparse_emb = SparseEmbedder(model_name=settings.sparse_embedding_model)
-            sparse_embeddings = sparse_emb.embed_texts(chunk_texts)
-            logger.info("task.sparse_embedded", job_id=job_id, count=len(sparse_embeddings))
-
-        # Visual embeddings (feature-flagged, experimental).
-        # Acceptable degradation: visual embeddings are optional enrichment
-        # that supplements text-based retrieval.
-        visual_page_embeddings: list[dict[str, Any]] = []
-        if settings.enable_visual_embeddings and rendered_page_images:
-            try:
-                import io
-
-                from PIL import Image
-
-                from app.ingestion.visual_embedder import VisualEmbedder
-
-                visual_emb = VisualEmbedder(
-                    model_name=settings.visual_embedding_model,
-                    device=settings.visual_embedding_device,
-                )
-
-                # Identify visually complex pages
-                complex_pages: list[tuple[int, bytes]] = []
-                for page_idx, page_img_bytes in enumerate(rendered_page_images):
-                    page_num = page_idx + 1
-                    # Get page text (if available from parse result)
-                    page_text = ""
-                    has_tables = False
-                    for p in parse_result.pages:
-                        if p.page_number == page_num:
-                            page_text = p.text if hasattr(p, "text") else ""
-                            has_tables = bool(getattr(p, "tables", []))
-                            break
-
-                    if _is_visually_complex(page_text, filename, has_tables=has_tables):
-                        complex_pages.append((page_num, page_img_bytes))
-
-                # Batch embed visually complex pages
-                if complex_pages:
-                    pil_images = [Image.open(io.BytesIO(img)) for _, img in complex_pages]
-                    batch_size = settings.visual_embedding_batch_size
-                    all_embeddings: list[list[list[float]]] = []
-
-                    for batch_start in range(0, len(pil_images), batch_size):
-                        batch = pil_images[batch_start : batch_start + batch_size]
-                        batch_embs = visual_emb.embed_images(batch)
-                        all_embeddings.extend(batch_embs)
-
-                    for (page_num, _), emb in zip(complex_pages, all_embeddings):
-                        point_id = f"{job_id}_page_{page_num}"
-                        visual_page_embeddings.append(
-                            {
-                                "id": point_id,
-                                "vectors": emb,
-                                "payload": {
-                                    "doc_id": job_id,
-                                    "page_number": page_num,
-                                    "source_file": filename,
-                                    **({"matter_id": matter_id} if matter_id else {}),
-                                },
-                            }
-                        )
-
-                    logger.info(
-                        "task.visual_embedded",
-                        job_id=job_id,
-                        complex_pages=len(complex_pages),
-                        total_pages=len(rendered_page_images),
-                    )
-            except Exception:
-                logger.warning("task.visual_embedding_failed", job_id=job_id, exc_info=True)
-                visual_page_embeddings = []
-
-        logger.info("task.embedded", job_id=job_id, embedding_count=len(embeddings))
-
-        progress["embeddings_generated"] = len(embeddings)
-        _update_stage(engine, job_id, "extracting", "uploading", progress=progress)
-
-        if _is_job_cancelled(engine, job_id):
-            return {"job_id": job_id, "status": "cancelled"}
-
-        # ---------------------------------------------------------------
-        # Stage 4: EXTRACTING — GLiNER zero-shot NER
-        # ---------------------------------------------------------------
-        from app.entities.extractor import EntityExtractor
-
-        extractor = EntityExtractor(model_name=settings.gliner_model)
-
-        all_entities: list[dict] = []
-        seen_entities: set[tuple[str, str]] = set()  # (name, type) dedup within doc
-
-        for chunk in chunks:
-            extracted = extractor.extract(chunk.text)
-            for ent in extracted:
-                key = (ent.text.strip().lower(), ent.type)
-                if key not in seen_entities:
-                    seen_entities.add(key)
-                    all_entities.append(
-                        {
-                            "name": ent.text.strip(),
-                            "type": ent.type,
-                            "page_number": chunk.metadata.get("page_number"),
-                        }
-                    )
-
-        logger.info(
-            "task.entities_extracted",
-            job_id=job_id,
-            unique_entities=len(all_entities),
-        )
-
-        # Tier 2: Relationship extraction (feature-flagged).
-        # Acceptable degradation: relationship extraction is optional
-        # enrichment via LLM (ENABLE_RELATIONSHIP_EXTRACTION).  Core
-        # entity nodes and MENTIONED_IN edges are created regardless.
-        relationship_count = 0
-        if settings.enable_relationship_extraction and all_entities:
-            try:
-                relationship_count = asyncio.run(_extract_relationships(settings, job_id, chunks, all_entities))
-                logger.info(
-                    "task.relationships_extracted",
-                    job_id=job_id,
-                    count=relationship_count,
-                )
-            except Exception:
-                logger.warning(
-                    "task.relationship_extraction_failed",
-                    job_id=job_id,
-                    exc_info=True,
-                )
-
-        progress["entities_extracted"] = len(all_entities)
-        _update_stage(engine, job_id, "indexing", "uploading", progress=progress)
-
-        if _is_job_cancelled(engine, job_id):
-            return {"job_id": job_id, "status": "cancelled"}
-
-        # ---------------------------------------------------------------
-        # Stage 5: INDEXING — Qdrant + Neo4j
-        # ---------------------------------------------------------------
-        # 5a. Qdrant upsert
-        from qdrant_client import QdrantClient
-        from qdrant_client.models import PointStruct, SparseVector
-
-        qdrant = QdrantClient(url=settings.qdrant_url)
-
-        points = []
-        chunk_data_for_neo4j = []
-
-        for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
-            point_id = str(uuid.uuid4())
-            payload = {
-                "source_file": filename,
-                "page_number": chunk.metadata.get("page_number", 1),
-                "section_heading": chunk.metadata.get("section_heading", ""),
-                "chunk_text": chunk.text,
-                "chunk_index": chunk.chunk_index,
-                "doc_id": job_id,
-                "token_count": chunk.token_count,
-            }
-            if matter_id is not None:
-                payload["matter_id"] = matter_id
-
-            # Build vector: named format when sparse enabled, unnamed otherwise
-            vector: dict[str, Any] | list[float]
-            if sparse_embeddings:
-                indices, values = sparse_embeddings[i]
-                vector = {
-                    "dense": embedding,
-                    "sparse": SparseVector(indices=indices, values=values),
-                }
-            elif settings.enable_sparse_embeddings:
-                # Sparse enabled but no sparse vectors (e.g. empty text)
-                vector = {"dense": embedding}
-            else:
-                vector = embedding
-
-            points.append(PointStruct(id=point_id, vector=vector, payload=payload))
-            chunk_data_for_neo4j.append(
-                {
-                    "chunk_id": point_id,
-                    "text_preview": chunk.text[:200],
-                    "page_number": chunk.metadata.get("page_number", 1),
-                    "qdrant_point_id": point_id,
-                }
-            )
-
-        if points:
-            from app.common.vector_store import TEXT_COLLECTION
-
-            qdrant.upsert(collection_name=TEXT_COLLECTION, points=points)
-            logger.info("task.qdrant_indexed", job_id=job_id, points=len(points))
-
-        # 5b. Visual Qdrant upsert (feature-flagged).
-        # Acceptable degradation: visual index is optional; text index above
-        # is the core data path.
-        if visual_page_embeddings:
-            try:
-                from app.common.vector_store import VISUAL_COLLECTION
-
-                vis_points = [
-                    PointStruct(id=vpe["id"], vector=vpe["vectors"], payload=vpe["payload"])
-                    for vpe in visual_page_embeddings
-                ]
-                qdrant.upsert(collection_name=VISUAL_COLLECTION, points=vis_points)
-                logger.info("task.visual_indexed", job_id=job_id, pages=len(vis_points))
-            except Exception:
-                logger.warning("task.visual_indexing_failed", job_id=job_id, exc_info=True)
-
-        # 5c. Neo4j graph indexing
-        # M11: Pass email metadata for email-as-node modeling
-        email_meta = None
-        if document_type == "email":
-            email_meta = {
-                "message_id": parse_result.metadata.get("message_id", ""),
-                "subject": parse_result.metadata.get("subject", ""),
-                "date": parse_result.metadata.get("date"),
-                "from": parse_result.metadata.get("from", ""),
-                "to": parse_result.metadata.get("to", ""),
-                "cc": parse_result.metadata.get("cc", ""),
-                "bcc": parse_result.metadata.get("bcc", ""),
-            }
-
-        asyncio.run(
-            _index_to_neo4j(
-                settings=settings,
-                doc_id=job_id,
-                filename=filename,
-                doc_type=doc_type,
-                page_count=parse_result.page_count,
-                minio_path=minio_path,
-                entities=all_entities,
-                chunk_data=chunk_data_for_neo4j,
-                matter_id=matter_id,
-                email_metadata=email_meta,
-            )
-        )
-
-        logger.info("task.neo4j_indexed", job_id=job_id, entities=len(all_entities))
-
-        # ---------------------------------------------------------------
-        # Stage 6: COMPLETE — create document record, mark job done
-        # ---------------------------------------------------------------
-        doc_id = _create_document_record(
-            engine=engine,
-            job_id=job_id,
-            filename=filename,
-            doc_type=doc_type,
-            page_count=parse_result.page_count,
-            chunk_count=len(chunks),
-            entity_count=len(all_entities),
-            minio_path=minio_path,
-            file_size=file_size,
-            content_hash=content_hash,
-            matter_id=matter_id,
-            metadata=parse_result.metadata,
-        )
-
-        # Acceptable degradation: email threading is feature-flagged
-        # post-processing that does not affect the core document record
-        # or search index.  The document is fully ingested at this point.
-        if document_type == "email" and settings.enable_email_threading:
-            try:
-                from app.ingestion.threading import EmailThreader
-
-                email_headers = {
-                    "message_id": parse_result.metadata.get("message_id", ""),
-                    "in_reply_to": parse_result.metadata.get("in_reply_to", ""),
-                    "references": parse_result.metadata.get("references", ""),
-                    "subject": parse_result.metadata.get("subject", ""),
-                }
-                EmailThreader.assign_thread(engine, doc_id, email_headers, matter_id)
-                logger.info("task.threading_complete", job_id=job_id, doc_id=doc_id)
-            except Exception:
-                logger.warning("task.threading_failed", job_id=job_id, exc_info=True)
-
-        # Acceptable degradation: communication pair computation is incremental
-        # post-processing for the analytics module.
-        if document_type == "email" and matter_id:
-            try:
-                from app.analytics.service import AnalyticsService
-                from app.dependencies import get_db
-
-                async def _compute_pairs():
-                    async for db in get_db():
-                        await AnalyticsService.compute_communication_pairs(db, matter_id)
-
-                asyncio.run(_compute_pairs())
-                logger.info("task.comm_pairs_updated", job_id=job_id, doc_id=doc_id)
-            except Exception:
-                logger.warning("task.comm_pairs_failed", job_id=job_id, exc_info=True)
-
-        # Acceptable degradation: near-duplicate detection is a fire-and-forget
-        # async task dispatch.  Failure to dispatch does not affect the document.
-        if settings.enable_near_duplicate_detection:
-            try:
-                detect_duplicates.delay(doc_id, parse_result.text, matter_id or "")
-                logger.info("task.dedup_dispatched", job_id=job_id, doc_id=doc_id)
-            except Exception:
-                logger.warning("task.dedup_dispatch_failed", job_id=job_id, exc_info=True)
-
-        # Acceptable degradation: hot document detection is a fire-and-forget
-        # async task dispatch (feature-flagged).
-        if settings.enable_hot_doc_detection:
-            try:
-                from app.analysis.tasks import scan_document_sentiment
-
-                scan_document_sentiment.delay(doc_id, matter_id or "")
-                logger.info("task.hot_doc_dispatched", job_id=job_id, doc_id=doc_id)
-            except Exception:
-                logger.warning("task.hot_doc_dispatch_failed", job_id=job_id, exc_info=True)
-
-        _update_stage(
-            engine,
-            job_id,
-            "complete",
-            "complete",
-            progress=progress,
-        )
-
-        logger.info(
-            "task.complete",
-            job_id=job_id,
-            pages=parse_result.page_count,
-            chunks=len(chunks),
-            entities=len(all_entities),
-            embeddings=len(embeddings),
-        )
-
-        # Trigger entity resolution (async, non-blocking)
-        from app.entities.tasks import resolve_entities
-
-        resolve_entities.delay()
+        for stage_fn in stages:
+            if _is_job_cancelled(engine, job_id):
+                logger.warning("task.cancelled_during_processing", job_id=job_id)
+                return {"job_id": job_id, "status": "cancelled"}
+            stage_fn(ctx)
 
         return {
             "job_id": job_id,
             "status": "complete",
-            "page_count": parse_result.page_count,
-            "chunk_count": len(chunks),
-            "entity_count": len(all_entities),
+            "page_count": ctx.parse_result.page_count,
+            "chunk_count": len(ctx.chunks),
+            "entity_count": len(ctx.all_entities),
         }
 
     except Exception as exc:

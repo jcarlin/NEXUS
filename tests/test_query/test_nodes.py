@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.query.nodes import (
+    _decompose_claims,
     _format_chat_history,
     _format_context,
     _format_graph_context,
+    _verify_single_claim,
     create_nodes,
 )
 
@@ -377,3 +380,106 @@ async def test_rerank_uses_score_sorting_when_disabled():
     # Sorted by score descending
     assert result["source_documents"][0]["relevance_score"] == 0.8
     assert result["source_documents"][1]["relevance_score"] == 0.4
+
+
+# ---------------------------------------------------------------------------
+# _decompose_claims tests
+# ---------------------------------------------------------------------------
+
+
+async def test_decompose_claims_success():
+    """LLM returns valid JSON array of claims -- should parse correctly."""
+    llm = AsyncMock()
+    llm.complete.return_value = json.dumps(
+        [
+            {"claim_text": "John Doe was present", "filename": "doc.pdf", "page_number": 1},
+            {"claim_text": "Meeting occurred on Jan 5", "filename": "doc.pdf", "page_number": 2},
+        ]
+    )
+
+    source_docs = [
+        {"filename": "doc.pdf", "page": 1, "chunk_text": "John Doe attended the meeting on Jan 5."},
+    ]
+
+    result = await _decompose_claims(llm, "John Doe was present at the meeting on Jan 5.", source_docs)
+
+    assert len(result) == 2
+    assert result[0]["claim_text"] == "John Doe was present"
+    assert result[1]["claim_text"] == "Meeting occurred on Jan 5"
+    llm.complete.assert_called_once()
+
+
+async def test_decompose_claims_llm_failure():
+    """LLM raises an exception -- should return empty list."""
+    llm = AsyncMock()
+    llm.complete.side_effect = RuntimeError("API error")
+
+    result = await _decompose_claims(llm, "some response", [])
+
+    assert result == []
+
+
+async def test_decompose_claims_invalid_json():
+    """LLM returns unparseable garbage -- should return empty list."""
+    llm = AsyncMock()
+    llm.complete.return_value = "This is not JSON at all, just random text."
+
+    result = await _decompose_claims(llm, "some response", [])
+
+    assert result == []
+
+
+# ---------------------------------------------------------------------------
+# _verify_single_claim tests
+# ---------------------------------------------------------------------------
+
+
+async def test_verify_single_claim_supported():
+    """Retriever returns evidence, LLM says 'supported' -- status='verified'."""
+    llm = AsyncMock()
+    llm.complete.return_value = "This claim is supported by the evidence. Confidence: 0.9"
+
+    retriever = AsyncMock()
+    retriever.retrieve_text.return_value = [
+        {"source_file": "doc.pdf", "page_number": 1, "chunk_text": "supporting evidence text"},
+    ]
+
+    claim = {"claim_text": "John Doe was present", "filename": "doc.pdf", "page_number": 1, "claim_index": 0}
+
+    result = await _verify_single_claim(llm, retriever, claim, None, [])
+
+    assert result["verification_status"] == "verified"
+    retriever.retrieve_text.assert_called_once()
+    llm.complete.assert_called_once()
+
+
+async def test_verify_single_claim_flagged():
+    """LLM says claim cannot be verified -- status='flagged'."""
+    llm = AsyncMock()
+    llm.complete.return_value = "The evidence does not confirm this assertion. Confidence: 0.2"
+
+    retriever = AsyncMock()
+    retriever.retrieve_text.return_value = [
+        {"source_file": "other.pdf", "page_number": 5, "chunk_text": "unrelated text"},
+    ]
+
+    claim = {"claim_text": "Fabricated claim", "filename": "doc.pdf", "page_number": 1, "claim_index": 0}
+
+    result = await _verify_single_claim(llm, retriever, claim, None, [])
+
+    assert result["verification_status"] == "flagged"
+
+
+async def test_verify_single_claim_error():
+    """Retriever raises an exception -- status='unverified'."""
+    llm = AsyncMock()
+
+    retriever = AsyncMock()
+    retriever.retrieve_text.side_effect = RuntimeError("connection error")
+
+    claim = {"claim_text": "Some claim", "filename": "doc.pdf", "page_number": 1, "claim_index": 0}
+
+    result = await _verify_single_claim(llm, retriever, claim, None, [])
+
+    assert result["verification_status"] == "unverified"
+    llm.complete.assert_not_called()

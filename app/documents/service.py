@@ -32,7 +32,8 @@ _COLUMNS = """id, job_id, filename, document_type, page_count, chunk_count,
               sentiment_positive, sentiment_negative, sentiment_pressure,
               sentiment_opportunity, sentiment_rationalization, sentiment_intent,
               sentiment_concealment, hot_doc_score, context_gap_score,
-              context_gaps, anomaly_score"""
+              context_gaps, anomaly_score,
+              bates_begin, bates_end"""
 
 # Privilege statuses that non-privileged users (paralegal, reviewer) cannot see
 _RESTRICTED_STATUSES = ("privileged", "work_product")

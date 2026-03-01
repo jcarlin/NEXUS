@@ -2,7 +2,7 @@
 
 > Multimodal RAG Investigation Platform for Legal Document Intelligence
 
-**Last updated:** 2026-02-28
+**Last updated:** 2026-03-01
 
 ---
 
@@ -31,13 +31,13 @@
 | M11 | Knowledge Graph Enhancement | ⚡ Entity Resolution | Done | 28 | Regression + eval non-regression | 2.5 weeks | M10 |
 | M12 | Bulk Import + EDRM | — | Done | 11 | Regression + migration | 2 weeks | M6, M6b, M8 (parallel w/ M10-11) |
 | M13 | React Frontend | — | TODO | 12+ | Frontend CI + backend regression | 3.5 weeks | M6, M7, M10, M10b, M10c, M9b |
-| M14 | Annotations + Export + EDRM | — | TODO | 10 | Regression + migration | 2.5 weeks | M13 |
+| M14 | Annotations + Export + EDRM (Backend) | — | Done | 10 | Regression + migration | 2.5 weeks | M13 |
 | M14b | Redaction | — | TODO | 8 | Regression | 1.5 weeks | M14 |
 | M15 | Retrieval Tuning | — | Done | 5 + 4 eval | Eval improvement ≥ 0.03 | 1 week | M9, M8b |
 | M16 | Visual Embeddings | — | Done | 16 + eval enum | Eval lift ≥ 5% or stays disabled | 2 weeks | M15 (conditional) |
 | M17 | Full Local Deployment | — | TODO | 3+ | Health check + benchmarks | 2 weeks | All |
 
-**Total tests: 411 collected** (389 unit/functional + 12 M10b analysis + 10 M10c analytics; 409 passing, 2 pre-existing failures from missing langchain_anthropic dep)
+**Total tests: 436 collected** (399 unit/functional + 12 M10b analysis + 10 M10c analytics + 10 M14 annotations/exports + 5 M16 eval; 434 passing, 2 pre-existing failures from missing langchain_anthropic dep)
 
 **6 autonomous LangGraph agents** across the pipeline (Case Setup, Investigation Orchestrator, Citation Verifier, Hot Doc Scanner, Contextual Completeness, Entity Resolution)
 
@@ -583,6 +583,8 @@ See `docs/M6-BULK-IMPORT.md` for full spec.
 ### M13: React Frontend (3.5 weeks)
 *Replace Streamlit prototype. Depends on M6 (auth), M7 (privilege UI), M10 (agentic query), M10b (sentiment), M10c (analytics), M9b (case context).*
 
+> **Feature spec:** [`docs/M13-FRONTEND-SPEC.md`](docs/M13-FRONTEND-SPEC.md) — complete page wireframes, user workflows, cross-cutting UX patterns, and phased build plan.
+
 #### Tech Stack
 
 | Concern | Choice | Notes |
@@ -790,25 +792,24 @@ frontend/
 
 ---
 
-### M14: Annotations + Export + EDRM (2.5 weeks)
-*Features that make it a real litigation support tool. Depends on M13.*
+### M14: Annotations + Export + EDRM — Backend (2.5 weeks) ✅
+*Litigation support backend: annotations, production sets, Bates numbering, court-ready exports. Frontend (PDF overlay, export UI) deferred to post-M13.*
 
-- [ ] Alembic migration: `annotations` table
-- [ ] Annotation CRUD endpoints
-- [ ] Frontend: highlight/note overlay on PDF viewer
-- [ ] Court-ready export: document production packages (PDF bundles, privilege log, citation index)
-- [ ] `POST /exports` → Celery task → downloadable ZIP
-- [ ] EDRM XML export: produce standard-compliant export packages for Relativity/DISCO import
-- [ ] Privilege log export: auto-generated privilege log with Bates ranges, privilege basis, reviewer
-- [ ] Production set management: define production sets, track production status per document
-- [ ] Result set export: export any query result set (from M10 result set mode) as CSV, XLSX, or PDF bundle with citation index
+- [x] Alembic migration 010: `annotations`, `production_sets`, `production_set_documents`, `export_jobs` tables + `bates_begin`/`bates_end` columns on `documents`
+- [x] Annotation CRUD endpoints (`app/annotations/` module: schemas, service, router)
+- [x] Production set management with Bates numbering (auto-generate, user prefix, imported)
+- [x] Export Celery task + generators: court_ready (ZIP), edrm_xml (ZIP), privilege_log (CSV), result_set (CSV)
+- [x] `POST /exports` → Celery task → downloadable ZIP via presigned URL
+- [x] EDRM XML export with BEGBATES/ENDBATES Tag elements (reuses `LoadFileParser.export_edrm_xml`)
+- [x] Privilege log with legal basis mapping (Attorney-Client Privilege, Work Product Doctrine)
+- [x] EDRM import Bates integration: `POST /edrm/import` now persists BEGBATES/ENDBATES to documents table
+- [ ] Frontend: highlight/note overlay on PDF viewer (deferred to post-M13)
 
 **Testing (10 tests):**
-- Unit: annotation CRUD — create/read/update/delete (4), annotation router endpoint contracts (2), EDRM XML export format compliance (1), privilege log auto-generation with Bates ranges (1), production set status tracking (1)
-- Integration: result set export — ZIP contains expected files (1)
-- Gate: regression + migration upgrade and downgrade succeed + export ZIP verified (contains expected structure)
+- Unit: annotation CRUD — create/get/update/delete (4), list empty (1), validation (1), EDRM XML with Bates (1), privilege log columns + basis mapping (1), production set lifecycle (1), court-ready ZIP structure (1)
+- Gate: regression (434 passing, 2 pre-existing failures) + migration
 
-**Key files:** New `app/annotations/` module, export Celery task
+**Key files:** `app/annotations/` (schemas, service, router), `app/exports/` (schemas, service, router, tasks, generators), `migrations/versions/010_annotations_exports.py`
 
 ---
 

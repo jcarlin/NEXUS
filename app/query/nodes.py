@@ -591,32 +591,19 @@ def _classify_tier(query: str) -> str:
     return "standard"
 
 
-async def verify_citations(state: dict) -> dict:
-    """Decompose the agent's response into cited claims and verify each.
+async def _decompose_claims(
+    llm: LLMClient,
+    response: str,
+    source_docs: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Decompose an LLM response into atomic cited claims.
 
-    Uses the Chain-of-Verification (CoVe) pattern:
-    1. Decompose response into atomic claims with cited sources
-    2. For each claim, run independent retrieval to find verification evidence
-    3. Judge whether the evidence supports the claim
+    Builds evidence text from *source_docs*, asks the LLM to split the
+    response into individual factual assertions, and parses the result.
 
-    Skipped for fast-tier queries (``_skip_verification=True``).
+    Returns an empty list when the LLM call fails or yields unparseable
+    output (acceptable degradation — citation verification is optional).
     """
-    if state.get("_skip_verification", False):
-        logger.debug("node.verify_citations.skipped", reason="fast_tier")
-        return {"cited_claims": []}
-
-    response = state.get("response", "")
-    if not response:
-        return {"cited_claims": []}
-
-    from app.dependencies import get_llm, get_retriever
-
-    llm = get_llm()
-    retriever = get_retriever()
-
-    # Stage 1: Decompose response into claims
-    # Build evidence context from source_documents in state
-    source_docs = state.get("source_documents", [])
     evidence_text = "\n".join(
         f"[{d.get('filename', '?')}, p{d.get('page', '?')}]: {d.get('chunk_text', '')[:300]}" for d in source_docs[:10]
     )
@@ -639,69 +626,116 @@ async def verify_citations(state: dict) -> dict:
         )
     except Exception:
         logger.warning("node.verify_citations.decompose_failed", exc_info=True)
-        return {"cited_claims": []}
+        return []
 
-    # Parse claims from LLM response (best-effort JSON parsing)
     claims = _parse_claims(claims_raw)
     if not claims:
         logger.debug("node.verify_citations.no_claims_parsed")
+    return claims
+
+
+async def _verify_single_claim(
+    llm: LLMClient,
+    retriever: HybridRetriever,
+    claim: dict[str, Any],
+    filters: dict[str, Any] | None,
+    exclude_privilege: list[str],
+) -> dict[str, Any]:
+    """Run independent retrieval and judge whether evidence supports *claim*.
+
+    Returns the *claim* dict with ``verification_status`` and ``claim_index``
+    added.  On failure, sets status to ``"unverified"`` (acceptable
+    degradation — individual claim verification failure should not prevent
+    other claims from being verified).
+    """
+    claim_text = claim.get("claim_text", "")
+
+    try:
+        # Independent retrieval for verification
+        verification_results = await retriever.retrieve_text(
+            claim_text,
+            limit=5,
+            filters=filters,
+            exclude_privilege_statuses=exclude_privilege or None,
+        )
+
+        verification_evidence = "\n".join(
+            f"[{r.get('source_file', '?')}, p{r.get('page_number', '?')}]: {r.get('chunk_text', '')[:200]}"
+            for r in verification_results[:3]
+        )
+
+        # Judge claim
+        judgment_prompt = VERIFY_JUDGMENT_PROMPT.format(
+            claim_text=claim_text,
+            filename=claim.get("filename", "unknown"),
+            page_number=claim.get("page_number", "?"),
+            evidence=verification_evidence or "(no supporting evidence found)",
+        )
+
+        judgment_raw = await llm.complete(
+            [{"role": "user", "content": judgment_prompt}],
+            max_tokens=300,
+            temperature=0.0,
+            node_name="verify_claims_judge",
+        )
+
+        # Parse judgment (simple heuristic)
+        supported = "supported" in judgment_raw.lower() or "true" in judgment_raw.lower()[:50]
+        claim["verification_status"] = "verified" if supported else "flagged"
+
+    except Exception:
+        logger.warning(
+            "node.verify_citations.claim_error",
+            claim_index=claim.get("claim_index"),
+            exc_info=True,
+        )
+        claim["verification_status"] = "unverified"
+
+    return claim
+
+
+async def verify_citations(state: dict) -> dict:
+    """Decompose the agent's response into cited claims and verify each.
+
+    Uses the Chain-of-Verification (CoVe) pattern:
+    1. Decompose response into atomic claims with cited sources
+    2. For each claim, run independent retrieval to find verification evidence
+    3. Judge whether the evidence supports the claim
+
+    Skipped for fast-tier queries (``_skip_verification=True``).
+    """
+    if state.get("_skip_verification", False):
+        logger.debug("node.verify_citations.skipped", reason="fast_tier")
+        return {"cited_claims": []}
+
+    response = state.get("response", "")
+    if not response:
+        return {"cited_claims": []}
+
+    from app.dependencies import get_llm, get_retriever
+    from app.dependencies import get_settings as _get_settings
+
+    llm = get_llm()
+    retriever = get_retriever()
+
+    # Stage 1: Decompose response into claims
+    source_docs = state.get("source_documents", [])
+    claims = await _decompose_claims(llm, response, source_docs)
+    if not claims:
         return {"cited_claims": []}
 
     # Stage 2+3: Verify each claim with independent retrieval
-    verified_claims: list[dict[str, Any]] = []
     filters = state.get("_filters")
     exclude_privilege = state.get("_exclude_privilege", [])
-
-    from app.dependencies import get_settings as _get_settings
-
     max_claims = _get_settings().max_claims_to_verify
+
+    verified_claims: list[dict[str, Any]] = []
     for i, claim in enumerate(claims[:max_claims]):
-        claim_text = claim.get("claim_text", "")
-        if not claim_text:
+        if not claim.get("claim_text", ""):
             continue
-
-        try:
-            # Independent retrieval for verification
-            verification_results = await retriever.retrieve_text(
-                claim_text,
-                limit=5,
-                filters=filters,
-                exclude_privilege_statuses=exclude_privilege or None,
-            )
-
-            verification_evidence = "\n".join(
-                f"[{r.get('source_file', '?')}, p{r.get('page_number', '?')}]: {r.get('chunk_text', '')[:200]}"
-                for r in verification_results[:3]
-            )
-
-            # Judge claim
-            judgment_prompt = VERIFY_JUDGMENT_PROMPT.format(
-                claim_text=claim_text,
-                filename=claim.get("filename", "unknown"),
-                page_number=claim.get("page_number", "?"),
-                evidence=verification_evidence or "(no supporting evidence found)",
-            )
-
-            judgment_raw = await llm.complete(
-                [{"role": "user", "content": judgment_prompt}],
-                max_tokens=300,
-                temperature=0.0,
-                node_name="verify_claims_judge",
-            )
-
-            # Parse judgment (simple heuristic)
-            supported = "supported" in judgment_raw.lower() or "true" in judgment_raw.lower()[:50]
-            status = "verified" if supported else "flagged"
-
-        except Exception:
-            # Acceptable degradation: individual claim verification failure
-            # should not prevent other claims from being verified.
-            logger.warning("node.verify_citations.claim_error", claim_index=i, exc_info=True)
-            status = "unverified"
-
-        claim["verification_status"] = status
         claim["claim_index"] = i
-        verified_claims.append(claim)
+        verified = await _verify_single_claim(llm, retriever, claim, filters, exclude_privilege)
+        verified_claims.append(verified)
 
     logger.debug(
         "node.verify_citations",

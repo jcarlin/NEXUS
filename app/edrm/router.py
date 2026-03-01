@@ -57,6 +57,15 @@ async def import_loadfile(
     elif format == LoadFileFormat.EDRM_XML:
         records = LoadFileParser.parse_edrm_xml(content)
 
+    # Persist BEGBATES/ENDBATES from parsed records onto documents table
+    from app.exports.service import ExportService
+
+    bates_updated = await ExportService.import_bates_from_loadfile(
+        db=db,
+        matter_id=matter_id,
+        records=records,
+    )
+
     log_entry = await EDRMService.create_import_log(
         db=db,
         matter_id=matter_id,
@@ -70,7 +79,7 @@ async def import_loadfile(
         import_id=log_entry["id"],
         status=ImportStatus.COMPLETE,
         record_count=len(records),
-        message=f"Parsed {len(records)} records from {format.value}",
+        message=f"Parsed {len(records)} records from {format.value} ({bates_updated} Bates numbers imported)",
     )
 
 

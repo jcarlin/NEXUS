@@ -118,6 +118,9 @@ class Settings(BaseSettings):
     bertopic_embedding_model: str = "all-MiniLM-L6-v2"
     bertopic_min_cluster_size: int = 5
 
+    # --- Export ---
+    export_max_documents: int = 10000
+
     # --- Citation Verification ---
     max_claims_to_verify: int = 10
 
