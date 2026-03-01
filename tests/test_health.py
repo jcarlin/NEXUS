@@ -32,9 +32,7 @@ async def test_health_has_service_keys(client: AsyncClient) -> None:
     services = body["services"]
 
     expected_keys = {"qdrant", "minio", "neo4j", "redis", "postgres"}
-    assert expected_keys.issubset(set(services.keys())), (
-        f"Missing service keys: {expected_keys - set(services.keys())}"
-    )
+    assert expected_keys.issubset(set(services.keys())), f"Missing service keys: {expected_keys - set(services.keys())}"
 
 
 @pytest.mark.asyncio
@@ -109,9 +107,9 @@ async def test_graph_stats_returns_200(client: AsyncClient) -> None:
     from unittest.mock import AsyncMock, patch
 
     mock_gs = AsyncMock()
-    mock_gs.get_graph_stats = AsyncMock(return_value={
-        "total_nodes": 0, "total_edges": 0, "node_counts": {}, "edge_counts": {}
-    })
+    mock_gs.get_graph_stats = AsyncMock(
+        return_value={"total_nodes": 0, "total_edges": 0, "node_counts": {}, "edge_counts": {}}
+    )
 
     with patch("app.dependencies._graph_service", mock_gs):
         response = await client.get("/api/v1/graph/stats")

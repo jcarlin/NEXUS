@@ -26,4 +26,4 @@ celery_app.conf.update(
 )
 
 # Autodiscover tasks in all domains with Celery tasks.
-celery_app.autodiscover_tasks(["app.ingestion", "app.entities", "app.cases"])
+celery_app.autodiscover_tasks(["app.ingestion", "app.entities", "app.cases", "app.analysis"])

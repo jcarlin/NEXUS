@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 from uuid import UUID
 
@@ -9,6 +10,7 @@ import jwt
 import pytest
 from httpx import AsyncClient
 
+from app.auth.schemas import UserRecord
 from app.config import Settings
 
 _SETTINGS = Settings(
@@ -18,19 +20,29 @@ _SETTINGS = Settings(
     jwt_refresh_token_expire_days=7,
 )
 
-_FAKE_USER = {
-    "id": UUID("00000000-0000-0000-0000-000000000001"),
-    "email": "admin@nexus.dev",
-    "password_hash": "$2b$12$fake",
-    "full_name": "Admin User",
-    "role": "admin",
-    "is_active": True,
-    "api_key_hash": None,
-    "created_at": "2025-01-01T00:00:00+00:00",
-    "updated_at": "2025-01-01T00:00:00+00:00",
-}
+_FAKE_USER = UserRecord(
+    id=UUID("00000000-0000-0000-0000-000000000001"),
+    email="admin@nexus.dev",
+    password_hash="$2b$12$fake",
+    full_name="Admin User",
+    role="admin",
+    is_active=True,
+    api_key_hash=None,
+    created_at=datetime(2025, 1, 1, tzinfo=UTC),
+    updated_at=datetime(2025, 1, 1, tzinfo=UTC),
+)
 
-_REVIEWER_USER = {**_FAKE_USER, "role": "reviewer", "email": "reviewer@nexus.dev"}
+_REVIEWER_USER = UserRecord(
+    id=UUID("00000000-0000-0000-0000-000000000001"),
+    email="reviewer@nexus.dev",
+    password_hash="$2b$12$fake",
+    full_name="Admin User",
+    role="reviewer",
+    is_active=True,
+    api_key_hash=None,
+    created_at=datetime(2025, 1, 1, tzinfo=UTC),
+    updated_at=datetime(2025, 1, 1, tzinfo=UTC),
+)
 
 
 def _make_token(user_id: str, role: str = "admin", token_type: str = "access", expired: bool = False) -> str:
@@ -59,7 +71,7 @@ async def test_unauthenticated_request(unauthed_client: AsyncClient):
 @pytest.mark.asyncio
 async def test_valid_jwt_passes(unauthed_client: AsyncClient):
     """Request with a valid JWT passes auth."""
-    token = _make_token(str(_FAKE_USER["id"]))
+    token = _make_token(str(_FAKE_USER.id))
 
     with (
         patch("app.auth.middleware.get_settings", return_value=_SETTINGS),
@@ -77,7 +89,7 @@ async def test_valid_jwt_passes(unauthed_client: AsyncClient):
 @pytest.mark.asyncio
 async def test_expired_jwt_returns_401(unauthed_client: AsyncClient):
     """Request with an expired JWT returns 401."""
-    token = _make_token(str(_FAKE_USER["id"]), expired=True)
+    token = _make_token(str(_FAKE_USER.id), expired=True)
 
     with patch("app.auth.middleware.get_settings", return_value=_SETTINGS):
         resp = await unauthed_client.get(
@@ -106,7 +118,7 @@ async def test_api_key_auth_passes(unauthed_client: AsyncClient):
 @pytest.mark.asyncio
 async def test_missing_matter_header_returns_400(unauthed_client: AsyncClient):
     """Request with valid auth but missing X-Matter-ID returns 400."""
-    token = _make_token(str(_FAKE_USER["id"]))
+    token = _make_token(str(_FAKE_USER.id))
 
     with (
         patch("app.auth.middleware.get_settings", return_value=_SETTINGS),
@@ -124,7 +136,7 @@ async def test_missing_matter_header_returns_400(unauthed_client: AsyncClient):
 @pytest.mark.asyncio
 async def test_user_not_assigned_to_matter_returns_403(unauthed_client: AsyncClient):
     """User without access to the requested matter gets 403."""
-    token = _make_token(str(_REVIEWER_USER["id"]), role="reviewer")
+    token = _make_token(str(_REVIEWER_USER.id), role="reviewer")
 
     with (
         patch("app.auth.middleware.get_settings", return_value=_SETTINGS),

@@ -26,8 +26,8 @@
 | M9 | Evaluation Framework | — | Done | 11 | Baseline metrics documented | 2 weeks | M8 |
 | M9b | Case Intelligence Layer | ⚡ Case Setup | Done | 15 | Regression | 2 weeks | M9 |
 | M10 | Agentic Query Pipeline | ⚡ Orchestrator, Citation Verifier | Done | 20 | Regression + eval non-regression | 2.5 weeks | M8, M9, M9b |
-| M10b | Sentiment + Hot Doc Detection | ⚡ Hot Doc, Completeness | TODO | 12 | Regression + eval non-regression | 1.5 weeks | M10 |
-| M10c | Communication Analytics | — | TODO | 10 | Regression | 1 week | M10, M11 |
+| M10b | Sentiment + Hot Doc Detection | ⚡ Hot Doc, Completeness | Done | 12 | Regression + eval non-regression | 1.5 weeks | M10 |
+| M10c | Communication Analytics | — | Done | 10 | Regression | 1 week | M10, M11 |
 | M11 | Knowledge Graph Enhancement | ⚡ Entity Resolution | **Prep Done** | 28 | Regression + eval non-regression | 2.5 weeks | M10 |
 | M12 | Bulk Import + EDRM | — | Done | 11 | Regression + migration | 2 weeks | M6, M6b, M8 (parallel w/ M10-11) |
 | M13 | React Frontend | — | TODO | 12+ | Frontend CI + backend regression | 3.5 weeks | M6, M7, M10, M10b, M10c, M9b |
@@ -37,7 +37,7 @@
 | M16 | Visual Embeddings | — | Done | 16 + eval enum | Eval lift ≥ 5% or stays disabled | 2 weeks | M15 (conditional) |
 | M17 | Full Local Deployment | — | TODO | 3+ | Health check + benchmarks | 2 weeks | All |
 
-**Total tests: 315 passing** (296 unit/functional + 15 case intelligence + 4 evaluation; baseline updated at M9b completion)
+**Total tests: 411 collected** (389 unit/functional + 12 M10b analysis + 10 M10c analytics; 409 passing, 2 pre-existing failures from missing langchain_anthropic dep)
 
 **6 autonomous LangGraph agents** across the pipeline (Case Setup, Investigation Orchestrator, Citation Verifier, Hot Doc Scanner, Contextual Completeness, Entity Resolution)
 
@@ -420,10 +420,12 @@ If a metric regresses beyond the threshold, the milestone must either fix the re
   - `entity_lookup` — entity resolution, aliases, case-defined terms (via M9b context resolver)
   - `document_retrieval` — full document by ID (for doc-level summarization, not chunked)
   - `case_context` — retrieve claims, parties, defined terms, session findings from M9b
-  - `sql_aggregation` — stub (returns "not yet available", wired in M10c)
-  - `sentiment_search` — stub (returns "not yet available", wired in M10b)
-  - `communication_matrix` — stub (returns "not yet available", wired in M10c)
-  - `topic_cluster` — stub (returns "not yet available", wired in M10c)
+  - `sentiment_search` — queries PostgreSQL sentiment columns by dimension (M10b)
+  - `hot_doc_search` — finds hot documents ranked by composite risk score (M10b)
+  - `context_gap_search` — finds documents with missing context / incomplete comms (M10b)
+  - `communication_matrix` — wired to AnalyticsService (M10c)
+  - `topic_cluster` — BERTopic clustering (M10c, feature-flagged)
+  - `network_analysis` — Neo4j GDS centrality metrics (M10c)
 - [x] Structured CitedClaim output: every factual assertion maps to document_id + page + Bates range + excerpt + grounding_score
 - [x] Citation Verification (CoVe): `verify_citations` node — decompose claims → independent retrieval → judge each (claim, evidence) pair via Instructor
 - [x] Self-RAG via `create_react_agent` built-in loop: agent decides when to retrieve more, when to respond
@@ -461,39 +463,41 @@ If a metric regresses beyond the threshold, the milestone must either fix the re
 4. Flags coded language, unusual terseness, or deliberate ambiguity
 5. Scores each email's "context gap" — how much missing context is implied
 
-- [ ] Sentiment/intent classification layer: 7 dimensions per Fraud Triangle + legal-specific signals
-- [ ] Hot Document Scanning Agent: LangGraph batch agent — runs per-document at ingestion, stores scores
-- [ ] Contextual Completeness Agent: LangGraph agent — `analyze_thread_context → detect_missing_refs → detect_coded_language → score_context_gap`
-- [ ] Communication anomaly baseline: per-person pattern modeling (avg length, frequency, tone), flag deviations
-- [ ] Sentiment scores stored as Qdrant payload fields (filterable) and PostgreSQL columns
-- [ ] `sentiment_search`, `hot_doc_search`, `context_gap_search` tools exposed to agentic pipeline (M10)
+- [x] Sentiment/intent classification layer: 7 dimensions per Fraud Triangle + legal-specific signals
+- [x] Hot Document Scanning Agent: Instructor+LLM per-document scorer — runs post-ingestion via Celery, stores scores
+- [x] Contextual Completeness Agent: Instructor+LLM analyzer — detects missing refs, coded language, context gaps
+- [x] Communication anomaly baseline: per-person pattern modeling (avg sentiment, message count), z-score deviation
+- [x] Sentiment scores stored as Qdrant payload fields (filterable) and PostgreSQL columns (migration 009)
+- [x] `sentiment_search`, `hot_doc_search`, `context_gap_search` tools exposed to agentic pipeline (M10)
 
 **Testing (12 tests):**
 - Unit: sentiment classifier — 7-dimension scoring (2), Hot Document Scanning Agent — score computation and threshold (2), Contextual Completeness Agent — missing reference detection and context gap scoring (2), anomaly baseline — per-person deviation detection (2), tool contracts — sentiment_search/hot_doc_search/context_gap_search parameter and return validation (3)
 - Integration: Qdrant payload storage of sentiment scores (1)
 - Gate: regression + eval non-regression (no metric regresses > 0.05 vs M9 baseline)
 
-**Key files:** `app/analysis/sentiment.py`, `app/analysis/hot_docs_agent.py`, `app/analysis/completeness_agent.py`, `app/query/tools.py`
+**Key files:** `app/analysis/sentiment.py`, `app/analysis/completeness.py`, `app/analysis/anomaly.py`, `app/analysis/tasks.py`, `app/analysis/schemas.py`, `app/query/tools.py`
 
 ---
 
-### M10c: Communication Analytics + Pre-computed Matrices (1 week)
+### M10c: Communication Analytics + Pre-computed Matrices (1 week) — DONE
 *Enables Q5 and Q10: org hierarchy analysis and full communication network analytics. Depends on M10, M11.*
 
-- [ ] Pre-computed communication matrices during ingestion: sender-recipient pair counts, stored in PostgreSQL
-- [ ] Neo4j GDS centrality metrics: betweenness (information brokers), PageRank (influence), degree (activity) — stored as node properties, recomputed on ingestion
-- [ ] Organizational hierarchy import: `POST /cases/{matter_id}/org-chart` — lawyer uploads or manually defines reporting structure (JSON or simple CSV)
-- [ ] Org hierarchy inference from email patterns as fallback: REPORTS_TO edges in Neo4j with `confidence` score, presented for lawyer confirmation
-- [ ] Topic auto-clustering via BERTopic: unsupervised clustering of result sets with auto-generated labels (enables Q9 "breakdown by subject matter")
-- [ ] `GET /analytics/communication-matrix?matter_id=X` — returns full NxN matrix for all communicators
-- [ ] `GET /analytics/network-centrality?matter_id=X` — returns ranked entity list by centrality metric
-- [ ] `communication_matrix`, `network_analysis`, and `topic_cluster` tools exposed to agentic pipeline
+- [x] Alembic migration 008: `communication_pairs` and `org_chart_entries` tables
+- [x] Pre-computed communication matrices during ingestion: sender-recipient pair counts from email metadata JSONB, stored in PostgreSQL, incrementally updated post-ingestion
+- [x] Email metadata persistence fix: `_create_document_record()` now passes `parse_result.metadata` (stripped of `attachment_data`) to the JSONB column
+- [x] Neo4j GDS centrality metrics: betweenness (information brokers), PageRank (influence), degree (activity) — `GraphService.compute_centrality()` with matter-scoped GDS projections
+- [x] Organizational hierarchy import: `POST /cases/{matter_id}/org-chart` — attorney/admin uploads reporting structure as JSON
+- [x] Org hierarchy inference from email patterns as fallback: asymmetric communication analysis with `confidence` scores
+- [x] Topic auto-clustering via BERTopic: `TopicClusterer` (feature-flagged `ENABLE_TOPIC_CLUSTERING`) with lazy-loaded model
+- [x] `GET /analytics/communication-matrix?matter_id=X` — returns full NxN matrix for all communicators
+- [x] `GET /analytics/network-centrality?matter_id=X&metric=degree` — returns ranked entity list by centrality metric
+- [x] `communication_matrix`, `network_analysis`, and `topic_cluster` tools replace stubs in agentic pipeline
 
 **Testing (10 tests):**
-- Unit: communication matrix computation from email pairs (2), centrality metrics — betweenness/PageRank/degree (2), org hierarchy import and inference (2), BERTopic clustering with auto-labels (1), endpoint contracts — communication-matrix/network-centrality (2), tool contracts — communication_matrix parameter validation (1)
-- Gate: regression
+- Unit: communication matrix computation from email pairs (2), centrality metrics — degree/PageRank/betweenness (2), org hierarchy import and inference (2), BERTopic clustering with auto-labels (1), endpoint contracts — communication-matrix/network-centrality (2), tool contracts — communication_matrix parameter validation (1)
+- Gate: regression (399 passed, 2 pre-existing failures unrelated to M10c)
 
-**Key files:** `app/analytics/communication.py`, `app/analytics/network.py`, `app/analytics/clustering.py`, `app/analytics/router.py`
+**Key files:** `app/analytics/service.py`, `app/analytics/schemas.py`, `app/analytics/clustering.py`, `app/analytics/router.py`, `app/entities/graph_service.py` (compute_centrality), `app/query/tools.py` (3 tool implementations)
 
 ---
 

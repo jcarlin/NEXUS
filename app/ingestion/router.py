@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.middleware import get_current_user, get_matter_id
+from app.auth.schemas import UserRecord
 from app.common.models import JobStatus
 from app.common.rate_limit import rate_limit_ingests
 from app.dependencies import get_db, get_minio
@@ -82,7 +83,7 @@ def _job_row_to_status_response(row: dict) -> JobStatusResponse:
 async def ingest_single(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: UserRecord = Depends(get_current_user),
     matter_id: UUID = Depends(get_matter_id),
     _rate_limit=Depends(rate_limit_ingests),
 ):
@@ -149,7 +150,7 @@ async def ingest_single(
 async def ingest_batch(
     files: list[UploadFile] = File(...),
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: UserRecord = Depends(get_current_user),
     matter_id: UUID = Depends(get_matter_id),
     _rate_limit=Depends(rate_limit_ingests),
 ):
@@ -289,7 +290,7 @@ async def ingest_webhook(
 async def get_job(
     job_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: UserRecord = Depends(get_current_user),
     matter_id: UUID = Depends(get_matter_id),
 ):
     """Return status and progress for a specific ingestion job."""
@@ -309,7 +310,7 @@ async def list_jobs(
     offset: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(50, ge=1, le=200, description="Max records to return"),
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: UserRecord = Depends(get_current_user),
     matter_id: UUID = Depends(get_matter_id),
 ):
     """List all ingestion jobs (paginated, newest first)."""
@@ -331,7 +332,7 @@ async def list_jobs(
 async def cancel_job(
     job_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: UserRecord = Depends(get_current_user),
     matter_id: UUID = Depends(get_matter_id),
 ):
     """Cancel a running ingestion job.
@@ -363,7 +364,7 @@ async def cancel_job(
 async def get_bulk_import_status(
     import_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: UserRecord = Depends(get_current_user),
     matter_id: UUID = Depends(get_matter_id),
 ):
     """Return status and progress for a bulk import job."""

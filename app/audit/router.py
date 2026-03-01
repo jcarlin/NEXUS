@@ -12,9 +12,10 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.audit.schemas import AIAuditLogListResponse, AIAuditLogEntry, RetentionConfig
+from app.audit.schemas import AIAuditLogEntry, AIAuditLogListResponse, RetentionConfig
 from app.audit.service import AuditService
 from app.auth.middleware import require_role
+from app.auth.schemas import UserRecord
 from app.dependencies import get_db, get_settings
 
 router = APIRouter(prefix="/admin/audit", tags=["admin", "audit"])
@@ -30,7 +31,7 @@ async def list_ai_audit_logs(
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(require_role("admin")),
+    current_user: UserRecord = Depends(require_role("admin")),
 ) -> AIAuditLogListResponse:
     """Return a paginated, filterable AI audit log. Admin-only."""
     rows, total = await AuditService.list_ai_audit_logs(
@@ -54,7 +55,7 @@ async def export_audit_logs(
     date_from: str | None = Query(None, description="ISO datetime lower bound"),
     date_to: str | None = Query(None, description="ISO datetime upper bound"),
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(require_role("admin")),
+    current_user: UserRecord = Depends(require_role("admin")),
 ) -> PlainTextResponse:
     """Export audit log entries as CSV or JSON. Admin-only."""
     content = await AuditService.export_audit_logs(
@@ -76,7 +77,7 @@ async def export_audit_logs(
 @router.get("/retention", response_model=RetentionConfig)
 async def get_retention_status(
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(require_role("admin")),
+    current_user: UserRecord = Depends(require_role("admin")),
 ) -> RetentionConfig:
     """Return retention status for the AI audit log. Admin-only."""
     settings = get_settings()
@@ -87,7 +88,7 @@ async def get_retention_status(
 @router.post("/retention", response_model=dict)
 async def apply_retention(
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(require_role("admin")),
+    current_user: UserRecord = Depends(require_role("admin")),
 ) -> dict:
     """Dry-run retention policy: returns count of entries that would be archived. Admin-only."""
     settings = get_settings()

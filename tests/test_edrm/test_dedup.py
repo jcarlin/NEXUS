@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from app.ingestion.dedup import NearDuplicateDetector
 
-
 # ---------------------------------------------------------------------------
 # Exact duplicate detection (1)
 # ---------------------------------------------------------------------------
+
 
 def test_exact_duplicate_detected():
     """Two identical documents should be detected as duplicates."""
@@ -31,6 +31,7 @@ def test_exact_duplicate_detected():
 # ---------------------------------------------------------------------------
 # Near-duplicate above threshold (1)
 # ---------------------------------------------------------------------------
+
 
 def test_near_duplicate_above_threshold():
     """Two similar documents above the threshold should be detected."""
@@ -62,6 +63,7 @@ def test_near_duplicate_above_threshold():
 # ---------------------------------------------------------------------------
 # Dissimilar documents not matched (1)
 # ---------------------------------------------------------------------------
+
 
 def test_dissimilar_documents_not_matched():
     """Two completely different documents should not be matched."""

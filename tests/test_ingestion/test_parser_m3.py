@@ -5,14 +5,12 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-import pytest
-
-from app.ingestion.parser import DocumentParser, PARSER_ROUTES
-
+from app.ingestion.parser import PARSER_ROUTES, DocumentParser
 
 # ---------------------------------------------------------------------------
 # EML tests (4)
 # ---------------------------------------------------------------------------
+
 
 def _make_eml(content: bytes, suffix: str = ".eml") -> Path:
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as f:
@@ -126,6 +124,7 @@ def test_parse_eml_cc_header():
 # MSG tests (2)
 # ---------------------------------------------------------------------------
 
+
 def test_parse_msg_routing():
     """MSG files should route to the 'msg' backend."""
     assert PARSER_ROUTES[".msg"] == "msg"
@@ -139,6 +138,7 @@ def test_parse_msg_import():
 # ---------------------------------------------------------------------------
 # CSV tests (3)
 # ---------------------------------------------------------------------------
+
 
 def test_parse_csv_basic():
     """Parse a simple CSV into a markdown table."""
@@ -195,6 +195,7 @@ def test_parse_tsv():
 # RTF tests (2)
 # ---------------------------------------------------------------------------
 
+
 def test_parse_rtf():
     """Parse a simple RTF document."""
     rtf_content = r"{\rtf1\ansi Hello RTF World!}"
@@ -220,6 +221,7 @@ def test_parse_rtf_routing():
 # ---------------------------------------------------------------------------
 # Routing tests (3)
 # ---------------------------------------------------------------------------
+
 
 def test_eml_route_is_eml():
     """EML should route to 'eml', not 'unsupported'."""

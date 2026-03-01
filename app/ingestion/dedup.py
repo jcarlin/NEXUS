@@ -29,7 +29,7 @@ def _text_to_shingles(text: str, k: int = 5) -> set[str]:
     text = text.lower().strip()
     if len(text) < k:
         return {text}
-    return {text[i:i + k] for i in range(len(text) - k + 1)}
+    return {text[i : i + k] for i in range(len(text) - k + 1)}
 
 
 class NearDuplicateDetector:
@@ -42,9 +42,11 @@ class NearDuplicateDetector:
         self,
         threshold: float = 0.80,
         num_perm: int = 128,
+        shingle_size: int = 5,
     ) -> None:
         self.threshold = threshold
         self.num_perm = num_perm
+        self.shingle_size = shingle_size
         self._indices: dict[str, MinHashLSH] = {}  # matter_id -> LSH index
         self._minhashes: dict[str, MinHash] = {}  # doc_id -> MinHash
 
@@ -60,7 +62,7 @@ class NearDuplicateDetector:
     def compute_minhash(self, text: str) -> MinHash:
         """Compute a MinHash signature for document text."""
         m = MinHash(num_perm=self.num_perm)
-        shingles = _text_to_shingles(text)
+        shingles = _text_to_shingles(text, k=self.shingle_size)
         for s in shingles:
             m.update(s.encode("utf-8"))
         return m
@@ -222,11 +224,12 @@ class VersionDetector:
         doc_id: str,
         filename: str,
         matches: list[tuple[str, float]],
+        version_upper_threshold: float = 0.95,
     ) -> str | None:
         """Check if this document and its near-duplicates form a version group.
 
         Criteria:
-        - Jaccard between 0.80 and 0.95 (similar but not identical)
+        - Jaccard between dedup threshold and *version_upper_threshold* (similar but not identical)
         - At least one document has a version-indicating filename
 
         Returns version_group_id or None.
@@ -236,8 +239,8 @@ class VersionDetector:
 
         from sqlalchemy import text
 
-        # Filter to version-range matches (0.80-0.95)
-        version_matches = [(mid, score) for mid, score in matches if 0.80 <= score <= 0.95]
+        # Filter to version-range matches
+        version_matches = [(mid, score) for mid, score in matches if 0.80 <= score <= version_upper_threshold]
         if not version_matches:
             return None
 
@@ -250,10 +253,7 @@ class VersionDetector:
 
         with engine.connect() as conn:
             result = conn.execute(
-                text(
-                    f"SELECT id, filename, version_group_id FROM documents "
-                    f"WHERE id IN ({placeholders})"
-                ),
+                text(f"SELECT id, filename, version_group_id FROM documents WHERE id IN ({placeholders})"),
                 params,
             )
             match_docs = result.all()
@@ -279,9 +279,7 @@ class VersionDetector:
 
             # Determine version number (simple: count existing in group + 1)
             count_result = conn.execute(
-                text(
-                    "SELECT count(*) FROM documents WHERE version_group_id = :gid"
-                ),
+                text("SELECT count(*) FROM documents WHERE version_group_id = :gid"),
                 {"gid": group_id},
             )
             existing_count = count_result.scalar_one()

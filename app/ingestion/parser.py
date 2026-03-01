@@ -143,10 +143,7 @@ class DocumentParser:
         if backend == "rtf":
             return self._parse_rtf(file_path, filename)
         if backend == "unsupported":
-            raise ValueError(
-                f"File format '{ext}' is not supported. "
-                f"File: '{filename}'"
-            )
+            raise ValueError(f"File format '{ext}' is not supported. File: '{filename}'")
         if backend == "zip_extract":
             raise ValueError(
                 "ZIP files are handled by the task layer, not the parser. "
@@ -200,11 +197,12 @@ class DocumentParser:
         try:
             text = doc.export_to_markdown()
         except Exception:
-            logger.warning(
+            logger.error(
                 "parser.docling.markdown_export_failed",
                 filename=filename,
+                exc_info=True,
             )
-            text = ""
+            raise
 
         # ----------------------------------------------------------
         # Per-page content
@@ -242,18 +240,19 @@ class DocumentParser:
                         )
                     )
         except Exception:
-            # Page-level iteration is best-effort; fall back to a single
-            # page containing the full text.
-            logger.debug(
+            # Page-level iteration is best-effort degradation: the full text
+            # is still available from export_to_markdown().  Docling page
+            # structures vary across versions, so graceful fallback to a
+            # single-page wrapper is acceptable.
+            logger.warning(
                 "parser.docling.page_iteration_unavailable",
                 filename=filename,
+                exc_info=True,
             )
 
         # Fallback: if we got no pages, wrap the entire text in one page.
         if not pages:
-            pages = [
-                PageContent(page_number=1, text=text, tables=[], images=[])
-            ]
+            pages = [PageContent(page_number=1, text=text, tables=[], images=[])]
 
         # ----------------------------------------------------------
         # Metadata
@@ -263,7 +262,7 @@ class DocumentParser:
             # Docling may expose name/title or other metadata on the document.
             if hasattr(doc, "name") and doc.name:
                 metadata["title"] = doc.name
-        except Exception:
+        except AttributeError:
             pass
 
         page_count = len(pages)
@@ -294,11 +293,13 @@ class DocumentParser:
             val = getattr(page, attr, None)
             if isinstance(val, str) and val:
                 return val
-        # Some versions expose an export method.
+        # Some versions expose an export method.  Best-effort: page text
+        # extraction is optional enrichment; full document text is available
+        # from the top-level export.
         if callable(getattr(page, "export_to_markdown", None)):
             try:
-                return page.export_to_markdown()
-            except Exception:
+                return str(page.export_to_markdown())
+            except (AttributeError, TypeError, RuntimeError):
                 pass
         return ""
 
@@ -309,13 +310,15 @@ class DocumentParser:
         raw = getattr(page, "tables", None)
         if raw is None:
             return tables
+        # Best-effort: table extraction is optional enrichment.
+        # Returns whatever tables were successfully extracted.
         try:
             for table in raw:
                 if callable(getattr(table, "export_to_markdown", None)):
                     tables.append(table.export_to_markdown())
                 elif hasattr(table, "text") and isinstance(table.text, str):
                     tables.append(table.text)
-        except Exception:
+        except (AttributeError, TypeError, RuntimeError):
             pass
         return tables
 
@@ -402,29 +405,23 @@ class DocumentParser:
         if msg.is_multipart():
             for part in msg.walk():
                 disposition = part.get_content_disposition()
-                if disposition == "attachment" or (
-                    disposition == "inline" and part.get_filename()
-                ):
+                if disposition == "attachment" or (disposition == "inline" and part.get_filename()):
                     att_filename = part.get_filename() or "unnamed_attachment"
                     att_data = part.get_payload(decode=True)
                     if att_data:
-                        attachments.append({
-                            "filename": att_filename,
-                            "content_type": part.get_content_type(),
-                            "data": att_data,
-                        })
+                        attachments.append(
+                            {
+                                "filename": att_filename,
+                                "content_type": part.get_content_type(),
+                                "data": att_data,
+                            }
+                        )
 
         # Format header block
-        header_block = (
-            f"From: {headers['from']}\n"
-            f"To: {headers['to']}\n"
-        )
+        header_block = f"From: {headers['from']}\nTo: {headers['to']}\n"
         if headers["cc"]:
             header_block += f"Cc: {headers['cc']}\n"
-        header_block += (
-            f"Date: {headers['date']}\n"
-            f"Subject: {headers['subject']}\n"
-        )
+        header_block += f"Date: {headers['date']}\nSubject: {headers['subject']}\n"
 
         full_text = f"{header_block}\n{body}"
 
@@ -473,9 +470,7 @@ class DocumentParser:
                 import email as _email_mod
                 import email.policy as _email_policy
 
-                parsed_headers = _email_mod.message_from_string(
-                    transport_headers, policy=_email_policy.default
-                )
+                parsed_headers = _email_mod.message_from_string(transport_headers, policy=_email_policy.default)
                 message_id = str(parsed_headers.get("Message-ID", "") or "")
                 in_reply_to = str(parsed_headers.get("In-Reply-To", "") or "")
                 references = str(parsed_headers.get("References", "") or "")
@@ -499,23 +494,19 @@ class DocumentParser:
                 att_filename = getattr(att, "longFilename", None) or getattr(att, "shortFilename", None) or "unnamed"
                 att_data = getattr(att, "data", None)
                 if att_data:
-                    attachments.append({
-                        "filename": att_filename,
-                        "content_type": "application/octet-stream",
-                        "data": att_data,
-                    })
+                    attachments.append(
+                        {
+                            "filename": att_filename,
+                            "content_type": "application/octet-stream",
+                            "data": att_data,
+                        }
+                    )
 
             # Format header block
-            header_block = (
-                f"From: {headers['from']}\n"
-                f"To: {headers['to']}\n"
-            )
+            header_block = f"From: {headers['from']}\nTo: {headers['to']}\n"
             if headers["cc"]:
                 header_block += f"Cc: {headers['cc']}\n"
-            header_block += (
-                f"Date: {headers['date']}\n"
-                f"Subject: {headers['subject']}\n"
-            )
+            header_block += f"Date: {headers['date']}\nSubject: {headers['subject']}\n"
 
             full_text = f"{header_block}\n{body}"
 
@@ -551,7 +542,7 @@ class DocumentParser:
     @staticmethod
     def _parse_csv(file_path: Path, filename: str) -> ParseResult:
         """Parse a CSV/TSV file into a markdown table."""
-        MAX_ROWS = 1000
+        max_rows = 1000
 
         try:
             raw_text = file_path.read_text(encoding="utf-8")
@@ -570,7 +561,7 @@ class DocumentParser:
         rows: list[list[str]] = []
         for row in reader:
             rows.append(row)
-            if len(rows) > MAX_ROWS + 1:  # +1 for header
+            if len(rows) > max_rows + 1:  # +1 for header
                 break
 
         if not rows:
@@ -581,11 +572,11 @@ class DocumentParser:
                 page_count=1,
             )
 
-        truncated = len(rows) > MAX_ROWS + 1
+        truncated = len(rows) > max_rows + 1
         total_row_count = len(rows) - 1  # Subtract header
         if truncated:
-            rows = rows[:MAX_ROWS + 1]
-            total_row_count = MAX_ROWS
+            rows = rows[: max_rows + 1]
+            total_row_count = max_rows
 
         # Build markdown table
         header = rows[0]

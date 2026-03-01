@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -61,8 +61,22 @@ async def test_search_entities(graph_service):
         side_effect=[
             [{"total": 2}],  # count query
             [
-                {"name": "Alice", "type": "person", "mention_count": 5, "first_seen": None, "last_seen": None, "aliases": []},
-                {"name": "Bob", "type": "person", "mention_count": 3, "first_seen": None, "last_seen": None, "aliases": []},
+                {
+                    "name": "Alice",
+                    "type": "person",
+                    "mention_count": 5,
+                    "first_seen": None,
+                    "last_seen": None,
+                    "aliases": [],
+                },
+                {
+                    "name": "Bob",
+                    "type": "person",
+                    "mention_count": 3,
+                    "first_seen": None,
+                    "last_seen": None,
+                    "aliases": [],
+                },
             ],
         ]
     )
@@ -79,7 +93,16 @@ async def test_search_entities_with_query(graph_service):
     graph_service._run_query = AsyncMock(
         side_effect=[
             [{"total": 1}],
-            [{"name": "Alice", "type": "person", "mention_count": 5, "first_seen": None, "last_seen": None, "aliases": []}],
+            [
+                {
+                    "name": "Alice",
+                    "type": "person",
+                    "mention_count": 5,
+                    "first_seen": None,
+                    "last_seen": None,
+                    "aliases": [],
+                }
+            ],
         ]
     )
 

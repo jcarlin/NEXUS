@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from app.ingestion.parser import DocumentParser, PARSER_ROUTES
+from app.ingestion.parser import PARSER_ROUTES, DocumentParser
 
 
 def test_parser_routes_cover_expected_extensions():

@@ -243,32 +243,251 @@ async def case_context(
 
 
 # ---------------------------------------------------------------------------
-# Stub tools (feature-flagged for M10b/M10c)
+# M10b: Sentiment & hot doc tools
 # ---------------------------------------------------------------------------
 
 
 @tool
-async def sentiment_search(query: str) -> str:
-    """Search for documents by sentiment or emotional tone. (Coming soon)"""
-    return "This capability is not yet available. Use vector_search or graph_query instead."
+async def sentiment_search(
+    query: str,
+    min_score: float = 0.5,
+    dimension: str = "pressure",
+    limit: int = 10,
+    state: Annotated[dict, InjectedState] = {},  # noqa: B006
+) -> str:
+    """Search documents by sentiment dimension score.
+
+    Use for "find documents showing pressure", "which emails express concealment",
+    or any question about emotional tone in legal documents.
+    Available dimensions: positive, negative, pressure, opportunity,
+    rationalization, intent, concealment.
+    """
+    valid_dimensions = {
+        "positive",
+        "negative",
+        "pressure",
+        "opportunity",
+        "rationalization",
+        "intent",
+        "concealment",
+    }
+    if dimension not in valid_dimensions:
+        return json.dumps({"error": f"Invalid dimension '{dimension}'. Valid: {sorted(valid_dimensions)}"})
+
+    from app.dependencies import get_db
+
+    filters = state.get("_filters", {})
+    matter_id = filters.get("matter_id", "")
+
+    db_gen = get_db()
+    db = await db_gen.__anext__()
+    try:
+        from sqlalchemy import text
+
+        col = f"sentiment_{dimension}"
+        result = await db.execute(
+            text(f"""
+                SELECT id, filename, document_type, {col}, hot_doc_score
+                FROM documents
+                WHERE matter_id = :matter_id AND {col} >= :min_score
+                ORDER BY {col} DESC
+                LIMIT :limit
+            """),
+            {"matter_id": matter_id, "min_score": min_score, "limit": limit},
+        )
+        rows = [dict(r._mapping) for r in result.all()]
+        return json.dumps(rows, default=str)
+    finally:
+        try:
+            await db_gen.aclose()
+        except Exception:
+            pass
 
 
 @tool
-async def communication_matrix(entity_name: str) -> str:
-    """Analyze communication patterns between entities. (Coming soon)"""
-    return "This capability is not yet available. Use graph_query instead."
+async def hot_doc_search(
+    min_score: float = 0.6,
+    limit: int = 10,
+    state: Annotated[dict, InjectedState] = {},  # noqa: B006
+) -> str:
+    """Find hot documents ranked by composite risk score.
+
+    Use for "find hot documents", "which documents have the highest risk score",
+    or "show me legally significant documents".
+    """
+    from app.dependencies import get_db
+
+    filters = state.get("_filters", {})
+    matter_id = filters.get("matter_id", "")
+
+    db_gen = get_db()
+    db = await db_gen.__anext__()
+    try:
+        from sqlalchemy import text
+
+        result = await db.execute(
+            text("""
+                SELECT id, filename, document_type, hot_doc_score,
+                       sentiment_pressure, sentiment_concealment, sentiment_intent
+                FROM documents
+                WHERE matter_id = :matter_id AND hot_doc_score >= :min_score
+                ORDER BY hot_doc_score DESC
+                LIMIT :limit
+            """),
+            {"matter_id": matter_id, "min_score": min_score, "limit": limit},
+        )
+        rows = [dict(r._mapping) for r in result.all()]
+        return json.dumps(rows, default=str)
+    finally:
+        try:
+            await db_gen.aclose()
+        except Exception:
+            pass
 
 
 @tool
-async def topic_cluster(query: str) -> str:
-    """Find topic clusters across the document corpus. (Coming soon)"""
-    return "This capability is not yet available. Use vector_search instead."
+async def context_gap_search(
+    min_gap_score: float = 0.5,
+    gap_type: str | None = None,
+    limit: int = 10,
+    state: Annotated[dict, InjectedState] = {},  # noqa: B006
+) -> str:
+    """Find documents with missing context or incomplete communications.
+
+    Use for "find emails with missing context", "which documents reference
+    missing attachments", or "show incomplete communications".
+    Optional gap_type filter: missing_attachment, prior_conversation,
+    forward_reference, coded_language, unusual_terseness.
+    """
+    from app.dependencies import get_db
+
+    filters = state.get("_filters", {})
+    matter_id = filters.get("matter_id", "")
+
+    db_gen = get_db()
+    db = await db_gen.__anext__()
+    try:
+        from sqlalchemy import text
+
+        params: dict = {"matter_id": matter_id, "min_gap_score": min_gap_score, "limit": limit}
+        where = "matter_id = :matter_id AND context_gap_score >= :min_gap_score"
+        if gap_type:
+            where += " AND context_gaps @> :gap_filter::jsonb"
+            params["gap_filter"] = json.dumps([{"gap_type": gap_type}])
+
+        result = await db.execute(
+            text(f"""
+                SELECT id, filename, document_type, context_gap_score, context_gaps
+                FROM documents
+                WHERE {where}
+                ORDER BY context_gap_score DESC
+                LIMIT :limit
+            """),
+            params,
+        )
+        rows = [dict(r._mapping) for r in result.all()]
+        return json.dumps(rows, default=str)
+    finally:
+        try:
+            await db_gen.aclose()
+        except Exception:
+            pass
 
 
 @tool
-async def sql_aggregation(query: str) -> str:
-    """Run aggregate queries over document metadata. (Coming soon)"""
-    return "This capability is not yet available. Use vector_search or case_context instead."
+async def communication_matrix(
+    entity_name: str | None = None,
+    state: Annotated[dict, InjectedState] = {},  # noqa: B006
+) -> str:
+    """Analyze communication patterns between entities.
+
+    Returns sender-recipient pairs with message counts. Optionally filter
+    to communications involving a specific entity.
+    """
+    from app.analytics.service import AnalyticsService
+    from app.dependencies import get_db
+
+    filters = state.get("_filters", {})
+    matter_id = filters.get("matter_id", "")
+
+    db_gen = get_db()
+    db = await db_gen.__anext__()
+    try:
+        result = await AnalyticsService.get_communication_matrix(
+            db,
+            matter_id,
+            entity_name=entity_name,
+        )
+        return json.dumps(result.model_dump(), default=str)
+    finally:
+        try:
+            await db_gen.aclose()
+        except Exception:
+            pass
+
+
+@tool
+async def topic_cluster(
+    query: str,
+    state: Annotated[dict, InjectedState] = {},  # noqa: B006
+) -> str:
+    """Find topic clusters across the document corpus.
+
+    Retrieves documents matching the query, then clusters them by topic
+    using BERTopic. Returns topic labels and representative terms.
+    """
+    from app.analytics.clustering import TopicClusterer
+    from app.config import Settings
+    from app.dependencies import get_retriever
+
+    settings = Settings()
+    if not settings.enable_topic_clustering:
+        return json.dumps({"info": "Topic clustering is not enabled. Set ENABLE_TOPIC_CLUSTERING=true."})
+
+    retriever = get_retriever()
+    results = await retriever.retrieve_text(
+        query,
+        limit=100,
+        filters=state.get("_filters"),
+        exclude_privilege_statuses=state.get("_exclude_privilege") or None,
+    )
+    texts = [r.get("chunk_text", "") for r in results if r.get("chunk_text")]
+
+    if not texts:
+        return json.dumps({"info": "No documents found for clustering."})
+
+    clusterer = TopicClusterer(
+        enabled=True,
+        embedding_model=settings.bertopic_embedding_model,
+        min_cluster_size=settings.bertopic_min_cluster_size,
+    )
+    clusters = clusterer.cluster(texts)
+    return json.dumps([c.model_dump() for c in clusters], default=str)
+
+
+@tool
+async def network_analysis(
+    metric: str = "degree",
+    state: Annotated[dict, InjectedState] = {},  # noqa: B006
+) -> str:
+    """Analyze network centrality of entities in the knowledge graph.
+
+    Computes centrality using Neo4j GDS. Supported metrics: degree,
+    pagerank, betweenness. Returns ranked entities with scores.
+    """
+    from app.analytics.service import AnalyticsService
+    from app.dependencies import get_graph_service
+
+    filters = state.get("_filters", {})
+    matter_id = filters.get("matter_id", "")
+
+    gs = get_graph_service()
+    result = await AnalyticsService.get_network_centrality(
+        gs,
+        matter_id,
+        metric,
+    )
+    return json.dumps(result.model_dump(), default=str)
 
 
 # ---------------------------------------------------------------------------
@@ -282,9 +501,11 @@ INVESTIGATION_TOOLS = [
     entity_lookup,
     document_retrieval,
     case_context,
-    # Stubs
     sentiment_search,
+    hot_doc_search,
+    context_gap_search,
+    # Communication analytics (M10c)
     communication_matrix,
     topic_cluster,
-    sql_aggregation,
+    network_analysis,
 ]

@@ -6,8 +6,6 @@ import io
 import zipfile
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from app.ingestion.tasks import _ZIP_SKIP_PATTERNS, process_zip
 
 
@@ -31,7 +29,6 @@ def _make_mock_settings():
     return s
 
 
-
 def test_zip_skip_patterns():
     """Known skip patterns should include __MACOSX and .DS_Store."""
     assert "__MACOSX" in _ZIP_SKIP_PATTERNS
@@ -40,10 +37,12 @@ def test_zip_skip_patterns():
 
 def test_zip_creates_child_jobs():
     """process_zip should create a child job per valid file in the archive."""
-    zip_bytes = _make_zip({
-        "doc1.pdf": b"fake pdf content",
-        "doc2.txt": b"some text",
-    })
+    zip_bytes = _make_zip(
+        {
+            "doc1.pdf": b"fake pdf content",
+            "doc2.txt": b"some text",
+        }
+    )
     mock_settings = _make_mock_settings()
 
     with (
@@ -66,10 +65,12 @@ def test_zip_creates_child_jobs():
 
 def test_zip_skips_macosx():
     """Files under __MACOSX/ directory should be skipped."""
-    zip_bytes = _make_zip({
-        "__MACOSX/._doc.pdf": b"mac resource fork",
-        "doc.pdf": b"real content",
-    })
+    zip_bytes = _make_zip(
+        {
+            "__MACOSX/._doc.pdf": b"mac resource fork",
+            "doc.pdf": b"real content",
+        }
+    )
     mock_settings = _make_mock_settings()
 
     with (
@@ -82,7 +83,7 @@ def test_zip_skips_macosx():
         patch("app.config.Settings", return_value=mock_settings),
     ):
         mock_pd.delay = MagicMock()
-        result = process_zip.__wrapped__("job-1", "raw/job-1/test.zip")
+        process_zip.__wrapped__("job-1", "raw/job-1/test.zip")
 
     # Only the real doc.pdf should produce a child job
     assert mock_child.call_count == 1
@@ -90,10 +91,12 @@ def test_zip_skips_macosx():
 
 def test_zip_skips_ds_store():
     """.DS_Store files should be skipped."""
-    zip_bytes = _make_zip({
-        ".DS_Store": b"binary junk",
-        "readme.txt": b"hello",
-    })
+    zip_bytes = _make_zip(
+        {
+            ".DS_Store": b"binary junk",
+            "readme.txt": b"hello",
+        }
+    )
     mock_settings = _make_mock_settings()
 
     with (
@@ -106,17 +109,19 @@ def test_zip_skips_ds_store():
         patch("app.config.Settings", return_value=mock_settings),
     ):
         mock_pd.delay = MagicMock()
-        result = process_zip.__wrapped__("job-1", "raw/job-1/test.zip")
+        process_zip.__wrapped__("job-1", "raw/job-1/test.zip")
 
     assert mock_child.call_count == 1
 
 
 def test_zip_skips_nested_zip():
     """Nested .zip files inside an archive should be skipped."""
-    zip_bytes = _make_zip({
-        "inner.zip": b"nested zip content",
-        "real.txt": b"hello",
-    })
+    zip_bytes = _make_zip(
+        {
+            "inner.zip": b"nested zip content",
+            "real.txt": b"hello",
+        }
+    )
     mock_settings = _make_mock_settings()
 
     with (
@@ -129,7 +134,7 @@ def test_zip_skips_nested_zip():
         patch("app.config.Settings", return_value=mock_settings),
     ):
         mock_pd.delay = MagicMock()
-        result = process_zip.__wrapped__("job-1", "raw/job-1/test.zip")
+        process_zip.__wrapped__("job-1", "raw/job-1/test.zip")
 
     # Only real.txt should produce a child job
     assert mock_child.call_count == 1

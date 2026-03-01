@@ -37,8 +37,7 @@ class EDRMService:
         """List email threads for a matter with message counts."""
         count_result = await db.execute(
             text(
-                "SELECT count(DISTINCT thread_id) FROM documents "
-                "WHERE thread_id IS NOT NULL AND matter_id = :matter_id"
+                "SELECT count(DISTINCT thread_id) FROM documents WHERE thread_id IS NOT NULL AND matter_id = :matter_id"
             ),
             {"matter_id": matter_id},
         )
@@ -144,9 +143,7 @@ class EDRMService:
     ) -> tuple[list[dict], int]:
         """List EDRM import log entries for a matter."""
         count_result = await db.execute(
-            text(
-                "SELECT count(*) FROM edrm_import_log WHERE matter_id = :matter_id"
-            ),
+            text("SELECT count(*) FROM edrm_import_log WHERE matter_id = :matter_id"),
             {"matter_id": matter_id},
         )
         total = count_result.scalar_one()

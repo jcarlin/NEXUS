@@ -97,6 +97,13 @@ Use these tools to gather evidence before answering:
   Use for "Summarize document X" or "What does Exhibit A say?" questions.
 - **case_context**: Retrieve case-level context (claims, parties, defined terms, timeline). \
   Use for "What are the claims?", "Who are the parties?" questions.
+- **sentiment_search**: Search documents by sentiment dimension score. Use for questions about \
+  emotional tone, pressure, concealment, or intent in documents. Available dimensions: \
+  positive, negative, pressure, opportunity, rationalization, intent, concealment.
+- **hot_doc_search**: Find hot documents ranked by composite risk score. Use for \
+  "find hot documents", "legally significant documents", or high-risk content.
+- **context_gap_search**: Find documents with missing context or incomplete communications. \
+  Use for "missing attachments", "incomplete email threads", or "coded language" detection.
 
 ## Citation Requirements
 

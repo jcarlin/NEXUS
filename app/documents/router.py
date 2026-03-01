@@ -15,9 +15,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.middleware import get_current_user, get_matter_id, require_role
+from app.auth.schemas import UserRecord
 from app.common.storage import StorageClient
 from app.common.vector_store import VectorStoreClient
-from app.dependencies import get_db, get_minio, get_qdrant, get_graph_service
+from app.dependencies import get_db, get_graph_service, get_minio, get_qdrant
 from app.documents.schemas import (
     DocumentDetail,
     DocumentListResponse,
@@ -35,6 +36,7 @@ router = APIRouter(tags=["documents"])
 # -----------------------------------------------------------------------
 # Helpers
 # -----------------------------------------------------------------------
+
 
 def _row_to_response(row: dict) -> DocumentResponse:
     """Convert a raw DB row dict into a ``DocumentResponse``."""
@@ -91,6 +93,7 @@ def _row_to_detail(row: dict) -> DocumentDetail:
 # GET /documents — list ingested documents (filterable)
 # -----------------------------------------------------------------------
 
+
 @router.get("/documents", response_model=DocumentListResponse)
 async def list_documents(
     document_type: str | None = Query(None, description="Filter by document type"),
@@ -98,7 +101,7 @@ async def list_documents(
     offset: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(50, ge=1, le=200, description="Max records to return"),
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: UserRecord = Depends(get_current_user),
     matter_id: UUID = Depends(get_matter_id),
 ):
     """List all ingested documents with optional filters."""
@@ -109,7 +112,7 @@ async def list_documents(
         offset=offset,
         limit=limit,
         matter_id=matter_id,
-        user_role=current_user["role"],
+        user_role=current_user.role,
     )
     return DocumentListResponse(
         items=[_row_to_response(row) for row in items],
@@ -123,16 +126,20 @@ async def list_documents(
 # GET /documents/{doc_id} — document metadata
 # -----------------------------------------------------------------------
 
+
 @router.get("/documents/{doc_id}", response_model=DocumentDetail)
 async def get_document(
     doc_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: UserRecord = Depends(get_current_user),
     matter_id: UUID = Depends(get_matter_id),
 ):
     """Return metadata for a single document."""
     row = await DocumentService.get_document(
-        db=db, doc_id=doc_id, matter_id=matter_id, user_role=current_user["role"],
+        db=db,
+        doc_id=doc_id,
+        matter_id=matter_id,
+        user_role=current_user.role,
     )
     if row is None:
         raise HTTPException(status_code=404, detail=f"Document {doc_id} not found")
@@ -143,18 +150,22 @@ async def get_document(
 # GET /documents/{doc_id}/preview — page thumbnail (presigned URL)
 # -----------------------------------------------------------------------
 
+
 @router.get("/documents/{doc_id}/preview", response_model=DocumentPreview)
 async def document_preview(
     doc_id: UUID,
     page: int = Query(1, ge=1, description="Page number to preview"),
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: UserRecord = Depends(get_current_user),
     matter_id: UUID = Depends(get_matter_id),
     storage: StorageClient = Depends(get_minio),
 ):
     """Return a presigned URL to a page thumbnail for the document."""
     row = await DocumentService.get_document(
-        db=db, doc_id=doc_id, matter_id=matter_id, user_role=current_user["role"],
+        db=db,
+        doc_id=doc_id,
+        matter_id=matter_id,
+        user_role=current_user.role,
     )
     if row is None:
         raise HTTPException(status_code=404, detail=f"Document {doc_id} not found")
@@ -169,17 +180,21 @@ async def document_preview(
 # GET /documents/{doc_id}/download — original file from MinIO
 # -----------------------------------------------------------------------
 
+
 @router.get("/documents/{doc_id}/download")
 async def document_download(
     doc_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: UserRecord = Depends(get_current_user),
     matter_id: UUID = Depends(get_matter_id),
     storage: StorageClient = Depends(get_minio),
 ):
     """Return a presigned URL to download the original uploaded file."""
     row = await DocumentService.get_document(
-        db=db, doc_id=doc_id, matter_id=matter_id, user_role=current_user["role"],
+        db=db,
+        doc_id=doc_id,
+        matter_id=matter_id,
+        user_role=current_user.role,
     )
     if row is None:
         raise HTTPException(status_code=404, detail=f"Document {doc_id} not found")
@@ -192,38 +207,33 @@ async def document_download(
 # PATCH /documents/{doc_id}/privilege — update privilege status
 # -----------------------------------------------------------------------
 
+
 @router.patch("/documents/{doc_id}/privilege", response_model=PrivilegeUpdateResponse)
 async def update_document_privilege(
     doc_id: UUID,
     body: PrivilegeUpdateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(require_role("admin", "attorney", "paralegal")),
+    current_user: UserRecord = Depends(require_role("admin", "attorney", "paralegal")),
     matter_id: UUID = Depends(get_matter_id),
     qdrant: VectorStoreClient = Depends(get_qdrant),
     gs: GraphService = Depends(get_graph_service),
 ):
     """Tag a document's privilege status. Reviewer role is excluded."""
-    # Verify doc exists (no role filtering — admin/attorney/paralegal can all see)
     row = await DocumentService.get_document(db=db, doc_id=doc_id, matter_id=matter_id, user_role="admin")
     if row is None:
         raise HTTPException(status_code=404, detail=f"Document {doc_id} not found")
 
-    # Update PostgreSQL
-    updated = await DocumentService.update_privilege(
+    updated = await DocumentService.update_privilege_across_stores(
         db=db,
         doc_id=doc_id,
         privilege_status=body.privilege_status.value,
-        reviewed_by=current_user["id"],
+        reviewed_by=current_user.id,
+        qdrant=qdrant,
+        gs=gs,
+        job_id=str(row["job_id"]),
     )
     if updated is None:
         raise HTTPException(status_code=404, detail=f"Document {doc_id} not found")
-
-    # Update Qdrant payload (uses job_id as doc identifier)
-    job_id = str(row["job_id"])
-    await qdrant.update_privilege_status(doc_id=job_id, privilege_status=body.privilege_status.value)
-
-    # Update Neo4j Document node
-    await gs.update_document_privilege(doc_id=job_id, privilege_status=body.privilege_status.value)
 
     await db.commit()
 

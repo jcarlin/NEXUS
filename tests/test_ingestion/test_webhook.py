@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
@@ -60,7 +60,7 @@ async def test_webhook_valid_payload(webhook_client):
     """POST /ingest/webhook with a valid S3 event should return 200 with job_ids."""
     client, mock_db = webhook_client
     fake_job_id = uuid4()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     with (
         patch("app.ingestion.router.process_document") as mock_task,
@@ -144,7 +144,7 @@ async def test_webhook_skips_non_create_events(webhook_client):
 async def test_webhook_multiple_records(webhook_client):
     """POST /ingest/webhook with 3 records should create 3 jobs."""
     client, mock_db = webhook_client
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     call_count = 0
 
     async def mock_create_job(**kwargs):

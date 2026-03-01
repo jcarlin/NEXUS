@@ -34,6 +34,20 @@ class RefreshRequest(BaseModel):
     refresh_token: str
 
 
+class UserRecord(BaseModel):
+    """Internal user record from the database. Includes sensitive fields."""
+
+    id: UUID
+    email: str
+    password_hash: str = ""
+    full_name: str
+    role: str
+    api_key_hash: str | None = None
+    is_active: bool = True
+    created_at: datetime
+    updated_at: datetime | None = None
+
+
 class UserResponse(BaseModel):
     id: UUID
     email: str

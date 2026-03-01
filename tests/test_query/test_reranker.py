@@ -4,10 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from app.query.reranker import Reranker
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -126,10 +123,10 @@ def test_reranker_uses_custom_text_key():
 
 def test_reranker_model_loaded_only_once():
     """CrossEncoder should be instantiated only once across multiple calls."""
-    with patch("sentence_transformers.CrossEncoder") as MockCE:
+    with patch("sentence_transformers.CrossEncoder") as mock_ce_cls:
         mock_instance = MagicMock()
         mock_instance.predict.return_value = [0.5]
-        MockCE.return_value = mock_instance
+        mock_ce_cls.return_value = mock_instance
 
         reranker = Reranker(model_name="test-model")
 
@@ -139,5 +136,5 @@ def test_reranker_model_loaded_only_once():
         reranker.rerank("q2", results2, top_n=10)
 
         # Model should have been instantiated exactly once
-        MockCE.assert_called_once_with("test-model")
+        mock_ce_cls.assert_called_once_with("test-model")
         assert mock_instance.predict.call_count == 2

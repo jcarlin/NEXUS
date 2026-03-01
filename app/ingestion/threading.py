@@ -257,4 +257,4 @@ class EmailThreader:
             inclusive_count=inclusive_count,
             matter_id=matter_id,
         )
-        return inclusive_count
+        return int(inclusive_count)

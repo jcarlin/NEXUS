@@ -180,7 +180,10 @@ def create_nodes_v1(
         text_results = state.get("text_results", [])
         settings = get_settings()
 
-        # Try cross-encoder reranking when feature flag is on
+        # Try cross-encoder reranking when feature flag is on.
+        # Acceptable degradation: reranking is an optional quality
+        # improvement; falling back to score-based sorting still
+        # returns valid results.
         sorted_results = None
         if settings.enable_reranker:
             try:
@@ -204,7 +207,10 @@ def create_nodes_v1(
                 reverse=True,
             )[: settings.reranker_top_n]
 
-        # Visual reranking (feature-flagged)
+        # Visual reranking (feature-flagged, experimental).
+        # Acceptable degradation: visual reranking is optional enrichment
+        # that supplements text-based results.  Failure falls back to
+        # text-only ranking which is fully functional.
         visual_results: list[dict[str, Any]] = []
         if settings.enable_visual_embeddings:
             try:
@@ -291,6 +297,8 @@ def create_nodes_v1(
         for entity_name in all_entities:
             if entity_name in existing_sources:
                 continue
+            # Acceptable degradation: one entity's graph lookup failing
+            # should not prevent returning results for other entities.
             try:
                 connections = await graph_service.get_entity_connections(
                     entity_name,
@@ -299,7 +307,11 @@ def create_nodes_v1(
                 )
                 new_graph.extend(connections)
             except Exception:
-                logger.warning("node.graph_lookup.entity_error", entity=entity_name)
+                logger.warning(
+                    "node.graph_lookup.entity_error",
+                    entity=entity_name,
+                    exc_info=True,
+                )
 
         logger.debug(
             "node.graph_lookup",
@@ -346,7 +358,10 @@ def create_nodes_v1(
             from langgraph.config import get_stream_writer
 
             writer = get_stream_writer()
-        except RuntimeError:
+        except (RuntimeError, LookupError):
+            # get_stream_writer() raises when called outside a streaming
+            # context (e.g. during non-streaming /query calls).  Acceptable
+            # degradation: tokens are still accumulated in full_response.
             writer = lambda x: None  # noqa: E731
 
         query = state.get("rewritten_query") or state["original_query"]
@@ -380,6 +395,9 @@ def create_nodes_v1(
 
         response = full_response.strip()
 
+        # Acceptable degradation: entity extraction on the response is
+        # optional enrichment for the UI entity panel.  The core response
+        # text and citations are already complete at this point.
         entities_mentioned: list[dict[str, Any]] = []
         try:
             raw_entities = entity_extractor.extract(
@@ -401,7 +419,7 @@ def create_nodes_v1(
                         }
                     )
         except Exception:
-            logger.warning("node.synthesize.entity_extraction_failed")
+            logger.warning("node.synthesize.entity_extraction_failed", exc_info=True)
 
         logger.debug(
             "node.synthesize",
@@ -493,6 +511,9 @@ async def case_context_resolve(state: dict) -> dict:
     term_map: dict[str, str] = {}
 
     if matter_id:
+        # Acceptable degradation: case context (M9b) is optional enrichment
+        # that improves query quality but is not required for retrieval.
+        # The module may not exist if the cases feature is not deployed.
         try:
             from app.cases.context_resolver import CaseContextResolver
 
@@ -506,10 +527,12 @@ async def case_context_resolve(state: dict) -> dict:
             finally:
                 try:
                     await db_gen.aclose()
-                except Exception:
+                except GeneratorExit:
                     pass
+        except ImportError:
+            logger.debug("node.case_context_resolve.skipped", reason="module_not_available")
         except Exception:
-            logger.debug("node.case_context_resolve.skipped")
+            logger.warning("node.case_context_resolve.failed", exc_info=True)
 
     # Classify tier based on query complexity heuristic
     original_query = state.get("original_query", "")
@@ -603,6 +626,10 @@ async def verify_citations(state: dict) -> dict:
         evidence=evidence_text[:3000],
     )
 
+    # Acceptable degradation: citation verification is optional quality
+    # enrichment (can be disabled via ENABLE_CITATION_VERIFICATION).
+    # If the LLM call fails, we return an empty claims list rather than
+    # failing the entire query.
     try:
         claims_raw = await llm.complete(
             [{"role": "user", "content": decompose_prompt}],
@@ -611,7 +638,7 @@ async def verify_citations(state: dict) -> dict:
             node_name="verify_claims_decompose",
         )
     except Exception:
-        logger.warning("node.verify_citations.decompose_failed")
+        logger.warning("node.verify_citations.decompose_failed", exc_info=True)
         return {"cited_claims": []}
 
     # Parse claims from LLM response (best-effort JSON parsing)
@@ -625,7 +652,10 @@ async def verify_citations(state: dict) -> dict:
     filters = state.get("_filters")
     exclude_privilege = state.get("_exclude_privilege", [])
 
-    for i, claim in enumerate(claims[:10]):  # Cap at 10 claims
+    from app.dependencies import get_settings as _get_settings
+
+    max_claims = _get_settings().max_claims_to_verify
+    for i, claim in enumerate(claims[:max_claims]):
         claim_text = claim.get("claim_text", "")
         if not claim_text:
             continue
@@ -664,7 +694,9 @@ async def verify_citations(state: dict) -> dict:
             status = "verified" if supported else "flagged"
 
         except Exception:
-            logger.warning("node.verify_citations.claim_error", claim_index=i)
+            # Acceptable degradation: individual claim verification failure
+            # should not prevent other claims from being verified.
+            logger.warning("node.verify_citations.claim_error", claim_index=i, exc_info=True)
             status = "unverified"
 
         claim["verification_status"] = status
@@ -744,6 +776,8 @@ async def generate_follow_ups_agentic(state: dict) -> dict:
         entities=entity_names or "none detected",
     )
 
+    # Acceptable degradation: follow-up questions are non-essential UX
+    # enrichment.  The core response and citations are already returned.
     try:
         raw = await llm.complete(
             [{"role": "user", "content": prompt}],
@@ -752,7 +786,7 @@ async def generate_follow_ups_agentic(state: dict) -> dict:
             node_name="generate_follow_ups",
         )
     except Exception:
-        logger.warning("node.generate_follow_ups_agentic.failed")
+        logger.warning("node.generate_follow_ups_agentic.failed", exc_info=True)
         return {"follow_up_questions": []}
 
     lines = [line.strip().lstrip("0123456789.-) ") for line in raw.strip().splitlines() if line.strip()]
@@ -769,7 +803,7 @@ async def audit_log_hook(state: dict) -> dict:
     audit trail even though the agent bypasses ``LLMClient``.
     """
     try:
-        from app.dependencies import _get_session_factory, get_settings
+        from app.dependencies import get_session_factory, get_settings
 
         settings = get_settings()
         if not settings.enable_ai_audit_logging:
@@ -791,7 +825,7 @@ async def audit_log_hook(state: dict) -> dict:
             input_tokens = usage.get("input_tokens")
             output_tokens = usage.get("output_tokens")
 
-        factory = _get_session_factory()
+        factory = get_session_factory()
         async with factory() as session:
             await session.execute(
                 sa_text("""
@@ -815,6 +849,8 @@ async def audit_log_hook(state: dict) -> dict:
             )
             await session.commit()
     except Exception:
+        # Acceptable degradation: audit logging must not block user
+        # requests or cause the query pipeline to fail.
         logger.warning("audit_log_hook.write_failed", exc_info=True)
 
     return state

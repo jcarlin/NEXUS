@@ -116,9 +116,7 @@ class OpenAIEmbeddingProvider:
     # -- internal ----------------------------------------------------------
 
     @retry(
-        retry=retry_if_exception_type(
-            (APIConnectionError, APITimeoutError, RateLimitError)
-        ),
+        retry=retry_if_exception_type((APIConnectionError, APITimeoutError, RateLimitError)),
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=30),
         reraise=True,
@@ -127,9 +125,7 @@ class OpenAIEmbeddingProvider:
     async def _embed_batch(self, texts: list[str]) -> list[list[float]]:
         """Call the OpenAI embeddings endpoint for a single batch."""
         # Audit log: hash of input data for privilege compliance
-        text_hash = hashlib.sha256(
-            "\n".join(texts).encode("utf-8")
-        ).hexdigest()[:16]
+        text_hash = hashlib.sha256("\n".join(texts).encode("utf-8")).hexdigest()[:16]
         logger.info(
             "embedder.external_api_call",
             provider="openai",

@@ -11,7 +11,6 @@ import time
 
 import structlog
 from fastapi import Depends, HTTPException, Request
-from fastapi.responses import JSONResponse
 
 from app.config import Settings
 from app.dependencies import get_redis, get_settings

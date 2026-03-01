@@ -309,10 +309,10 @@ class TextChunker:
     # common reply markers like "On ... wrote:" or "-----Original Message-----"
     _REPLY_MARKER_RE = re.compile(
         r"^(?:"
-        r"(?:>{1,}\s)|"                          # > quoted lines
-        r"(?:On .+ wrote:$)|"                     # "On ... wrote:"
+        r"(?:>{1,}\s)|"  # > quoted lines
+        r"(?:On .+ wrote:$)|"  # "On ... wrote:"
         r"(?:-{3,}\s*Original Message\s*-{3,})|"  # ---Original Message---
-        r"(?:-{3,}\s*Forwarded .+\s*-{3,})"       # ---Forwarded message---
+        r"(?:-{3,}\s*Forwarded .+\s*-{3,})"  # ---Forwarded message---
         r")",
         re.MULTILINE | re.IGNORECASE,
     )
@@ -327,8 +327,8 @@ class TextChunker:
         match = self._REPLY_MARKER_RE.search(text)
 
         if match:
-            body_text = text[:match.start()].strip()
-            quoted_text = text[match.start():].strip()
+            body_text = text[: match.start()].strip()
+            quoted_text = text[match.start() :].strip()
             sections = []
             if body_text:
                 sections.append(("body", body_text))

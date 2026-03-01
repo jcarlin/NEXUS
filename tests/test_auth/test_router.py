@@ -2,23 +2,26 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 from uuid import UUID
 
 import pytest
 from httpx import AsyncClient
 
-_FAKE_USER = {
-    "id": UUID("00000000-0000-0000-0000-000000000001"),
-    "email": "admin@nexus.dev",
-    "password_hash": "$2b$12$fake",
-    "full_name": "Admin User",
-    "role": "admin",
-    "is_active": True,
-    "api_key_hash": None,
-    "created_at": "2025-01-01T00:00:00+00:00",
-    "updated_at": "2025-01-01T00:00:00+00:00",
-}
+from app.auth.schemas import UserRecord
+
+_FAKE_USER = UserRecord(
+    id=UUID("00000000-0000-0000-0000-000000000001"),
+    email="admin@nexus.dev",
+    password_hash="$2b$12$fake",
+    full_name="Admin User",
+    role="admin",
+    is_active=True,
+    api_key_hash=None,
+    created_at=datetime(2025, 1, 1, tzinfo=UTC),
+    updated_at=datetime(2025, 1, 1, tzinfo=UTC),
+)
 
 
 @pytest.mark.asyncio
@@ -57,7 +60,7 @@ async def test_refresh_returns_new_tokens(unauthed_client: AsyncClient):
     with (
         patch(
             "app.auth.router.AuthService.decode_token",
-            return_value={"sub": str(_FAKE_USER["id"]), "type": "refresh", "exp": 9999999999},
+            return_value={"sub": str(_FAKE_USER.id), "type": "refresh", "exp": 9999999999},
         ),
         patch("app.auth.router.AuthService.get_user_by_id", new_callable=AsyncMock, return_value=_FAKE_USER),
         patch("app.auth.router.AuthService.create_access_token", return_value="new-access"),

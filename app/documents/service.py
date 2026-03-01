@@ -6,11 +6,18 @@ migration 001.  No ORM models are involved.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 import structlog
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.common.db_utils import row_to_dict
+
+if TYPE_CHECKING:
+    from app.common.vector_store import VectorStoreClient
+    from app.entities.graph_service import GraphService
 
 logger = structlog.get_logger(__name__)
 
@@ -21,15 +28,14 @@ _COLUMNS = """id, job_id, filename, document_type, page_count, chunk_count,
               privilege_status, privilege_reviewed_by, privilege_reviewed_at,
               message_id, in_reply_to, references_, thread_id, thread_position,
               is_inclusive, duplicate_cluster_id, duplicate_score,
-              version_group_id, version_number, is_final_version"""
+              version_group_id, version_number, is_final_version,
+              sentiment_positive, sentiment_negative, sentiment_pressure,
+              sentiment_opportunity, sentiment_rationalization, sentiment_intent,
+              sentiment_concealment, hot_doc_score, context_gap_score,
+              context_gaps, anomaly_score"""
 
 # Privilege statuses that non-privileged users (paralegal, reviewer) cannot see
 _RESTRICTED_STATUSES = ("privileged", "work_product")
-
-
-def _row_to_dict(row) -> dict:
-    """Convert a SQLAlchemy Row (from text query) into a plain dict."""
-    return dict(row._mapping)
 
 
 class DocumentService:
@@ -77,9 +83,7 @@ class DocumentService:
 
         # Privilege filtering: non-admin/attorney users cannot see restricted docs
         if user_role not in ("admin", "attorney"):
-            where_clauses.append(
-                "(privilege_status IS NULL OR privilege_status NOT IN ('privileged', 'work_product'))"
-            )
+            where_clauses.append("(privilege_status IS NULL OR privilege_status NOT IN ('privileged', 'work_product'))")
 
         where_sql = ""
         if where_clauses:
@@ -107,7 +111,7 @@ class DocumentService:
             params,
         )
         rows = result.all()
-        items = [_row_to_dict(r) for r in rows]
+        items = [row_to_dict(r) for r in rows]
 
         return items, total
 
@@ -143,7 +147,7 @@ class DocumentService:
         row = result.first()
         if row is None:
             return None
-        return _row_to_dict(row)
+        return row_to_dict(row)
 
     # ------------------------------------------------------------------
     # GET (single by job_id)
@@ -159,7 +163,7 @@ class DocumentService:
         row = result.first()
         if row is None:
             return None
-        return _row_to_dict(row)
+        return row_to_dict(row)
 
     # ------------------------------------------------------------------
     # PRIVILEGE UPDATE
@@ -211,6 +215,44 @@ class DocumentService:
         }
 
     # ------------------------------------------------------------------
+    # PRIVILEGE UPDATE (cross-store orchestration)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    async def update_privilege_across_stores(
+        db: AsyncSession,
+        doc_id: UUID,
+        privilege_status: str,
+        reviewed_by: UUID,
+        qdrant: VectorStoreClient,
+        gs: GraphService,
+        job_id: str,
+    ) -> dict:
+        """Update privilege status across PostgreSQL, Qdrant, and Neo4j.
+
+        Raises if any step fails after the PostgreSQL update.
+        Returns the updated privilege record dict.
+        """
+
+        # Step 1: Update PostgreSQL
+        updated = await DocumentService.update_privilege(
+            db=db,
+            doc_id=doc_id,
+            privilege_status=privilege_status,
+            reviewed_by=reviewed_by,
+        )
+        if updated is None:
+            return None  # type: ignore[return-value]
+
+        # Step 2: Update Qdrant payload
+        await qdrant.update_privilege_status(doc_id=job_id, privilege_status=privilege_status)
+
+        # Step 3: Update Neo4j Document node
+        await gs.update_document_privilege(doc_id=job_id, privilege_status=privilege_status)
+
+        return updated
+
+    # ------------------------------------------------------------------
     # LIST BY THREAD
     # ------------------------------------------------------------------
 
@@ -228,13 +270,10 @@ class DocumentService:
             params["matter_id"] = matter_id
 
         result = await db.execute(
-            text(
-                f"SELECT {_COLUMNS} FROM documents {where} "
-                f"ORDER BY thread_position ASC"
-            ),
+            text(f"SELECT {_COLUMNS} FROM documents {where} ORDER BY thread_position ASC"),
             params,
         )
-        return [_row_to_dict(r) for r in result.all()]
+        return [row_to_dict(r) for r in result.all()]
 
     # ------------------------------------------------------------------
     # LIST BY CLUSTER
@@ -254,13 +293,10 @@ class DocumentService:
             params["matter_id"] = matter_id
 
         result = await db.execute(
-            text(
-                f"SELECT {_COLUMNS} FROM documents {where} "
-                f"ORDER BY duplicate_score DESC NULLS LAST"
-            ),
+            text(f"SELECT {_COLUMNS} FROM documents {where} ORDER BY duplicate_score DESC NULLS LAST"),
             params,
         )
-        return [_row_to_dict(r) for r in result.all()]
+        return [row_to_dict(r) for r in result.all()]
 
     # ------------------------------------------------------------------
     # DELETE
@@ -276,7 +312,7 @@ class DocumentService:
             text("DELETE FROM documents WHERE id = :doc_id"),
             {"doc_id": doc_id},
         )
-        deleted = result.rowcount > 0
+        deleted: bool = (result.rowcount or 0) > 0  # type: ignore[attr-defined]
 
         if deleted:
             logger.info("document.deleted", doc_id=str(doc_id))

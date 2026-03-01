@@ -20,12 +20,14 @@ def _make_mock_redis(zcard_count: int, *, raise_on_execute: Exception | None = N
     if raise_on_execute:
         mock_pipe.execute = AsyncMock(side_effect=raise_on_execute)
     else:
-        mock_pipe.execute = AsyncMock(return_value=[
-            None,       # zremrangebyscore
-            zcard_count,  # zcard
-            None,       # zadd
-            None,       # expire
-        ])
+        mock_pipe.execute = AsyncMock(
+            return_value=[
+                None,  # zremrangebyscore
+                zcard_count,  # zcard
+                None,  # zadd
+                None,  # expire
+            ]
+        )
 
     mock_redis = MagicMock()
     mock_redis.pipeline.return_value = mock_pipe
@@ -46,6 +48,7 @@ async def test_rate_limit_allows_under_limit():
 
     with patch("app.common.rate_limit.get_redis", return_value=mock_redis):
         from app.common.rate_limit import _check_rate_limit
+
         await _check_rate_limit(mock_request, "queries", max_requests=30)
 
 

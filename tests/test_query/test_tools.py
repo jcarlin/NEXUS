@@ -7,14 +7,10 @@ from unittest.mock import AsyncMock, patch
 
 from app.query.tools import (
     case_context,
-    communication_matrix,
     document_retrieval,
     entity_lookup,
     graph_query,
-    sentiment_search,
-    sql_aggregation,
     temporal_search,
-    topic_cluster,
     vector_search,
 )
 
@@ -180,9 +176,11 @@ async def test_case_context_returns_full_context():
     assert "timeline" in parsed
 
 
-async def test_stub_tools_return_unavailable_message():
-    """All four stub tools return a 'not yet available' message."""
-    stubs = [sentiment_search, communication_matrix, topic_cluster, sql_aggregation]
-    for stub in stubs:
-        result = await stub.ainvoke({"query": "test"} if "query" in stub.args else {"entity_name": "test"})
-        assert "not yet available" in result.lower(), f"{stub.name} did not return unavailable message"
+async def test_stub_tools_in_investigation_tools():
+    """Stub/feature-flagged tools are listed in INVESTIGATION_TOOLS."""
+    from app.query.tools import INVESTIGATION_TOOLS
+
+    tool_names = [t.name for t in INVESTIGATION_TOOLS]
+    assert "communication_matrix" in tool_names
+    assert "topic_cluster" in tool_names
+    assert "network_analysis" in tool_names

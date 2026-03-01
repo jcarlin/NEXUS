@@ -12,7 +12,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.middleware import require_role
-from app.auth.schemas import AuditLogEntry, AuditLogListResponse
+from app.auth.schemas import AuditLogEntry, AuditLogListResponse, UserRecord
 from app.dependencies import get_db
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -30,7 +30,7 @@ async def list_audit_log(
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(require_role("admin")),
+    current_user: UserRecord = Depends(require_role("admin")),
 ):
     """Return a paginated, filterable audit log. Admin-only."""
     where_clauses: list[str] = []

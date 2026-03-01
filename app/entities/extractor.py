@@ -141,7 +141,4 @@ class EntityExtractor:
         GLiNER itself processes one text at a time, so there is no additional
         batching optimisation here beyond keeping the model warm in memory.
         """
-        return [
-            self.extract(text, entity_types=entity_types, threshold=threshold)
-            for text in texts
-        ]
+        return [self.extract(text, entity_types=entity_types, threshold=threshold) for text in texts]

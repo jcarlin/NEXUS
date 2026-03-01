@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import UUID
 
 import pytest
 
 from app.common.middleware import AuditLoggingMiddleware, _derive_resource_type, _get_client_ip
-
 
 # ---------------------------------------------------------------------------
 # Helper function tests
@@ -69,9 +69,7 @@ async def test_audit_middleware_writes_log() -> None:
     async def mock_call_next(request):
         return mock_response
 
-    with patch.object(
-        AuditLoggingMiddleware, "_write_audit_log", new_callable=AsyncMock
-    ) as mock_write:
+    with patch.object(AuditLoggingMiddleware, "_write_audit_log", new_callable=AsyncMock) as mock_write:
         middleware = AuditLoggingMiddleware(app=MagicMock())
         await middleware.dispatch(mock_request, mock_call_next)
 
@@ -99,13 +97,75 @@ async def test_audit_middleware_handles_unauthenticated() -> None:
     async def mock_call_next(request):
         return mock_response
 
-    with patch.object(
-        AuditLoggingMiddleware, "_write_audit_log", new_callable=AsyncMock
-    ) as mock_write:
+    with patch.object(AuditLoggingMiddleware, "_write_audit_log", new_callable=AsyncMock) as mock_write:
         middleware = AuditLoggingMiddleware(app=MagicMock())
         await middleware.dispatch(mock_request, mock_call_next)
 
         mock_write.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_write_audit_log_delegates_to_audit_service() -> None:
+    """_write_audit_log delegates to AuditService.log_request with correct params."""
+    mock_request = MagicMock()
+    mock_request.url.path = "/api/v1/documents"
+    mock_request.method = "GET"
+    mock_request.state.request_id = "test-req-id"
+    mock_request.state.session_id = "test-sess-id"
+    from types import SimpleNamespace
+
+    mock_request.state.user = SimpleNamespace(
+        id="00000000-0000-0000-0000-000000000099",
+        email="test@nexus.dev",
+    )
+    mock_request.headers = {
+        "X-Matter-ID": "00000000-0000-0000-0000-000000000001",
+        "User-Agent": "TestAgent/1.0",
+    }
+    mock_request.client.host = "127.0.0.1"
+
+    mock_factory = MagicMock()
+
+    with (
+        patch("app.audit.service.AuditService.log_request", new_callable=AsyncMock) as mock_log,
+        patch("app.dependencies.get_session_factory", return_value=mock_factory),
+    ):
+        await AuditLoggingMiddleware._write_audit_log(mock_request, 200, 42.5)
+
+        mock_log.assert_called_once_with(
+            mock_factory,
+            user_id="00000000-0000-0000-0000-000000000099",
+            user_email="test@nexus.dev",
+            action="GET",
+            resource="/api/v1/documents",
+            resource_type="documents",
+            matter_id=UUID("00000000-0000-0000-0000-000000000001"),
+            ip_address="127.0.0.1",
+            user_agent="TestAgent/1.0",
+            status_code=200,
+            duration_ms=42.5,
+            request_id="test-req-id",
+            session_id="test-sess-id",
+        )
+
+
+@pytest.mark.asyncio
+async def test_write_audit_log_silent_on_failure() -> None:
+    """_write_audit_log should not raise even if AuditService.log_request fails."""
+    mock_request = MagicMock()
+    mock_request.url.path = "/api/v1/documents"
+    mock_request.method = "GET"
+    mock_request.headers = {}
+    mock_request.client.host = "127.0.0.1"
+    del mock_request.state.user
+
+    with patch(
+        "app.audit.service.AuditService.log_request",
+        new_callable=AsyncMock,
+        side_effect=RuntimeError("DB down"),
+    ):
+        # Should not raise
+        await AuditLoggingMiddleware._write_audit_log(mock_request, 500, 10.0)
 
 
 @pytest.mark.asyncio
@@ -120,9 +180,7 @@ async def test_audit_middleware_skips_health() -> None:
     async def mock_call_next(request):
         return mock_response
 
-    with patch.object(
-        AuditLoggingMiddleware, "_write_audit_log", new_callable=AsyncMock
-    ) as mock_write:
+    with patch.object(AuditLoggingMiddleware, "_write_audit_log", new_callable=AsyncMock) as mock_write:
         middleware = AuditLoggingMiddleware(app=MagicMock())
         await middleware.dispatch(mock_request, mock_call_next)
 

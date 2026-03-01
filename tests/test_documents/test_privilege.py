@@ -2,19 +2,19 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID, uuid4
 
 import pytest
 from httpx import AsyncClient
 
-from app.common.models import PrivilegeStatus
-
+from app.auth.schemas import UserRecord
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _fake_doc_row(doc_id=None, **overrides) -> dict:
     """Return a dict mimicking a raw DB row from the documents table."""
@@ -31,8 +31,8 @@ def _fake_doc_row(doc_id=None, **overrides) -> dict:
         "content_hash": "sha256-abc",
         "metadata_": {},
         "matter_id": UUID("00000000-0000-0000-0000-000000000001"),
-        "created_at": datetime.now(timezone.utc),
-        "updated_at": datetime.now(timezone.utc),
+        "created_at": datetime.now(UTC),
+        "updated_at": datetime.now(UTC),
         "privilege_status": None,
         "privilege_reviewed_by": None,
         "privilege_reviewed_at": None,
@@ -51,7 +51,7 @@ async def test_patch_privilege_attorney_200(client: AsyncClient) -> None:
     """PATCH privilege returns 200 for admin (default test user is admin)."""
     doc_id = uuid4()
     row = _fake_doc_row(doc_id=doc_id)
-    reviewed_at = datetime.now(timezone.utc)
+    reviewed_at = datetime.now(UTC)
 
     mock_qdrant = MagicMock()
     mock_qdrant.update_privilege_status = AsyncMock()
@@ -60,12 +60,16 @@ async def test_patch_privilege_attorney_200(client: AsyncClient) -> None:
 
     with (
         patch("app.documents.service.DocumentService.get_document", new_callable=AsyncMock, return_value=row),
-        patch("app.documents.service.DocumentService.update_privilege", new_callable=AsyncMock, return_value={
-            "id": doc_id,
-            "privilege_status": "privileged",
-            "privilege_reviewed_by": UUID("00000000-0000-0000-0000-000000000099"),
-            "privilege_reviewed_at": reviewed_at,
-        }),
+        patch(
+            "app.documents.service.DocumentService.update_privilege",
+            new_callable=AsyncMock,
+            return_value={
+                "id": doc_id,
+                "privilege_status": "privileged",
+                "privilege_reviewed_by": UUID("00000000-0000-0000-0000-000000000099"),
+                "privilege_reviewed_at": reviewed_at,
+            },
+        ),
         patch("app.dependencies._qdrant_client", mock_qdrant),
         patch("app.dependencies._graph_service", mock_gs),
     ):
@@ -90,17 +94,18 @@ async def test_patch_privilege_paralegal_200(client: AsyncClient) -> None:
     """PATCH privilege returns 200 for paralegal role."""
     from app.auth.middleware import get_current_user
 
-    paralegal_user = {
-        "id": UUID("00000000-0000-0000-0000-000000000088"),
-        "email": "paralegal@nexus.dev",
-        "full_name": "Para Legal",
-        "role": "paralegal",
-        "is_active": True,
-    }
+    paralegal_user = UserRecord(
+        id=UUID("00000000-0000-0000-0000-000000000088"),
+        email="paralegal@nexus.dev",
+        full_name="Para Legal",
+        role="paralegal",
+        is_active=True,
+        created_at=datetime.now(UTC),
+    )
 
     doc_id = uuid4()
     row = _fake_doc_row(doc_id=doc_id)
-    reviewed_at = datetime.now(timezone.utc)
+    reviewed_at = datetime.now(UTC)
 
     mock_qdrant = MagicMock()
     mock_qdrant.update_privilege_status = AsyncMock()
@@ -113,12 +118,16 @@ async def test_patch_privilege_paralegal_200(client: AsyncClient) -> None:
     try:
         with (
             patch("app.documents.service.DocumentService.get_document", new_callable=AsyncMock, return_value=row),
-            patch("app.documents.service.DocumentService.update_privilege", new_callable=AsyncMock, return_value={
-                "id": doc_id,
-                "privilege_status": "work_product",
-                "privilege_reviewed_by": paralegal_user["id"],
-                "privilege_reviewed_at": reviewed_at,
-            }),
+            patch(
+                "app.documents.service.DocumentService.update_privilege",
+                new_callable=AsyncMock,
+                return_value={
+                    "id": doc_id,
+                    "privilege_status": "work_product",
+                    "privilege_reviewed_by": paralegal_user.id,
+                    "privilege_reviewed_at": reviewed_at,
+                },
+            ),
             patch("app.dependencies._qdrant_client", mock_qdrant),
             patch("app.dependencies._graph_service", mock_gs),
         ):
@@ -129,6 +138,7 @@ async def test_patch_privilege_paralegal_200(client: AsyncClient) -> None:
     finally:
         # Restore default admin user
         from tests.conftest import _TEST_USER
+
         client._transport.app.dependency_overrides[get_current_user] = lambda: _TEST_USER
 
     assert response.status_code == 200
@@ -141,13 +151,14 @@ async def test_patch_privilege_reviewer_403(client: AsyncClient) -> None:
     """PATCH privilege returns 403 for reviewer (excluded role)."""
     from app.auth.middleware import get_current_user
 
-    reviewer_user = {
-        "id": UUID("00000000-0000-0000-0000-000000000077"),
-        "email": "reviewer@nexus.dev",
-        "full_name": "Doc Reviewer",
-        "role": "reviewer",
-        "is_active": True,
-    }
+    reviewer_user = UserRecord(
+        id=UUID("00000000-0000-0000-0000-000000000077"),
+        email="reviewer@nexus.dev",
+        full_name="Doc Reviewer",
+        role="reviewer",
+        is_active=True,
+        created_at=datetime.now(UTC),
+    )
 
     client._transport.app.dependency_overrides[get_current_user] = lambda: reviewer_user
 
@@ -158,6 +169,7 @@ async def test_patch_privilege_reviewer_403(client: AsyncClient) -> None:
         )
     finally:
         from tests.conftest import _TEST_USER
+
         client._transport.app.dependency_overrides[get_current_user] = lambda: _TEST_USER
 
     assert response.status_code == 403
@@ -189,13 +201,14 @@ async def test_reviewer_cannot_see_privileged_docs(client: AsyncClient) -> None:
     """Reviewer's list_documents call passes user_role that excludes privileged docs."""
     from app.auth.middleware import get_current_user
 
-    reviewer_user = {
-        "id": UUID("00000000-0000-0000-0000-000000000077"),
-        "email": "reviewer@nexus.dev",
-        "full_name": "Doc Reviewer",
-        "role": "reviewer",
-        "is_active": True,
-    }
+    reviewer_user = UserRecord(
+        id=UUID("00000000-0000-0000-0000-000000000077"),
+        email="reviewer@nexus.dev",
+        full_name="Doc Reviewer",
+        role="reviewer",
+        is_active=True,
+        created_at=datetime.now(UTC),
+    )
 
     client._transport.app.dependency_overrides[get_current_user] = lambda: reviewer_user
 
@@ -212,6 +225,7 @@ async def test_reviewer_cannot_see_privileged_docs(client: AsyncClient) -> None:
         assert call_kwargs["user_role"] == "reviewer"
     finally:
         from tests.conftest import _TEST_USER
+
         client._transport.app.dependency_overrides[get_current_user] = lambda: _TEST_USER
 
 
@@ -224,8 +238,8 @@ async def test_reviewer_cannot_see_privileged_docs(client: AsyncClient) -> None:
 async def test_qdrant_query_builds_must_not_filter() -> None:
     """query_text() builds must_not conditions for excluded privilege statuses."""
     from unittest.mock import MagicMock
+
     from app.common.vector_store import VectorStoreClient
-    from qdrant_client.models import FieldCondition, MatchValue
 
     mock_settings = MagicMock()
     mock_settings.qdrant_url = "http://localhost:6333"

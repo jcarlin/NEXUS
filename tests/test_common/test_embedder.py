@@ -13,7 +13,6 @@ from app.common.embedder import (
     OpenAIEmbeddingProvider,
 )
 
-
 # ---------------------------------------------------------------------------
 # OpenAI provider
 # ---------------------------------------------------------------------------
@@ -31,9 +30,7 @@ async def test_openai_provider_embed_query():
     mock_response = MagicMock()
     mock_response.data = [mock_data]
 
-    with patch.object(
-        provider._client.embeddings, "create", new_callable=AsyncMock
-    ) as mock_create:
+    with patch.object(provider._client.embeddings, "create", new_callable=AsyncMock) as mock_create:
         mock_create.return_value = mock_response
         result = await provider.embed_query("test text")
 
@@ -44,21 +41,14 @@ async def test_openai_provider_embed_query():
 @pytest.mark.asyncio
 async def test_openai_provider_embed_texts_batching():
     """embed_texts should batch requests when over batch_size."""
-    provider = OpenAIEmbeddingProvider(
-        api_key="test-key", dimensions=4, batch_size=2
-    )
+    provider = OpenAIEmbeddingProvider(api_key="test-key", dimensions=4, batch_size=2)
 
     def make_response(count, offset=0):
         resp = MagicMock()
-        resp.data = [
-            MagicMock(index=i, embedding=[float(i + offset)] * 4)
-            for i in range(count)
-        ]
+        resp.data = [MagicMock(index=i, embedding=[float(i + offset)] * 4) for i in range(count)]
         return resp
 
-    with patch.object(
-        provider._client.embeddings, "create", new_callable=AsyncMock
-    ) as mock_create:
+    with patch.object(provider._client.embeddings, "create", new_callable=AsyncMock) as mock_create:
         mock_create.side_effect = [make_response(2, 0), make_response(1, 2)]
         results = await provider.embed_texts(["a", "b", "c"])
 
@@ -86,9 +76,7 @@ async def test_openai_provider_audit_log(caplog):
     mock_response = MagicMock()
     mock_response.data = [mock_data]
 
-    with patch.object(
-        provider._client.embeddings, "create", new_callable=AsyncMock
-    ) as mock_create:
+    with patch.object(provider._client.embeddings, "create", new_callable=AsyncMock) as mock_create:
         mock_create.return_value = mock_response
         await provider.embed_texts(["hello world"])
 
@@ -125,9 +113,7 @@ async def test_local_provider_embed_texts():
     provider = LocalEmbeddingProvider(model_name="test-model", dimensions=4)
 
     mock_model = MagicMock()
-    mock_model.encode.return_value = np.array(
-        [[0.1, 0.2, 0.3, 0.4], [0.5, 0.6, 0.7, 0.8]]
-    )
+    mock_model.encode.return_value = np.array([[0.1, 0.2, 0.3, 0.4], [0.5, 0.6, 0.7, 0.8]])
 
     with patch.object(provider, "_load_model", return_value=mock_model):
         results = await provider.embed_texts(["text1", "text2"])
@@ -146,9 +132,7 @@ async def test_local_provider_lazy_loading():
     mock_model = MagicMock()
     mock_model.encode.return_value = np.array([[0.1, 0.2, 0.3, 0.4]])
 
-    with patch(
-        "sentence_transformers.SentenceTransformer", return_value=mock_model
-    ) as mock_st:
+    with patch("sentence_transformers.SentenceTransformer", return_value=mock_model) as mock_st:
         # Model not loaded yet
         assert mock_st.call_count == 0
 

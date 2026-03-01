@@ -10,10 +10,10 @@ from pydantic import BaseModel, Field
 
 from app.common.models import PaginatedResponse
 
-
 # ---------------------------------------------------------------------------
 # Enums
 # ---------------------------------------------------------------------------
+
 
 class LoadFileFormat(StrEnum):
     """Supported EDRM load file formats."""
@@ -36,6 +36,7 @@ class ImportStatus(StrEnum):
 # Load file record schemas
 # ---------------------------------------------------------------------------
 
+
 class LoadFileRecord(BaseModel):
     """A single record parsed from an EDRM load file."""
 
@@ -57,6 +58,7 @@ class OpticonRecord(BaseModel):
 # ---------------------------------------------------------------------------
 # Import / export request/response schemas
 # ---------------------------------------------------------------------------
+
 
 class EDRMImportRequest(BaseModel):
     """Request body for importing an EDRM load file."""
@@ -100,6 +102,7 @@ class EDRMImportLogListResponse(PaginatedResponse[EDRMImportLogEntry]):
 # ---------------------------------------------------------------------------
 # Thread / duplicate response schemas
 # ---------------------------------------------------------------------------
+
 
 class ThreadResponse(BaseModel):
     """Response for email thread listing."""

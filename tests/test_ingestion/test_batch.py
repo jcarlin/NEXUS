@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
@@ -16,21 +16,23 @@ async def test_batch_returns_200_with_multiple_files(client: AsyncClient) -> Non
     mock_storage = MagicMock()
     mock_storage.upload_bytes = AsyncMock(return_value="raw/test/file.txt")
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     fake_jobs = []
     for i in range(3):
-        fake_jobs.append({
-            "id": uuid4(),
-            "filename": f"file{i}.txt",
-            "status": "pending",
-            "stage": "uploading",
-            "progress": {},
-            "error": None,
-            "parent_job_id": None,
-            "metadata_": {},
-            "created_at": now,
-            "updated_at": now,
-        })
+        fake_jobs.append(
+            {
+                "id": uuid4(),
+                "filename": f"file{i}.txt",
+                "status": "pending",
+                "stage": "uploading",
+                "progress": {},
+                "error": None,
+                "parent_job_id": None,
+                "metadata_": {},
+                "created_at": now,
+                "updated_at": now,
+            }
+        )
 
     call_count = 0
 
@@ -80,7 +82,7 @@ async def test_batch_returns_filenames(client: AsyncClient) -> None:
     mock_storage = MagicMock()
     mock_storage.upload_bytes = AsyncMock()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     fake_job = {
         "id": uuid4(),
         "filename": "report.pdf",
@@ -119,7 +121,7 @@ async def test_batch_with_zip(client: AsyncClient) -> None:
     mock_storage = MagicMock()
     mock_storage.upload_bytes = AsyncMock()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     fake_job = {
         "id": uuid4(),
         "filename": "archive.zip",
@@ -160,7 +162,7 @@ async def test_batch_mixed_formats(client: AsyncClient) -> None:
     mock_storage = MagicMock()
     mock_storage.upload_bytes = AsyncMock()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     jobs_created = 0
 
     async def make_fake_job(**kwargs):

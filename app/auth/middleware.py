@@ -6,7 +6,6 @@ allows per-route opt-out (e.g. health endpoint needs no auth).
 
 from __future__ import annotations
 
-from typing import Any
 from uuid import UUID
 
 import jwt
@@ -14,6 +13,7 @@ import structlog
 from fastapi import Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth.schemas import UserRecord
 from app.auth.service import AuthService
 from app.dependencies import get_db, get_settings
 
@@ -23,7 +23,7 @@ logger = structlog.get_logger(__name__)
 async def get_current_user(
     request: Request,
     db: AsyncSession = Depends(get_db),
-) -> dict[str, Any]:
+) -> UserRecord:
     """Extract and validate user identity from Bearer token or API key.
 
     Sets ``request.state.user`` for downstream consumers.
@@ -46,7 +46,7 @@ async def get_current_user(
             raise HTTPException(status_code=401, detail="Invalid token type")
 
         user = await AuthService.get_user_by_id(db, UUID(payload["sub"]))
-        if user is None or not user.get("is_active", False):
+        if user is None or not user.is_active:
             raise HTTPException(status_code=401, detail="User not found or inactive")
 
         request.state.user = user
@@ -69,12 +69,12 @@ def require_role(*allowed_roles: str):
     """Return a dependency that checks the current user has one of the allowed roles."""
 
     async def _check_role(
-        current_user: dict[str, Any] = Depends(get_current_user),
-    ) -> dict[str, Any]:
-        if current_user["role"] not in allowed_roles:
+        current_user: UserRecord = Depends(get_current_user),
+    ) -> UserRecord:
+        if current_user.role not in allowed_roles:
             raise HTTPException(
                 status_code=403,
-                detail=f"Role '{current_user['role']}' is not authorized for this action",
+                detail=f"Role '{current_user.role}' is not authorized for this action",
             )
         return current_user
 
@@ -83,7 +83,7 @@ def require_role(*allowed_roles: str):
 
 async def get_matter_id(
     request: Request,
-    current_user: dict[str, Any] = Depends(get_current_user),
+    current_user: UserRecord = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> UUID:
     """Read and validate X-Matter-ID header.
@@ -107,9 +107,7 @@ async def get_matter_id(
         raise HTTPException(status_code=404, detail="Matter not found")
 
     # Check user access
-    has_access = await AuthService.check_user_matter_access(
-        db, current_user["id"], matter_id, current_user["role"]
-    )
+    has_access = await AuthService.check_user_matter_access(db, current_user.id, matter_id, current_user.role)
     if not has_access:
         raise HTTPException(status_code=403, detail="Not authorized for this matter")
 

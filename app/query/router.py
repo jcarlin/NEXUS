@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -23,6 +22,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
 from app.auth.middleware import get_current_user, get_matter_id
+from app.auth.schemas import UserRecord
+from app.common.db_utils import parse_jsonb
 from app.common.rate_limit import rate_limit_queries
 from app.dependencies import get_db, get_query_graph
 from app.query.schemas import (
@@ -35,6 +36,7 @@ from app.query.schemas import (
     QueryResponse,
     SourceDocument,
 )
+from app.query.service import ChatService, QueryService
 
 logger = structlog.get_logger(__name__)
 router = APIRouter(tags=["query"])
@@ -59,168 +61,6 @@ _STAGE_MAP = {
 
 
 # ------------------------------------------------------------------
-# State construction helpers
-# ------------------------------------------------------------------
-
-
-def _build_agentic_state(
-    *,
-    query: str,
-    messages: list[dict[str, Any]],
-    thread_id: str,
-    user_id: str,
-    matter_id: str,
-    filters: dict | None,
-    exclude_privilege: list[str],
-) -> dict[str, Any]:
-    """Build initial state for the agentic graph (MessagesState format)."""
-    from langchain_core.messages import HumanMessage
-
-    # Convert chat history to LangChain message objects + append current query
-    lc_messages = []
-    for msg in messages:
-        if msg["role"] == "user":
-            lc_messages.append(HumanMessage(content=msg["content"]))
-        else:
-            from langchain_core.messages import AIMessage
-
-            lc_messages.append(AIMessage(content=msg["content"]))
-    lc_messages.append(HumanMessage(content=query))
-
-    return {
-        "messages": lc_messages,
-        "original_query": query,
-        "thread_id": thread_id,
-        "user_id": user_id,
-        "_case_context": "",  # populated by case_context_resolve
-        "_term_map": {},
-        "_filters": {**(filters or {}), "matter_id": matter_id},
-        "_exclude_privilege": exclude_privilege,
-        "_tier": "standard",
-        "_skip_verification": False,
-        "response": "",
-        "source_documents": [],
-        "cited_claims": [],
-        "follow_up_questions": [],
-        "entities_mentioned": [],
-    }
-
-
-def _build_graph_config(thread_id: str, settings: Any) -> dict[str, Any]:
-    """Build the LangGraph config dict with checkpointer thread_id and recursion_limit."""
-    config: dict[str, Any] = {"configurable": {"thread_id": thread_id}}
-    if settings.enable_agentic_pipeline:
-        config["recursion_limit"] = settings.agentic_recursion_limit_standard
-    return config
-
-
-def _extract_response(final_state: dict[str, Any], is_agentic: bool) -> str:
-    """Extract the response text from the final graph state.
-
-    For the agentic graph, the response is in the last AIMessage's content.
-    For v1, it's in the ``response`` field directly.
-    """
-    if final_state.get("response"):
-        return final_state["response"]
-
-    if is_agentic:
-        messages = final_state.get("messages", [])
-        for msg in reversed(messages):
-            content = ""
-            if hasattr(msg, "content"):
-                content = msg.content if isinstance(msg.content, str) else str(msg.content)
-            elif isinstance(msg, dict):
-                content = msg.get("content", "")
-            role = getattr(msg, "type", None) or (msg.get("role") if isinstance(msg, dict) else None)
-            if role in ("ai", "assistant") and content:
-                return content
-
-    return ""
-
-
-# ------------------------------------------------------------------
-# Chat persistence helpers (raw SQL, same pattern as IngestionService)
-# ------------------------------------------------------------------
-
-
-async def _save_message(
-    db: AsyncSession,
-    thread_id: str,
-    role: str,
-    content: str,
-    source_documents: list[dict] | None = None,
-    entities_mentioned: list[dict] | None = None,
-    follow_up_questions: list[str] | None = None,
-    matter_id: UUID | None = None,
-) -> str:
-    """Insert a message into ``chat_messages`` and return its id."""
-    message_id = str(uuid.uuid4())
-    await db.execute(
-        text("""
-            INSERT INTO chat_messages
-                (id, thread_id, role, content, source_documents, entities_mentioned,
-                 follow_up_questions, matter_id, created_at)
-            VALUES
-                (:id, :thread_id, :role, :content, :source_documents, :entities_mentioned,
-                 :follow_up_questions, :matter_id, :created_at)
-        """),
-        {
-            "id": message_id,
-            "thread_id": thread_id,
-            "role": role,
-            "content": content,
-            "source_documents": json.dumps(source_documents or []),
-            "entities_mentioned": json.dumps(entities_mentioned or []),
-            "follow_up_questions": json.dumps(follow_up_questions or []),
-            "matter_id": matter_id,
-            "created_at": datetime.now(UTC),
-        },
-    )
-    return message_id
-
-
-async def _load_thread_messages(
-    db: AsyncSession,
-    thread_id: str,
-    matter_id: UUID | None = None,
-) -> list[dict[str, Any]]:
-    """Load all messages for a thread, ordered by creation time."""
-    where = "WHERE thread_id = :thread_id"
-    params: dict[str, Any] = {"thread_id": thread_id}
-    if matter_id is not None:
-        where += " AND matter_id = :matter_id"
-        params["matter_id"] = matter_id
-
-    result = await db.execute(
-        text(f"""
-            SELECT id, thread_id, role, content, source_documents,
-                   entities_mentioned, follow_up_questions, created_at
-            FROM chat_messages
-            {where}
-            ORDER BY created_at ASC
-        """),
-        params,
-    )
-    rows = result.mappings().all()
-    return [dict(r) for r in rows]
-
-
-def _parse_jsonb(val: Any) -> list[Any]:
-    """Safely parse a JSONB column that may be a string, list, or None."""
-    if val is None:
-        return []
-    if isinstance(val, list):
-        return val
-    if isinstance(val, str):
-        try:
-            parsed = json.loads(val)
-            return list(parsed) if isinstance(parsed, list) else []
-        except (json.JSONDecodeError, TypeError):
-            return []
-    return []
-
-
-# ------------------------------------------------------------------
 # POST /query — full (non-streaming) endpoint
 # ------------------------------------------------------------------
 
@@ -229,7 +69,7 @@ def _parse_jsonb(val: Any) -> list[Any]:
 async def query(
     request: QueryRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: UserRecord = Depends(get_current_user),
     matter_id: UUID = Depends(get_matter_id),
     graph=Depends(get_query_graph),
     _rate_limit=Depends(rate_limit_queries),
@@ -243,66 +83,45 @@ async def query(
     # Load chat history if continuing a thread
     messages: list[dict[str, Any]] = []
     if request.thread_id:
-        rows = await _load_thread_messages(db, thread_id, matter_id=matter_id)
+        rows = await ChatService.load_thread_messages(db, thread_id, matter_id=matter_id)
         messages = [{"role": r["role"], "content": r["content"]} for r in rows]
 
-    exclude_privilege = ["privileged", "work_product"] if current_user["role"] not in ("admin", "attorney") else []
+    exclude_privilege = ["privileged", "work_product"] if current_user.role not in ("admin", "attorney") else []
 
     if settings.enable_agentic_pipeline:
-        initial_state = _build_agentic_state(
+        initial_state = QueryService.build_agentic_state(
             query=request.query,
             messages=messages,
             thread_id=thread_id,
-            user_id=str(current_user["id"]),
+            user_id=str(current_user.id),
             matter_id=str(matter_id),
             filters=request.filters,
             exclude_privilege=exclude_privilege,
         )
     else:
-        # V1 state
-        case_context_text = ""
-        try:
-            from app.cases.context_resolver import CaseContextResolver
+        initial_state = await QueryService.build_v1_state(
+            query=request.query,
+            messages=messages,
+            thread_id=thread_id,
+            user_id=str(current_user.id),
+            matter_id=str(matter_id),
+            filters=request.filters,
+            exclude_privilege=exclude_privilege,
+            db=db,
+            settings=settings,
+        )
 
-            ctx = await CaseContextResolver.get_context_for_matter(db, str(matter_id))
-            if ctx:
-                case_context_text = CaseContextResolver.format_context_for_prompt(ctx)
-        except Exception:
-            logger.debug("query.case_context_load_skipped")
-
-        initial_state = {
-            "messages": messages,
-            "thread_id": thread_id,
-            "user_id": str(current_user["id"]),
-            "original_query": request.query,
-            "rewritten_query": "",
-            "query_type": "",
-            "text_results": [],
-            "visual_results": [],
-            "graph_results": [],
-            "fused_context": [],
-            "response": "",
-            "source_documents": [],
-            "follow_up_questions": [],
-            "entities_mentioned": [],
-            "_case_context": case_context_text,
-            "_relevance": "",
-            "_reformulated": False,
-            "_filters": {**(request.filters or {}), "matter_id": str(matter_id)},
-            "_exclude_privilege": exclude_privilege,
-        }
-
-    config = _build_graph_config(thread_id, settings)
+    config = QueryService.build_graph_config(thread_id, settings)
     final_state = await graph.ainvoke(initial_state, config)
 
     # Extract response (agentic: from last AI message; v1: from response field)
-    response_text = _extract_response(final_state, settings.enable_agentic_pipeline)
+    response_text = QueryService.extract_response(final_state, settings.enable_agentic_pipeline)
 
     # Save user message
-    await _save_message(db, thread_id, "user", request.query, matter_id=matter_id)
+    await ChatService.save_message(db, thread_id, "user", request.query, matter_id=matter_id)
 
     # Save assistant response
-    message_id = await _save_message(
+    message_id = await ChatService.save_message(
         db,
         thread_id,
         "assistant",
@@ -336,7 +155,7 @@ async def query(
 async def query_stream(
     request: QueryRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: UserRecord = Depends(get_current_user),
     matter_id: UUID = Depends(get_matter_id),
     graph=Depends(get_query_graph),
     _rate_limit=Depends(rate_limit_queries),
@@ -355,55 +174,35 @@ async def query_stream(
     # Load chat history
     messages: list[dict[str, Any]] = []
     if request.thread_id:
-        rows = await _load_thread_messages(db, thread_id, matter_id=matter_id)
+        rows = await ChatService.load_thread_messages(db, thread_id, matter_id=matter_id)
         messages = [{"role": r["role"], "content": r["content"]} for r in rows]
 
-    exclude_privilege = ["privileged", "work_product"] if current_user["role"] not in ("admin", "attorney") else []
+    exclude_privilege = ["privileged", "work_product"] if current_user.role not in ("admin", "attorney") else []
 
     if settings.enable_agentic_pipeline:
-        initial_state = _build_agentic_state(
+        initial_state = QueryService.build_agentic_state(
             query=request.query,
             messages=messages,
             thread_id=thread_id,
-            user_id=str(current_user["id"]),
+            user_id=str(current_user.id),
             matter_id=str(matter_id),
             filters=request.filters,
             exclude_privilege=exclude_privilege,
         )
     else:
-        stream_case_context = ""
-        try:
-            from app.cases.context_resolver import CaseContextResolver
+        initial_state = await QueryService.build_v1_state(
+            query=request.query,
+            messages=messages,
+            thread_id=thread_id,
+            user_id=str(current_user.id),
+            matter_id=str(matter_id),
+            filters=request.filters,
+            exclude_privilege=exclude_privilege,
+            db=db,
+            settings=settings,
+        )
 
-            ctx = await CaseContextResolver.get_context_for_matter(db, str(matter_id))
-            if ctx:
-                stream_case_context = CaseContextResolver.format_context_for_prompt(ctx)
-        except Exception:
-            logger.debug("query_stream.case_context_load_skipped")
-
-        initial_state = {
-            "messages": messages,
-            "thread_id": thread_id,
-            "user_id": str(current_user["id"]),
-            "original_query": request.query,
-            "rewritten_query": "",
-            "query_type": "",
-            "text_results": [],
-            "visual_results": [],
-            "graph_results": [],
-            "fused_context": [],
-            "response": "",
-            "source_documents": [],
-            "follow_up_questions": [],
-            "entities_mentioned": [],
-            "_case_context": stream_case_context,
-            "_relevance": "",
-            "_reformulated": False,
-            "_filters": {**(request.filters or {}), "matter_id": str(matter_id)},
-            "_exclude_privilege": exclude_privilege,
-        }
-
-    config = _build_graph_config(thread_id, settings)
+    config = QueryService.build_graph_config(thread_id, settings)
 
     if settings.enable_agentic_pipeline:
         return EventSourceResponse(
@@ -431,9 +230,12 @@ async def _v1_event_generator(graph, initial_state, config, db, thread_id, query
             if isinstance(chunk, dict) and chunk.get("type") == "token":
                 yield {"event": "token", "data": json.dumps({"text": chunk["text"]})}
 
+    # Chat persistence failure after streaming is a data integrity issue
+    # but the SSE response is already in-flight and cannot be retracted.
+    # Log at error level with full traceback so it can be investigated.
     try:
-        await _save_message(db, thread_id, "user", query_text, matter_id=matter_id)
-        await _save_message(
+        await ChatService.save_message(db, thread_id, "user", query_text, matter_id=matter_id)
+        await ChatService.save_message(
             db,
             thread_id,
             "assistant",
@@ -445,7 +247,7 @@ async def _v1_event_generator(graph, initial_state, config, db, thread_id, query
         )
         await db.commit()
     except Exception:
-        logger.error("query_stream.save_failed")
+        logger.error("query_stream.save_failed", thread_id=thread_id, exc_info=True)
 
     yield {
         "event": "done",
@@ -507,11 +309,14 @@ async def _agentic_event_generator(graph, initial_state, config, db, thread_id, 
     from app.dependencies import get_settings
 
     settings = get_settings()
-    response_text = _extract_response(final_state, settings.enable_agentic_pipeline)
+    response_text = QueryService.extract_response(final_state, settings.enable_agentic_pipeline)
 
+    # Chat persistence failure after streaming is a data integrity issue
+    # but the SSE response is already in-flight and cannot be retracted.
+    # Log at error level with full traceback so it can be investigated.
     try:
-        await _save_message(db, thread_id, "user", query_text, matter_id=matter_id)
-        await _save_message(
+        await ChatService.save_message(db, thread_id, "user", query_text, matter_id=matter_id)
+        await ChatService.save_message(
             db,
             thread_id,
             "assistant",
@@ -523,7 +328,7 @@ async def _agentic_event_generator(graph, initial_state, config, db, thread_id, 
         )
         await db.commit()
     except Exception:
-        logger.error("query_stream.save_failed")
+        logger.error("query_stream.save_failed", thread_id=thread_id, exc_info=True)
 
     yield {
         "event": "done",
@@ -549,7 +354,7 @@ async def list_chats(
     offset: int = 0,
     limit: int = 20,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: UserRecord = Depends(get_current_user),
     matter_id: UUID = Depends(get_matter_id),
 ):
     """List all chat threads with summary info."""
@@ -592,11 +397,11 @@ async def list_chats(
 async def get_chat(
     thread_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: UserRecord = Depends(get_current_user),
     matter_id: UUID = Depends(get_matter_id),
 ):
     """Return the full message history for a chat thread."""
-    rows = await _load_thread_messages(db, thread_id, matter_id=matter_id)
+    rows = await ChatService.load_thread_messages(db, thread_id, matter_id=matter_id)
 
     if not rows:
         return JSONResponse(status_code=404, content={"detail": "Thread not found"})
@@ -605,9 +410,9 @@ async def get_chat(
         ChatMessage(
             role=r["role"],
             content=r["content"],
-            source_documents=[SourceDocument(**doc) for doc in _parse_jsonb(r.get("source_documents"))],
-            entities_mentioned=[EntityMention(**ent) for ent in _parse_jsonb(r.get("entities_mentioned"))],
-            follow_up_questions=_parse_jsonb(r.get("follow_up_questions")),
+            source_documents=[SourceDocument(**doc) for doc in parse_jsonb(r.get("source_documents"))],
+            entities_mentioned=[EntityMention(**ent) for ent in parse_jsonb(r.get("entities_mentioned"))],
+            follow_up_questions=parse_jsonb(r.get("follow_up_questions")),
             timestamp=r["created_at"],
         )
         for r in rows
@@ -628,7 +433,7 @@ async def get_chat(
 async def delete_chat(
     thread_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: UserRecord = Depends(get_current_user),
     matter_id: UUID = Depends(get_matter_id),
 ):
     """Delete a chat thread and all its messages."""

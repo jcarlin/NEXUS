@@ -16,6 +16,7 @@ logger = structlog.get_logger(__name__)
 # Request-ID middleware
 # ---------------------------------------------------------------------------
 
+
 class RequestIDMiddleware(BaseHTTPMiddleware):
     """Injects a unique X-Request-ID into every request/response cycle."""
 
@@ -36,6 +37,7 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
 # ---------------------------------------------------------------------------
 # Request-logging middleware
 # ---------------------------------------------------------------------------
+
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
     """Logs method, path, status code, and duration for every request using structlog."""
@@ -63,6 +65,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 # ---------------------------------------------------------------------------
 # CORS helper
 # ---------------------------------------------------------------------------
+
 
 def setup_cors(app: FastAPI) -> None:
     """Configure CORS from ``Settings.cors_allowed_origins`` (comma-separated)."""
@@ -132,15 +135,14 @@ class AuditLoggingMiddleware(BaseHTTPMiddleware):
 
     @staticmethod
     async def _write_audit_log(request: Request, status_code: int, duration_ms: float) -> None:
-        """Insert an audit log row in its own session (fire-and-forget)."""
+        """Delegate audit log INSERT to AuditService (fire-and-forget)."""
         try:
-            from sqlalchemy import text as sa_text
-            from app.dependencies import _get_session_factory
+            from app.audit.service import AuditService
+            from app.dependencies import get_session_factory
 
-            # Extract user info if available
             user = getattr(request.state, "user", None)
-            user_id = user["id"] if user else None
-            user_email = user.get("email") if user else None
+            user_id = user.id if user else None
+            user_email = user.email if user else None
 
             matter_header = request.headers.get("X-Matter-ID")
             matter_id: UUID | None = None
@@ -150,37 +152,22 @@ class AuditLoggingMiddleware(BaseHTTPMiddleware):
                 except ValueError:
                     pass  # Invalid UUID in header — store as NULL
 
-            request_id = getattr(request.state, "request_id", None)
-            session_id = getattr(request.state, "session_id", None)
-
-            factory = _get_session_factory()
-            async with factory() as session:
-                await session.execute(
-                    sa_text("""
-                        INSERT INTO audit_log
-                            (user_id, user_email, action, resource, resource_type,
-                             matter_id, ip_address, user_agent, status_code,
-                             duration_ms, request_id, session_id)
-                        VALUES
-                            (:user_id, :user_email, :action, :resource, :resource_type,
-                             :matter_id, :ip_address, :user_agent, :status_code,
-                             :duration_ms, :request_id, :session_id)
-                    """),
-                    {
-                        "user_id": user_id,
-                        "user_email": user_email,
-                        "action": request.method,
-                        "resource": str(request.url.path),
-                        "resource_type": _derive_resource_type(str(request.url.path)),
-                        "matter_id": matter_id,
-                        "ip_address": _get_client_ip(request),
-                        "user_agent": request.headers.get("User-Agent"),
-                        "status_code": status_code,
-                        "duration_ms": duration_ms,
-                        "request_id": request_id,
-                        "session_id": session_id,
-                    },
-                )
-                await session.commit()
+            await AuditService.log_request(
+                get_session_factory(),
+                user_id=user_id,
+                user_email=user_email,
+                action=request.method,
+                resource=str(request.url.path),
+                resource_type=_derive_resource_type(str(request.url.path)),
+                matter_id=matter_id,
+                ip_address=_get_client_ip(request),
+                user_agent=request.headers.get("User-Agent"),
+                status_code=status_code,
+                duration_ms=duration_ms,
+                request_id=getattr(request.state, "request_id", None),
+                session_id=getattr(request.state, "session_id", None),
+            )
         except Exception:
+            # Acceptable degradation: audit logging must not block user
+            # requests or return errors to the client.
             logger.warning("audit_log.write_failed", exc_info=True)

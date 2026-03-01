@@ -6,12 +6,6 @@ invoking the compiled LangGraph with ``astream()``.
 
 from __future__ import annotations
 
-import json
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
-
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -43,9 +37,7 @@ async def _collect_stream_events(graph, state: dict) -> list[tuple[str, dict]]:
     """Run graph.astream and collect all (stream_mode, chunk) tuples."""
     events = []
     config = {"configurable": {"thread_id": "test-stream"}}
-    async for stream_mode, chunk in graph.astream(
-        state, config, stream_mode=["updates", "custom"]
-    ):
+    async for stream_mode, chunk in graph.astream(state, config, stream_mode=["updates", "custom"]):
         events.append((stream_mode, chunk))
     return events
 
@@ -121,9 +113,7 @@ async def test_stream_done_contains_thread_and_followups(compiled_graph, mock_se
     mock_services["llm"].complete.side_effect = [
         "factual",
         "Who is John Doe?",
-        "What connections does John Doe have?\n"
-        "Are there financial records?\n"
-        "What is the timeline?",
+        "What connections does John Doe have?\nAre there financial records?\nWhat is the timeline?",
     ]
 
     state = _base_state()
@@ -173,9 +163,9 @@ async def test_stream_handles_empty_retrieval(mock_services):
     # Empty retrieval triggers: classify, rewrite, reformulate, follow-ups (4 calls)
     # The reformulation path adds an extra LLM call
     mock_services["llm"].complete.side_effect = [
-        "factual",                                    # classify
-        "Who is John Doe?",                           # rewrite
-        "alternative query about John Doe",           # reformulate
+        "factual",  # classify
+        "Who is John Doe?",  # rewrite
+        "alternative query about John Doe",  # reformulate
         "Follow-up one\nFollow-up two\nFollow-up three",  # follow-ups
     ]
     mock_services["entity_extractor"].extract.return_value = []

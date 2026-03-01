@@ -8,29 +8,31 @@ FastAPI app can be exercised purely in-process.
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import UTC, datetime
+from unittest.mock import patch
 from uuid import UUID
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from app.auth.schemas import UserRecord
 from app.config import Settings
 
 # ---------------------------------------------------------------------------
 # Fake user / matter used by all existing tests
 # ---------------------------------------------------------------------------
 
-_TEST_USER = {
-    "id": UUID("00000000-0000-0000-0000-000000000099"),
-    "email": "test@nexus.dev",
-    "full_name": "Test User",
-    "role": "admin",
-    "is_active": True,
-    "password_hash": "$2b$12$fake",
-    "api_key_hash": None,
-    "created_at": "2025-01-01T00:00:00+00:00",
-    "updated_at": "2025-01-01T00:00:00+00:00",
-}
+_TEST_USER = UserRecord(
+    id=UUID("00000000-0000-0000-0000-000000000099"),
+    email="test@nexus.dev",
+    full_name="Test User",
+    role="admin",
+    is_active=True,
+    password_hash="$2b$12$fake",
+    api_key_hash=None,
+    created_at=datetime(2025, 1, 1, tzinfo=UTC),
+    updated_at=datetime(2025, 1, 1, tzinfo=UTC),
+)
 
 _TEST_MATTER_ID = UUID("00000000-0000-0000-0000-000000000001")
 
@@ -38,6 +40,7 @@ _TEST_MATTER_ID = UUID("00000000-0000-0000-0000-000000000001")
 # ---------------------------------------------------------------------------
 # Test settings (no real service connections)
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture()
 def test_settings() -> Settings:
@@ -61,6 +64,7 @@ def test_settings() -> Settings:
 # ---------------------------------------------------------------------------
 # Async HTTP client backed by the FastAPI ASGI app
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture()
 async def client() -> AsyncIterator[AsyncClient]:

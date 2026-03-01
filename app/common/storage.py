@@ -79,7 +79,7 @@ class StorageClient:
 
         def _download() -> bytes:
             resp = self._client.get_object(Bucket=self._bucket, Key=key)
-            return resp["Body"].read()
+            return bytes(resp["Body"].read())
 
         return await asyncio.to_thread(_download)
 
@@ -87,10 +87,12 @@ class StorageClient:
         """Generate a presigned GET URL for the given object."""
 
         def _presign() -> str:
-            return self._client.generate_presigned_url(
-                "get_object",
-                Params={"Bucket": self._bucket, "Key": key},
-                ExpiresIn=expires,
+            return str(
+                self._client.generate_presigned_url(
+                    "get_object",
+                    Params={"Bucket": self._bucket, "Key": key},
+                    ExpiresIn=expires,
+                )
             )
 
         return await asyncio.to_thread(_presign)

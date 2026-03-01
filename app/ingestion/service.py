@@ -13,22 +13,9 @@ import structlog
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.db_utils import row_to_dict
+
 logger = structlog.get_logger(__name__)
-
-
-def _row_to_dict(row) -> dict:
-    """Convert a SQLAlchemy Row (from text query) into a plain dict.
-
-    UUID and datetime values are converted to JSON-safe types so the dict
-    can be passed directly into Pydantic response models.
-    """
-    raw = dict(row._mapping)
-    for key, value in raw.items():
-        if isinstance(value, UUID):
-            raw[key] = value
-        if isinstance(value, datetime):
-            raw[key] = value
-    return raw
 
 
 class IngestionService:
@@ -133,7 +120,7 @@ class IngestionService:
         row = result.first()
         if row is None:
             return None
-        return _row_to_dict(row)
+        return row_to_dict(row)
 
     # ------------------------------------------------------------------
     # READ (list + count)
@@ -176,7 +163,7 @@ class IngestionService:
             params,
         )
         rows = result.all()
-        items = [_row_to_dict(r) for r in rows]
+        items = [row_to_dict(r) for r in rows]
 
         return items, total
 
@@ -337,7 +324,7 @@ class IngestionService:
         row = result.first()
         if row is None:
             return None
-        return _row_to_dict(row)
+        return row_to_dict(row)
 
     # ------------------------------------------------------------------
     # CANCEL

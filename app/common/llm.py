@@ -83,7 +83,7 @@ class LLMClient:
 
             from sqlalchemy import text as sa_text
 
-            from app.dependencies import _get_session_factory
+            from app.dependencies import get_session_factory
 
             ctx = structlog.contextvars.get_contextvars()
             request_id = ctx.get("request_id")
@@ -94,7 +94,7 @@ class LLMClient:
             if input_tokens is not None and output_tokens is not None:
                 total_tokens = input_tokens + output_tokens
 
-            factory = _get_session_factory()
+            factory = get_session_factory()
             async with factory() as session:
                 await session.execute(
                     sa_text("""
@@ -151,11 +151,17 @@ class LLMClient:
         try:
             if self.provider == "anthropic":
                 result, input_tokens, output_tokens = await self._complete_anthropic(
-                    messages, max_tokens=max_tokens, temperature=temperature, **kwargs,
+                    messages,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    **kwargs,
                 )
             else:
                 result, input_tokens, output_tokens = await self._complete_openai(
-                    messages, max_tokens=max_tokens, temperature=temperature, **kwargs,
+                    messages,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    **kwargs,
                 )
         except Exception as exc:
             latency_ms = round((time.perf_counter() - start) * 1000, 2)
@@ -179,10 +185,10 @@ class LLMClient:
         return result
 
     async def _complete_anthropic(
-        self, messages: list[dict[str, str]], **kwargs: Any,
+        self,
+        messages: list[dict[str, str]],
+        **kwargs: Any,
     ) -> tuple[str, int | None, int | None]:
-        from anthropic import AsyncAnthropic
-
         client: AsyncAnthropic = self._client  # type: ignore[assignment]
 
         # Anthropic requires a separate system param; extract it if present.
@@ -203,13 +209,18 @@ class LLMClient:
         )
         input_tokens = getattr(response.usage, "input_tokens", None)
         output_tokens = getattr(response.usage, "output_tokens", None)
-        return response.content[0].text, input_tokens, output_tokens
+        from anthropic.types import TextBlock
+
+        content_block = response.content[0]
+        if not isinstance(content_block, TextBlock):
+            raise ValueError(f"Expected TextBlock, got {type(content_block).__name__}")
+        return content_block.text, input_tokens, output_tokens
 
     async def _complete_openai(
-        self, messages: list[dict[str, str]], **kwargs: Any,
+        self,
+        messages: list[dict[str, str]],
+        **kwargs: Any,
     ) -> tuple[str, int | None, int | None]:
-        from openai import AsyncOpenAI
-
         client: AsyncOpenAI = self._client  # type: ignore[assignment]
         response = await client.chat.completions.create(
             model=self.model,
@@ -243,10 +254,14 @@ class LLMClient:
 
         try:
             if self.provider == "anthropic":
-                async for token in self._stream_anthropic(messages, max_tokens=max_tokens, temperature=temperature, **kwargs):
+                async for token in self._stream_anthropic(
+                    messages, max_tokens=max_tokens, temperature=temperature, **kwargs
+                ):
                     yield token
             else:
-                async for token in self._stream_openai(messages, max_tokens=max_tokens, temperature=temperature, **kwargs):
+                async for token in self._stream_openai(
+                    messages, max_tokens=max_tokens, temperature=temperature, **kwargs
+                ):
                     yield token
         except Exception as exc:
             latency_ms = round((time.perf_counter() - start) * 1000, 2)
@@ -269,8 +284,6 @@ class LLMClient:
         )
 
     async def _stream_anthropic(self, messages: list[dict[str, str]], **kwargs: Any) -> AsyncIterator[str]:
-        from anthropic import AsyncAnthropic
-
         client: AsyncAnthropic = self._client  # type: ignore[assignment]
 
         system_text = ""
@@ -292,17 +305,15 @@ class LLMClient:
                 yield text
 
     async def _stream_openai(self, messages: list[dict[str, str]], **kwargs: Any) -> AsyncIterator[str]:
-        from openai import AsyncOpenAI
-
         client: AsyncOpenAI = self._client  # type: ignore[assignment]
-        stream = await client.chat.completions.create(
+        stream = await client.chat.completions.create(  # type: ignore[assignment]
             model=self.model,
             messages=messages,  # type: ignore[arg-type]
             max_tokens=kwargs.get("max_tokens", 4096),
             temperature=kwargs.get("temperature", 0.1),
             stream=True,
         )
-        async for chunk in stream:
+        async for chunk in stream:  # type: ignore[union-attr]
             delta = chunk.choices[0].delta
             if delta.content:
                 yield delta.content

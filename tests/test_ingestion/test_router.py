@@ -5,9 +5,9 @@ These tests run against the FastAPI app with mocked backends (no Docker required
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest
 from httpx import AsyncClient
@@ -38,7 +38,7 @@ async def test_ingest_accepts_file(client: AsyncClient) -> None:
     mock_storage.upload_bytes = AsyncMock(return_value="raw/test/file.txt")
 
     fake_job_id = uuid4()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     fake_job = {
         "id": fake_job_id,
         "filename": "test.txt",
@@ -88,7 +88,7 @@ async def test_get_job_not_found(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_get_job_found(client: AsyncClient) -> None:
     """GET /jobs/{id} for existing job should return 200 with job details."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     fake_job = {
         "id": uuid4(),
         "filename": "test.pdf",

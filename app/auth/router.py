@@ -19,6 +19,7 @@ from app.auth.schemas import (
     LoginRequest,
     RefreshRequest,
     TokenResponse,
+    UserRecord,
     UserResponse,
 )
 from app.auth.service import AuthService
@@ -41,8 +42,8 @@ async def login(
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
-    access_token = AuthService.create_access_token(user["id"], user["role"], settings)
-    refresh_token = AuthService.create_refresh_token(user["id"], settings)
+    access_token = AuthService.create_access_token(user.id, user.role, settings)
+    refresh_token = AuthService.create_refresh_token(user.id, settings)
 
     return TokenResponse(
         access_token=access_token,
@@ -70,11 +71,11 @@ async def refresh(
         raise HTTPException(status_code=401, detail="Invalid token type")
 
     user = await AuthService.get_user_by_id(db, UUID(payload["sub"]))
-    if user is None or not user.get("is_active", False):
+    if user is None or not user.is_active:
         raise HTTPException(status_code=401, detail="User not found or inactive")
 
-    access_token = AuthService.create_access_token(user["id"], user["role"], settings)
-    refresh_token = AuthService.create_refresh_token(user["id"], settings)
+    access_token = AuthService.create_access_token(user.id, user.role, settings)
+    refresh_token = AuthService.create_refresh_token(user.id, settings)
 
     return TokenResponse(
         access_token=access_token,
@@ -85,14 +86,14 @@ async def refresh(
 
 @router.get("/me", response_model=UserResponse)
 async def me(
-    current_user: dict = Depends(get_current_user),
+    current_user: UserRecord = Depends(get_current_user),
 ):
     """Return the profile of the currently authenticated user."""
     return UserResponse(
-        id=current_user["id"],
-        email=current_user["email"],
-        full_name=current_user["full_name"],
-        role=current_user["role"],
-        is_active=current_user["is_active"],
-        created_at=current_user["created_at"],
+        id=current_user.id,
+        email=current_user.email,
+        full_name=current_user.full_name,
+        role=current_user.role,
+        is_active=current_user.is_active,
+        created_at=current_user.created_at,
     )

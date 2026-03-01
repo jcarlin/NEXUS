@@ -1,23 +1,70 @@
-"""Audit service: AI interaction logging, agent action logging, export, retention."""
+"""Audit service: request audit logging, AI interaction logging, agent action logging, export, retention."""
 
 from __future__ import annotations
 
 import csv
 import io
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
 import structlog
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 logger = structlog.get_logger(__name__)
 
 
 class AuditService:
     """Static methods for SOC 2 audit operations. Raw SQL via sqlalchemy.text()."""
+
+    @staticmethod
+    async def log_request(
+        session_factory: async_sessionmaker[AsyncSession],
+        *,
+        user_id: UUID | None = None,
+        user_email: str | None = None,
+        action: str,
+        resource: str,
+        resource_type: str | None = None,
+        matter_id: UUID | None = None,
+        ip_address: str,
+        user_agent: str | None = None,
+        status_code: int,
+        duration_ms: float,
+        request_id: str | None = None,
+        session_id: str | None = None,
+    ) -> None:
+        """Insert a row into the audit_log table using its own session (fire-and-forget)."""
+        async with session_factory() as session:
+            await session.execute(
+                text("""
+                    INSERT INTO audit_log
+                        (user_id, user_email, action, resource, resource_type,
+                         matter_id, ip_address, user_agent, status_code,
+                         duration_ms, request_id, session_id)
+                    VALUES
+                        (:user_id, :user_email, :action, :resource, :resource_type,
+                         :matter_id, :ip_address, :user_agent, :status_code,
+                         :duration_ms, :request_id, :session_id)
+                """),
+                {
+                    "user_id": user_id,
+                    "user_email": user_email,
+                    "action": action,
+                    "resource": resource,
+                    "resource_type": resource_type,
+                    "matter_id": matter_id,
+                    "ip_address": ip_address,
+                    "user_agent": user_agent,
+                    "status_code": status_code,
+                    "duration_ms": duration_ms,
+                    "request_id": request_id,
+                    "session_id": session_id,
+                },
+            )
+            await session.commit()
 
     @staticmethod
     async def log_ai_call(
@@ -259,7 +306,7 @@ class AuditService:
         oldest_result = await db.execute(text("SELECT min(created_at) FROM ai_audit_log"))
         oldest = oldest_result.scalar_one()
 
-        cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
+        cutoff = datetime.now(UTC) - timedelta(days=retention_days)
 
         beyond_result = await db.execute(
             text("SELECT count(*) FROM ai_audit_log WHERE created_at < :cutoff"),
@@ -284,10 +331,10 @@ class AuditService:
         Note: Actual deletion requires dropping immutability rules first —
         a privileged DBA operation not exposed via API.
         """
-        cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
+        cutoff = datetime.now(UTC) - timedelta(days=retention_days)
 
         result = await db.execute(
             text("SELECT count(*) FROM ai_audit_log WHERE created_at < :cutoff"),
             {"cutoff": cutoff},
         )
-        return result.scalar_one()
+        return int(result.scalar_one())

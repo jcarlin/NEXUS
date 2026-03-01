@@ -16,6 +16,7 @@ from passlib.context import CryptContext
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth.schemas import UserRecord
 from app.config import Settings
 
 logger = structlog.get_logger(__name__)
@@ -32,11 +33,11 @@ class AuthService:
 
     @staticmethod
     def hash_password(password: str) -> str:
-        return _pwd_context.hash(password)
+        return str(_pwd_context.hash(password))
 
     @staticmethod
     def verify_password(plain: str, hashed: str) -> bool:
-        return _pwd_context.verify(plain, hashed)
+        return bool(_pwd_context.verify(plain, hashed))
 
     @staticmethod
     def hash_api_key(api_key: str) -> str:
@@ -53,7 +54,7 @@ class AuthService:
         password: str,
         full_name: str,
         role: str = "reviewer",
-    ) -> dict[str, Any]:
+    ) -> UserRecord:
         user_id = uuid4()
         now = datetime.now(UTC)
         password_hash = AuthService.hash_password(password)
@@ -76,33 +77,34 @@ class AuthService:
         await db.flush()
 
         logger.info("auth.user_created", user_id=str(user_id), email=email)
-        return {
-            "id": user_id,
-            "email": email,
-            "full_name": full_name,
-            "role": role,
-            "is_active": True,
-            "created_at": now,
-            "updated_at": now,
-        }
+        return UserRecord(
+            id=user_id,
+            email=email,
+            password_hash=password_hash,
+            full_name=full_name,
+            role=role,
+            is_active=True,
+            created_at=now,
+            updated_at=now,
+        )
 
     @staticmethod
     async def authenticate_user(
         db: AsyncSession,
         email: str,
         password: str,
-    ) -> dict[str, Any] | None:
+    ) -> UserRecord | None:
         user = await AuthService.get_user_by_email(db, email)
         if user is None:
             return None
-        if not user.get("is_active", False):
+        if not user.is_active:
             return None
-        if not AuthService.verify_password(password, user["password_hash"]):
+        if not AuthService.verify_password(password, user.password_hash):
             return None
         return user
 
     @staticmethod
-    async def get_user_by_id(db: AsyncSession, user_id: UUID) -> dict[str, Any] | None:
+    async def get_user_by_id(db: AsyncSession, user_id: UUID) -> UserRecord | None:
         result = await db.execute(
             text("""
                 SELECT id, email, password_hash, full_name, role, api_key_hash,
@@ -114,10 +116,10 @@ class AuthService:
         row = result.first()
         if row is None:
             return None
-        return dict(row._mapping)
+        return UserRecord.model_validate(dict(row._mapping))
 
     @staticmethod
-    async def get_user_by_email(db: AsyncSession, email: str) -> dict[str, Any] | None:
+    async def get_user_by_email(db: AsyncSession, email: str) -> UserRecord | None:
         result = await db.execute(
             text("""
                 SELECT id, email, password_hash, full_name, role, api_key_hash,
@@ -129,10 +131,10 @@ class AuthService:
         row = result.first()
         if row is None:
             return None
-        return dict(row._mapping)
+        return UserRecord.model_validate(dict(row._mapping))
 
     @staticmethod
-    async def get_user_by_api_key(db: AsyncSession, api_key: str) -> dict[str, Any] | None:
+    async def get_user_by_api_key(db: AsyncSession, api_key: str) -> UserRecord | None:
         key_hash = AuthService.hash_api_key(api_key)
         result = await db.execute(
             text("""
@@ -145,7 +147,7 @@ class AuthService:
         row = result.first()
         if row is None:
             return None
-        return dict(row._mapping)
+        return UserRecord.model_validate(dict(row._mapping))
 
     # ------------------------------------------------------------------
     # JWT tokens

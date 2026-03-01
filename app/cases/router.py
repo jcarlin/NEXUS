@@ -7,14 +7,16 @@ PATCH /cases/{matter_id}/context -- edit/confirm extracted context
 
 from __future__ import annotations
 
-import json
 from uuid import UUID, uuid4
 
 import structlog
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.analytics.schemas import OrgChartImportRequest, OrgChartImportResponse
+from app.analytics.service import AnalyticsService
 from app.auth.middleware import get_current_user, get_matter_id, require_role
+from app.auth.schemas import UserRecord
 from app.cases.schemas import (
     CaseContextResponse,
     CaseContextUpdateRequest,
@@ -25,26 +27,12 @@ from app.cases.schemas import (
     TimelineEvent,
 )
 from app.cases.service import CaseService
+from app.common.db_utils import parse_jsonb
 from app.dependencies import get_db, get_minio
 
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(tags=["cases"])
-
-
-def _parse_jsonb(val):
-    """Safely parse a JSONB column that may be a string, list, or None."""
-    if val is None:
-        return []
-    if isinstance(val, list):
-        return val
-    if isinstance(val, str):
-        try:
-            parsed = json.loads(val)
-            return list(parsed) if isinstance(parsed, list) else []
-        except (json.JSONDecodeError, TypeError):
-            return []
-    return []
 
 
 def _context_dict_to_response(ctx: dict) -> CaseContextResponse:
@@ -55,8 +43,8 @@ def _context_dict_to_response(ctx: dict) -> CaseContextResponse:
             claim_number=c["claim_number"],
             claim_label=c["claim_label"],
             claim_text=c["claim_text"],
-            legal_elements=_parse_jsonb(c.get("legal_elements")),
-            source_pages=_parse_jsonb(c.get("source_pages")),
+            legal_elements=parse_jsonb(c.get("legal_elements")),
+            source_pages=parse_jsonb(c.get("source_pages")),
         )
         for c in ctx.get("claims", [])
     ]
@@ -67,9 +55,9 @@ def _context_dict_to_response(ctx: dict) -> CaseContextResponse:
             name=p["name"],
             role=p["role"],
             description=p.get("description"),
-            aliases=_parse_jsonb(p.get("aliases")),
+            aliases=parse_jsonb(p.get("aliases")),
             entity_id=p.get("entity_id"),
-            source_pages=_parse_jsonb(p.get("source_pages")),
+            source_pages=parse_jsonb(p.get("source_pages")),
         )
         for p in ctx.get("parties", [])
     ]
@@ -80,7 +68,7 @@ def _context_dict_to_response(ctx: dict) -> CaseContextResponse:
             term=t["term"],
             definition=t["definition"],
             entity_id=t.get("entity_id"),
-            source_pages=_parse_jsonb(t.get("source_pages")),
+            source_pages=parse_jsonb(t.get("source_pages")),
         )
         for t in ctx.get("defined_terms", [])
     ]
@@ -119,7 +107,7 @@ async def setup_case(
     matter_id: UUID,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(require_role("admin", "attorney")),
+    current_user: UserRecord = Depends(require_role("admin", "attorney")),
     user_matter_id: UUID = Depends(get_matter_id),
 ):
     """Upload an anchor document (complaint) and start case context extraction.
@@ -171,7 +159,7 @@ async def setup_case(
         db=db,
         matter_id=str(matter_id),
         anchor_document_id=minio_path,
-        created_by=str(current_user["id"]),
+        created_by=str(current_user.id),
         job_id=job_id,
     )
 
@@ -211,7 +199,7 @@ async def setup_case(
 async def get_case_context(
     matter_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: UserRecord = Depends(get_current_user),
     user_matter_id: UUID = Depends(get_matter_id),
 ):
     """Get the full case context for a matter."""
@@ -238,7 +226,7 @@ async def update_case_context(
     matter_id: UUID,
     body: CaseContextUpdateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(require_role("admin", "attorney")),
+    current_user: UserRecord = Depends(require_role("admin", "attorney")),
     user_matter_id: UUID = Depends(get_matter_id),
 ):
     """Edit or confirm the extracted case context.
@@ -260,7 +248,7 @@ async def update_case_context(
 
     # Update status if provided
     if body.status is not None:
-        confirmed_by = str(current_user["id"]) if body.status == "confirmed" else None
+        confirmed_by = str(current_user.id) if body.status == "confirmed" else None
         await CaseService.update_case_context_status(
             db,
             context_id,
@@ -293,3 +281,35 @@ async def update_case_context(
     # Return the updated full context
     updated = await CaseService.get_full_context(db, str(matter_id))
     return _context_dict_to_response(updated)
+
+
+# -----------------------------------------------------------------------
+# POST /cases/{matter_id}/org-chart
+# -----------------------------------------------------------------------
+
+
+@router.post("/cases/{matter_id}/org-chart", response_model=OrgChartImportResponse)
+async def import_org_chart(
+    matter_id: UUID,
+    body: OrgChartImportRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserRecord = Depends(require_role("admin", "attorney")),
+    user_matter_id: UUID = Depends(get_matter_id),
+):
+    """Import organizational hierarchy for a matter.
+
+    Accepts a list of person entries with reporting relationships.
+    Requires attorney or admin role.
+    """
+    if matter_id != user_matter_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Path matter_id does not match X-Matter-ID header",
+        )
+
+    result = await AnalyticsService.import_org_chart(
+        db,
+        str(matter_id),
+        body.entries,
+    )
+    return result

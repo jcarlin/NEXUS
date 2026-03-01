@@ -36,10 +36,7 @@ async def test_embed_texts_batching():
 
     def make_response(count, offset=0):
         resp = MagicMock()
-        resp.data = [
-            MagicMock(index=i, embedding=[float(i + offset)] * 4)
-            for i in range(count)
-        ]
+        resp.data = [MagicMock(index=i, embedding=[float(i + offset)] * 4) for i in range(count)]
         return resp
 
     with patch.object(embedder._client.embeddings, "create", new_callable=AsyncMock) as mock_create:

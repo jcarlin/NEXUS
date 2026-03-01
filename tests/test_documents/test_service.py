@@ -5,7 +5,7 @@ All DB interactions are mocked via ``AsyncMock`` — no real Postgres needed.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
@@ -13,10 +13,10 @@ import pytest
 
 from app.documents.service import DocumentService
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_fake_row(overrides: dict | None = None) -> MagicMock:
     """Create a fake SQLAlchemy Row with a ``_mapping`` attribute."""
@@ -32,8 +32,8 @@ def _make_fake_row(overrides: dict | None = None) -> MagicMock:
         "file_size_bytes": 102400,
         "content_hash": "sha256-abc123",
         "metadata_": {},
-        "created_at": datetime.now(timezone.utc),
-        "updated_at": datetime.now(timezone.utc),
+        "created_at": datetime.now(UTC),
+        "updated_at": datetime.now(UTC),
     }
     if overrides:
         base.update(overrides)
@@ -88,9 +88,7 @@ async def test_list_documents_with_type_filter() -> None:
 
     db.execute = AsyncMock(side_effect=[count_result, select_result])
 
-    items, total = await DocumentService.list_documents(
-        db, document_type="email"
-    )
+    items, total = await DocumentService.list_documents(db, document_type="email")
     assert total == 1
     assert len(items) == 1
     assert items[0]["document_type"] == "email"

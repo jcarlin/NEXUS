@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID, uuid4
 
 import pytest
 from httpx import AsyncClient
 
+from app.auth.schemas import UserRecord
 
 # ---------------------------------------------------------------------------
 # GET /admin/audit-log
@@ -32,7 +33,7 @@ async def test_audit_log_admin_200(client: AsyncClient) -> None:
             "status_code": 200,
             "duration_ms": 12.5,
             "request_id": "test-req-id",
-            "created_at": datetime.now(timezone.utc),
+            "created_at": datetime.now(UTC),
         }
     ]
 
@@ -54,7 +55,7 @@ async def test_audit_log_admin_200(client: AsyncClient) -> None:
             return mock_count_result
         return mock_data_result
 
-    with patch("app.dependencies._get_session_factory") as mock_factory:
+    with patch("app.dependencies.get_session_factory") as mock_factory:
         mock_session = AsyncMock()
         mock_session.execute = mock_execute
         mock_session.commit = AsyncMock()
@@ -90,13 +91,14 @@ async def test_audit_log_non_admin_403(client: AsyncClient) -> None:
     """Non-admin users get 403 on the audit log endpoint."""
     from app.auth.middleware import get_current_user
 
-    reviewer_user = {
-        "id": UUID("00000000-0000-0000-0000-000000000077"),
-        "email": "reviewer@nexus.dev",
-        "full_name": "Doc Reviewer",
-        "role": "reviewer",
-        "is_active": True,
-    }
+    reviewer_user = UserRecord(
+        id=UUID("00000000-0000-0000-0000-000000000077"),
+        email="reviewer@nexus.dev",
+        full_name="Doc Reviewer",
+        role="reviewer",
+        is_active=True,
+        created_at=datetime.now(UTC),
+    )
 
     client._transport.app.dependency_overrides[get_current_user] = lambda: reviewer_user
 
@@ -104,6 +106,7 @@ async def test_audit_log_non_admin_403(client: AsyncClient) -> None:
         response = await client.get("/api/v1/admin/audit-log")
     finally:
         from tests.conftest import _TEST_USER
+
         client._transport.app.dependency_overrides[get_current_user] = lambda: _TEST_USER
 
     assert response.status_code == 403

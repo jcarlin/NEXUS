@@ -5,17 +5,17 @@ These tests run against the FastAPI app with mocked backends (no Docker required
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
 from httpx import AsyncClient
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _fake_doc_row(doc_id=None, **overrides) -> dict:
     """Return a dict mimicking a raw DB row from the documents table."""
@@ -31,8 +31,8 @@ def _fake_doc_row(doc_id=None, **overrides) -> dict:
         "file_size_bytes": 204800,
         "content_hash": "sha256-xyz",
         "metadata_": {"source": "batch_001"},
-        "created_at": datetime.now(timezone.utc),
-        "updated_at": datetime.now(timezone.utc),
+        "created_at": datetime.now(UTC),
+        "updated_at": datetime.now(UTC),
     }
     base.update(overrides)
     return base
@@ -81,8 +81,7 @@ async def test_list_documents_with_type_filter(client: AsyncClient) -> None:
     # Verify the filter was passed through
     mock_list.assert_called_once()
     call_kwargs = mock_list.call_args
-    assert call_kwargs[1].get("document_type") == "email" or \
-        (len(call_kwargs[0]) > 1 and call_kwargs[0][1] == "email")
+    assert call_kwargs[1].get("document_type") == "email" or (len(call_kwargs[0]) > 1 and call_kwargs[0][1] == "email")
 
 
 # ---------------------------------------------------------------------------
@@ -137,9 +136,7 @@ async def test_document_preview_returns_url(client: AsyncClient) -> None:
     row = _fake_doc_row(doc_id=doc_id)
 
     mock_storage = MagicMock()
-    mock_storage.get_presigned_url = AsyncMock(
-        return_value="http://minio:9000/documents/pages/preview.png?sig=abc"
-    )
+    mock_storage.get_presigned_url = AsyncMock(return_value="http://minio:9000/documents/pages/preview.png?sig=abc")
 
     with (
         patch(
@@ -184,9 +181,7 @@ async def test_document_download_returns_url(client: AsyncClient) -> None:
     row = _fake_doc_row(doc_id=doc_id)
 
     mock_storage = MagicMock()
-    mock_storage.get_presigned_url = AsyncMock(
-        return_value="http://minio:9000/documents/raw/abc/report.pdf?sig=xyz"
-    )
+    mock_storage.get_presigned_url = AsyncMock(return_value="http://minio:9000/documents/raw/abc/report.pdf?sig=xyz")
 
     with (
         patch(

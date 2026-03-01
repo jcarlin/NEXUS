@@ -1063,7 +1063,8 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
             except Exception:
                 logger.warning("task.dedup_dispatch_failed", job_id=job_id, exc_info=True)
 
-        # --- Hot document detection (async dispatch, feature-flagged) ---
+        # Acceptable degradation: hot document detection is a fire-and-forget
+        # async task dispatch (feature-flagged).
         if settings.enable_hot_doc_detection:
             try:
                 from app.analysis.tasks import scan_document_sentiment
@@ -1379,7 +1380,8 @@ def import_text_document(
             except Exception:
                 logger.warning("task.import_text.dedup_dispatch_failed", job_id=job_id, exc_info=True)
 
-        # --- Hot document detection (async dispatch, feature-flagged) ---
+        # Acceptable degradation: hot document detection is a fire-and-forget
+        # async task dispatch (feature-flagged).
         if settings.enable_hot_doc_detection:
             try:
                 from app.analysis.tasks import scan_document_sentiment
@@ -1510,6 +1512,7 @@ def detect_duplicates(self, doc_id: str, text: str, matter_id: str) -> dict:
         detector = NearDuplicateDetector(
             threshold=settings.dedup_jaccard_threshold,
             num_perm=settings.dedup_num_permutations,
+            shingle_size=settings.dedup_shingle_size,
         )
 
         matches = detector.find_duplicates(doc_id, text, matter_id or "default")
@@ -1531,7 +1534,13 @@ def detect_duplicates(self, doc_id: str, text: str, matter_id: str) -> dict:
 
         version_group_id = None
         if matches and filename:
-            version_group_id = VersionDetector.detect_versions(engine, doc_id, filename, matches)
+            version_group_id = VersionDetector.detect_versions(
+                engine,
+                doc_id,
+                filename,
+                matches,
+                version_upper_threshold=settings.dedup_version_upper_threshold,
+            )
 
         logger.info(
             "task.detect_duplicates.complete",

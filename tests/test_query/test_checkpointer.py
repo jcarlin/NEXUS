@@ -50,14 +50,18 @@ async def checkpointer_client():
         from app.common.rate_limit import rate_limit_queries
 
         test_app.dependency_overrides[rate_limit_queries] = lambda: None
-        test_app.dependency_overrides[get_current_user] = lambda: {
-            "id": UUID("00000000-0000-0000-0000-000000000099"),
-            "email": "test@nexus.dev",
-            "full_name": "Test",
-            "role": "admin",
-            "is_active": True,
-            "created_at": "2025-01-01T00:00:00+00:00",
-        }
+        from datetime import UTC, datetime
+
+        from app.auth.schemas import UserRecord
+
+        test_app.dependency_overrides[get_current_user] = lambda: UserRecord(
+            id=UUID("00000000-0000-0000-0000-000000000099"),
+            email="test@nexus.dev",
+            full_name="Test",
+            role="admin",
+            is_active=True,
+            created_at=datetime(2025, 1, 1, tzinfo=UTC),
+        )
         test_app.dependency_overrides[get_matter_id] = lambda: UUID("00000000-0000-0000-0000-000000000001")
 
         transport = ASGITransport(app=test_app)

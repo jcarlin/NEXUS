@@ -14,15 +14,17 @@ from fastapi import APIRouter, Depends, File, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.middleware import get_current_user, get_matter_id
+from app.auth.schemas import UserRecord
 from app.dependencies import get_db
 from app.edrm.loadfile_parser import LoadFileParser
 from app.edrm.schemas import (
     DuplicateCluster,
     DuplicateClusterListResponse,
-    EDRMImportLogEntry,
     EDRMImportResponse,
     ImportStatus,
     LoadFileFormat,
+    LoadFileRecord,
+    OpticonRecord,
     ThreadListResponse,
     ThreadResponse,
 )
@@ -35,25 +37,25 @@ router = APIRouter(prefix="/edrm", tags=["edrm"])
 # POST /edrm/import — import a load file
 # -----------------------------------------------------------------------
 
+
 @router.post("/import", response_model=EDRMImportResponse)
 async def import_loadfile(
     file: UploadFile = File(...),
     format: LoadFileFormat = Query(..., description="Load file format"),
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: UserRecord = Depends(get_current_user),
     matter_id: UUID = Depends(get_matter_id),
 ):
     """Import an EDRM load file and log the import."""
     content = (await file.read()).decode("utf-8", errors="replace")
 
+    records: list[LoadFileRecord] | list[OpticonRecord] = []
     if format == LoadFileFormat.CONCORDANCE_DAT:
         records = LoadFileParser.parse_dat(content)
     elif format == LoadFileFormat.OPTICON_OPT:
         records = LoadFileParser.parse_opt(content)
     elif format == LoadFileFormat.EDRM_XML:
         records = LoadFileParser.parse_edrm_xml(content)
-    else:
-        records = []
 
     log_entry = await EDRMService.create_import_log(
         db=db,
@@ -76,10 +78,11 @@ async def import_loadfile(
 # GET /edrm/export — export documents as EDRM XML
 # -----------------------------------------------------------------------
 
+
 @router.get("/export")
 async def export_edrm(
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: UserRecord = Depends(get_current_user),
     matter_id: UUID = Depends(get_matter_id),
 ):
     """Export matter documents as EDRM XML."""
@@ -132,17 +135,21 @@ async def export_edrm(
 # GET /edrm/threads — list email threads
 # -----------------------------------------------------------------------
 
+
 @router.get("/threads", response_model=ThreadListResponse)
 async def list_threads(
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: UserRecord = Depends(get_current_user),
     matter_id: UUID = Depends(get_matter_id),
 ):
     """List email threads for the current matter."""
     items, total = await EDRMService.list_threads(
-        db=db, matter_id=matter_id, offset=offset, limit=limit,
+        db=db,
+        matter_id=matter_id,
+        offset=offset,
+        limit=limit,
     )
     return ThreadListResponse(
         items=[
@@ -164,17 +171,21 @@ async def list_threads(
 # GET /edrm/duplicates — list duplicate clusters
 # -----------------------------------------------------------------------
 
+
 @router.get("/duplicates", response_model=DuplicateClusterListResponse)
 async def list_duplicates(
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: UserRecord = Depends(get_current_user),
     matter_id: UUID = Depends(get_matter_id),
 ):
     """List duplicate clusters for the current matter."""
     items, total = await EDRMService.list_duplicate_clusters(
-        db=db, matter_id=matter_id, offset=offset, limit=limit,
+        db=db,
+        matter_id=matter_id,
+        offset=offset,
+        limit=limit,
     )
     return DuplicateClusterListResponse(
         items=[

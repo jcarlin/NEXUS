@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from app.edrm.loadfile_parser import LoadFileParser
 
-
 # ---------------------------------------------------------------------------
 # Concordance DAT (1)
 # ---------------------------------------------------------------------------
+
 
 def test_parse_dat_basic():
     """Parse a simple Concordance DAT file with standard delimiters."""
@@ -33,12 +33,10 @@ def test_parse_dat_basic():
 # Opticon OPT (1)
 # ---------------------------------------------------------------------------
 
+
 def test_parse_opt_basic():
     """Parse a simple Opticon OPT file."""
-    content = (
-        "DOC001,VOL001,IMAGES\\DOC001\\001.tif,Y,,2\n"
-        "DOC002,VOL001,IMAGES\\DOC002\\001.tif,Y,,1\n"
-    )
+    content = "DOC001,VOL001,IMAGES\\DOC001\\001.tif,Y,,2\nDOC002,VOL001,IMAGES\\DOC002\\001.tif,Y,,1\n"
 
     records = LoadFileParser.parse_opt(content)
 
@@ -54,6 +52,7 @@ def test_parse_opt_basic():
 # ---------------------------------------------------------------------------
 # EDRM XML (1)
 # ---------------------------------------------------------------------------
+
 
 def test_parse_edrm_xml_basic():
     """Parse a simple EDRM XML file with Document and Tag elements."""
@@ -84,6 +83,7 @@ def test_parse_edrm_xml_basic():
 # ---------------------------------------------------------------------------
 # EDRM XML round-trip (1)
 # ---------------------------------------------------------------------------
+
 
 def test_edrm_xml_round_trip():
     """Export records as EDRM XML, then re-parse and verify consistency."""

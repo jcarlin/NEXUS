@@ -66,15 +66,11 @@ class RelationshipExtractor:
             if self._provider == "anthropic":
                 import anthropic
 
-                self._client = instructor.from_anthropic(
-                    anthropic.Anthropic(api_key=self._api_key)
-                )
+                self._client = instructor.from_anthropic(anthropic.Anthropic(api_key=self._api_key))
             else:
                 import openai
 
-                self._client = instructor.from_openai(
-                    openai.OpenAI(api_key=self._api_key)
-                )
+                self._client = instructor.from_openai(openai.OpenAI(api_key=self._api_key))
         return self._client
 
     async def extract(
@@ -98,9 +94,7 @@ class RelationshipExtractor:
         if len(entities) < 2:
             return []
 
-        entity_list = "\n".join(
-            f"- {e['name']} ({e['type']})" for e in entities
-        )
+        entity_list = "\n".join(f"- {e['name']} ({e['type']})" for e in entities)
 
         prompt = (
             "Extract relationships between the entities listed below from "
@@ -139,7 +133,7 @@ class RelationshipExtractor:
                 relationships=len(result.relationships),
                 entities=len(entities),
             )
-            return result.relationships
+            return list(result.relationships)
 
         except Exception as exc:
             logger.error(

@@ -88,6 +88,8 @@ class Settings(BaseSettings):
     enable_near_duplicate_detection: bool = False
     dedup_jaccard_threshold: float = 0.80
     dedup_num_permutations: int = 128
+    dedup_shingle_size: int = 5
+    dedup_version_upper_threshold: float = 0.95
 
     # --- Audit (SOC 2) ---
     audit_retention_days: int = 365
@@ -115,6 +117,9 @@ class Settings(BaseSettings):
     enable_topic_clustering: bool = False
     bertopic_embedding_model: str = "all-MiniLM-L6-v2"
     bertopic_min_cluster_size: int = 5
+
+    # --- Citation Verification ---
+    max_claims_to_verify: int = 10
 
     # --- Agentic Pipeline ---
     enable_agentic_pipeline: bool = True

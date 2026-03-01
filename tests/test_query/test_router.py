@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import json
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -52,9 +50,7 @@ async def query_client():
                 "Are there related financial records?",
                 "What is the timeline of events?",
             ],
-            "entities_mentioned": [
-                {"name": "Test Person", "type": "person", "kg_id": None, "connections": 0}
-            ],
+            "entities_mentioned": [{"name": "Test Person", "type": "person", "kg_id": None, "connections": 0}],
         }
 
         # Override dependencies
@@ -68,11 +64,16 @@ async def query_client():
         test_app.dependency_overrides[dependencies.get_db] = mock_get_db
         test_app.dependency_overrides[dependencies.get_query_graph] = lambda: mock_graph
         test_app.dependency_overrides[rate_limit_queries] = lambda: None
-        test_app.dependency_overrides[get_current_user] = lambda: {
-            "id": uuid.UUID("00000000-0000-0000-0000-000000000099"),
-            "email": "test@nexus.dev", "full_name": "Test", "role": "admin",
-            "is_active": True, "created_at": "2025-01-01T00:00:00+00:00",
-        }
+        from app.auth.schemas import UserRecord
+
+        test_app.dependency_overrides[get_current_user] = lambda: UserRecord(
+            id=uuid.UUID("00000000-0000-0000-0000-000000000099"),
+            email="test@nexus.dev",
+            full_name="Test",
+            role="admin",
+            is_active=True,
+            created_at=datetime(2025, 1, 1, tzinfo=UTC),
+        )
         test_app.dependency_overrides[get_matter_id] = lambda: uuid.UUID("00000000-0000-0000-0000-000000000001")
 
         transport = ASGITransport(app=test_app)
@@ -180,7 +181,7 @@ async def test_get_chat_with_messages(query_client):
             "source_documents": "[]",
             "entities_mentioned": "[]",
             "follow_up_questions": "[]",
-            "created_at": datetime.now(timezone.utc),
+            "created_at": datetime.now(UTC),
         },
     ]
     mock_db.execute.return_value = mock_result

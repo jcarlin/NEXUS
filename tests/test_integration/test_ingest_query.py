@@ -8,13 +8,10 @@ from __future__ import annotations
 
 import tempfile
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 from app.ingestion.chunker import TextChunker
 from app.ingestion.parser import DocumentParser
-
 
 # ---------------------------------------------------------------------------
 # Helper
@@ -85,8 +82,8 @@ async def test_full_pipeline_ingestion_to_retrieval(compiled_graph, mock_service
     state = _base_state()
     # Set up LLM to return classify → rewrite → synthesize → follow-ups
     mock_services["llm"].complete.side_effect = [
-        "factual",          # classify
-        "Who is John Doe?", # rewrite
+        "factual",  # classify
+        "Who is John Doe?",  # rewrite
         "Follow-up question one about John Doe and his activities\n"
         "Follow-up question two about related documents\n"
         "Follow-up question three about timeline of events",  # follow-ups
@@ -104,9 +101,7 @@ async def test_ingest_query_cited_answer(compiled_graph, mock_services):
     mock_services["llm"].complete.side_effect = [
         "factual",
         "Tell me about John Doe",
-        "What else is known about John Doe?\n"
-        "Are there financial records?\n"
-        "What is the timeline?",
+        "What else is known about John Doe?\nAre there financial records?\nWhat is the timeline?",
     ]
 
     state = _base_state()
@@ -158,8 +153,8 @@ async def test_query_pipeline_reformulation_path(compiled_graph, mock_services):
 
     mock_services["retriever"].retrieve_all.side_effect = retriever_side_effect
     mock_services["llm"].complete.side_effect = [
-        "factual",                           # classify
-        "Who is John Doe?",                  # rewrite
+        "factual",  # classify
+        "Who is John Doe?",  # rewrite
         "alternative query about John Doe",  # reformulate
         "Follow-up one\nFollow-up two\nFollow-up three",  # follow-ups
     ]
@@ -167,8 +162,10 @@ async def test_query_pipeline_reformulation_path(compiled_graph, mock_services):
     state = _base_state()
 
     # Patch get_settings and get_reranker so the rerank node doesn't error
-    with patch("app.dependencies.get_settings") as mock_settings, \
-         patch("app.dependencies.get_reranker", return_value=None):
+    with (
+        patch("app.dependencies.get_settings") as mock_settings,
+        patch("app.dependencies.get_reranker", return_value=None),
+    ):
         settings = MagicMock()
         settings.enable_reranker = False
         settings.reranker_top_n = 10

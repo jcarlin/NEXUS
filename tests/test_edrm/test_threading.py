@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from app.ingestion.threading import EmailThreader, _make_thread_id, _normalize_subject
-
 
 # ---------------------------------------------------------------------------
 # Subject normalization helper tests
 # ---------------------------------------------------------------------------
+
 
 def test_normalize_subject_strips_re():
     """Re: prefix should be stripped."""
@@ -30,6 +30,7 @@ def test_normalize_subject_strips_multiple():
 # Threading by References header (1)
 # ---------------------------------------------------------------------------
 
+
 def test_thread_by_references():
     """Documents with References header should be threaded by the root message-id."""
     mock_engine = MagicMock()
@@ -44,9 +45,7 @@ def test_thread_by_references():
         "subject": "Re: Project Update",
     }
 
-    thread_id, position = EmailThreader.assign_thread(
-        mock_engine, "doc-123", headers, "matter-1"
-    )
+    thread_id, position = EmailThreader.assign_thread(mock_engine, "doc-123", headers, "matter-1")
 
     # Thread ID should be based on first reference (root message)
     expected_thread_id = _make_thread_id("<msg1@example.com>")
@@ -61,6 +60,7 @@ def test_thread_by_references():
 # ---------------------------------------------------------------------------
 # Threading by In-Reply-To header (1)
 # ---------------------------------------------------------------------------
+
 
 def test_thread_by_in_reply_to():
     """Documents with In-Reply-To but no References should check parent in DB."""
@@ -81,9 +81,7 @@ def test_thread_by_in_reply_to():
         "subject": "Re: Budget Discussion",
     }
 
-    thread_id, position = EmailThreader.assign_thread(
-        mock_engine, "doc-456", headers, "matter-1"
-    )
+    thread_id, position = EmailThreader.assign_thread(mock_engine, "doc-456", headers, "matter-1")
 
     # Should create thread from in_reply_to
     expected_thread_id = _make_thread_id("<msg1@example.com>")
@@ -94,6 +92,7 @@ def test_thread_by_in_reply_to():
 # ---------------------------------------------------------------------------
 # Subject fallback threading (1)
 # ---------------------------------------------------------------------------
+
 
 def test_thread_by_subject_fallback():
     """Documents with no References/In-Reply-To should fall back to subject matching."""
@@ -114,9 +113,7 @@ def test_thread_by_subject_fallback():
         "subject": "Weekly Status Meeting",
     }
 
-    thread_id, position = EmailThreader.assign_thread(
-        mock_engine, "doc-789", headers, "matter-1"
-    )
+    thread_id, position = EmailThreader.assign_thread(mock_engine, "doc-789", headers, "matter-1")
 
     # Should create new thread from normalized subject
     expected_thread_id = _make_thread_id("weekly status meeting")
@@ -127,6 +124,7 @@ def test_thread_by_subject_fallback():
 # ---------------------------------------------------------------------------
 # Inclusive email detection (1)
 # ---------------------------------------------------------------------------
+
 
 def test_detect_inclusive_emails():
     """Inclusive detection should UPDATE documents and return a count."""

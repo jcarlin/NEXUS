@@ -44,12 +44,7 @@ def test_metadata_passed_to_chunks():
 
 def test_table_kept_as_single_block():
     chunker = TextChunker(max_tokens=512, overlap_tokens=64)
-    table = (
-        "| Name | Amount |\n"
-        "|------|--------|\n"
-        "| Alice | $100 |\n"
-        "| Bob | $200 |\n"
-    )
+    table = "| Name | Amount |\n|------|--------|\n| Alice | $100 |\n| Bob | $200 |\n"
     text = f"Before table.\n\n{table}\n\nAfter table."
     chunks = chunker.chunk(text)
     # The table should not be split across chunks
