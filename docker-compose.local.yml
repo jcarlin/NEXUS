@@ -1,0 +1,144 @@
+# docker-compose.local.yml — Full local deployment (zero cloud API dependency)
+# Usage: docker compose -f docker-compose.yml -f docker-compose.local.yml up -d
+# Extends the base infra with vLLM, TEI embedder, TEI reranker, API, and worker.
+
+services:
+  vllm:
+    image: vllm/vllm-openai:latest
+    ports:
+      - "8080:8000"
+    environment:
+      HF_TOKEN: ${HF_TOKEN}
+    volumes:
+      - vllm_models:/root/.cache/huggingface
+    command: >
+      --model ${VLLM_MODEL:-Qwen/Qwen3-235B-A22B}
+      --tensor-parallel-size ${VLLM_TP_SIZE:-1}
+      --max-model-len ${VLLM_MAX_MODEL_LEN:-8192}
+      --trust-remote-code
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+    restart: unless-stopped
+
+  tei-embedder:
+    image: ghcr.io/huggingface/text-embeddings-inference:latest
+    ports:
+      - "8081:80"
+    environment:
+      HF_TOKEN: ${HF_TOKEN}
+    volumes:
+      - tei_models:/data
+    command: --model-id ${TEI_EMBEDDING_MODEL:-BAAI/bge-m3} --port 80
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:80/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    restart: unless-stopped
+
+  tei-reranker:
+    image: ghcr.io/huggingface/text-embeddings-inference:latest
+    ports:
+      - "8082:80"
+    environment:
+      HF_TOKEN: ${HF_TOKEN}
+    volumes:
+      - tei_reranker_models:/data
+    command: --model-id ${TEI_RERANKER_MODEL:-BAAI/bge-reranker-v2-m3} --port 80
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:80/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file: .env.local
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      vllm:
+        condition: service_healthy
+      tei-embedder:
+        condition: service_healthy
+    environment:
+      POSTGRES_URL: postgresql+asyncpg://nexus:${POSTGRES_PASSWORD}@postgres:5432/nexus
+      POSTGRES_URL_SYNC: postgresql://nexus:${POSTGRES_PASSWORD}@postgres:5432/nexus
+      REDIS_URL: redis://redis:6379/0
+      QDRANT_URL: http://qdrant:6333
+      NEO4J_URI: bolt://neo4j:7687
+      MINIO_ENDPOINT: minio:9000
+      LLM_PROVIDER: vllm
+      VLLM_BASE_URL: http://vllm:8000/v1
+      EMBEDDING_PROVIDER: local
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/api/v1/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A workers.celery_app worker -l info -c 1 --max-tasks-per-child=100
+    env_file: .env.local
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      vllm:
+        condition: service_healthy
+      tei-embedder:
+        condition: service_healthy
+    environment:
+      POSTGRES_URL: postgresql+asyncpg://nexus:${POSTGRES_PASSWORD}@postgres:5432/nexus
+      POSTGRES_URL_SYNC: postgresql://nexus:${POSTGRES_PASSWORD}@postgres:5432/nexus
+      REDIS_URL: redis://redis:6379/0
+      QDRANT_URL: http://qdrant:6333
+      NEO4J_URI: bolt://neo4j:7687
+      MINIO_ENDPOINT: minio:9000
+      LLM_PROVIDER: vllm
+      VLLM_BASE_URL: http://vllm:8000/v1
+      EMBEDDING_PROVIDER: local
+    restart: unless-stopped
+
+volumes:
+  vllm_models:
+  tei_models:
+  tei_reranker_models:

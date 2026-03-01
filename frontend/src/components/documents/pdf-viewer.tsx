@@ -2,6 +2,8 @@ import { useState, useCallback } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AnnotationLayer } from "@/components/documents/annotation-layer";
+import type { Annotation, AnnotationAnchor } from "@/types";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
 
@@ -13,9 +15,20 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 interface PdfViewerProps {
   url: string;
   initialPage?: number;
+  annotations?: Annotation[];
+  selectedAnnotationId?: string | null;
+  onAnnotationClick?: (annotation: Annotation) => void;
+  onCreateHighlight?: (anchor: AnnotationAnchor, pageNumber: number) => void;
 }
 
-export function PdfViewer({ url, initialPage = 1 }: PdfViewerProps) {
+export function PdfViewer({
+  url,
+  initialPage = 1,
+  annotations,
+  selectedAnnotationId,
+  onAnnotationClick,
+  onCreateHighlight,
+}: PdfViewerProps) {
   const [numPages, setNumPages] = useState<number>(0);
   const [pageNumber, setPageNumber] = useState(initialPage);
   const [scale, setScale] = useState(1.0);
@@ -59,7 +72,18 @@ export function PdfViewer({ url, initialPage = 1 }: PdfViewerProps) {
 
       <div className="overflow-auto rounded border bg-muted/30 max-h-[calc(100vh-300px)]">
         <Document file={url} onLoadSuccess={onDocumentLoadSuccess} loading={<div className="p-8 text-muted-foreground">Loading PDF...</div>}>
-          <Page pageNumber={pageNumber} scale={scale} />
+          <div style={{ position: "relative" }}>
+            <Page pageNumber={pageNumber} scale={scale} />
+            {annotations && (
+              <AnnotationLayer
+                pageNumber={pageNumber}
+                annotations={annotations}
+                selectedId={selectedAnnotationId}
+                onAnnotationClick={onAnnotationClick}
+                onCreateHighlight={onCreateHighlight}
+              />
+            )}
+          </div>
         </Document>
       </div>
     </div>

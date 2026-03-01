@@ -1,12 +1,16 @@
+import { useState, useCallback } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Download } from "lucide-react";
 import { apiClient } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PdfViewer } from "@/components/documents/pdf-viewer";
 import { MetadataPanel } from "@/components/documents/metadata-panel";
-import type { DocumentDetail } from "@/types";
+import { AnnotationPanel } from "@/components/documents/annotation-panel";
+import { useAnnotations } from "@/hooks/use-annotations";
+import type { DocumentDetail, Annotation, AnnotationAnchor } from "@/types";
 
 export const Route = createFileRoute("/documents/$id")({
   component: DocumentDetailPage,
@@ -14,6 +18,12 @@ export const Route = createFileRoute("/documents/$id")({
 
 function DocumentDetailPage() {
   const { id } = Route.useParams();
+
+  const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | null>(null);
+  const [pendingAnchor, setPendingAnchor] = useState<{
+    anchor: AnnotationAnchor;
+    pageNumber: number;
+  } | null>(null);
 
   const { data: doc, isLoading } = useQuery({
     queryKey: ["document", id],
@@ -33,6 +43,20 @@ function DocumentDetailPage() {
       }),
     enabled: !!doc,
   });
+
+  const { data: annotationsData } = useAnnotations(id);
+  const annotations = annotationsData?.items ?? [];
+
+  const handleAnnotationClick = useCallback((annotation: Annotation) => {
+    setSelectedAnnotationId(annotation.id);
+  }, []);
+
+  const handleCreateHighlight = useCallback(
+    (anchor: AnnotationAnchor, pageNumber: number) => {
+      setPendingAnchor({ anchor, pageNumber });
+    },
+    [],
+  );
 
   if (isLoading) {
     return (
@@ -81,7 +105,13 @@ function DocumentDetailPage() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
           {downloadData?.url && doc.type === "pdf" ? (
-            <PdfViewer url={downloadData.url} />
+            <PdfViewer
+              url={downloadData.url}
+              annotations={annotations}
+              selectedAnnotationId={selectedAnnotationId}
+              onAnnotationClick={handleAnnotationClick}
+              onCreateHighlight={handleCreateHighlight}
+            />
           ) : (
             <div className="flex items-center justify-center rounded-md border h-[400px] text-muted-foreground">
               Preview not available for {doc.type?.toUpperCase() ?? "this"} format
@@ -89,7 +119,27 @@ function DocumentDetailPage() {
           )}
         </div>
         <div>
-          <MetadataPanel doc={doc} />
+          <Tabs defaultValue="metadata">
+            <TabsList className="w-full">
+              <TabsTrigger value="metadata" className="flex-1">Metadata</TabsTrigger>
+              <TabsTrigger value="annotations" className="flex-1">
+                Annotations ({annotations.length})
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="metadata">
+              <MetadataPanel doc={doc} />
+            </TabsContent>
+            <TabsContent value="annotations">
+              <AnnotationPanel
+                documentId={id}
+                annotations={annotations}
+                selectedId={selectedAnnotationId}
+                onSelectAnnotation={handleAnnotationClick}
+                pendingAnchor={pendingAnchor}
+                onClearPending={() => setPendingAnchor(null)}
+              />
+            </TabsContent>
+          </Tabs>
         </div>
       </div>
     </div>

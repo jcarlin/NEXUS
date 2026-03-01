@@ -1,6 +1,12 @@
 import { useAuthStore } from "@/stores/auth-store";
 import { useAppStore } from "@/stores/app-store";
 import { isTokenExpired, refreshAccessToken } from "@/lib/auth";
+import type {
+  Annotation,
+  AnnotationCreate,
+  AnnotationUpdate,
+  PaginatedResponse,
+} from "@/types";
 
 type RequestConfig = {
   url: string;
@@ -81,4 +87,40 @@ export async function apiClient<T>(config: RequestConfig): Promise<T> {
 
   if (res.status === 204) return undefined as T;
   return res.json();
+}
+
+// --- Annotation API ---
+
+export function fetchAnnotations(
+  documentId: string,
+  params?: { page_number?: number; offset?: number; limit?: number },
+) {
+  return apiClient<PaginatedResponse<Annotation>>({
+    url: "/api/v1/annotations",
+    method: "GET",
+    params: { document_id: documentId, ...params },
+  });
+}
+
+export function createAnnotation(data: AnnotationCreate) {
+  return apiClient<Annotation>({
+    url: "/api/v1/annotations",
+    method: "POST",
+    data,
+  });
+}
+
+export function updateAnnotation(id: string, data: AnnotationUpdate) {
+  return apiClient<Annotation>({
+    url: `/api/v1/annotations/${id}`,
+    method: "PATCH",
+    data,
+  });
+}
+
+export function deleteAnnotation(id: string) {
+  return apiClient<void>({
+    url: `/api/v1/annotations/${id}`,
+    method: "DELETE",
+  });
 }
