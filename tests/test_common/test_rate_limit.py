@@ -93,3 +93,45 @@ async def test_rate_limit_fails_open_on_redis_error():
 
         # Should NOT raise — fail open
         await _check_rate_limit(mock_request, "queries", max_requests=30)
+
+
+# ---------------------------------------------------------------------------
+# Edge-case tests (Sprint 8 L4)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_rate_limiter_redis_unavailable_raises():
+    """When get_redis() itself raises, the rate limiter should fail open (current behavior).
+
+    The rate limiter catches all non-HTTPException errors and allows the
+    request through. This test verifies that a ConnectionError from
+    get_redis() does not crash the endpoint.
+    """
+    mock_request = _make_mock_request()
+
+    with patch(
+        "app.common.rate_limit.get_redis",
+        side_effect=ConnectionError("Cannot connect to Redis"),
+    ):
+        from app.common.rate_limit import _check_rate_limit
+
+        # Should NOT raise — fail open
+        await _check_rate_limit(mock_request, "queries", max_requests=30)
+
+
+@pytest.mark.asyncio
+async def test_rate_limiter_zero_remaining_returns_429():
+    """When all tokens are consumed (count == max_requests), the next request gets HTTP 429."""
+    # Set zcard_count equal to max_requests (exactly at the boundary)
+    mock_redis = _make_mock_redis(zcard_count=10)
+    mock_request = _make_mock_request()
+
+    with patch("app.common.rate_limit.get_redis", return_value=mock_redis):
+        from app.common.rate_limit import _check_rate_limit
+
+        with pytest.raises(HTTPException) as exc_info:
+            await _check_rate_limit(mock_request, "queries", max_requests=10)
+
+        assert exc_info.value.status_code == 429
+        assert "Retry-After" in exc_info.value.headers

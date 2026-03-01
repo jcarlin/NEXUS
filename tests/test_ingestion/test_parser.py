@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -63,5 +64,54 @@ def test_parse_unsupported_doc_format_raises():
     try:
         with pytest.raises(ValueError, match="not supported"):
             parser.parse(tmp_path, "legacy.doc")
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+
+# ---------------------------------------------------------------------------
+# Edge-case: corrupted / zero-byte / timeout failures (Sprint 8 L4)
+# ---------------------------------------------------------------------------
+
+
+def test_parse_corrupted_pdf_raises():
+    """A file with .pdf extension but invalid content should raise, not return empty text."""
+    parser = DocumentParser()
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        f.write(b"not a pdf")
+        tmp_path = Path(f.name)
+
+    try:
+        with pytest.raises(Exception):
+            parser.parse(tmp_path, "corrupted.pdf")
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+
+def test_parse_zero_byte_file_raises():
+    """A 0-byte file should raise an exception, not silently return empty text."""
+    parser = DocumentParser()
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        # Write nothing — 0 bytes
+        tmp_path = Path(f.name)
+
+    try:
+        with pytest.raises(Exception):
+            parser.parse(tmp_path, "empty.pdf")
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+
+def test_parse_docling_timeout_propagates():
+    """A TimeoutError from Docling's convert() should propagate, not be caught silently."""
+    parser = DocumentParser()
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        f.write(b"fake pdf content")
+        tmp_path = Path(f.name)
+
+    try:
+        with patch.object(parser, "_get_converter") as mock_converter:
+            mock_converter.return_value.convert.side_effect = TimeoutError("Docling timed out")
+            with pytest.raises(TimeoutError, match="Docling timed out"):
+                parser.parse(tmp_path, "slow.pdf")
     finally:
         tmp_path.unlink(missing_ok=True)
