@@ -51,6 +51,9 @@ dependencies = [
     "redis>=5.0",
     "aiofiles",
 
+    # PDF Redaction
+    "pikepdf>=10.0",
+
     # Entity Resolution
     "rapidfuzz",
 

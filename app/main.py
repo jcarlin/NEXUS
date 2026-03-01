@@ -155,6 +155,7 @@ def create_app() -> FastAPI:
     from app.exports.router import router as exports_router
     from app.ingestion.router import router as ingestion_router
     from app.query.router import router as query_router
+    from app.redaction.router import router as redaction_router
 
     application.include_router(auth_router, prefix="/api/v1")
     application.include_router(ingestion_router, prefix="/api/v1")
@@ -168,6 +169,7 @@ def create_app() -> FastAPI:
     application.include_router(analytics_router, prefix="/api/v1")
     application.include_router(annotations_router, prefix="/api/v1")
     application.include_router(exports_router, prefix="/api/v1")
+    application.include_router(redaction_router, prefix="/api/v1")
 
     # --- Health endpoint ---
     @application.get("/api/v1/health", tags=["system"])

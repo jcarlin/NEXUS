@@ -1,6 +1,97 @@
 """Application configuration loaded from environment variables via Pydantic Settings."""
 
+from pydantic import BaseModel, model_validator
 from pydantic_settings import BaseSettings
+
+# --- Nested config groups (read-only views over flat fields) ---
+
+
+class LLMConfig(BaseModel):
+    provider: str
+    model: str
+    anthropic_api_key: str
+    openai_api_key: str
+    vllm_base_url: str
+
+
+class EmbeddingConfig(BaseModel):
+    provider: str
+    model: str
+    dimensions: int
+    local_model: str
+    batch_size: int
+    enable_visual: bool
+    visual_model: str
+    visual_device: str
+    visual_batch_size: int
+    visual_dim: int
+    visual_rerank_weight: float
+    visual_rerank_top_n: int
+    visual_page_dpi: int
+
+
+class DatabaseConfig(BaseModel):
+    postgres_url: str
+    postgres_url_sync: str
+    redis_url: str
+    qdrant_url: str
+    neo4j_uri: str
+    neo4j_user: str
+    neo4j_password: str
+
+
+class StorageConfig(BaseModel):
+    endpoint: str
+    access_key: str
+    secret_key: str
+    bucket: str
+    use_ssl: bool
+
+
+class RetrievalConfig(BaseModel):
+    text_limit: int
+    graph_limit: int
+    prefetch_multiplier: int
+    entity_threshold: float
+    enable_reranker: bool
+    reranker_model: str
+    reranker_top_n: int
+
+
+class AuthConfig(BaseModel):
+    jwt_secret_key: str
+    jwt_algorithm: str
+    jwt_access_token_expire_minutes: int
+    jwt_refresh_token_expire_days: int
+    cors_allowed_origins: str
+    require_matter_header: bool
+
+
+class ProcessingConfig(BaseModel):
+    celery_concurrency: int
+    chunk_size: int
+    chunk_overlap: int
+    gliner_model: str
+    enable_relationship_extraction: bool
+
+
+class FeatureFlags(BaseModel):
+    visual_embeddings: bool
+    relationship_extraction: bool
+    reranker: bool
+    sparse_embeddings: bool
+    email_threading: bool
+    near_duplicate_detection: bool
+    ai_audit_logging: bool
+    batch_embeddings: bool
+    case_setup_agent: bool
+    coreference_resolution: bool
+    graph_centrality: bool
+    hot_doc_detection: bool
+    topic_clustering: bool
+    agentic_pipeline: bool
+    citation_verification: bool
+    redaction: bool
 
 
 class Settings(BaseSettings):
@@ -118,6 +209,9 @@ class Settings(BaseSettings):
     bertopic_embedding_model: str = "all-MiniLM-L6-v2"
     bertopic_min_cluster_size: int = 5
 
+    # --- Redaction ---
+    enable_redaction: bool = False
+
     # --- Export ---
     export_max_documents: int = 10000
 
@@ -139,8 +233,110 @@ class Settings(BaseSettings):
     cors_allowed_origins: str = "http://localhost:5173,http://localhost:3000"
     require_matter_header: bool = True
 
+    # --- Nested config groups (populated from flat fields via validator) ---
+    llm: LLMConfig | None = None
+    embedding: EmbeddingConfig | None = None
+    database: DatabaseConfig | None = None
+    storage: StorageConfig | None = None
+    retrieval: RetrievalConfig | None = None
+    auth: AuthConfig | None = None
+    processing: ProcessingConfig | None = None
+    features: FeatureFlags | None = None
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",
         "extra": "ignore",
     }
+
+    @model_validator(mode="after")
+    def _populate_nested(self) -> "Settings":
+        if self.llm is None:
+            self.llm = LLMConfig(
+                provider=self.llm_provider,
+                model=self.llm_model,
+                anthropic_api_key=self.anthropic_api_key,
+                openai_api_key=self.openai_api_key,
+                vllm_base_url=self.vllm_base_url,
+            )
+        if self.embedding is None:
+            self.embedding = EmbeddingConfig(
+                provider=self.embedding_provider,
+                model=self.embedding_model,
+                dimensions=self.embedding_dimensions,
+                local_model=self.local_embedding_model,
+                batch_size=self.embedding_batch_size,
+                enable_visual=self.enable_visual_embeddings,
+                visual_model=self.visual_embedding_model,
+                visual_device=self.visual_embedding_device,
+                visual_batch_size=self.visual_embedding_batch_size,
+                visual_dim=self.visual_embedding_dim,
+                visual_rerank_weight=self.visual_rerank_weight,
+                visual_rerank_top_n=self.visual_rerank_top_n,
+                visual_page_dpi=self.visual_page_dpi,
+            )
+        if self.database is None:
+            self.database = DatabaseConfig(
+                postgres_url=self.postgres_url,
+                postgres_url_sync=self.postgres_url_sync,
+                redis_url=self.redis_url,
+                qdrant_url=self.qdrant_url,
+                neo4j_uri=self.neo4j_uri,
+                neo4j_user=self.neo4j_user,
+                neo4j_password=self.neo4j_password,
+            )
+        if self.storage is None:
+            self.storage = StorageConfig(
+                endpoint=self.minio_endpoint,
+                access_key=self.minio_access_key,
+                secret_key=self.minio_secret_key,
+                bucket=self.minio_bucket,
+                use_ssl=self.minio_use_ssl,
+            )
+        if self.retrieval is None:
+            self.retrieval = RetrievalConfig(
+                text_limit=self.retrieval_text_limit,
+                graph_limit=self.retrieval_graph_limit,
+                prefetch_multiplier=self.retrieval_prefetch_multiplier,
+                entity_threshold=self.query_entity_threshold,
+                enable_reranker=self.enable_reranker,
+                reranker_model=self.reranker_model,
+                reranker_top_n=self.reranker_top_n,
+            )
+        if self.auth is None:
+            self.auth = AuthConfig(
+                jwt_secret_key=self.jwt_secret_key,
+                jwt_algorithm=self.jwt_algorithm,
+                jwt_access_token_expire_minutes=self.jwt_access_token_expire_minutes,
+                jwt_refresh_token_expire_days=self.jwt_refresh_token_expire_days,
+                cors_allowed_origins=self.cors_allowed_origins,
+                require_matter_header=self.require_matter_header,
+            )
+        if self.processing is None:
+            self.processing = ProcessingConfig(
+                celery_concurrency=self.celery_concurrency,
+                chunk_size=self.chunk_size,
+                chunk_overlap=self.chunk_overlap,
+                gliner_model=self.gliner_model,
+                enable_relationship_extraction=self.enable_relationship_extraction,
+            )
+        if self.features is None:
+            self.features = FeatureFlags(
+                visual_embeddings=self.enable_visual_embeddings,
+                relationship_extraction=self.enable_relationship_extraction,
+                reranker=self.enable_reranker,
+                sparse_embeddings=self.enable_sparse_embeddings,
+                email_threading=self.enable_email_threading,
+                near_duplicate_detection=self.enable_near_duplicate_detection,
+                ai_audit_logging=self.enable_ai_audit_logging,
+                batch_embeddings=self.enable_batch_embeddings,
+                case_setup_agent=self.enable_case_setup_agent,
+                coreference_resolution=self.enable_coreference_resolution,
+                graph_centrality=self.enable_graph_centrality,
+                hot_doc_detection=self.enable_hot_doc_detection,
+                topic_clustering=self.enable_topic_clustering,
+                agentic_pipeline=self.enable_agentic_pipeline,
+                citation_verification=self.enable_citation_verification,
+                redaction=self.enable_redaction,
+            )
+        return self
