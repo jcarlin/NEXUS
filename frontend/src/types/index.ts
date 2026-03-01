@@ -209,3 +209,74 @@ export type SSEEvent =
       cited_claims: CitedClaim[];
       tier?: string | null;
     };
+
+export interface DatasetResponse {
+  id: string;
+  matter_id: string;
+  name: string;
+  description: string;
+  parent_id: string | null;
+  document_count: number;
+  children_count: number;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DatasetTreeNode {
+  id: string;
+  name: string;
+  description: string;
+  document_count: number;
+  children: DatasetTreeNode[];
+}
+
+export interface DatasetTreeResponse {
+  roots: DatasetTreeNode[];
+  total_datasets: number;
+}
+
+export interface TagResponse {
+  tag_name: string;
+  document_count: number;
+}
+
+// --- Annotations ---
+
+export type AnnotationType = "note" | "highlight" | "tag";
+
+export interface AnnotationAnchor {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface Annotation {
+  id: string;
+  document_id: string;
+  matter_id: string;
+  user_id: string;
+  page_number: number | null;
+  annotation_type: AnnotationType;
+  content: string;
+  anchor: AnnotationAnchor | Record<string, never>;
+  color: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AnnotationCreate {
+  document_id: string;
+  page_number?: number | null;
+  annotation_type?: AnnotationType;
+  content: string;
+  anchor?: AnnotationAnchor;
+  color?: string | null;
+}
+
+export interface AnnotationUpdate {
+  content?: string | null;
+  anchor?: AnnotationAnchor | null;
+  color?: string | null;
+}

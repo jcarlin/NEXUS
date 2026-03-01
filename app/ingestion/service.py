@@ -35,6 +35,7 @@ class IngestionService:
         parent_job_id: UUID | None = None,
         job_id: UUID | None = None,
         matter_id: UUID | None = None,
+        dataset_id: UUID | None = None,
     ) -> dict:
         """Insert a new job row and return it as a dict.
 
@@ -53,9 +54,9 @@ class IngestionService:
             text(
                 """
                 INSERT INTO jobs (id, filename, status, stage, progress, error,
-                                  parent_job_id, matter_id, metadata_, created_at, updated_at)
+                                  parent_job_id, matter_id, dataset_id, metadata_, created_at, updated_at)
                 VALUES (:id, :filename, :status, :stage, :progress, :error,
-                        :parent_job_id, :matter_id, :metadata_, :created_at, :updated_at)
+                        :parent_job_id, :matter_id, :dataset_id, :metadata_, :created_at, :updated_at)
                 """
             ),
             {
@@ -67,6 +68,7 @@ class IngestionService:
                 "error": None,
                 "parent_job_id": parent_job_id,
                 "matter_id": matter_id,
+                "dataset_id": dataset_id,
                 "metadata_": f'{{"minio_path": "{minio_path}"}}',
                 "created_at": now,
                 "updated_at": now,

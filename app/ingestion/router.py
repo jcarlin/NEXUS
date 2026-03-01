@@ -86,6 +86,7 @@ def _job_row_to_status_response(row: dict) -> JobStatusResponse:
 @router.post("/ingest", response_model=IngestResponse)
 async def ingest_single(
     file: UploadFile = File(...),
+    dataset_id: UUID | None = Query(default=None, description="Auto-assign ingested document to this dataset"),
     db: AsyncSession = Depends(get_db),
     current_user: UserRecord = Depends(get_current_user),
     matter_id: UUID = Depends(get_matter_id),
@@ -129,6 +130,7 @@ async def ingest_single(
         minio_path=minio_path,
         job_id=job_id,
         matter_id=matter_id,
+        dataset_id=dataset_id,
     )
 
     # 4. Dispatch Celery task
@@ -153,6 +155,7 @@ async def ingest_single(
 @router.post("/ingest/batch", response_model=BatchIngestResponse)
 async def ingest_batch(
     files: list[UploadFile] = File(...),
+    dataset_id: UUID | None = Query(default=None, description="Auto-assign ingested documents to this dataset"),
     db: AsyncSession = Depends(get_db),
     current_user: UserRecord = Depends(get_current_user),
     matter_id: UUID = Depends(get_matter_id),
@@ -192,6 +195,7 @@ async def ingest_batch(
             minio_path=minio_path,
             job_id=job_id,
             matter_id=matter_id,
+            dataset_id=dataset_id,
         )
 
         process_document.delay(str(job_row["id"]), minio_path)

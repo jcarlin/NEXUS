@@ -58,6 +58,7 @@ async def test_vector_search_calls_retriever():
         limit=10,
         filters={"matter_id": _MATTER_ID},
         exclude_privilege_statuses=["privileged", "work_product"],
+        dataset_doc_ids=None,
     )
     parsed = json.loads(raw)
     assert len(parsed) == 2

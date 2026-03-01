@@ -23,6 +23,7 @@ from qdrant_client.models import (
     Fusion,
     FusionQuery,
     HnswConfigDiff,
+    MatchAny,
     MatchValue,
     MultiVectorComparator,
     MultiVectorConfig,
@@ -183,6 +184,7 @@ class VectorStoreClient:
         sparse_vector: tuple[list[int], list[float]] | None = None,
         exclude_privilege_statuses: list[str] | None = None,
         prefetch_multiplier: int = 2,
+        dataset_doc_ids: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """Search ``nexus_text``. Uses RRF fusion when sparse vector is provided."""
         must_conditions: list[FieldCondition] = []
@@ -190,6 +192,9 @@ class VectorStoreClient:
 
         if filters:
             must_conditions = [FieldCondition(key=k, match=MatchValue(value=v)) for k, v in filters.items()]
+
+        if dataset_doc_ids:
+            must_conditions.append(FieldCondition(key="doc_id", match=MatchAny(any=dataset_doc_ids)))
 
         if exclude_privilege_statuses:
             for status in exclude_privilege_statuses:

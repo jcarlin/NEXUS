@@ -100,6 +100,8 @@ async def list_documents(
     q: str | None = Query(None, description="Search by filename (case-insensitive)"),
     hot_doc_score_min: float | None = Query(None, ge=0.0, le=1.0, description="Minimum hot doc score"),
     anomaly_score_min: float | None = Query(None, ge=0.0, le=1.0, description="Minimum anomaly score"),
+    dataset_id: UUID | None = Query(default=None, description="Filter by dataset"),
+    tag_name: str | None = Query(default=None, description="Filter by tag"),
     offset: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(50, ge=1, le=200, description="Max records to return"),
     db: AsyncSession = Depends(get_db),
@@ -117,6 +119,8 @@ async def list_documents(
         limit=limit,
         matter_id=matter_id,
         user_role=current_user.role,
+        dataset_id=dataset_id,
+        tag_name=tag_name,
     )
     return DocumentListResponse(
         items=[_row_to_response(row) for row in items],

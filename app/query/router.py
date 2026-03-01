@@ -88,6 +88,13 @@ async def query(
 
     exclude_privilege = ["privileged", "work_product"] if current_user.role not in ("admin", "attorney") else []
 
+    # Resolve dataset_id to document IDs for Qdrant filtering
+    dataset_doc_ids: list[str] | None = None
+    if request.dataset_id:
+        from app.datasets.service import DatasetService
+
+        dataset_doc_ids = await DatasetService.get_document_ids_for_dataset(db, request.dataset_id, matter_id)
+
     if settings.enable_agentic_pipeline:
         initial_state = QueryService.build_agentic_state(
             query=request.query,
@@ -97,6 +104,7 @@ async def query(
             matter_id=str(matter_id),
             filters=request.filters,
             exclude_privilege=exclude_privilege,
+            dataset_doc_ids=dataset_doc_ids,
         )
     else:
         initial_state = await QueryService.build_v1_state(
@@ -109,6 +117,7 @@ async def query(
             exclude_privilege=exclude_privilege,
             db=db,
             settings=settings,
+            dataset_doc_ids=dataset_doc_ids,
         )
 
     config = QueryService.build_graph_config(thread_id, settings)
@@ -179,6 +188,13 @@ async def query_stream(
 
     exclude_privilege = ["privileged", "work_product"] if current_user.role not in ("admin", "attorney") else []
 
+    # Resolve dataset_id to document IDs for Qdrant filtering
+    dataset_doc_ids: list[str] | None = None
+    if request.dataset_id:
+        from app.datasets.service import DatasetService
+
+        dataset_doc_ids = await DatasetService.get_document_ids_for_dataset(db, request.dataset_id, matter_id)
+
     if settings.enable_agentic_pipeline:
         initial_state = QueryService.build_agentic_state(
             query=request.query,
@@ -188,6 +204,7 @@ async def query_stream(
             matter_id=str(matter_id),
             filters=request.filters,
             exclude_privilege=exclude_privilege,
+            dataset_doc_ids=dataset_doc_ids,
         )
     else:
         initial_state = await QueryService.build_v1_state(
@@ -200,6 +217,7 @@ async def query_stream(
             exclude_privilege=exclude_privilege,
             db=db,
             settings=settings,
+            dataset_doc_ids=dataset_doc_ids,
         )
 
     config = QueryService.build_graph_config(thread_id, settings)

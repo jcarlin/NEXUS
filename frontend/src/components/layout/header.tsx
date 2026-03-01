@@ -2,6 +2,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { LogOut, User } from "lucide-react";
 import { useAuthStore } from "@/stores/auth-store";
 import { MatterSelector } from "./matter-selector";
+import { DatasetSelector } from "@/components/datasets/dataset-selector";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -33,7 +34,10 @@ export function Header() {
 
   return (
     <header className="flex h-14 items-center justify-between border-b bg-background px-4">
-      <MatterSelector />
+      <div className="flex items-center gap-2">
+        <MatterSelector />
+        <DatasetSelector />
+      </div>
 
       <div className="flex items-center gap-3">
         <kbd className="hidden rounded border bg-muted px-2 py-0.5 text-xs text-muted-foreground sm:inline-block">

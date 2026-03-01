@@ -4,11 +4,13 @@ import type { CitedClaim } from "@/types";
 
 interface AppState {
   matterId: string | null;
+  datasetId: string | null;
   findings: CitedClaim[];
   sidebarCollapsed: boolean;
   definedTermsOpen: boolean;
 
   setMatter: (matterId: string) => void;
+  setDataset: (datasetId: string | null) => void;
   addFinding: (claim: CitedClaim) => void;
   removeFinding: (index: number) => void;
   reorderFindings: (from: number, to: number) => void;
@@ -21,11 +23,13 @@ export const useAppStore = create<AppState>()(
   persist(
     (set) => ({
       matterId: null,
+      datasetId: null,
       findings: [],
       sidebarCollapsed: false,
       definedTermsOpen: false,
 
-      setMatter: (matterId) => set({ matterId }),
+      setMatter: (matterId) => set({ matterId, datasetId: null }),
+      setDataset: (datasetId) => set({ datasetId }),
 
       addFinding: (claim) =>
         set((state) => ({ findings: [...state.findings, claim] })),
@@ -53,6 +57,7 @@ export const useAppStore = create<AppState>()(
       name: "nexus-app-store",
       partialize: (state) => ({
         matterId: state.matterId,
+        datasetId: state.datasetId,
         findings: state.findings,
         sidebarCollapsed: state.sidebarCollapsed,
       }),

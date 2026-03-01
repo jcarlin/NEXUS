@@ -14,6 +14,7 @@ class QueryRequest(BaseModel):
     filters: dict | None = Field(
         default=None, description="Optional metadata filters (document_type, date_range, etc.)."
     )
+    dataset_id: UUID | None = Field(default=None, description="Scope query to documents in this dataset.")
 
 
 class SourceDocument(BaseModel):

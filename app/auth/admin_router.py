@@ -226,12 +226,12 @@ async def update_user(
     )
 
 
-@router.delete("/users/{user_id}", status_code=204)
+@router.delete("/users/{user_id}", status_code=204, response_model=None)
 async def deactivate_user(
     user_id: UUID,
     db: AsyncSession = Depends(get_db),
     _current_user: UserRecord = Depends(require_role("admin")),
-) -> None:
+):
     """Deactivate a user (soft delete). Admin-only."""
     user = await AuthService.get_user_by_id(db, user_id)
     if not user:

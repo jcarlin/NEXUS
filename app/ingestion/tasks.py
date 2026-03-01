@@ -203,6 +203,19 @@ def _get_job_matter_id(engine, job_id: str) -> str | None:
         return str(row.matter_id)
 
 
+def _get_job_dataset_id(engine, job_id: str) -> str | None:
+    """Read the dataset_id from a job record (set at ingest time)."""
+    with engine.connect() as conn:
+        result = conn.execute(
+            text("SELECT dataset_id FROM jobs WHERE id = :job_id"),
+            {"job_id": job_id},
+        )
+        row = result.first()
+        if row is None or row.dataset_id is None:
+            return None
+        return str(row.dataset_id)
+
+
 def _is_job_cancelled(engine, job_id: str) -> bool:
     """Check whether the job has been cancelled (status = 'failed' with error = 'Cancelled')."""
     with engine.connect() as conn:
@@ -452,6 +465,7 @@ class _PipelineContext:
     minio_path: str
     filename: str
     matter_id: str | None
+    dataset_id: str | None = None
 
     # Populated by _stage_parse
     parse_result: Any = None
@@ -867,6 +881,20 @@ def _stage_complete(ctx: _PipelineContext) -> None:
         metadata=ctx.parse_result.metadata,
     )
 
+    # Auto-assign document to dataset if the job has a dataset_id
+    if ctx.dataset_id:
+        with ctx.engine.connect() as conn:
+            conn.execute(
+                text("""
+                    INSERT INTO dataset_documents (dataset_id, document_id)
+                    VALUES (:dataset_id, :document_id)
+                    ON CONFLICT DO NOTHING
+                """),
+                {"dataset_id": ctx.dataset_id, "document_id": doc_id},
+            )
+            conn.commit()
+        logger.info("task.dataset_assigned", doc_id=doc_id, dataset_id=ctx.dataset_id)
+
     # Acceptable degradation: email threading is feature-flagged
     # post-processing that does not affect the core document record
     # or search index.  The document is fully ingested at this point.
@@ -1178,8 +1206,9 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
 
     logger.info("task.start", minio_path=minio_path, filename=filename)
 
-    # Read matter_id from the job record (set by the API router at ingest time)
+    # Read matter_id and dataset_id from the job record (set by the API router at ingest time)
     matter_id = _get_job_matter_id(engine, job_id)
+    dataset_id = _get_job_dataset_id(engine, job_id)
     structlog.contextvars.bind_contextvars(matter_id=matter_id)
 
     # Detect ZIP files — delegate to process_zip
@@ -1195,6 +1224,7 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
         minio_path=minio_path,
         filename=filename,
         matter_id=matter_id,
+        dataset_id=dataset_id,
     )
 
     stages = [

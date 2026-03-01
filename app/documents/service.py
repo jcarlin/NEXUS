@@ -58,6 +58,8 @@ class DocumentService:
         limit: int = 50,
         matter_id: UUID | None = None,
         user_role: str | None = None,
+        dataset_id: UUID | None = None,
+        tag_name: str | None = None,
     ) -> tuple[list[dict], int]:
         """Return ``(items, total_count)`` with offset/limit pagination.
 
@@ -68,55 +70,71 @@ class DocumentService:
         - *anomaly_score_min*: minimum anomaly_score threshold.
         - *matter_id*: scope to a specific case matter.
         - *user_role*: when not admin/attorney, filters out privileged/work_product docs.
+        - *dataset_id*: scope to documents in a specific dataset.
+        - *tag_name*: scope to documents with a specific tag.
 
         Documents are ordered by ``created_at DESC`` (newest first).
         """
+        join_clauses: list[str] = []
         where_clauses: list[str] = []
         params: dict = {"offset": offset, "limit": limit}
 
+        if dataset_id is not None:
+            join_clauses.append("JOIN dataset_documents dd ON dd.document_id = d.id AND dd.dataset_id = :dataset_id")
+            params["dataset_id"] = dataset_id
+
+        if tag_name is not None:
+            join_clauses.append("JOIN document_tags dt ON dt.document_id = d.id AND dt.tag_name = :tag_name")
+            params["tag_name"] = tag_name
+
         if matter_id is not None:
-            where_clauses.append("matter_id = :matter_id")
+            where_clauses.append("d.matter_id = :matter_id")
             params["matter_id"] = matter_id
 
         if document_type is not None:
-            where_clauses.append("document_type = :document_type")
+            where_clauses.append("d.document_type = :document_type")
             params["document_type"] = document_type
 
         if filename_search is not None:
-            where_clauses.append("filename ILIKE :filename_search")
+            where_clauses.append("d.filename ILIKE :filename_search")
             params["filename_search"] = f"%{filename_search}%"
 
         if hot_doc_score_min is not None:
-            where_clauses.append("hot_doc_score >= :hot_doc_score_min")
+            where_clauses.append("d.hot_doc_score >= :hot_doc_score_min")
             params["hot_doc_score_min"] = hot_doc_score_min
 
         if anomaly_score_min is not None:
-            where_clauses.append("anomaly_score >= :anomaly_score_min")
+            where_clauses.append("d.anomaly_score >= :anomaly_score_min")
             params["anomaly_score_min"] = anomaly_score_min
 
         # Privilege filtering: non-admin/attorney users cannot see restricted docs
         if user_role not in ("admin", "attorney"):
-            where_clauses.append("(privilege_status IS NULL OR privilege_status NOT IN ('privileged', 'work_product'))")
+            where_clauses.append(
+                "(d.privilege_status IS NULL OR d.privilege_status NOT IN ('privileged', 'work_product'))"
+            )
 
+        join_sql = " ".join(join_clauses)
         where_sql = ""
         if where_clauses:
             where_sql = "WHERE " + " AND ".join(where_clauses)
 
         # Total count
         count_result = await db.execute(
-            text(f"SELECT count(*) FROM documents {where_sql}"),
+            text(f"SELECT count(*) FROM documents d {join_sql} {where_sql}"),
             params,
         )
         total = count_result.scalar_one()
 
-        # Paginated rows
+        # Paginated rows — qualify column list with table alias
+        columns_qualified = ", ".join(f"d.{c.strip()}" for c in _COLUMNS.split(","))
         result = await db.execute(
             text(
                 f"""
-                SELECT {_COLUMNS}
-                FROM documents
+                SELECT {columns_qualified}
+                FROM documents d
+                {join_sql}
                 {where_sql}
-                ORDER BY created_at DESC
+                ORDER BY d.created_at DESC
                 OFFSET :offset
                 LIMIT :limit
                 """

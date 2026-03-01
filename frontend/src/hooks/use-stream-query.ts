@@ -45,6 +45,7 @@ export function useStreamQuery() {
 
     const accessToken = useAuthStore.getState().accessToken;
     const matterId = useAppStore.getState().matterId;
+    const datasetId = useAppStore.getState().datasetId;
 
     setState({
       ...initialState,
@@ -64,6 +65,7 @@ export function useStreamQuery() {
       body: JSON.stringify({
         query,
         ...(threadId ? { thread_id: threadId } : {}),
+        dataset_id: datasetId || undefined,
       }),
       signal: ctrl.signal,
 

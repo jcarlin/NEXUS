@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Upload } from "lucide-react";
 import { apiClient } from "@/api/client";
+import { useAppStore } from "@/stores/app-store";
 import { Button } from "@/components/ui/button";
 import { DocumentTable } from "@/components/documents/document-table";
 import { DocumentFilters } from "@/components/documents/document-filters";
@@ -14,6 +15,7 @@ export const Route = createFileRoute("/documents/")({
 
 function DocumentsPage() {
   const navigate = useNavigate();
+  const datasetId = useAppStore((s) => s.datasetId);
   const [search, setSearch] = useState("");
   const [docType, setDocType] = useState("all");
   const [privilege, setPrivilege] = useState("all");
@@ -21,7 +23,7 @@ function DocumentsPage() {
   const limit = 50;
 
   const { data, isLoading } = useQuery({
-    queryKey: ["documents", search, docType, privilege, offset],
+    queryKey: ["documents", search, docType, privilege, offset, datasetId],
     queryFn: () =>
       apiClient<PaginatedResponse<DocumentResponse>>({
         url: "/api/v1/documents",
@@ -29,6 +31,7 @@ function DocumentsPage() {
         params: {
           q: search || undefined,
           document_type: docType !== "all" ? docType : undefined,
+          dataset_id: datasetId || undefined,
           offset,
           limit,
         },

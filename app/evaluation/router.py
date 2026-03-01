@@ -77,7 +77,7 @@ async def delete_dataset_item(
     item_id: UUID,
     db: AsyncSession = Depends(get_db),
     _user: UserRecord = Depends(require_role("admin")),
-) -> None:
+):
     """Remove an item from an evaluation dataset."""
     deleted = await EvaluationService.delete_dataset_item(db, item_id)
     if not deleted:

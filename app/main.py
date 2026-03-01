@@ -149,6 +149,7 @@ def create_app() -> FastAPI:
     from app.auth.admin_router import router as admin_router
     from app.auth.router import router as auth_router
     from app.cases.router import router as cases_router
+    from app.datasets.router import router as datasets_router
     from app.documents.router import router as documents_router
     from app.edrm.router import router as edrm_router
     from app.entities.router import router as entities_router
@@ -162,6 +163,7 @@ def create_app() -> FastAPI:
     application.include_router(ingestion_router, prefix="/api/v1")
     application.include_router(query_router, prefix="/api/v1")
     application.include_router(entities_router, prefix="/api/v1")
+    application.include_router(datasets_router, prefix="/api/v1")
     application.include_router(documents_router, prefix="/api/v1")
     application.include_router(admin_router, prefix="/api/v1")
     application.include_router(audit_router, prefix="/api/v1")

@@ -41,6 +41,7 @@ async def vector_search(
         limit=limit,
         filters=state.get("_filters"),
         exclude_privilege_statuses=state.get("_exclude_privilege") or None,
+        dataset_doc_ids=state.get("_dataset_doc_ids"),
     )
     # Return structured results for the agent to reason over
     formatted = [
@@ -106,6 +107,7 @@ async def temporal_search(
         limit=limit,
         filters=filters,
         exclude_privilege_statuses=state.get("_exclude_privilege") or None,
+        dataset_doc_ids=state.get("_dataset_doc_ids"),
     )
     formatted = [
         {

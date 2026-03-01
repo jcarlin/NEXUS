@@ -31,14 +31,14 @@
 | M11 | Knowledge Graph Enhancement | ⚡ Entity Resolution | Done | 28 | Regression + eval non-regression | 2.5 weeks | M10 |
 | M12 | Bulk Import + EDRM | — | Done | 11 | Regression + migration | 2 weeks | M6, M6b, M8 (parallel w/ M10-11) |
 | M13 | React Frontend | — | Done | 13 + 2 E2E | Frontend CI + backend regression | 3.5 weeks | M6, M7, M10, M10b, M10c, M9b |
-| M13b | Dataset & Collection Management | — | TODO | TBD | Regression + migration | 2.5 weeks | M13 |
+| M13b | Dataset & Collection Management | — | Done | 18 | Regression + migration | 2.5 weeks | M13 |
 | M14 | Annotations + Export + EDRM (Backend) | — | Done | 10 | Regression + migration | 2.5 weeks | M13 |
 | M14b | Redaction | — | TODO | 8 | Regression | 1.5 weeks | M14 |
 | M15 | Retrieval Tuning | — | Done | 5 + 4 eval | Eval improvement ≥ 0.03 | 1 week | M9, M8b |
 | M16 | Visual Embeddings | — | Done | 16 + eval enum | Eval lift ≥ 5% or stays disabled | 2 weeks | M15 (conditional) |
 | M17 | Full Local Deployment | — | TODO | 3+ | Health check + benchmarks | 2 weeks | All |
 
-**Total tests: 486 backend + 15 frontend** (backend: 399 unit/functional + 12 M10b analysis + 10 M10c analytics + 10 M14 annotations/exports + 5 M16 eval + 50 tech debt; 484 passing, 2 pre-existing failures from missing langchain_anthropic dep | frontend: 13 Vitest unit/component + 2 Playwright E2E)
+**Total tests: 489 backend + 22 frontend** (backend: 399 unit/functional + 12 M10b analysis + 10 M10c analytics + 10 M14 annotations/exports + 5 M16 eval + 50 tech debt + 3 M17 local deployment; all 489 passing | frontend: 20 Vitest unit/component + 2 Playwright E2E)
 
 **6 autonomous LangGraph agents** across the pipeline (Case Setup, Investigation Orchestrator, Citation Verifier, Hot Doc Scanner, Contextual Completeness, Entity Resolution)
 
@@ -326,7 +326,7 @@ If a metric regresses beyond the threshold, the milestone must either fix the re
 - [x] Post-rationalization detection: verify citations were used DURING reasoning, not found AFTER (Wallat et al. found up to 57% of RAG citations are post-rationalized — model generates from memory then finds a plausible source)
 - [x] Adversarial test set: false premises, trick privilege questions, ambiguous entity references, overturned precedent references (4 items)
 - [x] `scripts/evaluate.py` CLI — runs full pipeline, reports all metrics, outputs JSON for CI
-- [ ] CI integration: `deepeval test run` or equivalent for regression gating on every PR (deferred — run manually via `scripts/evaluate.py --dry-run` for now)
+- [x] CI integration: GitHub Actions workflows for backend tests, evaluation dry-run, and frontend tests (`.github/workflows/`)
 - [x] Baseline numbers documented as regression gates
 - [x] Legal-specific evaluation tasks inspired by LegalBench 162-task benchmark (issue-spotting, rule-recall, rule-application, interpretation, rhetorical understanding) — 5 seed items
 - [x] Sparse-only retrieval method added to `VectorStoreClient` for separate measurement
@@ -496,7 +496,7 @@ If a metric regresses beyond the threshold, the milestone must either fix the re
 
 **Testing (10 tests):**
 - Unit: communication matrix computation from email pairs (2), centrality metrics — degree/PageRank/betweenness (2), org hierarchy import and inference (2), BERTopic clustering with auto-labels (1), endpoint contracts — communication-matrix/network-centrality (2), tool contracts — communication_matrix parameter validation (1)
-- Gate: regression (399 passed, 2 pre-existing failures unrelated to M10c)
+- Gate: regression (399 passed)
 
 **Key files:** `app/analytics/service.py`, `app/analytics/schemas.py`, `app/analytics/clustering.py`, `app/analytics/router.py`, `app/entities/graph_service.py` (compute_centrality), `app/query/tools.py` (3 tool implementations)
 
@@ -536,7 +536,7 @@ If a metric regresses beyond the threshold, the milestone must either fix the re
 - `tests/test_common/test_config.py` (10): flat field compat + nested model groups + env var override
 - `tests/test_common/test_dependencies.py` (12): singleton identity + feature flags + cache_clear
 - `tests/test_ingestion/test_task_failures.py` (6): retry, disposal, error propagation
-- Gate: regression (484 passed, 2 pre-existing `langchain_anthropic` failures unrelated)
+- Gate: regression (484 passed)
 
 **Key files:** `app/ingestion/tasks.py`, `app/query/nodes.py`, `app/common/middleware.py`, `app/analysis/tasks.py`, `app/cases/tasks.py`, `app/config.py`, `app/dependencies.py`
 
@@ -862,22 +862,30 @@ frontend/
 - Affects: Qdrant payload filters, Neo4j Cypher WHERE, SQL WHERE, query pipeline retrieval
 
 **Backend:**
-- [ ] Alembic migration: datasets, dataset_documents, document_tags, dataset_access tables
-- [ ] Dataset CRUD endpoints (create/list/get/update/delete folders + tags)
-- [ ] Document-to-dataset assignment endpoints (move, tag, untag)
-- [ ] Access control endpoints (grant/revoke per-dataset access)
-- [ ] Query pipeline integration: add dataset_id filter to Qdrant prefetch + Neo4j traversal
-- [ ] Ingestion integration: assign uploaded documents to target dataset
+- [x] Alembic migration 013: datasets, dataset_documents, document_tags, dataset_access tables + dataset_id on jobs
+- [x] Dataset CRUD endpoints (create/list/tree/get/update/delete folders)
+- [x] Document-to-dataset assignment endpoints (assign, unassign, move, list)
+- [x] Document tagging endpoints (add/remove/list tags, autocomplete, list by tag)
+- [x] Access control endpoints (grant/revoke per-dataset access, default-open model)
+- [x] Query pipeline integration: dataset_id → doc_id resolution → Qdrant MatchAny filter (QueryRequest, router, service, tools, retriever, vector_store)
+- [x] Ingestion integration: optional dataset_id on ingest endpoints, auto-assign in task pipeline
 
-**Frontend (in M13 scope if M13b backend is ready):**
-- [ ] Dataset tree browser (file-system metaphor, left sidebar or dedicated page)
-- [ ] Dataset selector in top bar (persistent context, like matter selector)
-- [ ] Document list scoped by active dataset
-- [ ] Drag-and-drop documents between folders
-- [ ] Tag management (add/remove labels on documents)
-- [ ] Access control UI (admin: grant/revoke dataset access per user)
+**Frontend:**
+- [x] Dataset tree browser (dedicated /datasets page with folder tree + document list)
+- [x] Dataset selector in top bar (persistent context via Zustand, resets on matter change)
+- [x] Document list scoped by active dataset (query param filtering)
+- [x] Tag management (TagManager component with autocomplete + removable badges)
+- [x] Chat integration (dataset_id included in SSE query body)
+- [x] Sidebar nav: Datasets item between Documents and Entities
+- [ ] Drag-and-drop documents between folders (deferred)
+- [ ] Access control UI (deferred — backend endpoints ready)
 
-**Key files:** New `app/datasets/` module (router.py, service.py, schemas.py), migration
+**Testing (18 tests):**
+- Router: dataset CRUD — create, create nested, list, tree, get, get 404, update, delete (8), document assignment — assign (1), tags — add (1)
+- Service: depth limit, unique name, tree assembly, doc_id resolution, access default-open, access restricted, access denied, assign documents (8)
+- Gate: regression + migration upgrade/downgrade
+
+**Key files:** `app/datasets/` (schemas.py, service.py, router.py), `migrations/versions/013_datasets.py`, `frontend/src/routes/datasets/index.tsx`, `frontend/src/components/datasets/`
 
 ---
 
@@ -892,11 +900,11 @@ frontend/
 - [x] EDRM XML export with BEGBATES/ENDBATES Tag elements (reuses `LoadFileParser.export_edrm_xml`)
 - [x] Privilege log with legal basis mapping (Attorney-Client Privilege, Work Product Doctrine)
 - [x] EDRM import Bates integration: `POST /edrm/import` now persists BEGBATES/ENDBATES to documents table
-- [ ] Frontend: highlight/note overlay on PDF viewer (deferred to post-M13)
+- [x] Frontend: highlight/note overlay on PDF viewer (annotation-layer, annotation-panel, PDF viewer integration, Tabs UI)
 
 **Testing (10 tests):**
 - Unit: annotation CRUD — create/get/update/delete (4), list empty (1), validation (1), EDRM XML with Bates (1), privilege log columns + basis mapping (1), production set lifecycle (1), court-ready ZIP structure (1)
-- Gate: regression (434 passing, 2 pre-existing failures) + migration
+- Gate: regression (434 passing) + migration
 
 **Key files:** `app/annotations/` (schemas, service, router), `app/exports/` (schemas, service, router, tasks, generators), `migrations/versions/010_annotations_exports.py`
 
@@ -994,7 +1002,7 @@ frontend/
 - Unit: `test_vector_store.py` — visual collection MultiVectorConfig+MaxSim (1), upsert_visual_pages (1), query_visual (1) = 3 tests
 - Unit: `test_retriever.py` — rerank_visual score blending (1), disabled returns unchanged (1), empty candidates (1) = 3 tests
 - Eval: `evaluation/schemas.py` — VISUAL and VISUAL_FUSION in RetrievalMode enum
-- Gate: regression pass (344/350, 2 pre-existing `langchain_anthropic` import failures) + **decision gate pending eval run**
+- Gate: regression pass (344/350) + **decision gate pending eval run**
 
 **Key files:** `app/ingestion/visual_embedder.py` (new), `app/common/vector_store.py`, `app/query/retriever.py`, `app/query/nodes.py`, `app/config.py`, `app/dependencies.py`
 

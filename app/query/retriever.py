@@ -63,6 +63,7 @@ class HybridRetriever:
         filters: dict[str, Any] | None = None,
         exclude_privilege_statuses: list[str] | None = None,
         prefetch_multiplier: int = 2,
+        dataset_doc_ids: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """Embed *query* and run dense (+ optional sparse RRF) search against ``nexus_text``."""
         vector = await self._embedder.embed_query(query)
@@ -78,6 +79,7 @@ class HybridRetriever:
             sparse_vector=sparse_vector,
             exclude_privilege_statuses=exclude_privilege_statuses,
             prefetch_multiplier=prefetch_multiplier,
+            dataset_doc_ids=dataset_doc_ids,
         )
         logger.debug("retriever.text", query_len=len(query), results=len(results), sparse=sparse_vector is not None)
         return results
@@ -154,6 +156,7 @@ class HybridRetriever:
         exclude_privilege_statuses: list[str] | None = None,
         prefetch_multiplier: int = 2,
         entity_threshold: float | None = None,
+        dataset_doc_ids: list[str] | None = None,
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         """Run text and graph retrieval in parallel.
 
@@ -167,6 +170,7 @@ class HybridRetriever:
                 filters=filters,
                 exclude_privilege_statuses=exclude_privilege_statuses,
                 prefetch_multiplier=prefetch_multiplier,
+                dataset_doc_ids=dataset_doc_ids,
             ),
             self.retrieve_graph(
                 query,

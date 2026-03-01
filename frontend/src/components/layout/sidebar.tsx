@@ -3,6 +3,7 @@ import {
   LayoutDashboard,
   MessageSquare,
   FileText,
+  FolderTree,
   Users,
   Network,
   BarChart3,
@@ -35,6 +36,7 @@ const mainNav: NavItem[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/chat", label: "Chat", icon: MessageSquare },
   { to: "/documents", label: "Documents", icon: FileText },
+  { to: "/datasets", label: "Datasets", icon: FolderTree },
   { to: "/entities", label: "Entities", icon: Users },
 ];
 

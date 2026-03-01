@@ -36,6 +36,7 @@ class QueryService:
         matter_id: str,
         filters: dict | None,
         exclude_privilege: list[str],
+        dataset_doc_ids: list[str] | None = None,
     ) -> dict[str, Any]:
         """Build initial state for the agentic graph (MessagesState format)."""
         lc_messages = []
@@ -55,6 +56,7 @@ class QueryService:
             "_term_map": {},
             "_filters": {**(filters or {}), "matter_id": matter_id},
             "_exclude_privilege": exclude_privilege,
+            "_dataset_doc_ids": dataset_doc_ids,
             "_tier": "standard",
             "_skip_verification": False,
             "response": "",
@@ -76,6 +78,7 @@ class QueryService:
         exclude_privilege: list[str],
         db: AsyncSession,
         settings: Settings,
+        dataset_doc_ids: list[str] | None = None,
     ) -> dict[str, Any]:
         """Build initial state for the v1 graph."""
         case_context_text = ""
@@ -106,6 +109,7 @@ class QueryService:
             "_reformulated": False,
             "_filters": {**(filters or {}), "matter_id": matter_id},
             "_exclude_privilege": exclude_privilege,
+            "_dataset_doc_ids": dataset_doc_ids,
         }
 
     @staticmethod
