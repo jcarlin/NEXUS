@@ -33,12 +33,12 @@
 | M13 | React Frontend | — | Done | 13 + 2 E2E | Frontend CI + backend regression | 3.5 weeks | M6, M7, M10, M10b, M10c, M9b |
 | M13b | Dataset & Collection Management | — | Done | 18 | Regression + migration | 2.5 weeks | M13 |
 | M14 | Annotations + Export + EDRM (Backend) | — | Done | 10 | Regression + migration | 2.5 weeks | M13 |
-| M14b | Redaction | — | TODO | 8 | Regression | 1.5 weeks | M14 |
+| M14b | Redaction | — | Done | 8 | Regression | 1.5 weeks | M14 |
 | M15 | Retrieval Tuning | — | Done | 5 + 4 eval | Eval improvement ≥ 0.03 | 1 week | M9, M8b |
 | M16 | Visual Embeddings | — | Done | 16 + eval enum | Eval lift ≥ 5% or stays disabled | 2 weeks | M15 (conditional) |
 | M17 | Full Local Deployment | — | TODO | 3+ | Health check + benchmarks | 2 weeks | All |
 
-**Total tests: 489 backend + 22 frontend** (backend: 399 unit/functional + 12 M10b analysis + 10 M10c analytics + 10 M14 annotations/exports + 5 M16 eval + 50 tech debt + 3 M17 local deployment; all 489 passing | frontend: 20 Vitest unit/component + 2 Playwright E2E)
+**Total tests: 489 backend + 35 frontend** (backend: 399 unit/functional + 12 M10b analysis + 10 M10c analytics + 10 M14 annotations/exports + 5 M16 eval + 50 tech debt + 3 M17 local deployment; all 489 passing | frontend: 33 Vitest unit/component + 2 Playwright E2E)
 
 **6 autonomous LangGraph agents** across the pipeline (Case Setup, Investigation Orchestrator, Citation Verifier, Hot Doc Scanner, Contextual Completeness, Entity Resolution)
 
@@ -877,12 +877,13 @@ frontend/
 - [x] Tag management (TagManager component with autocomplete + removable badges)
 - [x] Chat integration (dataset_id included in SSE query body)
 - [x] Sidebar nav: Datasets item between Documents and Entities
-- [ ] Drag-and-drop documents between folders (deferred)
-- [ ] Access control UI (deferred — backend endpoints ready)
+- [x] Drag-and-drop documents between folders: HTML5 DnD API, multi-select via checkboxes, visual drop indicator on tree items, calls move endpoint
+- [x] Access control UI: DatasetAccessDialog component (grant/revoke/list), role-gated to admin/attorney, default-open indicator, restriction warning on first grant
 
-**Testing (18 tests):**
+**Testing (18 backend + 13 frontend):**
 - Router: dataset CRUD — create, create nested, list, tree, get, get 404, update, delete (8), document assignment — assign (1), tags — add (1)
 - Service: depth limit, unique name, tree assembly, doc_id resolution, access default-open, access restricted, access denied, assign documents (8)
+- Frontend: DnD payload logic (3), selection toggle (3), select-all (3), role gating (5), user filtering (3) — via `datasets-dnd.test.ts` and `dataset-access.test.ts`
 - Gate: regression + migration upgrade/downgrade
 
 **Key files:** `app/datasets/` (schemas.py, service.py, router.py), `migrations/versions/013_datasets.py`, `frontend/src/routes/datasets/index.tsx`, `frontend/src/components/datasets/`

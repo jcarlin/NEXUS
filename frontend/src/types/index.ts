@@ -241,6 +241,19 @@ export interface TagResponse {
   document_count: number;
 }
 
+// --- Dataset Access Control ---
+
+export type DatasetAccessRole = "viewer" | "editor" | "admin";
+
+export interface DatasetAccessResponse {
+  id: string;
+  dataset_id: string;
+  user_id: string;
+  access_role: DatasetAccessRole;
+  granted_by: string | null;
+  granted_at: string;
+}
+
 // --- Annotations ---
 
 export type AnnotationType = "note" | "highlight" | "tag";
