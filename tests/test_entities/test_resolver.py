@@ -1,15 +1,15 @@
-"""Tests for the entity resolver (fuzzy matching + canonical selection)."""
+"""Tests for the entity resolver (fuzzy matching + canonical selection + union-find)."""
 
 from __future__ import annotations
 
-import pytest
+import networkx as nx
 
 from app.entities.resolver import EntityMatch, EntityResolver
-
 
 # ---------------------------------------------------------------------------
 # Fuzzy matching tests (8)
 # ---------------------------------------------------------------------------
+
 
 def test_fuzzy_exact_match():
     """Identical names within the same type should always match."""
@@ -107,19 +107,91 @@ def test_fuzzy_single_entity_no_match():
 # Canonical selection tests (built into fuzzy tests above, plus explicit)
 # ---------------------------------------------------------------------------
 
+
 def test_select_canonical_prefers_longer():
     """The longer (more complete) name should be canonical."""
-    canonical, alias = EntityResolver.select_canonical(
-        "J. Epstein", "Jeffrey Epstein"
-    )
+    canonical, alias = EntityResolver.select_canonical("J. Epstein", "Jeffrey Epstein")
     assert canonical == "Jeffrey Epstein"
     assert alias == "J. Epstein"
 
 
 def test_select_canonical_prefers_proper_case():
     """Proper case should be preferred over all-caps or all-lower."""
-    canonical, alias = EntityResolver.select_canonical(
-        "JOHN SMITH", "John Smith"
-    )
+    canonical, alias = EntityResolver.select_canonical("JOHN SMITH", "John Smith")
     assert canonical == "John Smith"
     assert alias == "JOHN SMITH"
+
+
+# ---------------------------------------------------------------------------
+# Connected components tests (replaced UnionFind with networkx)
+# ---------------------------------------------------------------------------
+
+
+def test_connected_components_basic():
+    """Basic edge creates one connected component with two nodes."""
+    g = nx.Graph()
+    g.add_edge("A", "B")
+    components = list(nx.connected_components(g))
+    assert len(components) == 1
+    assert components[0] == {"A", "B"}
+
+
+def test_connected_components_transitive_closure():
+    """If A~B and B~C, all three should be in the same component (transitive closure)."""
+    g = nx.Graph()
+    g.add_edge("A", "B")
+    g.add_edge("B", "C")
+
+    components = list(nx.connected_components(g))
+    assert len(components) == 1
+    assert components[0] == {"A", "B", "C"}
+
+
+def test_connected_components_separate_groups():
+    """Disjoint edges should produce separate components."""
+    g = nx.Graph()
+    g.add_edge("A", "B")
+    g.add_edge("C", "D")
+
+    components = list(nx.connected_components(g))
+    assert len(components) == 2
+
+
+def test_compute_merge_groups_transitive():
+    """compute_merge_groups should produce transitive closure from pairwise matches."""
+    resolver = EntityResolver()
+
+    # A~B, B~C → all three should merge (A, B, C)
+    matches = [
+        EntityMatch(name_a="J. Epstein", name_b="Jeffrey Epstein", entity_type="person", score=90, method="fuzzy"),
+        EntityMatch(
+            name_a="Jeffrey Epstein", name_b="Epstein, Jeffrey", entity_type="person", score=85, method="fuzzy"
+        ),
+    ]
+
+    groups = resolver.compute_merge_groups(matches)
+
+    assert len(groups) == 1
+    group = groups[0]
+    assert group.entity_type == "person"
+    # "Jeffrey Epstein" or "Epstein, Jeffrey" should be canonical (longest)
+    assert group.canonical in ("Jeffrey Epstein", "Epstein, Jeffrey")
+    # All names should be accounted for
+    all_names = {group.canonical} | set(group.aliases)
+    assert all_names == {"J. Epstein", "Jeffrey Epstein", "Epstein, Jeffrey"}
+
+
+def test_compute_merge_groups_multi_type():
+    """Merge groups are computed per entity type."""
+    resolver = EntityResolver()
+
+    matches = [
+        EntityMatch(name_a="NYC", name_b="New York City", entity_type="location", score=80, method="fuzzy"),
+        EntityMatch(name_a="Acme", name_b="Acme Corp", entity_type="organization", score=85, method="fuzzy"),
+    ]
+
+    groups = resolver.compute_merge_groups(matches)
+    assert len(groups) == 2
+
+    types = {g.entity_type for g in groups}
+    assert types == {"location", "organization"}

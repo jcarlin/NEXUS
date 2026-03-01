@@ -6,8 +6,10 @@ into a single canonical entity node in the knowledge graph.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
+import networkx as nx
+import numpy as np
 import structlog
 from rapidfuzz import fuzz
 
@@ -23,6 +25,18 @@ class EntityMatch:
     entity_type: str
     score: float  # 0-100 for fuzzy, 0-1 for cosine
     method: str  # "fuzzy" or "embedding"
+
+
+@dataclass
+class MergeGroup:
+    """A group of entity names that should be merged into one canonical node.
+
+    All ``aliases`` will be merged into ``canonical``.
+    """
+
+    canonical: str
+    aliases: list[str] = field(default_factory=list)
+    entity_type: str = ""
 
 
 class EntityResolver:
@@ -142,20 +156,34 @@ class EntityResolver:
             # Embed all names in batch
             embeddings = await embedder.embed_texts(unique_names)
 
-            # Compute pairwise cosine similarity
-            for i in range(len(unique_names)):
-                for j in range(i + 1, len(unique_names)):
-                    sim = self._cosine_similarity(embeddings[i], embeddings[j])
-                    if sim >= self.cosine_threshold:
-                        matches.append(
-                            EntityMatch(
-                                name_a=unique_names[i],
-                                name_b=unique_names[j],
-                                entity_type=entity_type,
-                                score=sim,
-                                method="embedding",
-                            )
-                        )
+            # Batch cosine similarity via numpy matrix operations
+            matrix = np.array(embeddings)
+            norms = np.linalg.norm(matrix, axis=1, keepdims=True)
+
+            # Avoid division by zero for zero-vectors
+            safe_norms = np.where(norms == 0, 1.0, norms)
+            normalized = matrix / safe_norms
+
+            # Similarity matrix (only upper triangle needed)
+            sim_matrix = normalized @ normalized.T
+
+            # Zero out rows/cols for zero-norm vectors
+            zero_mask = norms.squeeze() == 0
+            sim_matrix[zero_mask, :] = 0.0
+            sim_matrix[:, zero_mask] = 0.0
+
+            # Extract upper-triangle pairs above threshold
+            rows, cols = np.where(np.triu(sim_matrix >= self.cosine_threshold, k=1))
+            for r, c in zip(rows, cols):
+                matches.append(
+                    EntityMatch(
+                        name_a=unique_names[r],
+                        name_b=unique_names[c],
+                        entity_type=entity_type,
+                        score=float(sim_matrix[r, c]),
+                        method="embedding",
+                    )
+                )
 
         logger.info(
             "resolver.embedding.complete",
@@ -196,12 +224,67 @@ class EntityResolver:
             return name_a, name_b
         return name_b, name_a
 
+    def compute_merge_groups(
+        self,
+        matches: list[EntityMatch],
+    ) -> list[MergeGroup]:
+        """Compute transitive merge groups from pairwise matches.
+
+        Uses ``networkx.connected_components`` to find the transitive closure:
+        if A≈B and B≈C, then {A, B, C} form a single group.  Within each
+        group, :meth:`select_canonical` picks the best representative name.
+
+        Returns
+        -------
+        List of :class:`MergeGroup` — one per connected component that
+        has at least two members.
+        """
+        # Group matches by entity_type (connected components are per-type)
+        by_type: dict[str, list[EntityMatch]] = {}
+        for m in matches:
+            by_type.setdefault(m.entity_type, []).append(m)
+
+        groups: list[MergeGroup] = []
+
+        for entity_type, type_matches in by_type.items():
+            g = nx.Graph()
+            for m in type_matches:
+                g.add_edge(m.name_a, m.name_b)
+
+            for component in nx.connected_components(g):
+                if len(component) < 2:
+                    continue
+
+                members = list(component)
+
+                # Find canonical by iterating pairwise through members
+                canonical = members[0]
+                for other in members[1:]:
+                    canonical, _ = self.select_canonical(canonical, other)
+
+                aliases = [m for m in members if m != canonical]
+                groups.append(
+                    MergeGroup(
+                        canonical=canonical,
+                        aliases=aliases,
+                        entity_type=entity_type,
+                    )
+                )
+
+        logger.info(
+            "resolver.merge_groups.computed",
+            total_groups=len(groups),
+            total_aliases=sum(len(g.aliases) for g in groups),
+        )
+        return groups
+
     @staticmethod
     def _cosine_similarity(vec_a: list[float], vec_b: list[float]) -> float:
         """Compute cosine similarity between two vectors."""
-        dot = sum(a * b for a, b in zip(vec_a, vec_b))
-        norm_a = sum(a * a for a in vec_a) ** 0.5
-        norm_b = sum(b * b for b in vec_b) ** 0.5
+        a = np.asarray(vec_a)
+        b = np.asarray(vec_b)
+        norm_a = np.linalg.norm(a)
+        norm_b = np.linalg.norm(b)
         if norm_a == 0 or norm_b == 0:
             return 0.0
-        return dot / (norm_a * norm_b)
+        return float(np.dot(a, b) / (norm_a * norm_b))

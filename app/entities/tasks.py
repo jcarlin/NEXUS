@@ -37,11 +37,8 @@ async def _run_resolution(entity_type: str | None = None) -> dict:
             types_to_process = [entity_type]
         else:
             # Get all distinct entity types from the graph
-            stats = await gs.get_graph_stats()
             # Entity nodes have a 'type' property — query for distinct types
-            records = await gs._run_query(
-                "MATCH (e:Entity) RETURN DISTINCT e.type AS type"
-            )
+            records = await gs._run_query("MATCH (e:Entity) RETURN DISTINCT e.type AS type")
             types_to_process = [r["type"] for r in records if r.get("type")]
 
         total_merges = 0
@@ -52,27 +49,33 @@ async def _run_resolution(entity_type: str | None = None) -> dict:
                 continue
 
             matches = resolver.find_fuzzy_matches(entities)
+            if not matches:
+                continue
 
-            for match in matches:
-                canonical, alias = resolver.select_canonical(
-                    match.name_a, match.name_b
-                )
-                try:
-                    await gs.merge_entities(canonical, alias, match.entity_type)
-                    total_merges += 1
-                    logger.info(
-                        "resolver.merged",
-                        canonical=canonical,
-                        alias=alias,
-                        type=match.entity_type,
-                        score=match.score,
-                    )
-                except Exception:
-                    logger.error(
-                        "resolver.merge_failed",
-                        canonical=canonical,
-                        alias=alias,
-                    )
+            # Use union-find to compute transitive merge groups
+            groups = resolver.compute_merge_groups(matches)
+
+            for group in groups:
+                for alias in group.aliases:
+                    try:
+                        await gs.merge_entities(
+                            group.canonical,
+                            alias,
+                            group.entity_type,
+                        )
+                        total_merges += 1
+                        logger.info(
+                            "resolver.merged",
+                            canonical=group.canonical,
+                            alias=alias,
+                            type=group.entity_type,
+                        )
+                    except Exception:
+                        logger.error(
+                            "resolver.merge_failed",
+                            canonical=group.canonical,
+                            alias=alias,
+                        )
 
         return {
             "merges_performed": total_merges,

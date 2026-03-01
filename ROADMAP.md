@@ -28,7 +28,7 @@
 | M10 | Agentic Query Pipeline | ⚡ Orchestrator, Citation Verifier | Done | 20 | Regression + eval non-regression | 2.5 weeks | M8, M9, M9b |
 | M10b | Sentiment + Hot Doc Detection | ⚡ Hot Doc, Completeness | TODO | 12 | Regression + eval non-regression | 1.5 weeks | M10 |
 | M10c | Communication Analytics | — | TODO | 10 | Regression | 1 week | M10, M11 |
-| M11 | Knowledge Graph Enhancement | ⚡ Entity Resolution | TODO | 15 | Regression + eval non-regression | 2.5 weeks | M10 |
+| M11 | Knowledge Graph Enhancement | ⚡ Entity Resolution | **Prep Done** | 28 | Regression + eval non-regression | 2.5 weeks | M10 |
 | M12 | Bulk Import + EDRM | — | Done | 11 | Regression + migration | 2 weeks | M6, M6b, M8 (parallel w/ M10-11) |
 | M13 | React Frontend | — | TODO | 12+ | Frontend CI + backend regression | 3.5 weeks | M6, M7, M10, M10b, M10c, M9b |
 | M14 | Annotations + Export + EDRM | — | TODO | 10 | Regression + migration | 2.5 weeks | M13 |
@@ -510,26 +510,33 @@ If a metric regresses beyond the threshold, the milestone must either fix the re
 
 **Note:** CORE-KG research found that removing coreference resolution increases node duplication by 28%, while removing structured prompts increases noisy nodes by 73%. Both must be implemented.
 
-- [ ] Implement 9 core node types: `:Person`, `:Organization`, `:Department`, `:Role`, `:Email`, `:Document`, `:Event`, `:Allegation`, `:Topic`
-- [ ] Entity Resolution Agent: LangGraph agent — `extract → deduplicate → resolve_coreferences → merge → infer_hierarchy → link_defined_terms → present_uncertain`
-- [ ] Coreference resolution: spaCy `coreferee` or neuralcoref to resolve pronouns and anaphora before entity extraction (prevents 28% node duplication)
-- [ ] Temporal properties on ALL organizational relationships: `since` and `until` on MANAGES, HAS_ROLE, MEMBER_OF, BOARD_MEMBER, REPORTS_TO edges
-- [ ] Email-as-node modeling: Email nodes connected via SENT, SENT_TO, CC, BCC to Person nodes
-- [ ] DISCUSSES edges from Email/Document nodes to Topic nodes
-- [ ] Neo4j GDS centrality algorithms: betweenness, PageRank, degree — computed per matter, stored as node properties
-- [ ] Legal defined-term support: parse definitions sections, create ALIAS_OF edges for capitalized terms
-- [ ] Qdrant↔Neo4j integration: vector search results map to Neo4j nodes by entity_id, enabling graph context enrichment of retrieval results (QdrantNeo4jRetriever pattern)
-- [ ] `GraphService.get_communication_pairs(person_a, person_b, date_from, date_to)` — filtered email traversal
-- [ ] `GraphService.get_reporting_chain(person, date)` — temporal org hierarchy
-- [ ] `GraphService.find_path(entity_a, entity_b, max_hops=5)` — shortest path with relationship type filtering
-- [ ] Union-find transitive closure in `app/entities/resolver.py`
+- [x] Implement 9 core node types: `:Person`, `:Organization`, `:Location`, `:Event`, `:Financial`, `:LegalReference`, `:ContactInfo`, `:Email`, `:Topic` — dual-label system (`:Entity:Person`) for backward compat
+- [x] Neo4j schema init: `ensure_schema()` with constraints + indexes, called from FastAPI lifespan
+- [x] One-time migration: `migrate_existing_entities()` adds typed labels + propagates `matter_id`
+- [x] Union-find transitive closure in `app/entities/resolver.py` — `compute_merge_groups()` with networkx connected components
+- [x] Group-based entity resolution in `app/entities/tasks.py` — replaces one-at-a-time merge loop
+- [x] Dual-label entity creation: `create_entity_node()` + `index_entities_for_document()` apply secondary Neo4j labels + `matter_id`
+- [x] Email-as-node modeling: `create_email_node()` + `link_email_participants()` — SENT, SENT_TO, CC, BCC edges to Person nodes
+- [x] Email-as-node ingestion integration: `_index_to_neo4j()` extracts email headers and creates graph nodes for eml/msg files
+- [x] Temporal relationships: `create_temporal_relationship()` with `since`/`until` on MANAGES, HAS_ROLE, MEMBER_OF, BOARD_MEMBER, REPORTS_TO (allowlist-validated)
+- [x] `GraphService.get_communication_pairs(person_a, person_b, date_from, date_to)` — bidirectional email traversal
+- [x] `GraphService.get_reporting_chain(person, date)` — temporal REPORTS_TO*1..10 traversal
+- [x] `GraphService.find_path(entity_a, entity_b, max_hops=5)` — shortestPath with relationship type filtering
+- [x] Topic nodes + DISCUSSES edges from Email/Document to Topic
+- [x] ALIAS_OF edges: `create_alias_edge()` for legal defined terms → canonical entities
+- [x] `GraphService.get_entities_by_names()` — batch fetch for Qdrant↔Neo4j cross-reference
+- [x] Coreference resolution module: `CoreferenceResolver` (spaCy + coreferee), feature-flagged `ENABLE_COREFERENCE_RESOLUTION`
+- [x] Neo4j GDS centrality: `compute_centrality()` — degree/pagerank/betweenness per matter (feature-flagged `ENABLE_GRAPH_CENTRALITY`)
+- [ ] Entity Resolution Agent: LangGraph agent — `extract → deduplicate → resolve_coreferences → merge → infer_hierarchy → link_defined_terms → present_uncertain` (post-M10)
+- [ ] Router + schema updates: `/graph/communication-pairs`, `/graph/reporting-chain/{person}`, `/graph/path` endpoints (post-M10)
+- [ ] Query tool integration: replace stub `communication_matrix` tool with real GraphService calls (post-M10)
 
-**Testing (15 tests):**
-- Unit: Entity Resolution Agent — extract + deduplicate flow (1), alias resolution across documents (2), coreference resolution pronoun/anaphora (1), temporal edge properties — since/until on org relationships (2), email-as-node modeling — SENT/SENT_TO/CC/BCC (1), graph queries — get_communication_pairs/get_reporting_chain/find_path (3), union-find transitive closure (1), 9 core node types validation (1), Qdrant↔Neo4j cross-reference by entity_id (1)
-- Integration: agent e2e with mock extractor and graph (1), uncertain merge queue presentation (1)
+**Testing (28 tests — 23 prep + 5 remaining):**
+- Unit (done): 9 core node types validation (1), entity type mapping (1), dual-label creation (3), email-as-node SENT/SENT_TO/CC/BCC (1), email parsing (4), temporal relationships + validation (2), communication pairs (1), reporting chain (1), find_path (1), topic/discusses (2), alias_of (2), batch entity lookup (2), union-find (3), merge groups (2), coreference (1)
+- Remaining: Entity Resolution Agent flow (3), router endpoints (2)
 - Gate: regression + eval non-regression (no metric regresses > 0.05 vs M9 baseline) + existing resolver tests pass
 
-**Key files:** `app/entities/graph_service.py`, `app/entities/resolver.py`, `app/entities/extractor.py`
+**Key files:** `app/entities/graph_service.py`, `app/entities/resolver.py`, `app/entities/schema.py`, `app/entities/coreference.py`
 
 **Neo4j Schema (target state):**
 - Node types: `:Person`, `:Organization`, `:Department`, `:Role`, `:Email`, `:Document`, `:Event`, `:Allegation`, `:Topic`

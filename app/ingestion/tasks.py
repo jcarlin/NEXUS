@@ -108,9 +108,14 @@ def _create_document_record(
     file_size: int,
     content_hash: str,
     matter_id: str | None = None,
+    metadata: dict | None = None,
 ) -> str:
     """Insert a row into the ``documents`` table and return its id."""
     doc_id = str(uuid.uuid4())
+    # Serialize metadata, stripping attachment_data (binary) if present
+    meta = dict(metadata) if metadata else {}
+    meta.pop("attachment_data", None)
+    metadata_json = json.dumps(meta, default=str)
     with engine.connect() as conn:
         conn.execute(
             text(
@@ -137,7 +142,7 @@ def _create_document_record(
                 "file_size": file_size,
                 "content_hash": content_hash,
                 "matter_id": matter_id,
-                "metadata_": "{}",
+                "metadata_": metadata_json,
             },
         )
         conn.commit()
@@ -296,8 +301,14 @@ async def _index_to_neo4j(
     entities: list[dict],
     chunk_data: list[dict],
     matter_id: str | None = None,
+    email_metadata: dict | None = None,
 ) -> None:
-    """Create Document, Entity, and Chunk nodes in Neo4j."""
+    """Create Document, Entity, and Chunk nodes in Neo4j.
+
+    When *email_metadata* is provided (for ``eml``/``msg`` files), also
+    creates an ``:Email`` node and links participants via
+    ``SENT`` / ``SENT_TO`` / ``CC`` / ``BCC`` edges.
+    """
     from neo4j import AsyncGraphDatabase
 
     from app.entities.graph_service import GraphService
@@ -319,9 +330,13 @@ async def _index_to_neo4j(
             matter_id=matter_id,
         )
 
-        # Bulk-index entities
+        # Bulk-index entities (with dual labels + matter_id)
         if entities:
-            await gs.index_entities_for_document(doc_id=doc_id, entities=entities)
+            await gs.index_entities_for_document(
+                doc_id=doc_id,
+                entities=entities,
+                matter_id=matter_id,
+            )
 
         # Create chunk nodes
         for cd in chunk_data:
@@ -332,6 +347,41 @@ async def _index_to_neo4j(
                 qdrant_point_id=cd["qdrant_point_id"],
                 doc_id=doc_id,
             )
+
+        # M11: Email-as-node modeling
+        if email_metadata:
+            from app.entities.schema import parse_email_address, parse_recipient_list
+
+            email_id = email_metadata.get("message_id") or doc_id
+            await gs.create_email_node(
+                email_id=email_id,
+                subject=email_metadata.get("subject", ""),
+                date=email_metadata.get("date"),
+                message_id=email_metadata.get("message_id"),
+                doc_id=doc_id,
+                matter_id=matter_id,
+            )
+
+            sender = None
+            from_raw = email_metadata.get("from", "")
+            if from_raw:
+                sender = parse_email_address(from_raw)
+                if not sender[1]:
+                    sender = None
+
+            to_list = parse_recipient_list(email_metadata.get("to", ""))
+            cc_list = parse_recipient_list(email_metadata.get("cc", ""))
+            bcc_list = parse_recipient_list(email_metadata.get("bcc", ""))
+
+            if sender or to_list or cc_list or bcc_list:
+                await gs.link_email_participants(
+                    email_id=email_id,
+                    sender=sender,
+                    to=to_list,
+                    cc=cc_list,
+                    bcc=bcc_list,
+                    matter_id=matter_id,
+                )
     finally:
         await driver.close()
 
@@ -510,10 +560,12 @@ def process_zip(self, job_id: str, minio_path: str) -> dict:
     except Exception as exc:
         logger.error("task.zip.failed", job_id=job_id, error=str(exc))
 
+        # Acceptable degradation: if updating the job status itself fails,
+        # the original error is still raised/retried below.
         try:
             _update_stage(engine, job_id, "failed", "failed", error=str(exc))
         except Exception:
-            logger.error("task.zip.failed_to_update_status", job_id=job_id)
+            logger.error("task.zip.failed_to_update_status", job_id=job_id, exc_info=True)
 
         if self.request.retries < self.max_retries:
             raise self.retry(exc=exc)
@@ -633,6 +685,9 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
         # Store page images in MinIO (render via pdf2image when visual embeddings enabled)
         doc_id_for_pages = job_id  # Use job_id as doc namespace for page images
         rendered_page_images: list[bytes] = []
+        # Acceptable degradation: PDF page rendering is only needed for
+        # visual embeddings (ENABLE_VISUAL_EMBEDDINGS), which is experimental.
+        # Text-based indexing is the core pipeline and is unaffected.
         if settings.enable_visual_embeddings and ext == ".pdf":
             try:
                 with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as pdf_tmp:
@@ -711,7 +766,9 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
             sparse_embeddings = sparse_emb.embed_texts(chunk_texts)
             logger.info("task.sparse_embedded", job_id=job_id, count=len(sparse_embeddings))
 
-        # Visual embeddings (feature-flagged)
+        # Visual embeddings (feature-flagged, experimental).
+        # Acceptable degradation: visual embeddings are optional enrichment
+        # that supplements text-based retrieval.
         visual_page_embeddings: list[dict[str, Any]] = []
         if settings.enable_visual_embeddings and rendered_page_images:
             try:
@@ -816,7 +873,10 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
             unique_entities=len(all_entities),
         )
 
-        # Tier 2: Relationship extraction (feature-flagged)
+        # Tier 2: Relationship extraction (feature-flagged).
+        # Acceptable degradation: relationship extraction is optional
+        # enrichment via LLM (ENABLE_RELATIONSHIP_EXTRACTION).  Core
+        # entity nodes and MENTIONED_IN edges are created regardless.
         relationship_count = 0
         if settings.enable_relationship_extraction and all_entities:
             try:
@@ -895,7 +955,9 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
             qdrant.upsert(collection_name=TEXT_COLLECTION, points=points)
             logger.info("task.qdrant_indexed", job_id=job_id, points=len(points))
 
-        # 5b. Visual Qdrant upsert (feature-flagged)
+        # 5b. Visual Qdrant upsert (feature-flagged).
+        # Acceptable degradation: visual index is optional; text index above
+        # is the core data path.
         if visual_page_embeddings:
             try:
                 from app.common.vector_store import VISUAL_COLLECTION
@@ -910,6 +972,19 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
                 logger.warning("task.visual_indexing_failed", job_id=job_id, exc_info=True)
 
         # 5c. Neo4j graph indexing
+        # M11: Pass email metadata for email-as-node modeling
+        email_meta = None
+        if document_type == "email":
+            email_meta = {
+                "message_id": parse_result.metadata.get("message_id", ""),
+                "subject": parse_result.metadata.get("subject", ""),
+                "date": parse_result.metadata.get("date"),
+                "from": parse_result.metadata.get("from", ""),
+                "to": parse_result.metadata.get("to", ""),
+                "cc": parse_result.metadata.get("cc", ""),
+                "bcc": parse_result.metadata.get("bcc", ""),
+            }
+
         asyncio.run(
             _index_to_neo4j(
                 settings=settings,
@@ -921,6 +996,7 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
                 entities=all_entities,
                 chunk_data=chunk_data_for_neo4j,
                 matter_id=matter_id,
+                email_metadata=email_meta,
             )
         )
 
@@ -941,9 +1017,12 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
             file_size=file_size,
             content_hash=content_hash,
             matter_id=matter_id,
+            metadata=parse_result.metadata,
         )
 
-        # --- Email threading (inline, feature-flagged) ---
+        # Acceptable degradation: email threading is feature-flagged
+        # post-processing that does not affect the core document record
+        # or search index.  The document is fully ingested at this point.
         if document_type == "email" and settings.enable_email_threading:
             try:
                 from app.ingestion.threading import EmailThreader
@@ -959,13 +1038,40 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
             except Exception:
                 logger.warning("task.threading_failed", job_id=job_id, exc_info=True)
 
-        # --- Near-duplicate detection (async dispatch, feature-flagged) ---
+        # Acceptable degradation: communication pair computation is incremental
+        # post-processing for the analytics module.
+        if document_type == "email" and matter_id:
+            try:
+                from app.analytics.service import AnalyticsService
+                from app.dependencies import get_db
+
+                async def _compute_pairs():
+                    async for db in get_db():
+                        await AnalyticsService.compute_communication_pairs(db, matter_id)
+
+                asyncio.run(_compute_pairs())
+                logger.info("task.comm_pairs_updated", job_id=job_id, doc_id=doc_id)
+            except Exception:
+                logger.warning("task.comm_pairs_failed", job_id=job_id, exc_info=True)
+
+        # Acceptable degradation: near-duplicate detection is a fire-and-forget
+        # async task dispatch.  Failure to dispatch does not affect the document.
         if settings.enable_near_duplicate_detection:
             try:
                 detect_duplicates.delay(doc_id, parse_result.text, matter_id or "")
                 logger.info("task.dedup_dispatched", job_id=job_id, doc_id=doc_id)
             except Exception:
                 logger.warning("task.dedup_dispatch_failed", job_id=job_id, exc_info=True)
+
+        # --- Hot document detection (async dispatch, feature-flagged) ---
+        if settings.enable_hot_doc_detection:
+            try:
+                from app.analysis.tasks import scan_document_sentiment
+
+                scan_document_sentiment.delay(doc_id, matter_id or "")
+                logger.info("task.hot_doc_dispatched", job_id=job_id, doc_id=doc_id)
+            except Exception:
+                logger.warning("task.hot_doc_dispatch_failed", job_id=job_id, exc_info=True)
 
         _update_stage(
             engine,
@@ -1001,10 +1107,12 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
         tb = traceback.format_exc()
         logger.error("task.failed", job_id=job_id, error=str(exc), traceback=tb)
 
+        # Acceptable degradation: if updating the job status itself fails,
+        # the original error is still raised/retried below.
         try:
             _update_stage(engine, job_id, "failed", "failed", error=str(exc))
         except Exception:
-            logger.error("task.failed_to_update_status", job_id=job_id)
+            logger.error("task.failed_to_update_status", job_id=job_id, exc_info=True)
 
         # Let Celery retry on transient errors
         if self.request.retries < self.max_retries:
@@ -1239,6 +1347,7 @@ def import_text_document(
             file_size=file_size,
             content_hash=content_hash,
             matter_id=matter_id,
+            metadata=metadata,
         )
 
         # Set import_source on the document record
@@ -1250,7 +1359,8 @@ def import_text_document(
                 )
                 conn.commit()
 
-        # Email threading (if email_headers provided)
+        # Acceptable degradation: email threading is feature-flagged
+        # post-processing.  The document is fully ingested at this point.
         if email_headers and settings.enable_email_threading:
             try:
                 from app.ingestion.threading import EmailThreader
@@ -1260,13 +1370,24 @@ def import_text_document(
             except Exception:
                 logger.warning("task.import_text.threading_failed", job_id=job_id, exc_info=True)
 
-        # Near-duplicate detection
+        # Acceptable degradation: near-duplicate detection is a fire-and-forget
+        # async task dispatch.
         if settings.enable_near_duplicate_detection:
             try:
                 detect_duplicates.delay(doc_id, text, matter_id or "")
                 logger.info("task.import_text.dedup_dispatched", job_id=job_id)
             except Exception:
                 logger.warning("task.import_text.dedup_dispatch_failed", job_id=job_id, exc_info=True)
+
+        # --- Hot document detection (async dispatch, feature-flagged) ---
+        if settings.enable_hot_doc_detection:
+            try:
+                from app.analysis.tasks import scan_document_sentiment
+
+                scan_document_sentiment.delay(doc_id, matter_id or "")
+                logger.info("task.import_text.hot_doc_dispatched", job_id=job_id, doc_id=doc_id)
+            except Exception:
+                logger.warning("task.import_text.hot_doc_dispatch_failed", job_id=job_id, exc_info=True)
 
         # Increment bulk_import_jobs counter
         if bulk_import_job_id:
@@ -1305,12 +1426,15 @@ def import_text_document(
         tb = traceback.format_exc()
         logger.error("task.import_text.failed", job_id=job_id, error=str(exc), traceback=tb)
 
+        # Acceptable degradation: if updating the job status itself fails,
+        # the original error is still raised/retried below.
         try:
             _update_stage(engine, job_id, "failed", "failed", error=str(exc))
         except Exception:
-            logger.error("task.import_text.failed_to_update_status", job_id=job_id)
+            logger.error("task.import_text.failed_to_update_status", job_id=job_id, exc_info=True)
 
-        # Increment failed counter on bulk import job
+        # Acceptable degradation: if updating the bulk import counter fails,
+        # the individual job error is still raised/retried below.
         if bulk_import_job_id:
             try:
                 with engine.connect() as conn:
@@ -1327,7 +1451,7 @@ def import_text_document(
                     )
                     conn.commit()
             except Exception:
-                logger.error("task.import_text.failed_to_update_bulk_job", job_id=job_id)
+                logger.error("task.import_text.failed_to_update_bulk_job", job_id=job_id, exc_info=True)
 
         if self.request.retries < self.max_retries:
             raise self.retry(exc=exc)

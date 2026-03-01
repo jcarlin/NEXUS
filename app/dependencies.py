@@ -65,7 +65,7 @@ def _get_engine():
     return _async_engine
 
 
-def _get_session_factory() -> async_sessionmaker[AsyncSession]:
+def get_session_factory() -> async_sessionmaker[AsyncSession]:
     global _async_session_factory
     if _async_session_factory is None:
         _async_session_factory = async_sessionmaker(
@@ -78,7 +78,7 @@ def _get_session_factory() -> async_sessionmaker[AsyncSession]:
 
 async def get_db() -> AsyncIterator[AsyncSession]:
     """Yield an ``AsyncSession`` scoped to a single request."""
-    factory = _get_session_factory()
+    factory = get_session_factory()
     async with factory() as session:
         try:
             yield session
@@ -304,6 +304,26 @@ def get_dedup_detector():
             num_perm=settings.dedup_num_permutations,
         )
     return _dedup_detector
+
+
+# ---------------------------------------------------------------------------
+# Coreference Resolver (feature-flagged)
+# ---------------------------------------------------------------------------
+
+_coref_resolver = None
+
+
+def get_coref_resolver():
+    """Return the ``CoreferenceResolver`` singleton, or ``None`` when disabled."""
+    global _coref_resolver
+    settings = get_settings()
+    if not settings.enable_coreference_resolution:
+        return None
+    if _coref_resolver is None:
+        from app.entities.coreference import CoreferenceResolver
+
+        _coref_resolver = CoreferenceResolver(model_name=settings.coreference_model)
+    return _coref_resolver
 
 
 # ---------------------------------------------------------------------------

@@ -1,8 +1,11 @@
 """Neo4j knowledge graph operations.
 
-Manages :Document, :Entity, and :Chunk nodes with MENTIONED_IN /
-PART_OF relationships.  Uses ``MERGE`` for idempotent entity creation
-(exact-name dedup) so the same pipeline step can safely be retried.
+Manages :Document, :Entity, :Chunk, :Email, and :Topic nodes with typed
+relationships.  Uses ``MERGE`` for idempotent entity creation (exact-name
+dedup) so the same pipeline step can safely be retried.
+
+M11 enhancements: dual-label entities, email-as-node, temporal relationships,
+topic/alias edges, communication/reporting chain queries, path-finding.
 """
 
 from __future__ import annotations
@@ -11,6 +14,8 @@ from typing import Any
 
 import structlog
 from neo4j import AsyncDriver
+
+from app.entities.schema import TEMPORAL_RELATIONSHIP_TYPES, get_neo4j_label
 
 logger = structlog.get_logger(__name__)
 
@@ -113,21 +118,31 @@ class GraphService:
         entity_type: str,
         doc_id: str,
         page_number: int | None = None,
+        matter_id: str | None = None,
     ) -> None:
         """Create (or merge) an ``:Entity`` node and link it to a document.
 
         The ``MERGE`` is keyed on ``(name, type)`` so that duplicate mentions
         across chunks / documents converge on a single node.  A
         ``MENTIONED_IN`` relationship is always created to the target document.
+
+        M11: Applies a typed secondary label (e.g. ``:Person``) when a mapping
+        exists in ``ENTITY_TYPE_TO_LABEL``, and stores ``matter_id``.
         """
-        query = """
-        MERGE (e:Entity {name: $name, type: $entity_type})
+        # Build secondary label clause (e.g. "SET e:Person")
+        label = get_neo4j_label(entity_type)
+        label_clause = f"SET e:{label}" if label else ""
+
+        query = f"""
+        MERGE (e:Entity {{name: $name, type: $entity_type}})
         ON CREATE SET e.first_seen     = datetime(),
-                      e.mention_count  = 1
+                      e.mention_count  = 1,
+                      e.matter_id      = $matter_id
         ON MATCH  SET e.mention_count  = e.mention_count + 1,
                       e.last_seen      = datetime()
+        {label_clause}
         WITH e
-        MATCH (d:Document {id: $doc_id})
+        MATCH (d:Document {{id: $doc_id}})
         MERGE (e)-[r:MENTIONED_IN]->(d)
         SET r.page_number = $page_number
         """
@@ -139,6 +154,7 @@ class GraphService:
                     "entity_type": entity_type,
                     "doc_id": doc_id,
                     "page_number": page_number,
+                    "matter_id": matter_id,
                 },
             )
             logger.debug(
@@ -214,11 +230,15 @@ class GraphService:
         self,
         doc_id: str,
         entities: list[dict[str, Any]],
+        matter_id: str | None = None,
     ) -> int:
         """Bulk-create entity nodes and ``MENTIONED_IN`` relationships.
 
         Each dict in *entities* must contain ``name``, ``type``, and
         optionally ``page_number``.
+
+        M11: Groups entities by type and applies dual labels (e.g.
+        ``:Entity:Person``) in per-type batches.
 
         Returns:
             The number of entities processed (created or merged).
@@ -226,34 +246,51 @@ class GraphService:
         if not entities:
             return 0
 
-        # Use UNWIND for efficient batch creation in a single Cypher query
-        query = """
-        UNWIND $entities AS ent
-        MERGE (e:Entity {name: ent.name, type: ent.type})
-        ON CREATE SET e.first_seen     = datetime(),
-                      e.mention_count  = 1
-        ON MATCH  SET e.mention_count  = e.mention_count + 1,
-                      e.last_seen      = datetime()
-        WITH e, ent
-        MATCH (d:Document {id: $doc_id})
-        MERGE (e)-[r:MENTIONED_IN]->(d)
-        SET r.page_number = ent.page_number
-        """
-        try:
-            await self._run_write(query, {"doc_id": doc_id, "entities": entities})
-            logger.info(
-                "graph.entities.indexed",
-                doc_id=doc_id,
-                count=len(entities),
-            )
-            return len(entities)
-        except Exception:
-            logger.error(
-                "graph.entities.index_failed",
-                doc_id=doc_id,
-                count=len(entities),
-            )
-            raise
+        # Group by type so we can apply the correct secondary label per batch
+        by_type: dict[str, list[dict[str, Any]]] = {}
+        for ent in entities:
+            by_type.setdefault(ent["type"], []).append(ent)
+
+        total = 0
+        for etype, batch in by_type.items():
+            label = get_neo4j_label(etype)
+            label_clause = f"SET e:{label}" if label else ""
+
+            query = f"""
+            UNWIND $entities AS ent
+            MERGE (e:Entity {{name: ent.name, type: ent.type}})
+            ON CREATE SET e.first_seen     = datetime(),
+                          e.mention_count  = 1,
+                          e.matter_id      = $matter_id
+            ON MATCH  SET e.mention_count  = e.mention_count + 1,
+                          e.last_seen      = datetime()
+            {label_clause}
+            WITH e, ent
+            MATCH (d:Document {{id: $doc_id}})
+            MERGE (e)-[r:MENTIONED_IN]->(d)
+            SET r.page_number = ent.page_number
+            """
+            try:
+                await self._run_write(
+                    query,
+                    {"doc_id": doc_id, "entities": batch, "matter_id": matter_id},
+                )
+                total += len(batch)
+            except Exception:
+                logger.error(
+                    "graph.entities.index_failed",
+                    doc_id=doc_id,
+                    entity_type=etype,
+                    count=len(batch),
+                )
+                raise
+
+        logger.info(
+            "graph.entities.indexed",
+            doc_id=doc_id,
+            count=total,
+        )
+        return total
 
     # ------------------------------------------------------------------
     # Read queries
@@ -594,6 +631,462 @@ class GraphService:
             raise
 
     # ------------------------------------------------------------------
+    # Email-as-node modeling (M11)
+    # ------------------------------------------------------------------
+
+    async def create_email_node(
+        self,
+        email_id: str,
+        subject: str,
+        date: str | None,
+        message_id: str | None,
+        doc_id: str,
+        matter_id: str | None = None,
+    ) -> None:
+        """Create an ``:Email`` node linked to its source ``:Document`` via ``SOURCED_FROM``."""
+        query = """
+        MERGE (em:Email {id: $email_id})
+        SET em.subject    = $subject,
+            em.date       = $date,
+            em.message_id = $message_id,
+            em.matter_id  = $matter_id
+        WITH em
+        MATCH (d:Document {id: $doc_id})
+        MERGE (em)-[:SOURCED_FROM]->(d)
+        """
+        try:
+            await self._run_write(
+                query,
+                {
+                    "email_id": email_id,
+                    "subject": subject,
+                    "date": date,
+                    "message_id": message_id,
+                    "doc_id": doc_id,
+                    "matter_id": matter_id,
+                },
+            )
+            logger.info("graph.email.created", email_id=email_id, doc_id=doc_id)
+        except Exception:
+            logger.error("graph.email.create_failed", email_id=email_id)
+            raise
+
+    async def link_email_participants(
+        self,
+        email_id: str,
+        sender: tuple[str, str] | None,
+        to: list[tuple[str, str]] | None = None,
+        cc: list[tuple[str, str]] | None = None,
+        bcc: list[tuple[str, str]] | None = None,
+        matter_id: str | None = None,
+    ) -> None:
+        """Create ``:Person`` nodes and ``SENT`` / ``SENT_TO`` / ``CC`` / ``BCC`` edges.
+
+        Each participant is a ``(display_name, email_address)`` tuple.
+        The person node is keyed on the email address for dedup.
+        """
+
+        async def _link(name: str, addr: str, rel_type: str) -> None:
+            display = name or addr.split("@")[0]
+            query = f"""
+            MERGE (p:Entity:Person {{name: $display, type: 'person'}})
+            ON CREATE SET p.first_seen = datetime(),
+                          p.mention_count = 1,
+                          p.email_address = $addr,
+                          p.matter_id = $matter_id
+            ON MATCH  SET p.mention_count = p.mention_count + 1,
+                          p.email_address = coalesce(p.email_address, $addr)
+            WITH p
+            MATCH (em:Email {{id: $email_id}})
+            MERGE (p)-[:{rel_type}]->(em)
+            """
+            await self._run_write(
+                query,
+                {
+                    "display": display,
+                    "addr": addr,
+                    "email_id": email_id,
+                    "matter_id": matter_id,
+                },
+            )
+
+        try:
+            if sender:
+                await _link(sender[0], sender[1], "SENT")
+
+            for recip_list, rel_type in [
+                (to or [], "SENT_TO"),
+                (cc or [], "CC"),
+                (bcc or [], "BCC"),
+            ]:
+                for name, addr in recip_list:
+                    await _link(name, addr, rel_type)
+
+            logger.info("graph.email.participants_linked", email_id=email_id)
+        except Exception:
+            logger.error("graph.email.participants_link_failed", email_id=email_id)
+            raise
+
+    # ------------------------------------------------------------------
+    # Temporal relationships (M11)
+    # ------------------------------------------------------------------
+
+    async def create_temporal_relationship(
+        self,
+        source_name: str,
+        target_name: str,
+        rel_type: str,
+        since: str | None = None,
+        until: str | None = None,
+        matter_id: str | None = None,
+    ) -> None:
+        """Create a time-bounded relationship between two entities.
+
+        Only allowlisted relationship types are accepted:
+        ``MANAGES``, ``HAS_ROLE``, ``MEMBER_OF``, ``BOARD_MEMBER``, ``REPORTS_TO``.
+        """
+        if rel_type not in TEMPORAL_RELATIONSHIP_TYPES:
+            raise ValueError(
+                f"Invalid temporal relationship type: {rel_type}. " f"Allowed: {sorted(TEMPORAL_RELATIONSHIP_TYPES)}"
+            )
+
+        query = f"""
+        MATCH (src:Entity {{name: $source}})
+        MATCH (tgt:Entity {{name: $target}})
+        MERGE (src)-[r:{rel_type}]->(tgt)
+        SET r.since     = $since,
+            r.until     = $until,
+            r.matter_id = $matter_id
+        """
+        try:
+            await self._run_write(
+                query,
+                {
+                    "source": source_name,
+                    "target": target_name,
+                    "since": since,
+                    "until": until,
+                    "matter_id": matter_id,
+                },
+            )
+            logger.info(
+                "graph.temporal_rel.created",
+                source=source_name,
+                target=target_name,
+                rel_type=rel_type,
+            )
+        except Exception:
+            logger.error(
+                "graph.temporal_rel.create_failed",
+                source=source_name,
+                target=target_name,
+            )
+            raise
+
+    # ------------------------------------------------------------------
+    # Advanced graph queries (M11)
+    # ------------------------------------------------------------------
+
+    async def get_communication_pairs(
+        self,
+        person_a: str,
+        person_b: str,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        matter_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return all emails exchanged between two people (bidirectional).
+
+        Traverses ``SENT`` / ``SENT_TO`` / ``CC`` / ``BCC`` edges through
+        ``:Email`` nodes.
+        """
+        date_filter = ""
+        if date_from:
+            date_filter += " AND em.date >= $date_from"
+        if date_to:
+            date_filter += " AND em.date <= $date_to"
+
+        matter_filter = " AND em.matter_id = $matter_id" if matter_id else ""
+
+        query = f"""
+        MATCH (a:Entity {{name: $person_a}})-[:SENT|SENT_TO|CC|BCC]-(em:Email)-[:SENT|SENT_TO|CC|BCC]-(b:Entity {{name: $person_b}})
+        WHERE a <> b{date_filter}{matter_filter}
+        RETURN DISTINCT em.id AS email_id,
+               em.subject AS subject,
+               em.date AS date,
+               em.message_id AS message_id
+        ORDER BY em.date
+        """
+        try:
+            records = await self._run_query(
+                query,
+                {
+                    "person_a": person_a,
+                    "person_b": person_b,
+                    "date_from": date_from,
+                    "date_to": date_to,
+                    "matter_id": matter_id,
+                },
+            )
+            logger.debug(
+                "graph.communication_pairs.fetched",
+                person_a=person_a,
+                person_b=person_b,
+                count=len(records),
+            )
+            return records
+        except Exception:
+            logger.error(
+                "graph.communication_pairs.failed",
+                person_a=person_a,
+                person_b=person_b,
+            )
+            raise
+
+    async def get_reporting_chain(
+        self,
+        person: str,
+        date: str | None = None,
+        matter_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return the ``REPORTS_TO`` chain for a person (up to 10 hops).
+
+        Optionally filters by point-in-time (``since <= date <= until``).
+        """
+        date_filter = ""
+        if date:
+            date_filter = " AND (r.since IS NULL OR r.since <= $date)" " AND (r.until IS NULL OR r.until >= $date)"
+
+        matter_filter = " AND p.matter_id = $matter_id" if matter_id else ""
+
+        query = f"""
+        MATCH path = (start:Entity {{name: $person}})-[:REPORTS_TO*1..10]->(manager:Entity)
+        WHERE ALL(r IN relationships(path) WHERE true{date_filter})
+        AND ALL(p IN nodes(path) WHERE true{matter_filter})
+        RETURN [n IN nodes(path) | n.name] AS chain,
+               length(path) AS depth
+        ORDER BY depth
+        """
+        try:
+            records = await self._run_query(
+                query,
+                {"person": person, "date": date, "matter_id": matter_id},
+            )
+            logger.debug(
+                "graph.reporting_chain.fetched",
+                person=person,
+                chains=len(records),
+            )
+            return records
+        except Exception:
+            logger.error("graph.reporting_chain.failed", person=person)
+            raise
+
+    async def find_path(
+        self,
+        entity_a: str,
+        entity_b: str,
+        max_hops: int = 5,
+        relationship_types: list[str] | None = None,
+        matter_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Find the shortest path between two entities.
+
+        Parameters
+        ----------
+        relationship_types:
+            Optional filter — only traverse these edge types.
+        """
+        rel_pattern = "|".join(relationship_types) if relationship_types else ""
+        rel_spec = f"[:{rel_pattern}*1..{max_hops}]" if rel_pattern else f"[*1..{max_hops}]"
+
+        matter_filter = ""
+        if matter_id:
+            matter_filter = " AND ALL(n IN nodes(p) WHERE n.matter_id IS NULL OR n.matter_id = $matter_id)"
+
+        query = f"""
+        MATCH (a:Entity {{name: $entity_a}}), (b:Entity {{name: $entity_b}})
+        MATCH p = shortestPath((a)-{rel_spec}-(b))
+        WHERE a <> b{matter_filter}
+        RETURN [n IN nodes(p) | n.name] AS nodes,
+               [r IN relationships(p) | type(r)] AS relationships,
+               length(p) AS hops
+        """
+        try:
+            records = await self._run_query(
+                query,
+                {
+                    "entity_a": entity_a,
+                    "entity_b": entity_b,
+                    "matter_id": matter_id,
+                },
+            )
+            logger.debug(
+                "graph.find_path.fetched",
+                entity_a=entity_a,
+                entity_b=entity_b,
+                paths=len(records),
+            )
+            return records
+        except Exception:
+            logger.error(
+                "graph.find_path.failed",
+                entity_a=entity_a,
+                entity_b=entity_b,
+            )
+            raise
+
+    # ------------------------------------------------------------------
+    # Topic / alias / batch operations (M11)
+    # ------------------------------------------------------------------
+
+    async def create_topic_node(
+        self,
+        topic_name: str,
+        matter_id: str | None = None,
+    ) -> None:
+        """Create (or merge) a ``:Topic`` node."""
+        query = """
+        MERGE (t:Topic {name: $name, matter_id: $matter_id})
+        ON CREATE SET t.created_at = datetime()
+        """
+        try:
+            await self._run_write(
+                query,
+                {"name": topic_name, "matter_id": matter_id},
+            )
+            logger.debug("graph.topic.created", topic=topic_name)
+        except Exception:
+            logger.error("graph.topic.create_failed", topic=topic_name)
+            raise
+
+    async def create_discusses_edge(
+        self,
+        source_id: str,
+        source_label: str,
+        topic_name: str,
+        matter_id: str | None = None,
+    ) -> None:
+        """Create a ``DISCUSSES`` edge from an Email or Document to a Topic.
+
+        Parameters
+        ----------
+        source_label:
+            ``"Email"`` or ``"Document"``.
+        """
+        if source_label not in ("Email", "Document"):
+            raise ValueError(f"source_label must be 'Email' or 'Document', got '{source_label}'")
+
+        query = f"""
+        MATCH (src:{source_label} {{id: $source_id}})
+        MERGE (t:Topic {{name: $topic_name, matter_id: $matter_id}})
+        ON CREATE SET t.created_at = datetime()
+        MERGE (src)-[:DISCUSSES]->(t)
+        """
+        try:
+            await self._run_write(
+                query,
+                {
+                    "source_id": source_id,
+                    "topic_name": topic_name,
+                    "matter_id": matter_id,
+                },
+            )
+            logger.debug(
+                "graph.discusses.created",
+                source_id=source_id,
+                topic=topic_name,
+            )
+        except Exception:
+            logger.error(
+                "graph.discusses.create_failed",
+                source_id=source_id,
+                topic=topic_name,
+            )
+            raise
+
+    async def create_alias_edge(
+        self,
+        term: str,
+        canonical_name: str,
+        entity_type: str,
+        matter_id: str | None = None,
+    ) -> None:
+        """Create an ``ALIAS_OF`` edge from a defined term to its canonical entity.
+
+        Bridges M9b case-intelligence defined terms to graph entity nodes.
+        """
+        query = """
+        MERGE (alias:Entity {name: $term, type: $entity_type})
+        ON CREATE SET alias.first_seen = datetime(),
+                      alias.mention_count = 0,
+                      alias.matter_id = $matter_id
+        WITH alias
+        MATCH (canonical:Entity {name: $canonical_name, type: $entity_type})
+        MERGE (alias)-[:ALIAS_OF]->(canonical)
+        """
+        try:
+            await self._run_write(
+                query,
+                {
+                    "term": term,
+                    "canonical_name": canonical_name,
+                    "entity_type": entity_type,
+                    "matter_id": matter_id,
+                },
+            )
+            logger.debug(
+                "graph.alias.created",
+                term=term,
+                canonical=canonical_name,
+            )
+        except Exception:
+            logger.error(
+                "graph.alias.create_failed",
+                term=term,
+                canonical=canonical_name,
+            )
+            raise
+
+    async def get_entities_by_names(
+        self,
+        names: list[str],
+        matter_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Batch-fetch entities by name for Qdrant <-> Neo4j cross-reference.
+
+        Returns entity nodes matching any of the provided names, optionally
+        filtered by ``matter_id``.
+        """
+        if not names:
+            return []
+
+        matter_filter = " AND e.matter_id = $matter_id" if matter_id else ""
+        query = f"""
+        MATCH (e:Entity)
+        WHERE e.name IN $names{matter_filter}
+        RETURN e.name AS name,
+               e.type AS type,
+               e.mention_count AS mention_count,
+               labels(e) AS labels,
+               coalesce(e.aliases, []) AS aliases
+        """
+        try:
+            records = await self._run_query(
+                query,
+                {"names": names, "matter_id": matter_id},
+            )
+            logger.debug(
+                "graph.entities_by_names.fetched",
+                requested=len(names),
+                found=len(records),
+            )
+            return records
+        except Exception:
+            logger.error("graph.entities_by_names.failed", count=len(names))
+            raise
+
+    # ------------------------------------------------------------------
     # Graph statistics
     # ------------------------------------------------------------------
 
@@ -611,12 +1104,8 @@ class GraphService:
             node_records = await self._run_query(node_query)
             edge_records = await self._run_query(edge_query)
 
-            node_counts: dict[str, int] = {
-                rec["label"]: rec["count"] for rec in node_records
-            }
-            edge_counts: dict[str, int] = {
-                rec["type"]: rec["count"] for rec in edge_records
-            }
+            node_counts: dict[str, int] = {rec["label"]: rec["count"] for rec in node_records}
+            edge_counts: dict[str, int] = {rec["type"]: rec["count"] for rec in edge_records}
             total_nodes = sum(node_counts.values())
             total_edges = sum(edge_counts.values())
 
@@ -634,3 +1123,134 @@ class GraphService:
         except Exception:
             logger.error("graph.stats.failed")
             raise
+
+    # ------------------------------------------------------------------
+    # Centrality analysis (GDS)
+    # ------------------------------------------------------------------
+
+    async def compute_centrality(
+        self,
+        matter_id: str,
+        metric: str,
+    ) -> list[dict[str, Any]]:
+        """Compute a centrality metric for entities within a matter using Neo4j GDS.
+
+        Creates a temporary GDS graph projection scoped to the matter, runs
+        the requested algorithm, returns ranked results, and drops the
+        projection.  Pre-M11 fallback: projects over ``MENTIONED_IN`` +
+        ``RELATED_TO`` edges (co-occurrence centrality).
+
+        Parameters
+        ----------
+        matter_id:
+            Scope the projection to entities belonging to this matter.
+        metric:
+            One of ``"degree"``, ``"pagerank"``, or ``"betweenness"``.
+
+        Returns
+        -------
+        list[dict[str, Any]]
+            Dicts with keys ``name``, ``type``, ``score`` sorted by score
+            descending.
+        """
+        allowed_metrics = {"degree", "pagerank", "betweenness"}
+        if metric not in allowed_metrics:
+            raise ValueError(f"Invalid centrality metric: {metric}. " f"Allowed: {sorted(allowed_metrics)}")
+
+        graph_name = f"centrality_{matter_id}_{metric}"
+
+        # GDS algorithm procedure names
+        algorithm_map = {
+            "degree": "gds.degree.stream",
+            "pagerank": "gds.pageRank.stream",
+            "betweenness": "gds.betweenness.stream",
+        }
+
+        logger.info(
+            "graph.centrality.start",
+            matter_id=matter_id,
+            metric=metric,
+            graph_name=graph_name,
+        )
+
+        try:
+            # 1. Create a GDS graph projection scoped to the matter.
+            #    Include Entity nodes where matter_id matches OR is NULL,
+            #    and project MENTIONED_IN + RELATED_TO edges for
+            #    co-occurrence centrality.
+            project_query = """
+            CALL gds.graph.project(
+                $graph_name,
+                {
+                    Entity: {
+                        label: 'Entity',
+                        properties: ['name', 'type'],
+                        filter: 'WHERE n.matter_id = $matter_id OR n.matter_id IS NULL'
+                    }
+                },
+                {
+                    MENTIONED_IN: {
+                        type: 'MENTIONED_IN',
+                        orientation: 'UNDIRECTED'
+                    },
+                    RELATED_TO: {
+                        type: 'RELATED_TO',
+                        orientation: 'UNDIRECTED'
+                    }
+                }
+            )
+            """
+            await self._run_write(
+                project_query,
+                {"graph_name": graph_name, "matter_id": matter_id},
+            )
+            logger.debug(
+                "graph.centrality.projected",
+                graph_name=graph_name,
+            )
+
+            # 2. Run the appropriate GDS algorithm.
+            algo_proc = algorithm_map[metric]
+            stream_query = f"""
+            CALL {algo_proc}($graph_name)
+            YIELD nodeId, score
+            RETURN gds.util.asNode(nodeId).name AS name,
+                   gds.util.asNode(nodeId).type AS type,
+                   score
+            ORDER BY score DESC
+            """
+            records = await self._run_query(
+                stream_query,
+                {"graph_name": graph_name},
+            )
+
+            logger.info(
+                "graph.centrality.complete",
+                matter_id=matter_id,
+                metric=metric,
+                result_count=len(records),
+            )
+            return records
+
+        except Exception:
+            logger.error(
+                "graph.centrality.failed",
+                matter_id=matter_id,
+                metric=metric,
+                graph_name=graph_name,
+            )
+            raise
+        finally:
+            # 3. Always drop the projection to avoid leaking memory.
+            try:
+                drop_query = "CALL gds.graph.drop($graph_name)"
+                await self._run_write(drop_query, {"graph_name": graph_name})
+                logger.debug(
+                    "graph.centrality.projection_dropped",
+                    graph_name=graph_name,
+                )
+            except Exception:
+                logger.warning(
+                    "graph.centrality.projection_drop_failed",
+                    graph_name=graph_name,
+                )

@@ -100,6 +100,22 @@ class Settings(BaseSettings):
     # --- Case Intelligence ---
     enable_case_setup_agent: bool = False
 
+    # --- Coreference Resolution (M11) ---
+    enable_coreference_resolution: bool = False  # spaCy + coreferee
+    coreference_model: str = "en_core_web_lg"
+
+    # --- Graph Centrality (M11) ---
+    enable_graph_centrality: bool = False  # Neo4j GDS betweenness/PageRank
+
+    # --- Hot Doc Detection (M10b) ---
+    enable_hot_doc_detection: bool = False
+    hot_doc_score_threshold: float = 0.6
+
+    # --- Communication Analytics (M10c) ---
+    enable_topic_clustering: bool = False
+    bertopic_embedding_model: str = "all-MiniLM-L6-v2"
+    bertopic_min_cluster_size: int = 5
+
     # --- Agentic Pipeline ---
     enable_agentic_pipeline: bool = True
     enable_citation_verification: bool = True

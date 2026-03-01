@@ -67,13 +67,19 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     except Exception as exc:
         logger.error("startup.minio.failed", error=str(exc))
 
-    # --- Neo4j connectivity ---
+    # --- Neo4j connectivity + schema ---
     try:
         driver = get_neo4j()
         async with driver.session() as session:
             result = await session.run("RETURN 1 AS n")
             await result.consume()
         logger.info("startup.neo4j.ok")
+
+        # Ensure M11 graph schema (constraints + indexes)
+        from app.entities.schema import ensure_schema
+
+        await ensure_schema(driver)
+        logger.info("startup.neo4j.schema.ok")
     except Exception as exc:
         logger.error("startup.neo4j.failed", error=str(exc))
 
@@ -137,6 +143,7 @@ def create_app() -> FastAPI:
     application.add_middleware(RequestIDMiddleware)
 
     # --- Domain routers (lazy imports to keep this module lightweight) ---
+    from app.analytics.router import router as analytics_router
     from app.audit.router import router as audit_router
     from app.auth.admin_router import router as admin_router
     from app.auth.router import router as auth_router
@@ -156,6 +163,7 @@ def create_app() -> FastAPI:
     application.include_router(audit_router, prefix="/api/v1")
     application.include_router(edrm_router, prefix="/api/v1")
     application.include_router(cases_router, prefix="/api/v1")
+    application.include_router(analytics_router, prefix="/api/v1")
 
     # --- Health endpoint ---
     @application.get("/api/v1/health", tags=["system"])
