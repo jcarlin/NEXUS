@@ -44,6 +44,8 @@ class RetrievalMode(StrEnum):
     DENSE = "dense"
     SPARSE = "sparse"
     HYBRID = "hybrid"
+    VISUAL = "visual"
+    VISUAL_FUSION = "visual_fusion"
 
 
 class EvaluationMode(StrEnum):

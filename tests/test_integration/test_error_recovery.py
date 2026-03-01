@@ -16,7 +16,6 @@ from app.ingestion.chunker import TextChunker
 from app.ingestion.parser import DocumentParser
 from app.query.graph import build_graph
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -188,9 +187,7 @@ async def test_graph_service_error_in_graph_lookup_continues():
 
     llm.stream = _stream
 
-    graph = _build_compiled_graph(
-        llm=llm, entity_extractor=entity_extractor, graph_service=graph_service
-    )
+    graph = _build_compiled_graph(llm=llm, entity_extractor=entity_extractor, graph_service=graph_service)
     state = _base_state()
     result = await graph.ainvoke(state)
 
@@ -224,20 +221,21 @@ async def test_reranker_failure_falls_back_to_score_sort():
     entity_extractor = MagicMock()
     entity_extractor.extract.return_value = []
 
-    graph = _build_compiled_graph(
-        llm=llm, retriever=retriever, entity_extractor=entity_extractor
-    )
+    graph = _build_compiled_graph(llm=llm, retriever=retriever, entity_extractor=entity_extractor)
     state = _base_state()
 
     # Patch settings to enable reranker but make get_reranker return a broken one
     mock_reranker = MagicMock()
     mock_reranker.rerank.side_effect = RuntimeError("Model failed to load")
 
-    with patch("app.dependencies.get_settings") as mock_settings, \
-         patch("app.dependencies.get_reranker", return_value=mock_reranker):
+    with (
+        patch("app.dependencies.get_settings") as mock_settings,
+        patch("app.dependencies.get_reranker", return_value=mock_reranker),
+    ):
         settings = MagicMock()
         settings.enable_reranker = True
         settings.reranker_top_n = 10
+        settings.enable_visual_embeddings = False
         mock_settings.return_value = settings
 
         result = await graph.ainvoke(state)
@@ -262,9 +260,7 @@ async def test_stream_db_save_failure_still_sends_done(compiled_graph, mock_serv
     # Collect all events — stream should complete regardless of DB issues
     events = []
     config = {"configurable": {"thread_id": "test-db-fail"}}
-    async for stream_mode, chunk in compiled_graph.astream(
-        state, config, stream_mode=["updates", "custom"]
-    ):
+    async for stream_mode, chunk in compiled_graph.astream(state, config, stream_mode=["updates", "custom"]):
         events.append((stream_mode, chunk))
 
     # The stream itself should complete — DB save happens after in the router

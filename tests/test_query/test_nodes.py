@@ -5,15 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 from app.query.nodes import (
     _format_chat_history,
     _format_context,
     _format_graph_context,
     create_nodes,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -185,7 +182,13 @@ async def test_retrieve_calls_retriever():
 async def test_rerank_takes_top_10_by_score():
     nodes, *_ = _make_nodes()
     results = [
-        {"id": f"p{i}", "score": 1.0 - i * 0.05, "source_file": f"doc{i}.pdf", "page_number": i, "chunk_text": f"text {i}"}
+        {
+            "id": f"p{i}",
+            "score": 1.0 - i * 0.05,
+            "source_file": f"doc{i}.pdf",
+            "page_number": i,
+            "chunk_text": f"text {i}",
+        }
         for i in range(15)
     ]
     state = _base_state(text_results=results)
@@ -238,22 +241,26 @@ async def test_synthesize_generates_response():
 
 
 async def test_generate_follow_ups_returns_list():
-    nodes, llm, *_ = _make_nodes([
-        "mocked",  # For any prior calls
-        "1. What connections does John Doe have to other individuals?\n"
-        "2. Are there financial records mentioning John Doe?\n"
-        "3. What is the timeline of John Doe's activities?"
-    ])
+    nodes, llm, *_ = _make_nodes(
+        [
+            "mocked",  # For any prior calls
+            "1. What connections does John Doe have to other individuals?\n"
+            "2. Are there financial records mentioning John Doe?\n"
+            "3. What is the timeline of John Doe's activities?",
+        ]
+    )
     state = _base_state(
         response="John Doe is mentioned in documents.",
         entities_mentioned=[{"name": "John Doe", "type": "person"}],
     )
     # Need to set up fresh nodes with the right response
-    nodes2, llm2, *_ = _make_nodes([
-        "What connections does John Doe have to other individuals?\n"
-        "Are there financial records mentioning John Doe?\n"
-        "What is the timeline of John Doe's activities?"
-    ])
+    nodes2, llm2, *_ = _make_nodes(
+        [
+            "What connections does John Doe have to other individuals?\n"
+            "Are there financial records mentioning John Doe?\n"
+            "What is the timeline of John Doe's activities?"
+        ]
+    )
     result = await nodes2["generate_follow_ups"](state)
     assert "follow_up_questions" in result
     assert isinstance(result["follow_up_questions"], list)
@@ -283,9 +290,12 @@ async def test_rerank_uses_cross_encoder_when_enabled():
     mock_settings = MagicMock()
     mock_settings.enable_reranker = True
     mock_settings.reranker_top_n = 10
+    mock_settings.enable_visual_embeddings = False
 
-    with patch("app.dependencies.get_settings", return_value=mock_settings), \
-         patch("app.dependencies.get_reranker", return_value=mock_reranker):
+    with (
+        patch("app.dependencies.get_settings", return_value=mock_settings),
+        patch("app.dependencies.get_reranker", return_value=mock_reranker),
+    ):
         result = await nodes["rerank"](state)
 
     mock_reranker.rerank.assert_called_once()
@@ -305,9 +315,12 @@ async def test_rerank_falls_back_when_reranker_none():
     mock_settings = MagicMock()
     mock_settings.enable_reranker = True
     mock_settings.reranker_top_n = 10
+    mock_settings.enable_visual_embeddings = False
 
-    with patch("app.dependencies.get_settings", return_value=mock_settings), \
-         patch("app.dependencies.get_reranker", return_value=None):
+    with (
+        patch("app.dependencies.get_settings", return_value=mock_settings),
+        patch("app.dependencies.get_reranker", return_value=None),
+    ):
         result = await nodes["rerank"](state)
 
     # Should use score-based sorting
@@ -320,8 +333,13 @@ async def test_graph_lookup_passes_exclude_privilege():
     nodes, _, _, graph_service, _ = _make_nodes()
     state = _base_state(
         fused_context=[
-            {"chunk_text": "John Doe was seen at the meeting.", "score": 0.9,
-             "source_file": "doc.pdf", "page_number": 1, "id": "p1"},
+            {
+                "chunk_text": "John Doe was seen at the meeting.",
+                "score": 0.9,
+                "source_file": "doc.pdf",
+                "page_number": 1,
+                "id": "p1",
+            },
         ],
         graph_results=[],
         _exclude_privilege=["privileged", "work_product"],
@@ -346,9 +364,12 @@ async def test_rerank_uses_score_sorting_when_disabled():
     mock_settings = MagicMock()
     mock_settings.enable_reranker = False
     mock_settings.reranker_top_n = 10
+    mock_settings.enable_visual_embeddings = False
 
-    with patch("app.dependencies.get_settings", return_value=mock_settings), \
-         patch("app.dependencies.get_reranker") as mock_get_reranker:
+    with (
+        patch("app.dependencies.get_settings", return_value=mock_settings),
+        patch("app.dependencies.get_reranker") as mock_get_reranker,
+    ):
         result = await nodes["rerank"](state)
 
     # get_reranker should not be called when flag is off

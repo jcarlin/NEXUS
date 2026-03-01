@@ -82,6 +82,12 @@ dev = [
     "langchain-anthropic>=0.3",
     "langchain-openai>=0.3",
 ]
+visual = [
+    "colpali-engine>=0.3.1",
+    "transformers>=4.45.0",
+    "torch>=2.1.0",
+    "pdf2image>=1.17.0",
+]
 frontend = [
     "streamlit>=1.40",
     "requests",

@@ -22,7 +22,10 @@ from qdrant_client.models import (
     Filter,
     Fusion,
     FusionQuery,
+    HnswConfigDiff,
     MatchValue,
+    MultiVectorComparator,
+    MultiVectorConfig,
     PointStruct,
     Prefetch,
     SparseVector,
@@ -99,16 +102,20 @@ class VectorStoreClient:
         else:
             logger.info("qdrant.collection_exists", name=TEXT_COLLECTION)
 
-        # --- Visual collection (placeholder, created only when feature flag is on) ---
+        # --- Visual collection (multi-vector MaxSim for ColQwen2.5 reranking) ---
         if self._enable_visual and VISUAL_COLLECTION not in existing:
             self.client.create_collection(
                 collection_name=VISUAL_COLLECTION,
                 vectors_config=VectorParams(
-                    size=128,  # ColQwen2.5 patch embedding dimensionality
+                    size=128,  # ColQwen2.5 per-token dimension
                     distance=Distance.COSINE,
+                    multivector_config=MultiVectorConfig(
+                        comparator=MultiVectorComparator.MAX_SIM,
+                    ),
+                    hnsw_config=HnswConfigDiff(m=0),  # Reranking only, no HNSW index
                 ),
             )
-            logger.info("qdrant.collection_created", name=VISUAL_COLLECTION, dim=128)
+            logger.info("qdrant.collection_created", name=VISUAL_COLLECTION, mode="multivector_maxsim", dim=128)
         elif VISUAL_COLLECTION in existing:
             logger.info("qdrant.collection_exists", name=VISUAL_COLLECTION)
 
@@ -298,6 +305,68 @@ class VectorStoreClient:
             "vectors_count": info.indexed_vectors_count,
             "status": info.status.value,
         }
+
+    # ------------------------------------------------------------------
+    # Visual collection CRUD
+    # ------------------------------------------------------------------
+
+    async def upsert_visual_pages(self, pages: list[dict[str, Any]]) -> None:
+        """Upsert page-level multi-vector embeddings into ``nexus_visual``.
+
+        Each dict in *pages* must contain:
+          - ``id``        (str) -- point id (typically ``{doc_id}_{page_number}``)
+          - ``vectors``   (list[list[float]]) -- multi-vector embedding (patches × 128d)
+          - ``payload``   (dict) -- metadata (doc_id, page_number, matter_id, etc.)
+        """
+        points = [
+            PointStruct(
+                id=page["id"],
+                vector=page["vectors"],
+                payload=page.get("payload", {}),
+            )
+            for page in pages
+        ]
+        self.client.upsert(collection_name=VISUAL_COLLECTION, points=points)
+        logger.info("qdrant.upsert", collection=VISUAL_COLLECTION, count=len(points))
+
+    async def query_visual(
+        self,
+        query_vectors: list[list[float]],
+        limit: int = 20,
+        filters: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Query ``nexus_visual`` with multi-vector MaxSim for reranking.
+
+        Args:
+            query_vectors: Query token embeddings (tokens × 128d).
+            limit: Maximum results to return.
+            filters: Payload filters (e.g. matter_id).
+
+        Returns:
+            List of result dicts with ``id``, ``score``, and payload fields.
+        """
+        must_conditions: list[FieldCondition] = []
+        if filters:
+            must_conditions = [FieldCondition(key=k, match=MatchValue(value=v)) for k, v in filters.items()]
+
+        qdrant_filter = Filter(must=must_conditions) if must_conditions else None
+
+        results = self.client.query_points(
+            collection_name=VISUAL_COLLECTION,
+            query=query_vectors,
+            limit=limit,
+            query_filter=qdrant_filter,
+            with_payload=True,
+        )
+
+        return [
+            {
+                "id": str(point.id),
+                "score": point.score,
+                **(point.payload or {}),
+            }
+            for point in results.points
+        ]
 
     # ------------------------------------------------------------------
     # HNSW index management (bulk import optimization)

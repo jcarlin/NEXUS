@@ -630,13 +630,32 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
             # Strip binary attachment data from metadata before DB storage
             parse_result.metadata.pop("attachment_data", None)
 
-        # Store page images in MinIO for future ColQwen2.5
+        # Store page images in MinIO (render via pdf2image when visual embeddings enabled)
         doc_id_for_pages = job_id  # Use job_id as doc namespace for page images
-        for page in parse_result.pages:
-            for img_idx, img_bytes in enumerate(page.images):
-                if img_bytes:
-                    page_key = f"pages/{doc_id_for_pages}/page_{page.page_number:03d}_{img_idx}.png"
-                    _upload_to_minio(settings, page_key, img_bytes)
+        rendered_page_images: list[bytes] = []
+        if settings.enable_visual_embeddings and ext == ".pdf":
+            try:
+                with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as pdf_tmp:
+                    pdf_tmp.write(_download_from_minio(settings, minio_path))
+                    pdf_tmp_path = Path(pdf_tmp.name)
+                try:
+                    rendered_page_images = _render_pdf_pages(str(pdf_tmp_path), dpi=settings.visual_page_dpi)
+                    for page_num, img_bytes in enumerate(rendered_page_images, 1):
+                        page_key = f"pages/{doc_id_for_pages}/page_{page_num:03d}.png"
+                        _upload_to_minio(settings, page_key, img_bytes)
+                    logger.info("task.pdf_pages_rendered", job_id=job_id, pages=len(rendered_page_images))
+                finally:
+                    pdf_tmp_path.unlink(missing_ok=True)
+            except Exception:
+                logger.warning("task.pdf_page_rendering_failed", job_id=job_id, exc_info=True)
+                rendered_page_images = []
+        else:
+            # Fallback: store Docling-provided page images (if any)
+            for page in parse_result.pages:
+                for img_idx, img_bytes in enumerate(page.images):
+                    if img_bytes:
+                        page_key = f"pages/{doc_id_for_pages}/page_{page.page_number:03d}_{img_idx}.png"
+                        _upload_to_minio(settings, page_key, img_bytes)
 
         progress = {"pages_parsed": parse_result.page_count}
         _update_stage(engine, job_id, "chunking", "uploading", progress=progress)
@@ -691,6 +710,73 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
             sparse_emb = SparseEmbedder(model_name=settings.sparse_embedding_model)
             sparse_embeddings = sparse_emb.embed_texts(chunk_texts)
             logger.info("task.sparse_embedded", job_id=job_id, count=len(sparse_embeddings))
+
+        # Visual embeddings (feature-flagged)
+        visual_page_embeddings: list[dict[str, Any]] = []
+        if settings.enable_visual_embeddings and rendered_page_images:
+            try:
+                import io
+
+                from PIL import Image
+
+                from app.ingestion.visual_embedder import VisualEmbedder
+
+                visual_emb = VisualEmbedder(
+                    model_name=settings.visual_embedding_model,
+                    device=settings.visual_embedding_device,
+                )
+
+                # Identify visually complex pages
+                complex_pages: list[tuple[int, bytes]] = []
+                for page_idx, page_img_bytes in enumerate(rendered_page_images):
+                    page_num = page_idx + 1
+                    # Get page text (if available from parse result)
+                    page_text = ""
+                    has_tables = False
+                    for p in parse_result.pages:
+                        if p.page_number == page_num:
+                            page_text = p.text if hasattr(p, "text") else ""
+                            has_tables = bool(getattr(p, "tables", []))
+                            break
+
+                    if _is_visually_complex(page_text, filename, has_tables=has_tables):
+                        complex_pages.append((page_num, page_img_bytes))
+
+                # Batch embed visually complex pages
+                if complex_pages:
+                    pil_images = [Image.open(io.BytesIO(img)) for _, img in complex_pages]
+                    batch_size = settings.visual_embedding_batch_size
+                    all_embeddings: list[list[list[float]]] = []
+
+                    for batch_start in range(0, len(pil_images), batch_size):
+                        batch = pil_images[batch_start : batch_start + batch_size]
+                        batch_embs = visual_emb.embed_images(batch)
+                        all_embeddings.extend(batch_embs)
+
+                    for (page_num, _), emb in zip(complex_pages, all_embeddings):
+                        point_id = f"{job_id}_page_{page_num}"
+                        visual_page_embeddings.append(
+                            {
+                                "id": point_id,
+                                "vectors": emb,
+                                "payload": {
+                                    "doc_id": job_id,
+                                    "page_number": page_num,
+                                    "source_file": filename,
+                                    **({"matter_id": matter_id} if matter_id else {}),
+                                },
+                            }
+                        )
+
+                    logger.info(
+                        "task.visual_embedded",
+                        job_id=job_id,
+                        complex_pages=len(complex_pages),
+                        total_pages=len(rendered_page_images),
+                    )
+            except Exception:
+                logger.warning("task.visual_embedding_failed", job_id=job_id, exc_info=True)
+                visual_page_embeddings = []
 
         logger.info("task.embedded", job_id=job_id, embedding_count=len(embeddings))
 
@@ -809,7 +895,21 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
             qdrant.upsert(collection_name=TEXT_COLLECTION, points=points)
             logger.info("task.qdrant_indexed", job_id=job_id, points=len(points))
 
-        # 5b. Neo4j graph indexing
+        # 5b. Visual Qdrant upsert (feature-flagged)
+        if visual_page_embeddings:
+            try:
+                from app.common.vector_store import VISUAL_COLLECTION
+
+                vis_points = [
+                    PointStruct(id=vpe["id"], vector=vpe["vectors"], payload=vpe["payload"])
+                    for vpe in visual_page_embeddings
+                ]
+                qdrant.upsert(collection_name=VISUAL_COLLECTION, points=vis_points)
+                logger.info("task.visual_indexed", job_id=job_id, pages=len(vis_points))
+            except Exception:
+                logger.warning("task.visual_indexing_failed", job_id=job_id, exc_info=True)
+
+        # 5c. Neo4j graph indexing
         asyncio.run(
             _index_to_neo4j(
                 settings=settings,
@@ -1392,6 +1492,49 @@ def detect_inclusive_emails(self, matter_id: str | None = None) -> dict:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def _render_pdf_pages(file_path: str, dpi: int = 144) -> list[bytes]:
+    """Render PDF pages to PNG bytes via pdf2image.
+
+    Requires system ``poppler`` (``brew install poppler`` on macOS).
+
+    Args:
+        file_path: Path to the PDF file on disk.
+        dpi: Resolution for rendering.
+
+    Returns:
+        List of PNG bytes, one per page.
+    """
+    import io
+
+    from pdf2image import convert_from_path
+
+    images = convert_from_path(file_path, dpi=dpi)
+    page_bytes: list[bytes] = []
+    for img in images:
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        page_bytes.append(buf.getvalue())
+    return page_bytes
+
+
+def _is_visually_complex(page_text: str, filename: str, has_tables: bool = False) -> bool:
+    """Determine if a page should receive visual embeddings.
+
+    A page is considered visually complex if any of:
+      - It has tables
+      - It has very little text (< 100 chars → likely a scan or chart)
+      - The source file is a presentation or spreadsheet
+    """
+    ext = Path(filename).suffix.lower()
+    if ext in (".pptx", ".xlsx"):
+        return True
+    if has_tables:
+        return True
+    if len(page_text.strip()) < 100:
+        return True
+    return False
 
 
 def _infer_doc_type(filename: str) -> str:

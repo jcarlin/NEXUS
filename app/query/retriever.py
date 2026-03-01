@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from app.entities.extractor import EntityExtractor, ExtractedEntity
     from app.entities.graph_service import GraphService
     from app.ingestion.sparse_embedder import SparseEmbedder
+    from app.ingestion.visual_embedder import VisualEmbedder
 
 logger = structlog.get_logger(__name__)
 
@@ -41,12 +42,14 @@ class HybridRetriever:
         entity_extractor: EntityExtractor,
         graph_service: GraphService,
         sparse_embedder: SparseEmbedder | None = None,
+        visual_embedder: VisualEmbedder | None = None,
     ) -> None:
         self._embedder = embedder
         self._vector_store = vector_store
         self._entity_extractor = entity_extractor
         self._graph_service = graph_service
         self._sparse_embedder = sparse_embedder
+        self._visual_embedder = visual_embedder
 
     # ------------------------------------------------------------------
     # Text retrieval (Qdrant dense search)
@@ -196,3 +199,71 @@ class HybridRetriever:
             entity_types=_QUERY_ENTITY_TYPES,
             threshold=threshold,
         )
+
+    # ------------------------------------------------------------------
+    # Visual reranking
+    # ------------------------------------------------------------------
+
+    async def rerank_visual(
+        self,
+        query: str,
+        candidates: list[dict[str, Any]],
+        *,
+        weight: float = 0.3,
+        top_n: int = 20,
+        filters: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Rerank candidates by blending text scores with visual MaxSim scores.
+
+        For each candidate, looks up the corresponding page's visual embedding
+        in ``nexus_visual`` and computes a blended score:
+        ``(1 - weight) * text_score + weight * visual_score``.
+
+        Candidates without visual embeddings keep their original score.
+
+        Args:
+            query: The user query text.
+            candidates: Text retrieval results with ``score``, ``doc_id``, ``page_number``.
+            weight: Visual score blend factor (0.0 = text only, 1.0 = visual only).
+            top_n: Number of results to return after reranking.
+            filters: Optional payload filters (e.g. matter_id).
+
+        Returns:
+            Reranked candidate list sorted by blended score.
+        """
+        if self._visual_embedder is None or not candidates:
+            return candidates[:top_n]
+
+        # Embed query as multi-vector (CPU-bound, offload to thread)
+        query_vectors = await asyncio.to_thread(self._visual_embedder.embed_query, query)
+
+        # Look up visual embeddings for each candidate's page
+        for candidate in candidates:
+            doc_id = candidate.get("doc_id", "")
+            page_num = candidate.get("page_number", 1)
+
+            try:
+                # Query for this specific page's visual embedding
+                visual_results = await self._vector_store.query_visual(
+                    query_vectors=query_vectors,
+                    limit=1,
+                    filters={"doc_id": doc_id, "page_number": page_num, **(filters or {})},
+                )
+
+                if visual_results:
+                    visual_score = visual_results[0].get("score", 0.0)
+                    text_score = candidate.get("score", 0.0)
+                    candidate["visual_score"] = visual_score
+                    candidate["score"] = (1 - weight) * text_score + weight * visual_score
+                    candidate["_visual_reranked"] = True
+            except Exception:
+                logger.debug("retriever.visual_rerank.page_miss", doc_id=doc_id, page=page_num)
+
+        # Re-sort by blended score
+        reranked = sorted(candidates, key=lambda r: r.get("score", 0), reverse=True)
+        logger.debug(
+            "retriever.visual_rerank",
+            candidates=len(candidates),
+            reranked_count=len(reranked[:top_n]),
+        )
+        return reranked[:top_n]

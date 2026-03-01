@@ -34,7 +34,7 @@
 | M14 | Annotations + Export + EDRM | — | TODO | 10 | Regression + migration | 2.5 weeks | M13 |
 | M14b | Redaction | — | TODO | 8 | Regression | 1.5 weeks | M14 |
 | M15 | Retrieval Tuning | — | Done | 5 + 4 eval | Eval improvement ≥ 0.03 | 1 week | M9, M8b |
-| M16 | Visual Embeddings | — | TODO | 5+ + eval | Eval lift ≥ 5% or stays disabled | 2 weeks | M15 (conditional) |
+| M16 | Visual Embeddings | — | Done | 16 + eval enum | Eval lift ≥ 5% or stays disabled | 2 weeks | M15 (conditional) |
 | M17 | Full Local Deployment | — | TODO | 3+ | Health check + benchmarks | 2 weeks | All |
 
 **Total tests: 315 passing** (296 unit/functional + 15 case intelligence + 4 evaluation; baseline updated at M9b completion)
@@ -678,25 +678,33 @@ See `docs/M6-BULK-IMPORT.md` for full spec.
 
 ---
 
-### M16: Visual Embeddings (2 weeks, conditional)
+### M16: Visual Embeddings (2 weeks, conditional) ✅
 *Only pursue if evaluation shows text retrieval missing table/figure content. Depends on M15.*
 
-- [ ] ColQwen2.5-v0.2 inference setup (requires GPU)
-- [ ] `nexus_visual` Qdrant collection activation
-- [ ] Page image extraction during ingestion (stored in MinIO `pages/` prefix)
-- [ ] Multi-modal fusion in retrieval pipeline
-- [ ] Re-run evaluation: measure lift over text-only
+- [x] ColQwen2.5-v0.2 inference wrapper (`app/ingestion/visual_embedder.py`) — lazy-loaded, MPS/CUDA/CPU, bfloat16
+- [x] `nexus_visual` Qdrant collection — multi-vector MaxSim (`MultiVectorConfig`), HNSW disabled (reranking only)
+- [x] PDF page rendering via `pdf2image` during ingestion, stored in MinIO `pages/` prefix
+- [x] Selective visual embedding: only visually complex pages (tables, low text density, PPTX/XLSX)
+- [x] Visual embedding in ingestion Stage 3, visual indexing in Stage 5
+- [x] Two-stage visual reranking in retriever: `rerank_visual()` blends `(1-w)*text + w*visual` scores
+- [x] Visual reranking integrated in query pipeline `rerank` node (feature-flagged)
+- [x] DI factory `get_visual_embedder()`, wired into `get_retriever()`
+- [x] Evaluation schema: `VISUAL` and `VISUAL_FUSION` retrieval modes
+- [x] Config: 7 new settings (`visual_embedding_model`, `_device`, `_batch_size`, `_dim`, `visual_rerank_weight`, `_top_n`, `visual_page_dpi`)
+- [x] Optional dependency group: `pip install -e ".[visual]"` (colpali-engine, transformers, torch, pdf2image)
+- [ ] Re-run evaluation: measure lift over text-only *(requires GPU/MPS + poppler + visual deps installed)*
 - [ ] **Decision gate: if lift < 5% on legal docs, deprioritize**
 - [ ] Handwriting recognition supplement: LlamaParse agentic OCR or dedicated handwriting model for margin annotations, initials, handwritten notes (Docling does not support handwriting)
-- [ ] Selective visual embedding: only apply ColQwen2.5 to pages classified as visually complex during ingestion (tables, charts, degraded scans), not all pages — Docling's 97.9% table extraction accuracy means most legal docs are well-served by text alone
 - [ ] Light-ColQwen2 compression: semantic clustering at merge factor 9 (retains ~98% NDCG while keeping ~12% of tokens) + Qdrant binary quantization (16x compression)
 
-**Testing (5+ unit + 1 eval):**
-- Unit: ColQwen2.5 wrapper — embedding generation and dimension check (1), page image extraction from MinIO (1), multi-modal fusion in retrieval pipeline (1), selective embedding — only visually complex pages (1), compression — binary quantization roundtrip (1)
-- Evaluation: re-run full evaluation suite — measure lift over text-only baseline
-- Gate: regression + **decision gate: ≥ 5% lift on at least one retrieval metric (MRR@10 or Recall@10) or feature stays disabled (`ENABLE_VISUAL_EMBEDDINGS=false`)**
+**Testing (16 unit + 1 eval enum):**
+- Unit: `test_visual_embedder.py` — lazy loading (1), embed_images dimensions (1), embed_query dimensions (1), MaxSim computation (2), `_is_visually_complex` classifier (5) = 10 tests
+- Unit: `test_vector_store.py` — visual collection MultiVectorConfig+MaxSim (1), upsert_visual_pages (1), query_visual (1) = 3 tests
+- Unit: `test_retriever.py` — rerank_visual score blending (1), disabled returns unchanged (1), empty candidates (1) = 3 tests
+- Eval: `evaluation/schemas.py` — VISUAL and VISUAL_FUSION in RetrievalMode enum
+- Gate: regression pass (344/350, 2 pre-existing `langchain_anthropic` import failures) + **decision gate pending eval run**
 
-**Key files:** `app/ingestion/embedder.py`, `app/query/retriever.py`, `app/config.py`
+**Key files:** `app/ingestion/visual_embedder.py` (new), `app/common/vector_store.py`, `app/query/retriever.py`, `app/query/nodes.py`, `app/config.py`, `app/dependencies.py`
 
 ---
 
