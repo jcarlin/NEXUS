@@ -121,9 +121,9 @@ async def list_users(
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
-    _current_user: UserRecord = Depends(require_role("admin")),
+    _current_user: UserRecord = Depends(require_role("admin", "attorney")),
 ) -> UserListResponse:
-    """List all users. Admin-only."""
+    """List all users. Admin and attorney roles (attorneys need this for dataset access grants)."""
     count_result = await db.execute(text("SELECT count(*) FROM users"))
     total = count_result.scalar_one()
 
