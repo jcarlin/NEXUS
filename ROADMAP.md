@@ -38,7 +38,7 @@
 | M16 | Visual Embeddings | — | Done | 16 + eval enum | Eval lift ≥ 5% or stays disabled | 2 weeks | M15 (conditional) |
 | M17 | Full Local Deployment | — | TODO | 3+ | Health check + benchmarks | 2 weeks | All |
 
-**Total tests: 436 collected** (399 unit/functional + 12 M10b analysis + 10 M10c analytics + 10 M14 annotations/exports + 5 M16 eval; 434 passing, 2 pre-existing failures from missing langchain_anthropic dep)
+**Total tests: 486 collected** (399 unit/functional + 12 M10b analysis + 10 M10c analytics + 10 M14 annotations/exports + 5 M16 eval + 50 tech debt; 484 passing, 2 pre-existing failures from missing langchain_anthropic dep)
 
 **6 autonomous LangGraph agents** across the pipeline (Case Setup, Investigation Orchestrator, Citation Verifier, Hot Doc Scanner, Contextual Completeness, Entity Resolution)
 
@@ -499,6 +499,46 @@ If a metric regresses beyond the threshold, the milestone must either fix the re
 - Gate: regression (399 passed, 2 pre-existing failures unrelated to M10c)
 
 **Key files:** `app/analytics/service.py`, `app/analytics/schemas.py`, `app/analytics/clustering.py`, `app/analytics/router.py`, `app/entities/graph_service.py` (compute_centrality), `app/query/tools.py` (3 tool implementations)
+
+---
+
+### Tech Debt Completion (M5 + L1–L5) — DONE
+
+*Post-M10c audit identified 16 tech debt items across 4 priorities. Completed 5 of 6 actionable items (L3 skipped by design). Zero regressions.*
+
+**Sprint 5 — M5: God Functions Decomposition**
+- [x] Decomposed `process_document()` (535→~50 lines) into `_PipelineContext` dataclass + 6 stage functions: `_stage_parse`, `_stage_chunk`, `_stage_embed`, `_stage_extract`, `_stage_index`, `_stage_complete`
+- [x] Extracted `_should_skip_zip_member()` and `_process_zip_member()` from `process_zip()`
+- [x] Decomposed `verify_citations()` (120→~47 lines) into `_decompose_claims()` and `_verify_single_claim()` (CoVe pattern)
+
+**Sprint 6 — L5: Logging Context Consistency**
+- [x] Removed ~45 redundant `job_id=`/`doc_id=` kwargs from logger calls across 4 files (already bound via `bind_contextvars`)
+- [x] Added `matter_id` to `bind_contextvars()` in ingestion tasks
+- [x] Rule: service methods called from multiple contexts keep per-call kwargs; only task entry points and middleware bind context
+
+**Sprint 7 — L1: Config Grouping + L2: DI Standardization**
+- [x] Added 8 nested `BaseModel` config groups to `app/config.py`: `LLMConfig`, `EmbeddingConfig`, `DatabaseConfig`, `StorageConfig`, `RetrievalConfig`, `AuthConfig`, `ProcessingConfig`, `FeatureFlags` — zero caller changes, backward compatible via `@model_validator(mode="after")`
+- [x] Replaced 17 `global + None-check` singletons in `app/dependencies.py` with `@functools.cache` (444→258 lines)
+- [x] Updated `close_all()` to use `.cache_clear()` on all factory functions
+
+**Sprint 8 — L4: Test Edge Case Coverage**
+- [x] Parser failures: corrupted PDF, zero-byte file, Docling timeout (3 tests)
+- [x] Dedup edge cases: empty text, single-char, unicode, boundary threshold, idempotent doc_id (6 tests)
+- [x] Task retry/failure: failed stage update, engine disposal, error propagation, corrupt zip, cancelled job (6 tests)
+- [x] Rate limiting: Redis unavailable, zero remaining → 429 (2 tests)
+
+**L3: MinIO asyncio.to_thread() — SKIPPED** (per audit: only worth changing if storage becomes a bottleneck; current sync approach is correct for localhost MinIO)
+
+**Testing (50 new tests):**
+- `tests/test_ingestion/test_task_stages.py` (13): one per stage function + zip helpers
+- `tests/test_query/test_nodes.py` (+6): `_decompose_claims` + `_verify_single_claim` tests
+- `tests/test_common/test_logging_context.py` (3): structlog contextvars propagation
+- `tests/test_common/test_config.py` (10): flat field compat + nested model groups + env var override
+- `tests/test_common/test_dependencies.py` (12): singleton identity + feature flags + cache_clear
+- `tests/test_ingestion/test_task_failures.py` (6): retry, disposal, error propagation
+- Gate: regression (484 passed, 2 pre-existing `langchain_anthropic` failures unrelated)
+
+**Key files:** `app/ingestion/tasks.py`, `app/query/nodes.py`, `app/common/middleware.py`, `app/analysis/tasks.py`, `app/cases/tasks.py`, `app/config.py`, `app/dependencies.py`
 
 ---
 
