@@ -500,5 +500,6 @@ pytest tests/ -v --cov=app
 - `CLAUDE.md` — Implementation rules, project structure, do/don't guidelines
 - `ROADMAP.md` — Milestone tracker with status and dependencies
 - `.env.example` — All configuration variables and feature flags
+- `docs/CLOUD-DEPLOY.md` — Cloud deployment guide (GCP + Vercel)
 - `docs/M6-BULK-IMPORT.md` — Bulk import spec for pre-OCR'd datasets
 - `docs/archive/` — Superseded design documents

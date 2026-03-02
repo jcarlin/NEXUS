@@ -1,6 +1,6 @@
 """Generate a synthetic legal corpus for end-to-end testing of the NEXUS platform.
 
-Creates 6 documents with overlapping entities, dates, and legal issues that
+Creates 14 documents with overlapping entities, dates, and legal issues that
 exercise the ingestion pipeline, entity extraction, relationship resolution,
 and knowledge graph construction.
 

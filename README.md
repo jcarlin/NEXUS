@@ -97,8 +97,12 @@ nexus/
 ├── migrations/                 # Alembic migrations
 ├── frontend/                   # React 19 + Vite dashboard
 ├── tests/                      # Mirrors app/ structure
+├── scripts/                    # cloud-deploy.sh, seed_admin.py, import_dataset.py
+├── docs/                       # CLOUD-DEPLOY.md, M6-BULK-IMPORT.md
 ├── docker-compose.yml          # Infrastructure services (dev)
 ├── docker-compose.prod.yml     # Full containerized stack
+├── docker-compose.cloud.yml    # Cloud overlay (Caddy + TLS)
+├── Caddyfile                   # Reverse proxy config
 ├── Makefile                    # Dev workflow targets
 ├── Procfile.dev                # Process definitions for `make dev`
 └── pyproject.toml
@@ -134,4 +138,5 @@ Optional capabilities controlled via environment variables (all default to `fals
 - [ARCHITECTURE.md](ARCHITECTURE.md) — System design, security model, data flow
 - [ROADMAP.md](ROADMAP.md) — Milestones, build status, dependency graph
 - [CLAUDE.md](CLAUDE.md) — Development conventions and implementation rules
+- [docs/CLOUD-DEPLOY.md](docs/CLOUD-DEPLOY.md) — Cloud deployment guide (GCP + Vercel)
 - [.env.example](.env.example) — All configuration variables

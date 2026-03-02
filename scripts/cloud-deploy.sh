@@ -137,9 +137,9 @@ else
         --quiet
 fi
 
-# Wait for VM to be ready
+# Wait for VM to be ready (SSH key propagation needs ~30s)
 log "Waiting for VM to be ready..."
-sleep 15
+sleep 30
 
 # Get external IP
 EXTERNAL_IP=$(gcloud compute instances describe "$VM_NAME" --zone="$ZONE" \
@@ -234,7 +234,7 @@ echo "[remote] Running database migrations..."
 sudo docker compose exec -T api alembic upgrade head
 
 echo "[remote] Seeding admin user..."
-sudo docker compose exec -T -e ADMIN_EMAIL=admin@nexus.local -e ADMIN_PASSWORD=PLACEHOLDER api python scripts/seed_admin.py
+sudo docker compose exec -T -e ADMIN_EMAIL=admin@nexus-demo.com -e ADMIN_PASSWORD=PLACEHOLDER api python scripts/seed_admin.py
 
 echo "[remote] Checking service health..."
 for i in {1..10}; do
@@ -254,7 +254,7 @@ REMOTE_SCRIPT
 
 # Replace the placeholder admin password
 gcloud compute ssh "$VM_NAME" --zone="$ZONE" --quiet --command="
-cd ~/nexus && sudo docker compose exec -T -e ADMIN_EMAIL=admin@nexus.local -e ADMIN_PASSWORD='$ADMIN_PASSWORD' api python scripts/seed_admin.py 2>/dev/null || true
+cd ~/nexus && sudo docker compose exec -T -e ADMIN_EMAIL=admin@nexus-demo.com -e ADMIN_PASSWORD='$ADMIN_PASSWORD' api python scripts/seed_admin.py 2>/dev/null || true
 "
 
 # =============================================================================

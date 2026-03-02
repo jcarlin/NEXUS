@@ -44,7 +44,7 @@
 
 **All milestones complete.** M5b through M17 — full local deployment with zero cloud API dependency.
 
-**Cloud demo hosting:** Code changes for GCP + Vercel deployment are ready (`VITE_API_BASE_URL`, `MINIO_PUBLIC_ENDPOINT`, Caddy reverse proxy, admin seed script). See `.env.cloud.example` and `docker-compose.cloud.yml`.
+**Cloud demo hosting:** GCP + Vercel deployment tested and working. Run `./scripts/cloud-deploy.sh` to deploy, `./scripts/cloud-teardown.sh` to tear down. See `docs/CLOUD-DEPLOY.md` for full guide. Config files: `Caddyfile`, `docker-compose.cloud.yml`, `.env.cloud.example`, `frontend/vercel.json`, `scripts/seed_admin.py`.
 
 ---
 

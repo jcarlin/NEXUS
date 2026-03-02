@@ -183,8 +183,11 @@ nexus/
 ├── ROADMAP.md                             # Milestones, build status, dependencies
 ├── docker-compose.yml                     # Infra services only (Redis, PG, Qdrant, Neo4j, MinIO)
 ├── docker-compose.prod.yml                # Full stack (adds API, worker, Flower)
+├── docker-compose.cloud.yml               # Cloud overlay (adds Caddy reverse proxy + TLS)
 ├── Dockerfile
+├── Caddyfile                              # Caddy reverse proxy config (API + MinIO + TLS)
 ├── .env.example                           # All configuration variables
+├── .env.cloud.example                     # Cloud deployment env template
 ├── pyproject.toml                         # Python 3.12+, uv/pip
 ├── alembic.ini
 │
@@ -245,12 +248,21 @@ nexus/
 │   └── versions/                          # Alembic migrations
 │
 ├── frontend/
-│   └── app.py                             # Streamlit 3-page dashboard (Chat/Documents/Entities)
+│   ├── vercel.json                        # Vercel build/routing config
+│   └── ...                                # React 19 + Vite dashboard
+│
+├── scripts/
+│   ├── cloud-deploy.sh                    # GCP deployment automation
+│   ├── cloud-teardown.sh                  # GCP resource cleanup
+│   ├── seed_admin.py                      # Initial admin user creation
+│   ├── import_dataset.py                  # Bulk dataset import
+│   └── ...
 │
 ├── evaluation/
 │   └── ...                                # Ground-truth Q&A, metrics, regression tests
 │
 ├── docs/
+│   ├── CLOUD-DEPLOY.md                    # Cloud deployment guide (GCP + Vercel)
 │   ├── M6-BULK-IMPORT.md                  # Bulk import spec
 │   └── archive/                           # Superseded design documents
 │
@@ -383,6 +395,8 @@ pytest tests/ -v --cov=app
 - `ARCHITECTURE.md` — system design, tech stack, security model, data flow
 - `ROADMAP.md` — milestones, build status, dependencies (M5b→M17)
 - `.env.example` — all configuration variables and feature flags
+- `docs/CLOUD-DEPLOY.md` — cloud deployment guide (GCP + Vercel)
 - `docs/M6-BULK-IMPORT.md` — bulk import spec for pre-OCR'd datasets
 - `docker-compose.yml` — infrastructure services (dev: runs natively on Mac)
 - `docker-compose.prod.yml` — full containerized stack (API + worker + Flower)
+- `docker-compose.cloud.yml` — cloud overlay (adds Caddy reverse proxy + TLS)

@@ -29,7 +29,7 @@ def main() -> None:
     settings = Settings()
     engine = create_engine(settings.postgres_url_sync, pool_pre_ping=True)
 
-    email = os.environ.get("ADMIN_EMAIL", "admin@nexus.local")
+    email = os.environ.get("ADMIN_EMAIL", "admin@nexus-demo.com")
     password = os.environ.get("ADMIN_PASSWORD", "")
     full_name = os.environ.get("ADMIN_NAME", "NEXUS Admin")
 
