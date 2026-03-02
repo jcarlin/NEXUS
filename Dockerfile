@@ -57,6 +57,7 @@ WORKDIR /app
 COPY app/ ./app/
 COPY workers/ ./workers/
 COPY migrations/ ./migrations/
+COPY scripts/ ./scripts/
 COPY alembic.ini* ./
 
 # Non-root user for security

@@ -1,0 +1,41 @@
+# Caddyfile — NEXUS Cloud Deployment
+# Caddy auto-provisions TLS via Let's Encrypt.
+# Replace {$DOMAIN} with your actual domain (set in .env or shell).
+
+{$DOMAIN:localhost} {
+    # API — proxy to FastAPI
+    handle /api/* {
+        reverse_proxy api:8000
+    }
+
+    # SSE streaming — extended timeouts
+    handle /api/v1/query/stream {
+        reverse_proxy api:8000 {
+            flush_interval -1
+        }
+    }
+
+    # MinIO storage — proxy presigned URL requests
+    handle /storage/* {
+        uri strip_prefix /storage
+        reverse_proxy minio:9000
+    }
+
+    # Health check shortcut
+    handle /health {
+        reverse_proxy api:8000 {
+            rewrite /api/v1/health
+        }
+    }
+
+    # Default — return 404 (frontend is on Vercel, not here)
+    handle {
+        respond "NEXUS API Server" 200
+    }
+
+    # Logging
+    log {
+        output stdout
+        format console
+    }
+}

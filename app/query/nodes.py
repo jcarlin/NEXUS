@@ -12,6 +12,7 @@ and the streaming router.
 
 from __future__ import annotations
 
+import inspect
 import json
 from typing import TYPE_CHECKING, Any
 
@@ -190,11 +191,15 @@ def create_nodes_v1(
                 reranker = get_reranker()
                 if reranker is not None:
                     query = state.get("rewritten_query") or state.get("original_query", "")
-                    sorted_results = reranker.rerank(
+                    result = reranker.rerank(
                         query,
                         text_results,
                         top_n=settings.reranker_top_n,
                     )
+                    if inspect.isawaitable(result):
+                        sorted_results = await result
+                    else:
+                        sorted_results = result
                     logger.debug("node.rerank.cross_encoder", count=len(sorted_results))
             except Exception:
                 logger.warning("node.rerank.cross_encoder_failed", exc_info=True)

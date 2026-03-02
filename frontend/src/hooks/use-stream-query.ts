@@ -2,6 +2,7 @@ import { useState, useCallback, useRef } from "react";
 import { fetchEventSource } from "@microsoft/fetch-event-source";
 import { useAuthStore } from "@/stores/auth-store";
 import { useAppStore } from "@/stores/app-store";
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 import type {
   SourceDocument,
   EntityMention,
@@ -59,7 +60,7 @@ export function useStreamQuery() {
     if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
     if (matterId) headers["X-Matter-ID"] = matterId;
 
-    fetchEventSource("/api/v1/query/stream", {
+    fetchEventSource(`${API_BASE}/api/v1/query/stream`, {
       method: "POST",
       headers,
       body: JSON.stringify({

@@ -7,7 +7,15 @@ returns ``None`` and the rerank node falls back to score-based sorting.
 
 from __future__ import annotations
 
+import httpx
 import structlog
+from tenacity import (
+    before_sleep_log,
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -67,3 +75,64 @@ class Reranker:
 
         ranked = sorted(results, key=lambda r: r["score"], reverse=True)
         return ranked[:top_n]
+
+
+class TEIReranker:
+    """Reranker via a HuggingFace Text Embeddings Inference server.
+
+    Calls the TEI ``/rerank`` endpoint over HTTP.  Async-only.
+    """
+
+    def __init__(self, base_url: str = "http://localhost:8082") -> None:
+        self._base_url = base_url.rstrip("/")
+        self._client = httpx.AsyncClient(base_url=self._base_url, timeout=120.0)
+
+    @retry(
+        retry=retry_if_exception_type((httpx.ConnectError, httpx.TimeoutException)),
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=30),
+        reraise=True,
+        before_sleep=before_sleep_log(logger, "warning"),  # type: ignore[arg-type]
+    )
+    async def rerank(
+        self,
+        query: str,
+        results: list[dict],
+        *,
+        top_n: int = 10,
+        text_key: str = "chunk_text",
+    ) -> list[dict]:
+        """Rerank *results* by relevance to *query* via TEI.
+
+        Returns top *top_n* results sorted by cross-encoder score (descending).
+        """
+        if not results:
+            return []
+
+        texts = [r.get(text_key, "") for r in results]
+
+        response = await self._client.post(
+            "/rerank",
+            json={"query": query, "texts": texts, "truncate": True},
+        )
+        response.raise_for_status()
+        scored: list[dict] = response.json()
+
+        # TEI returns [{"index": 0, "score": 0.99}, ...] — map back to results
+        for item in scored:
+            idx = item["index"]
+            results[idx]["score"] = float(item["score"])
+
+        ranked = sorted(results, key=lambda r: r["score"], reverse=True)
+
+        logger.debug(
+            "reranker.tei.complete",
+            base_url=self._base_url,
+            count=len(results),
+            top_n=top_n,
+        )
+        return ranked[:top_n]
+
+    async def close(self) -> None:
+        """Close the underlying HTTP client."""
+        await self._client.aclose()

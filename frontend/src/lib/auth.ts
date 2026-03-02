@@ -24,12 +24,14 @@ export function isTokenExpired(token: string, bufferSeconds = 30): boolean {
   return payload.exp < now + bufferSeconds;
 }
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
+
 export async function refreshAccessToken(refreshToken: string): Promise<{
   access_token: string;
   refresh_token: string;
 } | null> {
   try {
-    const res = await fetch("/api/v1/auth/refresh", {
+    const res = await fetch(`${API_BASE}/api/v1/auth/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refresh_token: refreshToken }),

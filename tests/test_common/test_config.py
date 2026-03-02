@@ -19,6 +19,10 @@ class TestNestedConfig:
         assert s.llm.openai_api_key == "k"
         assert s.llm.vllm_base_url == s.vllm_base_url
 
+    def test_nested_llm_ollama_base_url_populated(self):
+        s = Settings(anthropic_api_key="k", openai_api_key="k")
+        assert s.llm.ollama_base_url == "http://localhost:11434/v1"
+
     def test_nested_database_populated(self):
         s = Settings(anthropic_api_key="k", openai_api_key="k")
         assert s.database is not None

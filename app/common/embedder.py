@@ -23,6 +23,7 @@ import asyncio
 import hashlib
 from typing import Protocol, runtime_checkable
 
+import httpx
 import structlog
 from openai import APIConnectionError, APITimeoutError, AsyncOpenAI, RateLimitError
 from tenacity import (
@@ -209,3 +210,68 @@ class LocalEmbeddingProvider:
         """Embed a single query string."""
         results = await self.embed_texts([text])
         return results[0]
+
+
+# ---------------------------------------------------------------------------
+# TEI provider (HuggingFace Text Embeddings Inference)
+# ---------------------------------------------------------------------------
+
+
+class TEIEmbeddingProvider:
+    """Dense embeddings via a HuggingFace Text Embeddings Inference server.
+
+    Calls the TEI ``/embed`` endpoint over HTTP.  No data leaves the
+    local network — safe for privileged documents.
+    """
+
+    def __init__(
+        self,
+        base_url: str = "http://localhost:8081",
+        dimensions: int = 1024,
+    ) -> None:
+        self._base_url = base_url.rstrip("/")
+        self._dimensions = dimensions
+        self._client = httpx.AsyncClient(base_url=self._base_url, timeout=120.0)
+
+    @retry(
+        retry=retry_if_exception_type((httpx.ConnectError, httpx.TimeoutException)),
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=30),
+        reraise=True,
+        before_sleep=before_sleep_log(logger, "warning"),  # type: ignore[arg-type]
+    )
+    async def _embed_batch(self, texts: list[str]) -> list[list[float]]:
+        """Call the TEI /embed endpoint for a batch of texts."""
+        response = await self._client.post(
+            "/embed",
+            json={"inputs": texts, "truncate": True},
+        )
+        response.raise_for_status()
+        embeddings: list[list[float]] = response.json()
+
+        # Truncate to requested dimensions if model produces more
+        return [vec[: self._dimensions] for vec in embeddings]
+
+    async def embed_texts(self, texts: list[str]) -> list[list[float]]:
+        """Embed a batch of texts via the TEI server."""
+        if not texts:
+            raise ValueError("Cannot embed an empty list of texts.")
+
+        result = await self._embed_batch(texts)
+
+        logger.info(
+            "embedder.batch_complete",
+            provider="tei",
+            base_url=self._base_url,
+            count=len(texts),
+        )
+        return result
+
+    async def embed_query(self, text: str) -> list[float]:
+        """Embed a single query string."""
+        results = await self.embed_texts([text])
+        return results[0]
+
+    async def close(self) -> None:
+        """Close the underlying HTTP client."""
+        await self._client.aclose()

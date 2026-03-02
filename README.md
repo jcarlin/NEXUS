@@ -18,73 +18,62 @@ Multimodal RAG investigation platform for legal document intelligence. Ingests, 
 | Doc Parsing | Docling (PDF, DOCX, XLSX, PPTX, HTML, images) + stdlib (EML, MSG, RTF, CSV, TXT) |
 | Query Orchestration | LangGraph (agentic state graph) |
 | Structured Output | Instructor |
-| Frontend | Streamlit (prototype) |
+| Frontend | React 19 + Vite |
 
 ## Prerequisites
 
 - Python 3.12+
+- Node.js 20+
 - [Docker](https://docs.docker.com/get-docker/) (for infrastructure services)
 - [uv](https://docs.astral.sh/uv/) (Python package manager)
 - [Anthropic API key](https://console.anthropic.com/)
 - [OpenAI API key](https://platform.openai.com/api-keys) (for embeddings)
+- [Ollama](https://ollama.com/) (optional — for local LLM inference)
 
 ## Quick Start
 
-1. **Clone and configure environment**
+```bash
+git clone <repo-url> && cd NEXUS
+cp .env.example .env   # edit API keys
+make install            # Python + frontend deps
+make dev                # starts everything in one terminal
+```
 
-   ```bash
-   git clone <repo-url> && cd NEXUS
-   cp .env.example .env
-   ```
+API docs available at http://localhost:8000/docs
 
-   Edit `.env` and fill in your API keys (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`) and set passwords for Postgres, Neo4j, and MinIO.
+## LLM Providers
 
-2. **Start infrastructure services**
+NEXUS supports 4 LLM providers. Set `LLM_PROVIDER` and the corresponding env vars in `.env`:
 
-   ```bash
-   docker compose up -d
-   ```
+| Provider | `LLM_PROVIDER` | Requires |
+|----------|----------------|----------|
+| Anthropic | `anthropic` | `ANTHROPIC_API_KEY` |
+| OpenAI | `openai` | `OPENAI_API_KEY` |
+| vLLM | `vllm` | `VLLM_BASE_URL` |
+| Ollama | `ollama` | `OLLAMA_BASE_URL` |
 
-   This starts Redis, PostgreSQL, Qdrant, Neo4j, and MinIO.
+vLLM and Ollama both expose OpenAI-compatible APIs, so switching is a config change — no code changes needed. See `.env.local.example` for a full local deployment config.
 
-3. **Install Python dependencies**
+## Makefile Targets
 
-   ```bash
-   uv venv && source .venv/bin/activate
-   uv pip install -e ".[dev]"
-   ```
-
-4. **Run database migrations**
-
-   ```bash
-   alembic upgrade head
-   ```
-
-5. **Start the API server**
-
-   ```bash
-   uvicorn app.main:app --reload --port 8000
-   ```
-
-   API docs available at http://localhost:8000/docs
-
-6. **Start the Celery worker** (separate terminal)
-
-   ```bash
-   celery -A workers.celery_app worker -l info
-   ```
-
-7. **(Optional) Start the Streamlit frontend** (separate terminal)
-
-   ```bash
-   uv pip install -e ".[frontend]"
-   streamlit run frontend/app.py
-   ```
+| Target | What it does |
+|--------|-------------|
+| `make help` | Show all targets (default) |
+| `make install` | Create venv, install Python + frontend deps |
+| `make up` | Start Docker infrastructure services |
+| `make down` | Stop Docker infrastructure services |
+| `make dev` | Start everything: infra + API + worker + frontend (one terminal) |
+| `make api` | Start API server with auto-reload |
+| `make worker` | Start Celery worker with auto-reload on `.py` changes |
+| `make frontend` | Start React frontend dev server |
+| `make test` | Run test suite |
+| `make migrate` | Run database migrations (Alembic) |
+| `make logs` | Tail Docker service logs (filter with `SERVICES=redis,postgres`) |
 
 ## Running Tests
 
 ```bash
-pytest tests/ -v
+make test
 ```
 
 Tests mock all external services — no running infrastructure required.
@@ -106,10 +95,12 @@ nexus/
 ├── workers/
 │   └── celery_app.py           # Celery config + task autodiscovery
 ├── migrations/                 # Alembic migrations
-├── frontend/                   # Streamlit dashboard
+├── frontend/                   # React 19 + Vite dashboard
 ├── tests/                      # Mirrors app/ structure
 ├── docker-compose.yml          # Infrastructure services (dev)
 ├── docker-compose.prod.yml     # Full containerized stack
+├── Makefile                    # Dev workflow targets
+├── Procfile.dev                # Process definitions for `make dev`
 └── pyproject.toml
 ```
 

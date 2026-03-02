@@ -1,6 +1,6 @@
-"""Unified LLM client that supports Anthropic, OpenAI, and vLLM providers.
+"""Unified LLM client that supports Anthropic, OpenAI, vLLM, and Ollama providers.
 
-The key insight from the architecture doc: vLLM exposes an OpenAI-compatible API,
+The key insight from the architecture doc: vLLM and Ollama expose OpenAI-compatible APIs,
 so cloud-to-local migration is a config change (URL + model name), not a code change.
 """
 
@@ -35,12 +35,18 @@ class LLMClient:
             from anthropic import AsyncAnthropic
 
             self._client = AsyncAnthropic(api_key=settings.anthropic_api_key)
-        elif self.provider in ("openai", "vllm"):
+        elif self.provider in ("openai", "vllm", "ollama"):
             from openai import AsyncOpenAI
+
+            base_url = None
+            if self.provider == "vllm":
+                base_url = settings.vllm_base_url
+            elif self.provider == "ollama":
+                base_url = settings.ollama_base_url
 
             self._client = AsyncOpenAI(
                 api_key=settings.openai_api_key or "not-needed",
-                base_url=settings.vllm_base_url if self.provider == "vllm" else None,
+                base_url=base_url,
             )
         else:
             raise ValueError(f"Unsupported LLM provider: {self.provider}")

@@ -39,6 +39,8 @@ async function getValidToken(): Promise<string | null> {
   return result.access_token;
 }
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
+
 export async function apiClient<T>(config: RequestConfig): Promise<T> {
   const token = await getValidToken();
   const matterId = useAppStore.getState().matterId;
@@ -55,7 +57,7 @@ export async function apiClient<T>(config: RequestConfig): Promise<T> {
     headers["X-Matter-ID"] = matterId;
   }
 
-  let url = config.url;
+  let url = `${API_BASE}${config.url}`;
   if (config.params) {
     const searchParams = new URLSearchParams();
     for (const [key, value] of Object.entries(config.params)) {

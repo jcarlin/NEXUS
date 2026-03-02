@@ -287,12 +287,22 @@ def _upload_to_minio(settings, key: str, data: bytes, content_type: str = "image
 
 async def _embed_chunks(settings, chunk_texts: list[str]) -> list[list[float]]:
     """Embed chunk texts using the configured embedding provider."""
-    from app.common.embedder import EmbeddingProvider, LocalEmbeddingProvider, OpenAIEmbeddingProvider
+    from app.common.embedder import (
+        EmbeddingProvider,
+        LocalEmbeddingProvider,
+        OpenAIEmbeddingProvider,
+        TEIEmbeddingProvider,
+    )
 
     provider: EmbeddingProvider
     if settings.embedding_provider == "local":
         provider = LocalEmbeddingProvider(
             model_name=settings.local_embedding_model,
+            dimensions=settings.embedding_dimensions,
+        )
+    elif settings.embedding_provider == "tei":
+        provider = TEIEmbeddingProvider(
+            base_url=settings.tei_embedding_url,
             dimensions=settings.embedding_dimensions,
         )
     else:

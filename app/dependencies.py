@@ -20,6 +20,7 @@ from app.common.embedder import (
     EmbeddingProvider,
     LocalEmbeddingProvider,
     OpenAIEmbeddingProvider,
+    TEIEmbeddingProvider,
 )
 from app.common.llm import LLMClient
 from app.common.storage import StorageClient
@@ -29,7 +30,7 @@ from app.entities.extractor import EntityExtractor
 from app.entities.graph_service import GraphService
 from app.ingestion.sparse_embedder import SparseEmbedder
 from app.ingestion.visual_embedder import VisualEmbedder
-from app.query.reranker import Reranker
+from app.query.reranker import Reranker, TEIReranker
 from app.query.retriever import HybridRetriever
 
 logger = structlog.get_logger(__name__)
@@ -156,6 +157,11 @@ def get_embedder() -> EmbeddingProvider:
             model_name=settings.local_embedding_model,
             dimensions=settings.embedding_dimensions,
         )
+    if settings.embedding_provider == "tei":
+        return TEIEmbeddingProvider(
+            base_url=settings.tei_embedding_url,
+            dimensions=settings.embedding_dimensions,
+        )
     return OpenAIEmbeddingProvider(
         api_key=settings.openai_api_key,
         model=settings.embedding_model,
@@ -193,11 +199,13 @@ def get_entity_extractor() -> EntityExtractor:
 
 
 @functools.cache
-def get_reranker() -> Reranker | None:
+def get_reranker() -> Reranker | TEIReranker | None:
     """Return the ``Reranker`` singleton, or ``None`` when disabled."""
     settings = get_settings()
     if not settings.enable_reranker:
         return None
+    if settings.reranker_provider == "tei":
+        return TEIReranker(base_url=settings.tei_reranker_url)
     return Reranker(model_name=settings.reranker_model)
 
 
@@ -401,6 +409,19 @@ async def close_all() -> None:
     if get_redis.cache_info().currsize:
         await get_redis().aclose()
         logger.info("shutdown.redis")
+
+    # Close TEI HTTP clients (embedder and reranker)
+    if get_embedder.cache_info().currsize:
+        embedder = get_embedder()
+        if hasattr(embedder, "close"):
+            await embedder.close()
+            logger.info("shutdown.tei_embedder")
+
+    if get_reranker.cache_info().currsize:
+        reranker = get_reranker()
+        if reranker is not None and hasattr(reranker, "close"):
+            await reranker.close()
+            logger.info("shutdown.tei_reranker")
 
     # Clear all caches
     for fn in _ALL_CACHED_FACTORIES:

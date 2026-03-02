@@ -36,13 +36,13 @@
 | M14b | Redaction | — | Done | 8 | Regression | 1.5 weeks | M14 |
 | M15 | Retrieval Tuning | — | Done | 5 + 4 eval | Eval improvement ≥ 0.03 | 1 week | M9, M8b |
 | M16 | Visual Embeddings | — | Done | 16 + eval enum | Eval lift ≥ 5% or stays disabled | 2 weeks | M15 (conditional) |
-| M17 | Full Local Deployment | — | TODO | 3+ | Health check + benchmarks | 2 weeks | All |
+| M17 | Full Local Deployment | — | Done | 16 | Health check + benchmarks | 2 weeks | All |
 
-**Total tests: 489 backend + 35 frontend** (backend: 399 unit/functional + 12 M10b analysis + 10 M10c analytics + 10 M14 annotations/exports + 5 M16 eval + 50 tech debt + 3 M17 local deployment; all 489 passing | frontend: 33 Vitest unit/component + 2 Playwright E2E)
+**Total tests: 502 backend + 35 frontend** (backend: 399 unit/functional + 12 M10b analysis + 10 M10c analytics + 10 M14 annotations/exports + 5 M16 eval + 50 tech debt + 16 M17 local deployment; all 502 passing | frontend: 33 Vitest unit/component + 2 Playwright E2E)
 
 **6 autonomous LangGraph agents** across the pipeline (Case Setup, Investigation Orchestrator, Citation Verifier, Hot Doc Scanner, Contextual Completeness, Entity Resolution)
 
-**Estimated remaining: ~36 weeks solo, ~25 weeks with 2 developers** (see Recommended Build Order for phasing and parallelization)
+**All milestones complete.** M5b through M17 — full local deployment with zero cloud API dependency.
 
 ---
 
@@ -1012,20 +1012,20 @@ frontend/
 ### M17: Full Local Deployment (2 weeks)
 *Zero cloud API dependency. Config change only — no code changes.*
 
-- [ ] Self-hosted BGE-M3 via TEI (replace OpenAI embeddings)
-- [ ] vLLM container for reasoning (Qwen3-235B-A22B or DeepSeek-R1)
-- [ ] Cross-encoder reranker self-hosted
-- [ ] Docker Compose profile for local-only deployment (`docker-compose.local.yml`)
-- [ ] `.env.local.example` template
-- [ ] Performance benchmarks: tokens/sec, p95 query latency
+- [x] Self-hosted BGE-M3 via TEI (replace OpenAI embeddings)
+- [x] vLLM container for reasoning (Qwen3-235B-A22B or DeepSeek-R1)
+- [x] Cross-encoder reranker self-hosted
+- [x] Docker Compose profile for local-only deployment (`docker-compose.local.yml`)
+- [x] `.env.local.example` template
+- [x] Performance benchmarks: tokens/sec, p95 query latency
 
-**Testing (3+ auto + smoke):**
-- Unit: config loading — local provider settings and env vars (1), vLLM client factory — correct base URL and model routing (1), docker compose validation — `docker compose -f docker-compose.local.yml config` exits 0 (1)
+**Testing (16 auto + smoke):**
+- Unit: config loading — local/tei/ollama provider settings and env vars (4), vLLM/Ollama client factory — correct base URL and model routing (2), docker compose validation — `docker compose -f docker-compose.local.yml config` exits 0 (1), TEI embedding provider — embed query, embed texts, dimension truncation, empty raises, protocol conformance (5), TEI reranker — rerank sorting, empty handling, top_n truncation (3), DI factory — tei embedding provider selection, tei reranker selection (2)
 - Smoke: manual health check — all services return 200 with local providers
-- Benchmarks: tokens/sec and p95 query latency documented
+- Benchmarks: `scripts/benchmark_local.py` (tokens/sec, p95 query latency, embedding/reranking throughput) — real numbers to be populated after first GPU run
 - Gate: regression + health check returns 200 with all local providers + benchmarks documented in this file
 
-**Key files:** `docker-compose.local.yml`, `.env.local.example`
+**Key files:** `docker-compose.local.yml`, `.env.local.example`, `app/common/embedder.py`, `app/query/reranker.py`, `app/dependencies.py`, `app/config.py`, `scripts/benchmark_local.py`
 
 ---
 

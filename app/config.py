@@ -12,6 +12,7 @@ class LLMConfig(BaseModel):
     anthropic_api_key: str
     openai_api_key: str
     vllm_base_url: str
+    ollama_base_url: str
 
 
 class EmbeddingConfig(BaseModel):
@@ -20,6 +21,7 @@ class EmbeddingConfig(BaseModel):
     dimensions: int
     local_model: str
     batch_size: int
+    tei_url: str
     enable_visual: bool
     visual_model: str
     visual_device: str
@@ -42,6 +44,7 @@ class DatabaseConfig(BaseModel):
 
 class StorageConfig(BaseModel):
     endpoint: str
+    public_endpoint: str
     access_key: str
     secret_key: str
     bucket: str
@@ -56,6 +59,8 @@ class RetrievalConfig(BaseModel):
     enable_reranker: bool
     reranker_model: str
     reranker_top_n: int
+    reranker_provider: str
+    tei_reranker_url: str
 
 
 class AuthConfig(BaseModel):
@@ -103,15 +108,17 @@ class Settings(BaseSettings):
     # --- LLM Providers ---
     anthropic_api_key: str = ""
     openai_api_key: str = ""
-    llm_provider: str = "anthropic"  # anthropic | openai | vllm
+    llm_provider: str = "anthropic"  # anthropic | openai | vllm | ollama
     llm_model: str = "claude-sonnet-4-5-20250929"
     vllm_base_url: str = "http://localhost:8080/v1"
+    ollama_base_url: str = "http://localhost:11434/v1"
 
     # --- Embedding ---
-    embedding_provider: str = "openai"  # openai | local
+    embedding_provider: str = "openai"  # openai | local | tei
     embedding_model: str = "text-embedding-3-large"
     embedding_dimensions: int = 1024
     local_embedding_model: str = "BAAI/bge-large-en-v1.5"
+    tei_embedding_url: str = "http://localhost:8081"
     enable_visual_embeddings: bool = False  # ColQwen2.5 visual reranking
     visual_embedding_model: str = "vidore/colqwen2.5-v0.2"
     visual_embedding_device: str = "mps"  # mps | cuda | cpu
@@ -138,6 +145,7 @@ class Settings(BaseSettings):
 
     # --- MinIO (S3-compatible) ---
     minio_endpoint: str = "localhost:9000"
+    minio_public_endpoint: str = ""  # Public-facing endpoint for presigned URLs (cloud deploy)
     minio_access_key: str = "nexus-admin"
     minio_secret_key: str = "changeme"
     minio_bucket: str = "documents"
@@ -167,6 +175,8 @@ class Settings(BaseSettings):
     enable_reranker: bool = False  # bge-reranker-v2-m3, deferred
     reranker_model: str = "BAAI/bge-reranker-v2-m3"
     reranker_top_n: int = 10
+    reranker_provider: str = "local"  # local | tei
+    tei_reranker_url: str = "http://localhost:8082"
 
     # --- Sparse Embeddings ---
     enable_sparse_embeddings: bool = False
@@ -258,6 +268,7 @@ class Settings(BaseSettings):
                 anthropic_api_key=self.anthropic_api_key,
                 openai_api_key=self.openai_api_key,
                 vllm_base_url=self.vllm_base_url,
+                ollama_base_url=self.ollama_base_url,
             )
         if self.embedding is None:
             self.embedding = EmbeddingConfig(
@@ -266,6 +277,7 @@ class Settings(BaseSettings):
                 dimensions=self.embedding_dimensions,
                 local_model=self.local_embedding_model,
                 batch_size=self.embedding_batch_size,
+                tei_url=self.tei_embedding_url,
                 enable_visual=self.enable_visual_embeddings,
                 visual_model=self.visual_embedding_model,
                 visual_device=self.visual_embedding_device,
@@ -288,6 +300,7 @@ class Settings(BaseSettings):
         if self.storage is None:
             self.storage = StorageConfig(
                 endpoint=self.minio_endpoint,
+                public_endpoint=self.minio_public_endpoint,
                 access_key=self.minio_access_key,
                 secret_key=self.minio_secret_key,
                 bucket=self.minio_bucket,
@@ -302,6 +315,8 @@ class Settings(BaseSettings):
                 enable_reranker=self.enable_reranker,
                 reranker_model=self.reranker_model,
                 reranker_top_n=self.reranker_top_n,
+                reranker_provider=self.reranker_provider,
+                tei_reranker_url=self.tei_reranker_url,
             )
         if self.auth is None:
             self.auth = AuthConfig(
