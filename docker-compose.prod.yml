@@ -23,7 +23,8 @@ services:
         condition: service_healthy
     environment:
       # Override dev localhost URLs to use Docker service names
-      POSTGRES_URL: postgresql://nexus:${POSTGRES_PASSWORD}@postgres:5432/nexus
+      POSTGRES_URL: postgresql+asyncpg://nexus:${POSTGRES_PASSWORD}@postgres:5432/nexus
+      POSTGRES_URL_SYNC: postgresql://nexus:${POSTGRES_PASSWORD}@postgres:5432/nexus
       REDIS_URL: redis://redis:6379/0
       QDRANT_URL: http://qdrant:6333
       NEO4J_URI: bolt://neo4j:7687
@@ -55,7 +56,8 @@ services:
         condition: service_healthy
     environment:
       # Override dev localhost URLs to use Docker service names
-      POSTGRES_URL: postgresql://nexus:${POSTGRES_PASSWORD}@postgres:5432/nexus
+      POSTGRES_URL: postgresql+asyncpg://nexus:${POSTGRES_PASSWORD}@postgres:5432/nexus
+      POSTGRES_URL_SYNC: postgresql://nexus:${POSTGRES_PASSWORD}@postgres:5432/nexus
       REDIS_URL: redis://redis:6379/0
       QDRANT_URL: http://qdrant:6333
       NEO4J_URI: bolt://neo4j:7687
