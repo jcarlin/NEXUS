@@ -5,7 +5,7 @@ test.describe("Query and citation flow", () => {
     // Mock auth — set token in localStorage-like store or intercept login
     await page.goto("/login");
     await page.getByLabel(/email/i).fill("admin@example.com");
-    await page.getByLabel(/password/i).fill("password123");
+    await page.locator("#password").fill("password123");
     await page.getByRole("button", { name: /sign in/i }).click();
     await expect(page).toHaveURL("/", { timeout: 10000 });
   });

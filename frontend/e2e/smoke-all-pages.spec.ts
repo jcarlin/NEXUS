@@ -36,7 +36,11 @@ type PageError = {
 };
 
 async function login(page: Page) {
+  // Clear any persisted auth state
   await page.goto("/login");
+  await page.evaluate(() => localStorage.clear());
+  await page.goto("/login");
+
   await page.getByLabel(/email/i).fill(CREDENTIALS.email);
   await page.locator("#password").fill(CREDENTIALS.password);
   await page.getByRole("button", { name: /sign in/i }).click();
