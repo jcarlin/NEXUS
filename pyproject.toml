@@ -34,10 +34,9 @@ dependencies = [
     "neo4j>=5.25",
     "graphiti-core>=0.17",
 
-    # NER & Coreference
+    # NER
     "gliner>=0.2.24",
     "spacy>=3.8",
-    "coreferee>=1.4",
 
     # Reranker
     "sentence-transformers>=3.0",
@@ -88,6 +87,10 @@ dev = [
     "datasets>=2.14",
     "honcho>=1.1",
     "watchdog>=4.0",
+]
+coreference = [
+    "coreferee>=1.4",
+    "spacy>=3.0,<3.6",  # coreferee requires spacy <3.6
 ]
 visual = [
     "colpali-engine>=0.3.1",
