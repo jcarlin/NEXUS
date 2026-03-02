@@ -1,4 +1,4 @@
-.PHONY: help install up down dev api worker frontend test migrate logs
+.PHONY: help install up down dev api worker frontend test migrate logs demo seed-demo
 
 VENV := .venv/bin
 SERVICES ?=
@@ -39,3 +39,10 @@ migrate: ## Run database migrations
 
 logs: ## Tail Docker service logs (use SERVICES=redis,postgres to filter)
 	docker compose logs -f $(SERVICES)
+
+demo: install up migrate  ## One-time demo setup: seed all data
+	bash scripts/demo.sh
+
+seed-demo:  ## Re-seed demo data (requires running API + worker)
+	$(VENV)/python -m scripts.generate_test_docs
+	$(VENV)/python scripts/seed_demo.py

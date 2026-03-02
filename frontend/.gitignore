@@ -8,3 +8,4 @@ test-results/
 playwright-report/
 src/routeTree.gen.ts
 src/api/generated/
+e2e/.auth/
