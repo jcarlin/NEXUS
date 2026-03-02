@@ -18,8 +18,8 @@ LOGIN_URL = "/api/v1/auth/login"
 REFRESH_URL = "/api/v1/auth/refresh"
 ME_URL = "/api/v1/auth/me"
 
-ADMIN_EMAIL = "admin@nexus.dev"
-ADMIN_PASSWORD = "changeme123!"
+ADMIN_EMAIL = "admin@example.com"
+ADMIN_PASSWORD = "password123"
 ADMIN_ROLE = "admin"
 
 

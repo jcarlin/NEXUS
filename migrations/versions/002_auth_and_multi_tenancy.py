@@ -6,7 +6,7 @@ Create Date: 2026-02-26 00:00:00.000000
 
 """
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
@@ -14,13 +14,13 @@ from sqlalchemy.dialects.postgresql import UUID
 
 # revision identifiers, used by Alembic.
 revision: str = "002"
-down_revision: Union[str, None] = "001"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "001"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
-# Pre-computed bcrypt hash for "changeme123!" — the seed admin password.
-# Generated via: passlib.hash.bcrypt.hash("changeme123!")
-_ADMIN_PASSWORD_HASH = "$2b$12$LJ3m4ys3Lk0TSwYkBYHZxeDxPMnUbFQ7RlIzQp/MBkKr5rFNarvtS"
+# Pre-computed bcrypt hash for "password123" — the seed admin password.
+# Generated via: bcrypt.hashpw(b"password123", bcrypt.gensalt()).decode()
+_ADMIN_PASSWORD_HASH = "$2b$12$DM4w/5eCr4iJXwTYrOmfnOK4dH9VdaV4phByXOCTXxbu9ea.qxVE6"
 _ADMIN_ID = "00000000-0000-0000-0000-000000000001"
 _DEFAULT_MATTER_ID = "00000000-0000-0000-0000-000000000001"
 
@@ -62,7 +62,9 @@ def upgrade() -> None:
     op.create_table(
         "user_case_matters",
         sa.Column("user_id", UUID(as_uuid=True), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("matter_id", UUID(as_uuid=True), sa.ForeignKey("case_matters.id", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "matter_id", UUID(as_uuid=True), sa.ForeignKey("case_matters.id", ondelete="CASCADE"), nullable=False
+        ),
         sa.Column("assigned_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
         sa.PrimaryKeyConstraint("user_id", "matter_id"),
     )
@@ -71,8 +73,12 @@ def upgrade() -> None:
     # Add NULLABLE matter_id FK to existing tables
     # ------------------------------------------------------------------
     op.add_column("jobs", sa.Column("matter_id", UUID(as_uuid=True), sa.ForeignKey("case_matters.id"), nullable=True))
-    op.add_column("documents", sa.Column("matter_id", UUID(as_uuid=True), sa.ForeignKey("case_matters.id"), nullable=True))
-    op.add_column("chat_messages", sa.Column("matter_id", UUID(as_uuid=True), sa.ForeignKey("case_matters.id"), nullable=True))
+    op.add_column(
+        "documents", sa.Column("matter_id", UUID(as_uuid=True), sa.ForeignKey("case_matters.id"), nullable=True)
+    )
+    op.add_column(
+        "chat_messages", sa.Column("matter_id", UUID(as_uuid=True), sa.ForeignKey("case_matters.id"), nullable=True)
+    )
 
     op.create_index("idx_jobs_matter_id", "jobs", ["matter_id"])
     op.create_index("idx_documents_matter_id", "documents", ["matter_id"])
@@ -87,7 +93,7 @@ def upgrade() -> None:
             "VALUES (:id, :email, :password_hash, :full_name, :role)"
         ).bindparams(
             id=_ADMIN_ID,
-            email="admin@nexus.dev",
+            email="admin@example.com",
             password_hash=_ADMIN_PASSWORD_HASH,
             full_name="System Administrator",
             role="admin",
@@ -95,10 +101,7 @@ def upgrade() -> None:
     )
 
     op.execute(
-        sa.text(
-            "INSERT INTO case_matters (id, name, description) "
-            "VALUES (:id, :name, :description)"
-        ).bindparams(
+        sa.text("INSERT INTO case_matters (id, name, description) " "VALUES (:id, :name, :description)").bindparams(
             id=_DEFAULT_MATTER_ID,
             name="Default Matter",
             description="Default case matter for development and testing",
@@ -106,10 +109,7 @@ def upgrade() -> None:
     )
 
     op.execute(
-        sa.text(
-            "INSERT INTO user_case_matters (user_id, matter_id) "
-            "VALUES (:user_id, :matter_id)"
-        ).bindparams(
+        sa.text("INSERT INTO user_case_matters (user_id, matter_id) " "VALUES (:user_id, :matter_id)").bindparams(
             user_id=_ADMIN_ID,
             matter_id=_DEFAULT_MATTER_ID,
         )

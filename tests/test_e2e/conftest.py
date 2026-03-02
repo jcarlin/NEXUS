@@ -29,8 +29,8 @@ E2E_DB_NAME = "nexus_e2e_test"
 E2E_BUCKET = "e2e-test"
 E2E_REDIS_DB = 14
 E2E_MATTER_ID = "00000000-0000-0000-0000-000000000001"  # Seed data from migration 002
-E2E_ADMIN_EMAIL = "admin@nexus.dev"
-E2E_ADMIN_PASSWORD = "changeme123!"
+E2E_ADMIN_EMAIL = "admin@example.com"
+E2E_ADMIN_PASSWORD = "password123"
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 

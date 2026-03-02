@@ -193,6 +193,12 @@ class TestCloseAll:
         """After ``close_all()``, every factory's cache is empty."""
         from app.dependencies import _ALL_CACHED_FACTORIES, close_all
 
+        # Clear any leftover state from previous tests to prevent
+        # close_all() from trying to tear down real service clients
+        # (e.g. neo4j AsyncDriver) on a closed or mismatched event loop.
+        for fn in _ALL_CACHED_FACTORIES:
+            fn.cache_clear()
+
         # Pre-populate a few caches with mock objects
         mock_settings = _make_test_settings()
         with (
