@@ -364,7 +364,7 @@ class ExportService:
                     (matter_id, export_type, export_format, status, parameters, created_by)
                 VALUES
                     (:matter_id, :export_type, :export_format, 'pending',
-                     :parameters::jsonb, :created_by)
+                     CAST(:parameters AS jsonb), :created_by)
                 RETURNING id, matter_id, export_type, export_format, status,
                           parameters, output_path, file_size_bytes, error,
                           created_by, created_at, completed_at

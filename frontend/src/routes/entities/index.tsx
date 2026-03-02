@@ -22,11 +22,11 @@ export const Route = createFileRoute("/entities/")({
 
 const ENTITY_TYPES = [
   { value: "all", label: "All Types" },
-  { value: "PERSON", label: "Person" },
-  { value: "ORG", label: "Organization" },
-  { value: "LOCATION", label: "Location" },
-  { value: "DATE", label: "Date" },
-  { value: "MONEY", label: "Money" },
+  { value: "person", label: "Person" },
+  { value: "organization", label: "Organization" },
+  { value: "location", label: "Location" },
+  { value: "date", label: "Date" },
+  { value: "monetary_amount", label: "Money" },
 ];
 
 function EntitiesPage() {

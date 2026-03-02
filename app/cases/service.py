@@ -309,7 +309,7 @@ class CaseService:
         await db.execute(
             text("""
                 UPDATE case_contexts
-                SET timeline = :timeline::jsonb,
+                SET timeline = CAST(:timeline AS jsonb),
                     updated_at = now()
                 WHERE id = :context_id
             """),

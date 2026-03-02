@@ -308,7 +308,11 @@ def get_retriever() -> HybridRetriever:
 
 @functools.cache
 def _get_checkpointer_conn():
-    """Return a synchronous ``psycopg`` connection for the checkpointer."""
+    """Return a synchronous ``psycopg`` connection for the checkpointer.
+
+    Used only by ``_setup_checkpointer_tables`` to create tables synchronously
+    at startup. The async checkpointer uses its own pool.
+    """
     import psycopg
 
     settings = get_settings()
@@ -317,18 +321,30 @@ def _get_checkpointer_conn():
 
 @functools.cache
 def get_checkpointer():
-    """Return the PostgresSaver checkpointer singleton.
+    """Return the AsyncPostgresSaver checkpointer singleton.
 
-    Uses a synchronous ``psycopg`` connection with ``autocommit=True``.
-    The ``.setup()`` call is idempotent -- it creates checkpoint tables if they
-    don't already exist.
+    Uses ``AsyncConnectionPool`` so that ``graph.astream()`` can call
+    async checkpoint methods (``aget_tuple``, ``aput``, etc.).
+    The sync connection is used once at startup for table creation.
     """
     from langgraph.checkpoint.postgres import PostgresSaver
+    from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+    from psycopg_pool import AsyncConnectionPool
 
-    conn = _get_checkpointer_conn()
-    saver = PostgresSaver(conn=conn)
-    saver.setup()
-    return saver
+    # Create tables synchronously (idempotent)
+    sync_conn = _get_checkpointer_conn()
+    sync_saver = PostgresSaver(conn=sync_conn)
+    sync_saver.setup()
+
+    # Build async checkpointer with a connection pool
+    settings = get_settings()
+    pool = AsyncConnectionPool(
+        conninfo=settings.postgres_url_sync,
+        min_size=1,
+        max_size=5,
+        kwargs={"autocommit": True},
+    )
+    return AsyncPostgresSaver(pool)
 
 
 # ---------------------------------------------------------------------------

@@ -24,6 +24,7 @@ class DocumentResponse(BaseModel):
     is_inclusive: bool | None = None
     duplicate_cluster_id: str | None = None
     version_group_id: str | None = None
+    hot_doc_score: float | None = None
 
 
 class DocumentDetail(DocumentResponse):

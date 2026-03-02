@@ -195,7 +195,7 @@ class IngestionService:
                     UPDATE jobs
                     SET stage = :stage,
                         status = :status,
-                        progress = :progress::jsonb,
+                        progress = CAST(:progress AS jsonb),
                         error = :error,
                         updated_at = now()
                     WHERE id = :job_id

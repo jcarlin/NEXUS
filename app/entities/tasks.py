@@ -11,6 +11,8 @@ import asyncio
 import structlog
 from celery import shared_task
 
+from workers.celery_app import celery_app  # noqa: F401 — ensures @shared_task binds to our app
+
 logger = structlog.get_logger(__name__)
 
 

@@ -54,6 +54,7 @@ def _row_to_response(row: dict) -> DocumentResponse:
         is_inclusive=row.get("is_inclusive"),
         duplicate_cluster_id=row.get("duplicate_cluster_id"),
         version_group_id=row.get("version_group_id"),
+        hot_doc_score=row.get("hot_doc_score"),
     )
 
 

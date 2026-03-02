@@ -374,7 +374,7 @@ async def context_gap_search(
         params: dict = {"matter_id": matter_id, "min_gap_score": min_gap_score, "limit": limit}
         where = "matter_id = :matter_id AND context_gap_score >= :min_gap_score"
         if gap_type:
-            where += " AND context_gaps @> :gap_filter::jsonb"
+            where += " AND context_gaps @> CAST(:gap_filter AS jsonb)"
             params["gap_filter"] = json.dumps([{"gap_type": gap_type}])
 
         result = await db.execute(

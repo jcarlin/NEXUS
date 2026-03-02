@@ -13,6 +13,8 @@ import structlog
 from celery import shared_task
 from sqlalchemy import create_engine, text
 
+from workers.celery_app import celery_app  # noqa: F401 — ensures @shared_task binds to our app
+
 logger = structlog.get_logger(__name__)
 
 
@@ -138,7 +140,7 @@ def _write_results_to_db(engine, context_id: str, state: dict) -> None:
             conn.execute(
                 text("""
                     UPDATE case_contexts
-                    SET timeline = :timeline::jsonb, updated_at = now()
+                    SET timeline = CAST(:timeline AS jsonb), updated_at = now()
                     WHERE id = :context_id
                 """),
                 {

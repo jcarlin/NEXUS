@@ -14,6 +14,8 @@ import structlog
 from celery import shared_task
 from sqlalchemy import create_engine, text
 
+from workers.celery_app import celery_app  # noqa: F401 — ensures @shared_task binds to our app
+
 logger = structlog.get_logger(__name__)
 
 
@@ -36,7 +38,7 @@ def _update_export_job(engine, job_id: str, **kwargs) -> None:
     params: dict = {"job_id": job_id}
     for key, value in kwargs.items():
         if key == "parameters" and isinstance(value, dict):
-            set_parts.append(f"{key} = :{key}::jsonb")
+            set_parts.append(f"{key} = CAST(:{key} AS jsonb)")
             params[key] = json.dumps(value)
         else:
             set_parts.append(f"{key} = :{key}")

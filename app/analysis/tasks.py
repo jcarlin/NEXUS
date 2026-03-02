@@ -13,6 +13,8 @@ import structlog
 from celery import shared_task
 from sqlalchemy import create_engine, text
 
+from workers.celery_app import celery_app  # noqa: F401 — ensures @shared_task binds to our app
+
 logger = structlog.get_logger(__name__)
 
 
@@ -212,7 +214,7 @@ def scan_document_sentiment(self, doc_id: str, matter_id: str = "") -> dict:
                         sentiment_concealment = :sentiment_concealment,
                         hot_doc_score = :hot_doc_score,
                         context_gap_score = :context_gap_score,
-                        context_gaps = :context_gaps::jsonb,
+                        context_gaps = CAST(:context_gaps AS jsonb),
                         anomaly_score = :anomaly_score,
                         updated_at = now()
                     WHERE id = :doc_id

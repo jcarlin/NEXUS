@@ -41,6 +41,18 @@ class GraphService:
     # Internal helpers
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _serialize_value(val: Any) -> Any:
+        """Convert Neo4j temporal types to ISO-8601 strings for JSON."""
+        try:
+            from neo4j.time import DateTime as Neo4jDateTime
+
+            if isinstance(val, Neo4jDateTime):
+                return val.iso_format()
+        except ImportError:
+            pass
+        return val
+
     async def _run_query(
         self,
         query: str,
@@ -50,7 +62,7 @@ class GraphService:
         async with self._driver.session() as session:
             result = await session.run(query, params or {})
             records = await result.data()
-            return records
+            return [{k: self._serialize_value(v) for k, v in rec.items()} for rec in records]
 
     async def _run_write(
         self,
@@ -376,7 +388,7 @@ class GraphService:
         {where_clause}
         RETURN e.name           AS source,
                type(r)          AS relationship_type,
-               connected.name   AS target,
+               COALESCE(connected.name, connected.filename, connected.chunk_id, toString(id(connected))) AS target,
                labels(connected) AS target_labels,
                properties(r)   AS edge_properties
         LIMIT $limit

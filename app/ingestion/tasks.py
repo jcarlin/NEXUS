@@ -26,6 +26,8 @@ import structlog
 from celery import shared_task
 from sqlalchemy import create_engine, text
 
+from workers.celery_app import celery_app  # noqa: F401 — ensures @shared_task binds to our app
+
 logger = structlog.get_logger(__name__)
 
 
@@ -59,7 +61,7 @@ def _update_stage(
                     UPDATE jobs
                     SET stage = :stage,
                         status = :status,
-                        progress = :progress::jsonb,
+                        progress = CAST(:progress AS jsonb),
                         error = :error,
                         updated_at = now()
                     WHERE id = :job_id

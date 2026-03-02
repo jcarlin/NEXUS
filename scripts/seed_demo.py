@@ -438,7 +438,7 @@ def phase4a_hot_doc_scores(settings: Settings) -> None:
                             SET metadata_ = jsonb_set(
                                 COALESCE(metadata_, '{}'),
                                 '{hot_doc_score}',
-                                :score_json::jsonb
+                                CAST(:score_json AS jsonb)
                             ),
                             updated_at = :now
                             WHERE filename = :fn AND matter_id = :mid

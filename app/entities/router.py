@@ -70,13 +70,16 @@ async def get_entity_connections(
     matter_id: UUID = Depends(get_matter_id),
 ):
     """Return the graph neighbourhood for an entity."""
+    entity = await gs.get_entity_by_name(entity_id)
+    if entity is None:
+        raise HTTPException(status_code=404, detail=f"Entity '{entity_id}' not found")
     exclude_privilege = ["privileged", "work_product"] if current_user.role not in ("admin", "attorney") else None
     connections = await gs.get_entity_connections(
         entity_id,
         limit=limit,
         exclude_privilege_statuses=exclude_privilege,
     )
-    return {"entity": entity_id, "connections": connections}
+    return {"entity": entity, "connections": connections}
 
 
 @router.get("/graph/explore")

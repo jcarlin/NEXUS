@@ -54,7 +54,7 @@ class AnnotationService:
                 )
                 VALUES (
                     :document_id, :matter_id, :user_id, :page_number,
-                    :annotation_type, :content, :anchor::jsonb, :color
+                    :annotation_type, :content, CAST(:anchor AS jsonb), :color
                 )
                 RETURNING {_COLUMNS}
             """),
@@ -170,7 +170,7 @@ class AnnotationService:
             params["content"] = data.content
 
         if data.anchor is not None:
-            set_clauses.append("anchor = :anchor::jsonb")
+            set_clauses.append("anchor = CAST(:anchor AS jsonb)")
             params["anchor"] = _json_dumps(data.anchor)
 
         if data.color is not None:
