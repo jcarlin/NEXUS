@@ -44,6 +44,8 @@
 
 **All milestones complete.** M5b through M17 — full local deployment with zero cloud API dependency.
 
+**Cloud demo hosting:** Code changes for GCP + Vercel deployment are ready (`VITE_API_BASE_URL`, `MINIO_PUBLIC_ENDPOINT`, Caddy reverse proxy, admin seed script). See `.env.cloud.example` and `docker-compose.cloud.yml`.
+
 ---
 
 ## Recommended Build Order
@@ -214,7 +216,7 @@ If a metric regresses beyond the threshold, the milestone must either fix the re
 
 ### M6: Auth + Multi-Tenancy
 - Alembic migration 002: `users`, `case_matters`, `user_case_matters` tables + NULLABLE `matter_id` FK on `jobs`, `documents`, `chat_messages`
-- Seed admin user (admin@nexus.dev) + default matter in migration
+- Seed admin user (admin@example.com) + default matter in migration
 - JWT authentication (PyJWT) with access/refresh tokens
 - API key auth fallback via `X-API-Key` header
 - RBAC: 4 roles (admin, attorney, paralegal, reviewer) via `require_role()` dependency

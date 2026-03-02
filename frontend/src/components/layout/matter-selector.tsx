@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAppStore } from "@/stores/app-store";
 import { apiClient } from "@/api/client";
@@ -19,6 +20,13 @@ export function MatterSelector() {
     queryFn: () =>
       apiClient<Matter[]>({ url: "/api/v1/auth/me/matters", method: "GET" }),
   });
+
+  // Auto-select the first matter when none is selected
+  useEffect(() => {
+    if (!matterId && matters && matters.length > 0) {
+      setMatter(matters[0].id);
+    }
+  }, [matterId, matters, setMatter]);
 
   return (
     <Select value={matterId ?? undefined} onValueChange={setMatter}>

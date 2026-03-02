@@ -1,8 +1,9 @@
-"""Auth API endpoints: login, refresh, current user profile.
+"""Auth API endpoints: login, refresh, current user profile, user matters.
 
-POST /auth/login    -- JWT token issuance
-POST /auth/refresh  -- Token refresh
-GET  /auth/me       -- Current user profile (requires auth)
+POST /auth/login        -- JWT token issuance
+POST /auth/refresh      -- Token refresh
+GET  /auth/me           -- Current user profile (requires auth)
+GET  /auth/me/matters   -- Matters accessible to the current user
 """
 
 from __future__ import annotations
@@ -12,11 +13,13 @@ from uuid import UUID
 import jwt
 import structlog
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.middleware import get_current_user
 from app.auth.schemas import (
     LoginRequest,
+    MatterResponse,
     RefreshRequest,
     TokenResponse,
     UserRecord,
@@ -97,3 +100,34 @@ async def me(
         is_active=current_user.is_active,
         created_at=current_user.created_at,
     )
+
+
+@router.get("/me/matters", response_model=list[MatterResponse])
+async def my_matters(
+    current_user: UserRecord = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the matters accessible to the current user.
+
+    Admins see all active matters; other roles see only matters linked
+    via the ``user_case_matters`` join table.
+    """
+    if current_user.role == "admin":
+        result = await db.execute(
+            text(
+                "SELECT id, name, description, is_active, created_at FROM case_matters WHERE is_active = true ORDER BY name"
+            )
+        )
+    else:
+        result = await db.execute(
+            text("""
+                SELECT cm.id, cm.name, cm.description, cm.is_active, cm.created_at
+                FROM case_matters cm
+                JOIN user_case_matters ucm ON cm.id = ucm.matter_id
+                WHERE ucm.user_id = :user_id AND cm.is_active = true
+                ORDER BY cm.name
+            """),
+            {"user_id": current_user.id},
+        )
+    rows = result.all()
+    return [MatterResponse.model_validate(dict(r._mapping)) for r in rows]

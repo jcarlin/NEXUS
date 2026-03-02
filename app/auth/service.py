@@ -10,9 +10,9 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID, uuid4
 
+import bcrypt
 import jwt
 import structlog
-from passlib.context import CryptContext
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,8 +20,6 @@ from app.auth.schemas import UserRecord
 from app.config import Settings
 
 logger = structlog.get_logger(__name__)
-
-_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 class AuthService:
@@ -33,11 +31,11 @@ class AuthService:
 
     @staticmethod
     def hash_password(password: str) -> str:
-        return str(_pwd_context.hash(password))
+        return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
     @staticmethod
     def verify_password(plain: str, hashed: str) -> bool:
-        return bool(_pwd_context.verify(plain, hashed))
+        return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
 
     @staticmethod
     def hash_api_key(api_key: str) -> str:

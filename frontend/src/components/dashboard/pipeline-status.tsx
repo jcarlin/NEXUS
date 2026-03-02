@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/api/client";
+import { useAppStore } from "@/stores/app-store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -27,14 +28,16 @@ function jobProgress(job: JobStatusResponse): number {
 }
 
 export function PipelineStatus() {
+  const matterId = useAppStore((s) => s.matterId);
   const { data, isLoading } = useQuery({
-    queryKey: ["pipeline-jobs"],
+    queryKey: ["pipeline-jobs", matterId],
     queryFn: () =>
       apiClient<PaginatedResponse<JobStatusResponse>>({
         url: "/api/v1/jobs",
         method: "GET",
         params: { limit: 5 },
       }),
+    enabled: !!matterId,
     refetchInterval: 5_000,
   });
 

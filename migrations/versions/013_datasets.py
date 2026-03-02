@@ -28,7 +28,7 @@ def upgrade() -> None:
     op.create_table(
         "datasets",
         sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), primary_key=True),
-        sa.Column("matter_id", sa.UUID(), sa.ForeignKey("matters.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("matter_id", sa.UUID(), sa.ForeignKey("case_matters.id", ondelete="CASCADE"), nullable=False),
         sa.Column("name", sa.String(255), nullable=False),
         sa.Column("description", sa.Text(), server_default="", nullable=False),
         sa.Column("parent_id", sa.UUID(), sa.ForeignKey("datasets.id", ondelete="CASCADE"), nullable=True),

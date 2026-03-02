@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { FileText, Users, Flame, Loader2 } from "lucide-react";
 import { apiClient } from "@/api/client";
+import { useAppStore } from "@/stores/app-store";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { RecentActivity } from "@/components/dashboard/recent-activity";
 import { PipelineStatus } from "@/components/dashboard/pipeline-status";
@@ -13,29 +14,34 @@ export const Route = createFileRoute("/")({
 });
 
 function DashboardPage() {
+  const matterId = useAppStore((s) => s.matterId);
+
   const { data: docs, isLoading: docsLoading } = useQuery({
-    queryKey: ["doc-count"],
+    queryKey: ["doc-count", matterId],
     queryFn: () =>
       apiClient<PaginatedResponse<DocumentResponse>>({
         url: "/api/v1/documents",
         method: "GET",
         params: { limit: 1 },
       }),
+    enabled: !!matterId,
   });
 
   const { data: graph, isLoading: graphLoading } = useQuery({
-    queryKey: ["graph-stats-summary"],
+    queryKey: ["graph-stats-summary", matterId],
     queryFn: () => apiClient<GraphStats>({ url: "/api/v1/graph/stats", method: "GET" }),
+    enabled: !!matterId,
   });
 
   const { data: hotDocs, isLoading: hotDocsLoading } = useQuery({
-    queryKey: ["hot-doc-count"],
+    queryKey: ["hot-doc-count", matterId],
     queryFn: () =>
       apiClient<PaginatedResponse<DocumentResponse>>({
         url: "/api/v1/documents",
         method: "GET",
         params: { limit: 1, hot_doc_score_min: 0.7 },
       }),
+    enabled: !!matterId,
   });
 
   return (
