@@ -199,6 +199,7 @@ class TestCloseAll:
             patch("app.dependencies.get_settings", return_value=mock_settings),
             patch("app.dependencies.VectorStoreClient", return_value=MagicMock()),
             patch("app.dependencies.StorageClient", return_value=MagicMock()),
+            patch("app.dependencies.AsyncGraphDatabase.driver", return_value=MagicMock()),
         ):
             from app.dependencies import get_minio, get_qdrant
 

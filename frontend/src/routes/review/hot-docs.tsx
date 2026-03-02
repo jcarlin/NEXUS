@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/api/client";
+import { useAppStore } from "@/stores/app-store";
 import { HotDocTable } from "@/components/review/hot-doc-table";
 import type { DocumentDetail, PaginatedResponse } from "@/types";
 
@@ -9,8 +10,10 @@ export const Route = createFileRoute("/review/hot-docs")({
 });
 
 function HotDocsPage() {
+  const matterId = useAppStore((s) => s.matterId);
+
   const { data, isLoading } = useQuery({
-    queryKey: ["hot-docs"],
+    queryKey: ["hot-docs", matterId],
     queryFn: () =>
       apiClient<PaginatedResponse<DocumentDetail>>({
         url: "/api/v1/documents",
@@ -20,6 +23,7 @@ function HotDocsPage() {
           limit: 50,
         },
       }),
+    enabled: !!matterId,
   });
 
   return (

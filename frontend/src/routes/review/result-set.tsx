@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { apiClient } from "@/api/client";
+import { useAppStore } from "@/stores/app-store";
 import { Button } from "@/components/ui/button";
 import { ResultSetTable } from "@/components/review/result-set-table";
 import type { DocumentResponse, PaginatedResponse } from "@/types";
@@ -11,17 +12,19 @@ export const Route = createFileRoute("/review/result-set")({
 });
 
 function ResultSetPage() {
+  const matterId = useAppStore((s) => s.matterId);
   const [offset, setOffset] = useState(0);
   const limit = 50;
 
   const { data, isLoading } = useQuery({
-    queryKey: ["result-set", offset],
+    queryKey: ["result-set", matterId, offset],
     queryFn: () =>
       apiClient<PaginatedResponse<DocumentResponse>>({
         url: "/api/v1/documents",
         method: "GET",
         params: { offset, limit },
       }),
+    enabled: !!matterId,
   });
 
   return (

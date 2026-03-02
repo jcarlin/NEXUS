@@ -15,6 +15,7 @@ export const Route = createFileRoute("/documents/")({
 
 function DocumentsPage() {
   const navigate = useNavigate();
+  const matterId = useAppStore((s) => s.matterId);
   const datasetId = useAppStore((s) => s.datasetId);
   const [search, setSearch] = useState("");
   const [docType, setDocType] = useState("all");
@@ -23,7 +24,7 @@ function DocumentsPage() {
   const limit = 50;
 
   const { data, isLoading } = useQuery({
-    queryKey: ["documents", search, docType, privilege, offset, datasetId],
+    queryKey: ["documents", matterId, search, docType, privilege, offset, datasetId],
     queryFn: () =>
       apiClient<PaginatedResponse<DocumentResponse>>({
         url: "/api/v1/documents",
@@ -36,6 +37,7 @@ function DocumentsPage() {
           limit,
         },
       }),
+    enabled: !!matterId,
   });
 
   return (

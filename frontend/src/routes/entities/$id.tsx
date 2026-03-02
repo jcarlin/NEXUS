@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
 import { apiClient } from "@/api/client";
+import { useAppStore } from "@/stores/app-store";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EntityHeader } from "@/components/entities/entity-header";
@@ -21,15 +22,17 @@ interface ConnectionsResponse {
 
 function EntityDetailPage() {
   const { id } = Route.useParams();
+  const matterId = useAppStore((s) => s.matterId);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["entity-connections", id],
+    queryKey: ["entity-connections", matterId, id],
     queryFn: () =>
       apiClient<ConnectionsResponse>({
         url: `/api/v1/entities/${id}/connections`,
         method: "GET",
         params: { limit: 50 },
       }),
+    enabled: !!matterId,
   });
 
   if (isLoading) {

@@ -51,6 +51,7 @@ export function MessageInput({ onSend, disabled }: MessageInputProps) {
       />
       <Button
         size="icon"
+        aria-label="Send"
         onClick={handleSubmit}
         disabled={disabled || !text.trim()}
       >

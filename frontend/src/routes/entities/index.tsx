@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Network } from "lucide-react";
 import { apiClient } from "@/api/client";
+import { useAppStore } from "@/stores/app-store";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,13 +30,14 @@ const ENTITY_TYPES = [
 ];
 
 function EntitiesPage() {
+  const matterId = useAppStore((s) => s.matterId);
   const [search, setSearch] = useState("");
   const [entityType, setEntityType] = useState("all");
   const [offset, setOffset] = useState(0);
   const limit = 50;
 
   const { data, isLoading } = useQuery({
-    queryKey: ["entities", search, entityType, offset],
+    queryKey: ["entities", matterId, search, entityType, offset],
     queryFn: () =>
       apiClient<PaginatedResponse<EntityResponse>>({
         url: "/api/v1/entities",
@@ -47,6 +49,7 @@ function EntitiesPage() {
           limit,
         },
       }),
+    enabled: !!matterId,
   });
 
   return (

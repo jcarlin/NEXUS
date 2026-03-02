@@ -25,25 +25,34 @@ interface EvaluationResult {
 }
 
 function EvaluationPage() {
-  const { data: latestEval, isLoading: evalLoading } = useQuery({
+  const { data: latestEval, isLoading: evalLoading, isError: evalError } = useQuery({
     queryKey: ["eval-latest"],
     queryFn: () =>
       apiClient<EvaluationResult>({
         url: "/api/v1/evaluation/latest",
         method: "GET",
       }),
+    retry: (failureCount, error) => {
+      // Don't retry 404s — no runs exist yet
+      if (error instanceof Error && error.message.includes("404")) return false;
+      return failureCount < 2;
+    },
   });
 
-  const { data: runsData, isLoading: runsLoading } = useQuery({
+  const { data: runsData, isLoading: runsLoading, isError: runsError } = useQuery({
     queryKey: ["eval-runs"],
     queryFn: () =>
       apiClient<{ items: EvalRun[] }>({
         url: "/api/v1/evaluation/runs",
         method: "GET",
       }),
+    retry: (failureCount, error) => {
+      if (error instanceof Error && error.message.includes("404")) return false;
+      return failureCount < 2;
+    },
   });
 
-  const runs = runsData?.items ?? [];
+  const runs = runsError ? [] : (runsData?.items ?? []);
 
   return (
     <div className="space-y-8">
@@ -56,7 +65,10 @@ function EvaluationPage() {
 
       <section className="space-y-4">
         <h2 className="text-lg font-semibold">Quality Gates</h2>
-        <QualityGates data={latestEval} isLoading={evalLoading} />
+        <QualityGates data={evalError ? undefined : latestEval} isLoading={evalLoading && !evalError} />
+        {evalError && !evalLoading && (
+          <p className="text-sm text-muted-foreground">No evaluation runs yet. Run an evaluation to see quality gates.</p>
+        )}
       </section>
 
       <Separator />

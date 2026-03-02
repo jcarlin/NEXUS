@@ -68,7 +68,7 @@ export function AssistantMessage({
   const addFinding = useAppStore((s) => s.addFinding);
 
   return (
-    <div className="flex justify-start">
+    <div className="flex justify-start" data-testid="assistant-message">
       <div className="max-w-[85%] space-y-2">
         <Card>
           <CardContent className="p-3">
@@ -88,7 +88,7 @@ export function AssistantMessage({
         )}
 
         {sources.length > 0 && (
-          <div className="rounded-md border">
+          <div className="rounded-md border" data-testid="source-panel">
             <button
               onClick={() => setSourcesOpen(!sourcesOpen)}
               className="flex w-full items-center justify-between px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-accent"

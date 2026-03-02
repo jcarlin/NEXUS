@@ -402,7 +402,10 @@ async def close_all() -> None:
 
     # Close Neo4j driver
     if get_neo4j.cache_info().currsize:
-        await get_neo4j().close()
+        try:
+            await get_neo4j().close()
+        except Exception:
+            pass
         logger.info("shutdown.neo4j")
 
     # Close Redis

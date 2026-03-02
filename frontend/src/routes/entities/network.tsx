@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState, useCallback, useRef } from "react";
 import { ArrowLeft } from "lucide-react";
 import { apiClient } from "@/api/client";
+import { useAppStore } from "@/stores/app-store";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -23,19 +24,21 @@ export const Route = createFileRoute("/entities/network")({
 const DEFAULT_TYPES = new Set(["PERSON", "ORG", "LOCATION", "DATE", "MONEY"]);
 
 function NetworkGraphPage() {
+  const matterId = useAppStore((s) => s.matterId);
   const [activeTypes, setActiveTypes] = useState<Set<string>>(
     () => new Set(DEFAULT_TYPES),
   );
   const graphRef = useRef<NetworkGraphHandle>(null);
 
   const { data: entitiesData, isLoading: entitiesLoading } = useQuery({
-    queryKey: ["entities-network"],
+    queryKey: ["entities-network", matterId],
     queryFn: () =>
       apiClient<PaginatedResponse<EntityResponse>>({
         url: "/api/v1/entities",
         method: "GET",
         params: { limit: 200, offset: 0 },
       }),
+    enabled: !!matterId,
   });
 
   // Fetch connections for top entities by mention count

@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/api/client";
+import { useAppStore } from "@/stores/app-store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -8,14 +9,17 @@ import { formatDateTime } from "@/lib/utils";
 import type { AuditLogEntry, PaginatedResponse } from "@/types";
 
 export function RecentActivity() {
+  const matterId = useAppStore((s) => s.matterId);
+
   const { data, isLoading } = useQuery({
-    queryKey: ["recent-activity"],
+    queryKey: ["recent-activity", matterId],
     queryFn: () =>
       apiClient<PaginatedResponse<AuditLogEntry>>({
         url: "/api/v1/admin/audit-log",
         method: "GET",
         params: { limit: 10 },
       }),
+    enabled: !!matterId,
     refetchInterval: 30_000,
   });
 

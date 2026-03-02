@@ -82,7 +82,7 @@ export function useStreamQuery() {
         try {
           const parsed = JSON.parse(event.data);
 
-          switch (parsed.type) {
+          switch (event.event) {
             case "status":
               setState((prev) => ({ ...prev, stage: parsed.stage }));
               break;
