@@ -37,7 +37,7 @@ function DocumentDetailPage() {
   const { data: downloadData } = useQuery({
     queryKey: ["document-download", id],
     queryFn: () =>
-      apiClient<{ url: string }>({
+      apiClient<{ download_url: string }>({
         url: `/api/v1/documents/${id}/download`,
         method: "GET",
       }),
@@ -92,9 +92,9 @@ function DocumentDetailPage() {
             </p>
           </div>
         </div>
-        {downloadData?.url && (
+        {downloadData?.download_url && (
           <Button variant="outline" size="sm" asChild>
-            <a href={downloadData.url} target="_blank" rel="noreferrer">
+            <a href={downloadData.download_url} target="_blank" rel="noreferrer">
               <Download className="mr-2 h-3.5 w-3.5" />
               Download
             </a>
@@ -104,9 +104,9 @@ function DocumentDetailPage() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          {downloadData?.url && doc.type === "pdf" ? (
+          {downloadData?.download_url && doc.type === "pdf" ? (
             <PdfViewer
-              url={downloadData.url}
+              url={downloadData.download_url}
               annotations={annotations}
               selectedAnnotationId={selectedAnnotationId}
               onAnnotationClick={handleAnnotationClick}
