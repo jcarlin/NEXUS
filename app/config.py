@@ -108,14 +108,16 @@ class Settings(BaseSettings):
     # --- LLM Providers ---
     anthropic_api_key: str = ""
     openai_api_key: str = ""
+    gemini_api_key: str = ""
     llm_provider: str = "anthropic"  # anthropic | openai | vllm | ollama
     llm_model: str = "claude-sonnet-4-5-20250929"
     vllm_base_url: str = "http://localhost:8080/v1"
     ollama_base_url: str = "http://localhost:11434/v1"
 
     # --- Embedding ---
-    embedding_provider: str = "openai"  # openai | local | tei
+    embedding_provider: str = "openai"  # openai | local | tei | gemini
     embedding_model: str = "text-embedding-3-large"
+    gemini_embedding_model: str = "gemini-embedding-exp-03-07"
     embedding_dimensions: int = 1024
     local_embedding_model: str = "BAAI/bge-large-en-v1.5"
     tei_embedding_url: str = "http://localhost:8081"

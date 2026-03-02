@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.common.embedder import (
     EmbeddingProvider,
+    GeminiEmbeddingProvider,
     LocalEmbeddingProvider,
     OpenAIEmbeddingProvider,
     TEIEmbeddingProvider,
@@ -161,6 +162,13 @@ def get_embedder() -> EmbeddingProvider:
         return TEIEmbeddingProvider(
             base_url=settings.tei_embedding_url,
             dimensions=settings.embedding_dimensions,
+        )
+    if settings.embedding_provider == "gemini":
+        return GeminiEmbeddingProvider(
+            api_key=settings.gemini_api_key,
+            model=settings.gemini_embedding_model,
+            dimensions=settings.embedding_dimensions,
+            batch_size=settings.embedding_batch_size,
         )
     return OpenAIEmbeddingProvider(
         api_key=settings.openai_api_key,

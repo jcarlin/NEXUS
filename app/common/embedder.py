@@ -213,6 +213,94 @@ class LocalEmbeddingProvider:
 
 
 # ---------------------------------------------------------------------------
+# Gemini provider (Google GenAI)
+# ---------------------------------------------------------------------------
+
+
+class GeminiEmbeddingProvider:
+    """Dense embeddings via the Google GenAI API (e.g. ``gemini-embedding-exp-03-07``).
+
+    Batches large inputs and retries transient failures with exponential
+    backoff.  Every API call is audit-logged with a SHA-256 hash of the
+    concatenated input texts for privilege compliance verification.
+
+    The ``google.genai`` client is synchronous, so calls are wrapped in
+    ``asyncio.to_thread()`` to avoid blocking the event loop.
+    """
+
+    def __init__(
+        self,
+        api_key: str,
+        model: str = "gemini-embedding-exp-03-07",
+        dimensions: int = 1024,
+        batch_size: int = 64,
+    ) -> None:
+        from google import genai
+
+        self._client = genai.Client(api_key=api_key)
+        self._model = model
+        self._dimensions = dimensions
+        self.batch_size = batch_size
+
+    async def embed_texts(self, texts: list[str]) -> list[list[float]]:
+        """Embed a list of texts, automatically batching if necessary."""
+        if not texts:
+            raise ValueError("Cannot embed an empty list of texts.")
+
+        all_embeddings: list[list[float]] = []
+
+        for batch_start in range(0, len(texts), self.batch_size):
+            batch = texts[batch_start : batch_start + self.batch_size]
+            batch_embeddings = await self._embed_batch(batch)
+            all_embeddings.extend(batch_embeddings)
+
+            logger.info(
+                "embedder.batch_complete",
+                batch_start=batch_start,
+                batch_size=len(batch),
+                total_embedded=len(all_embeddings),
+                total_requested=len(texts),
+            )
+
+        return all_embeddings
+
+    async def embed_query(self, text: str) -> list[float]:
+        """Embed a single query string."""
+        results = await self.embed_texts([text])
+        return results[0]
+
+    # -- internal ----------------------------------------------------------
+
+    @retry(
+        retry=retry_if_exception_type((ConnectionError, TimeoutError)),
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=30),
+        reraise=True,
+        before_sleep=before_sleep_log(logger, "warning"),  # type: ignore[arg-type]
+    )
+    async def _embed_batch(self, texts: list[str]) -> list[list[float]]:
+        """Call the Google GenAI embeddings endpoint for a single batch."""
+        # Audit log: hash of input data for privilege compliance
+        text_hash = hashlib.sha256("\n".join(texts).encode("utf-8")).hexdigest()[:16]
+        logger.info(
+            "embedder.external_api_call",
+            provider="gemini",
+            model=self._model,
+            text_count=len(texts),
+            text_hash=text_hash,
+        )
+
+        result = await asyncio.to_thread(
+            self._client.models.embed_content,
+            model=self._model,
+            contents=texts,
+            config={"output_dimensionality": self._dimensions},
+        )
+
+        return [embedding.values for embedding in result.embeddings]
+
+
+# ---------------------------------------------------------------------------
 # TEI provider (HuggingFace Text Embeddings Inference)
 # ---------------------------------------------------------------------------
 

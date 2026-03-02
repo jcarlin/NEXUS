@@ -9,6 +9,7 @@ import pytest
 
 from app.common.embedder import (
     EmbeddingProvider,
+    GeminiEmbeddingProvider,
     LocalEmbeddingProvider,
     OpenAIEmbeddingProvider,
 )
@@ -84,6 +85,66 @@ async def test_openai_provider_audit_log(caplog):
     # structlog events are captured in caplog when configured for stdlib
     # In tests without full structlog config, we verify the call succeeded
     # (the audit log is a structlog.info call in _embed_batch)
+
+
+# ---------------------------------------------------------------------------
+# Gemini provider
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_gemini_provider_embed_query():
+    """embed_query should return a list of floats via the Google GenAI API."""
+    mock_client = MagicMock()
+
+    mock_embedding = MagicMock()
+    mock_embedding.values = [0.1] * 1024
+
+    mock_result = MagicMock()
+    mock_result.embeddings = [mock_embedding]
+
+    mock_client.models.embed_content.return_value = mock_result
+
+    with patch("google.genai.Client", return_value=mock_client):
+        provider = GeminiEmbeddingProvider(api_key="test-key", dimensions=1024)
+
+    result = await provider.embed_query("test text")
+
+    assert len(result) == 1024
+    assert all(isinstance(x, float) for x in result)
+
+
+@pytest.mark.asyncio
+async def test_gemini_provider_embed_texts_batching():
+    """embed_texts should batch requests when over batch_size."""
+    mock_client = MagicMock()
+
+    def make_result(count, offset=0):
+        result = MagicMock()
+        result.embeddings = [MagicMock(values=[float(i + offset)] * 4) for i in range(count)]
+        return result
+
+    mock_client.models.embed_content.side_effect = [make_result(2, 0), make_result(1, 2)]
+
+    with patch("google.genai.Client", return_value=mock_client):
+        provider = GeminiEmbeddingProvider(api_key="test-key", dimensions=4, batch_size=2)
+
+    results = await provider.embed_texts(["a", "b", "c"])
+
+    assert len(results) == 3
+    assert mock_client.models.embed_content.call_count == 2  # Two batches
+
+
+@pytest.mark.asyncio
+async def test_gemini_provider_empty_raises():
+    """embed_texts should raise ValueError on empty list."""
+    mock_client = MagicMock()
+
+    with patch("google.genai.Client", return_value=mock_client):
+        provider = GeminiEmbeddingProvider(api_key="test-key")
+
+    with pytest.raises(ValueError, match="empty"):
+        await provider.embed_texts([])
 
 
 # ---------------------------------------------------------------------------
@@ -194,6 +255,32 @@ def test_factory_selects_local_provider():
         embedder = deps.get_embedder()
 
     assert isinstance(embedder, LocalEmbeddingProvider)
+
+    # Clean up cached singleton
+    deps.get_embedder.cache_clear()
+
+
+def test_factory_selects_gemini_provider():
+    """get_embedder() should return GeminiEmbeddingProvider when provider is gemini."""
+    import app.dependencies as deps
+
+    # Reset cached singleton
+    deps.get_embedder.cache_clear()
+
+    mock_settings = MagicMock()
+    mock_settings.embedding_provider = "gemini"
+    mock_settings.gemini_api_key = "test-key"
+    mock_settings.gemini_embedding_model = "gemini-embedding-exp-03-07"
+    mock_settings.embedding_dimensions = 1024
+    mock_settings.embedding_batch_size = 32
+
+    with (
+        patch.object(deps, "get_settings", return_value=mock_settings),
+        patch("google.genai.Client"),
+    ):
+        embedder = deps.get_embedder()
+
+    assert isinstance(embedder, GeminiEmbeddingProvider)
 
     # Clean up cached singleton
     deps.get_embedder.cache_clear()
