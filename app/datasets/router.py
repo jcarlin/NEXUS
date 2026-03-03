@@ -35,14 +35,18 @@ from app.auth.middleware import get_current_user, get_matter_id, require_role
 from app.auth.schemas import UserRecord
 from app.datasets.schemas import (
     AssignDocumentsRequest,
+    BulkImportStatusResponse,
     DatasetAccessRequest,
     DatasetAccessResponse,
     DatasetCreateRequest,
+    DatasetIngestRequest,
+    DatasetIngestResponse,
     DatasetListResponse,
     DatasetResponse,
     DatasetTreeResponse,
     DatasetUpdateRequest,
     DocumentTagsResponse,
+    DryRunEstimate,
     MoveDocumentsRequest,
     TagRequest,
     TagResponse,
@@ -346,6 +350,260 @@ async def list_documents_by_tag(
         limit,
     )
     return {"items": items, "total": total, "offset": offset, "limit": limit}
+
+
+# ------------------------------------------------------------------
+# Dataset ingestion
+# ------------------------------------------------------------------
+
+
+@router.post(
+    "/datasets/{dataset_id}/ingest",
+    response_model=DatasetIngestResponse,
+)
+async def ingest_dataset(
+    dataset_id: UUID,
+    request: DatasetIngestRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserRecord = Depends(require_role("admin", "attorney")),
+    matter_id: UUID = Depends(get_matter_id),
+) -> DatasetIngestResponse:
+    """Kick off a bulk import into a dataset."""
+    from app.ingestion.bulk_import import (
+        _get_sync_engine,
+        build_adapter,
+        create_bulk_import_job,
+    )
+    from app.ingestion.tasks import run_bulk_import
+
+    # Validate dataset exists
+    ds = await DatasetService.get_dataset(db, dataset_id, matter_id)
+    if ds is None:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    # Build source_config from request
+    source_config = _build_source_config(request)
+
+    # Validate adapter + path
+    try:
+        adapter = build_adapter(request.adapter_type, source_config)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Count documents (quick scan)
+    doc_count = sum(1 for _ in adapter.iter_documents(limit=request.limit))
+    if doc_count == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="No documents found at source path",
+        )
+
+    # Create bulk import job row
+    engine = _get_sync_engine()
+    try:
+        bulk_job_id = create_bulk_import_job(
+            engine,
+            str(matter_id),
+            request.adapter_type,
+            request.source_path,
+            doc_count,
+        )
+    finally:
+        engine.dispose()
+
+    # Dispatch Celery task
+    run_bulk_import.delay(
+        bulk_job_id=bulk_job_id,
+        adapter_type=request.adapter_type,
+        source_config=source_config,
+        matter_id=str(matter_id),
+        dataset_id=str(dataset_id),
+        options={
+            "resume": request.resume,
+            "limit": request.limit,
+            "disable_hnsw": request.disable_hnsw,
+        },
+    )
+
+    logger.info(
+        "dataset.ingest.started",
+        dataset_id=str(dataset_id),
+        bulk_job_id=bulk_job_id,
+        adapter_type=request.adapter_type,
+        total_documents=doc_count,
+    )
+
+    return DatasetIngestResponse(
+        bulk_job_id=bulk_job_id,
+        total_documents=doc_count,
+        status="processing",
+    )
+
+
+@router.post(
+    "/datasets/{dataset_id}/ingest/dry-run",
+    response_model=DryRunEstimate,
+)
+async def ingest_dry_run(
+    dataset_id: UUID,
+    request: DatasetIngestRequest,
+    db: AsyncSession = Depends(get_db),
+    _user: UserRecord = Depends(require_role("admin", "attorney")),
+    matter_id: UUID = Depends(get_matter_id),
+) -> DryRunEstimate:
+    """Count documents and estimate costs without dispatching any tasks."""
+    from app.ingestion.bulk_import import (
+        AVG_CHUNKS_PER_DOC,
+        AVG_TOKENS_PER_CHUNK,
+        EMBEDDING_COST_PER_M_TOKENS,
+        build_adapter,
+    )
+
+    # Validate dataset exists
+    ds = await DatasetService.get_dataset(db, dataset_id, matter_id)
+    if ds is None:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    source_config = _build_source_config(request)
+
+    try:
+        adapter = build_adapter(request.adapter_type, source_config)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    doc_count = 0
+    total_chars = 0
+    for doc in adapter.iter_documents(limit=request.limit):
+        doc_count += 1
+        total_chars += len(doc.text)
+
+    est_chunks = int(doc_count * AVG_CHUNKS_PER_DOC)
+    est_tokens = est_chunks * AVG_TOKENS_PER_CHUNK
+    est_cost = (est_tokens / 1_000_000) * EMBEDDING_COST_PER_M_TOKENS
+
+    return DryRunEstimate(
+        total_documents=doc_count,
+        total_characters=total_chars,
+        estimated_chunks=est_chunks,
+        estimated_tokens=est_tokens,
+        estimated_cost_usd=round(est_cost, 4),
+    )
+
+
+@router.get(
+    "/datasets/{dataset_id}/ingest/status",
+    response_model=list[BulkImportStatusResponse],
+)
+async def list_ingest_jobs(
+    dataset_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _user: UserRecord = Depends(get_current_user),
+    matter_id: UUID = Depends(get_matter_id),
+) -> list[BulkImportStatusResponse]:
+    """List bulk import jobs for a dataset."""
+    from sqlalchemy import text
+
+    # Validate dataset exists
+    ds = await DatasetService.get_dataset(db, dataset_id, matter_id)
+    if ds is None:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    result = await db.execute(
+        text(
+            """
+            SELECT b.id, b.status, b.adapter_type, b.source_path,
+                   b.total_documents, b.processed_documents,
+                   b.failed_documents, b.skipped_documents,
+                   b.created_at, b.completed_at, b.error
+            FROM bulk_import_jobs b
+            WHERE b.matter_id = :matter_id
+            ORDER BY b.created_at DESC
+            LIMIT 50
+            """
+        ),
+        {"matter_id": str(matter_id)},
+    )
+    rows = result.fetchall()
+    return [
+        BulkImportStatusResponse(
+            id=str(row.id),
+            status=row.status,
+            adapter_type=row.adapter_type,
+            source_path=row.source_path,
+            total_documents=row.total_documents,
+            processed_documents=row.processed_documents,
+            failed_documents=row.failed_documents,
+            skipped_documents=row.skipped_documents,
+            created_at=str(row.created_at),
+            completed_at=(str(row.completed_at) if row.completed_at else None),
+            error=row.error,
+        )
+        for row in rows
+    ]
+
+
+@router.get(
+    "/datasets/{dataset_id}/ingest/{bulk_job_id}",
+    response_model=BulkImportStatusResponse,
+)
+async def get_ingest_job(
+    dataset_id: UUID,
+    bulk_job_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _user: UserRecord = Depends(get_current_user),
+    matter_id: UUID = Depends(get_matter_id),
+) -> BulkImportStatusResponse:
+    """Get a single bulk import job's progress."""
+    from sqlalchemy import text
+
+    result = await db.execute(
+        text(
+            """
+            SELECT id, status, adapter_type, source_path,
+                   total_documents, processed_documents,
+                   failed_documents, skipped_documents,
+                   created_at, completed_at, error
+            FROM bulk_import_jobs
+            WHERE id = :id AND matter_id = :matter_id
+            """
+        ),
+        {"id": str(bulk_job_id), "matter_id": str(matter_id)},
+    )
+    row = result.first()
+    if row is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Bulk import job not found",
+        )
+
+    return BulkImportStatusResponse(
+        id=str(row.id),
+        status=row.status,
+        adapter_type=row.adapter_type,
+        source_path=row.source_path,
+        total_documents=row.total_documents,
+        processed_documents=row.processed_documents,
+        failed_documents=row.failed_documents,
+        skipped_documents=row.skipped_documents,
+        created_at=str(row.created_at),
+        completed_at=(str(row.completed_at) if row.completed_at else None),
+        error=row.error,
+    )
+
+
+def _build_source_config(request: DatasetIngestRequest) -> dict:
+    """Build the adapter source_config dict from the request."""
+    if request.adapter_type == "directory":
+        return {"data_dir": request.source_path}
+    elif request.adapter_type == "huggingface_csv":
+        return {"file_path": request.source_path}
+    elif request.adapter_type in ("edrm_xml", "concordance_dat"):
+        config: dict = {"file_path": request.source_path}
+        if request.content_dir:
+            config["content_dir"] = request.content_dir
+        return config
+    else:
+        return {"file_path": request.source_path}
 
 
 # ------------------------------------------------------------------

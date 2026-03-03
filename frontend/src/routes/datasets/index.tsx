@@ -9,6 +9,7 @@ import {
   Plus,
   Trash2,
   Shield,
+  Upload,
   X,
 } from "lucide-react";
 import { apiClient } from "@/api/client";
@@ -30,6 +31,8 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { DatasetAccessDialog } from "@/components/datasets/dataset-access-dialog";
+import { IngestDialog } from "@/components/datasets/ingest-dialog";
+import { IngestProgress } from "@/components/datasets/ingest-progress";
 import type {
   DatasetTreeResponse,
   DatasetTreeNode,
@@ -145,6 +148,7 @@ function DatasetsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [accessOpen, setAccessOpen] = useState(false);
+  const [ingestOpen, setIngestOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newDescription, setNewDescription] = useState("");
   const [docOffset, setDocOffset] = useState(0);
@@ -306,6 +310,15 @@ function DatasetsPage() {
                   : "Loading..."}
               </span>
               <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => setIngestOpen(true)}
+                  title="Import documents"
+                >
+                  <Upload className="h-4 w-4" />
+                </Button>
                 {showPermissions && (
                   <Button
                     variant="ghost"
@@ -329,6 +342,8 @@ function DatasetsPage() {
                 </Button>
               </div>
             </div>
+
+            <IngestProgress datasetId={selectedId} />
 
             {/* Selection indicator */}
             {selectedDocIds.size > 0 && (
@@ -510,6 +525,20 @@ function DatasetsPage() {
           open={accessOpen}
           onOpenChange={setAccessOpen}
           datasetId={selectedId}
+        />
+      )}
+
+      {/* Ingest dialog */}
+      {selectedId && (
+        <IngestDialog
+          open={ingestOpen}
+          onOpenChange={setIngestOpen}
+          datasetId={selectedId}
+          onStarted={() =>
+            queryClient.invalidateQueries({
+              queryKey: ["datasets", selectedId, "ingest"],
+            })
+          }
         />
       )}
     </div>

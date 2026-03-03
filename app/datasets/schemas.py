@@ -114,3 +114,65 @@ class DatasetAccessResponse(BaseModel):
     access_role: DatasetAccessRole
     granted_by: UUID | None = None
     granted_at: datetime
+
+
+# ---------------------------------------------------------------------------
+# Dataset ingestion
+# ---------------------------------------------------------------------------
+
+
+class DatasetIngestRequest(BaseModel):
+    adapter_type: str = Field(
+        ...,
+        description="Adapter type: directory, huggingface_csv, edrm_xml, concordance_dat",
+    )
+    source_path: str = Field(
+        ...,
+        min_length=1,
+        description="Primary path (directory or file)",
+    )
+    content_dir: str | None = Field(
+        default=None,
+        description="Content directory for EDRM/Concordance referenced files",
+    )
+    resume: bool = Field(
+        default=False,
+        description="Skip documents whose content hash already exists",
+    )
+    limit: int | None = Field(
+        default=None,
+        ge=1,
+        description="Import at most N documents",
+    )
+    disable_hnsw: bool = Field(
+        default=False,
+        description="Disable HNSW indexing during import for faster inserts",
+    )
+
+
+class DatasetIngestResponse(BaseModel):
+    bulk_job_id: str
+    total_documents: int
+    status: str
+
+
+class DryRunEstimate(BaseModel):
+    total_documents: int
+    total_characters: int
+    estimated_chunks: int
+    estimated_tokens: int
+    estimated_cost_usd: float
+
+
+class BulkImportStatusResponse(BaseModel):
+    id: str
+    status: str
+    adapter_type: str
+    source_path: str
+    total_documents: int
+    processed_documents: int
+    failed_documents: int
+    skipped_documents: int
+    created_at: str
+    completed_at: str | None = None
+    error: str | None = None

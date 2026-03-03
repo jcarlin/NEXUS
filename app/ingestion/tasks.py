@@ -1849,3 +1849,164 @@ def _infer_doc_type(filename: str) -> str:
         ".tif": "image",
     }
     return type_map.get(ext, "other")
+
+
+# ---------------------------------------------------------------------------
+# Bulk import orchestrator task
+# ---------------------------------------------------------------------------
+
+
+@shared_task(
+    bind=True,
+    name="ingestion.run_bulk_import",
+    acks_late=True,
+    reject_on_worker_lost=True,
+)
+def run_bulk_import(
+    self,
+    bulk_job_id: str,
+    adapter_type: str,
+    source_config: dict,
+    matter_id: str,
+    dataset_id: str,
+    options: dict,
+) -> dict:
+    """Orchestrate a bulk dataset import as a Celery task.
+
+    Builds the appropriate adapter, iterates documents, creates job rows,
+    and dispatches ``import_text_document`` subtasks for each document.
+    """
+    import uuid as _uuid
+
+    import structlog
+
+    from app.ingestion.bulk_import import (
+        build_adapter,
+        check_resume,
+        complete_bulk_job,
+        create_job_row,
+        dispatch_post_ingestion_hooks,
+        increment_skipped,
+    )
+
+    _logger = structlog.get_logger(__name__)
+    structlog.contextvars.clear_contextvars()
+    structlog.contextvars.bind_contextvars(
+        task_id=self.request.id,
+        bulk_job_id=bulk_job_id,
+        matter_id=matter_id,
+    )
+
+    resume = options.get("resume", False)
+    limit = options.get("limit")
+    disable_hnsw = options.get("disable_hnsw", False)
+
+    engine = _get_sync_engine()
+    qdrant_client = None
+
+    try:
+        # Build adapter
+        adapter = build_adapter(adapter_type, source_config)
+
+        # Disable HNSW if requested
+        if disable_hnsw:
+            from app.common.vector_store import (
+                TEXT_COLLECTION,
+                VectorStoreClient,
+            )
+            from app.config import Settings
+
+            settings = Settings()
+            qdrant_client = VectorStoreClient(settings)
+            _logger.info("bulk_import.hnsw_disabled")
+            qdrant_client.disable_hnsw_indexing(TEXT_COLLECTION)
+
+        # Dispatch tasks
+        dispatched = 0
+        skipped = 0
+
+        for doc in adapter.iter_documents(limit=limit):
+            # Skip empty text
+            if not doc.text.strip():
+                skipped += 1
+                increment_skipped(engine, bulk_job_id)
+                continue
+
+            # Resume: skip if content hash exists
+            if resume and check_resume(
+                engine,
+                doc.content_hash,
+                matter_id,
+            ):
+                skipped += 1
+                increment_skipped(engine, bulk_job_id)
+                continue
+
+            # Create job row
+            job_id = str(_uuid.uuid4())
+            create_job_row(
+                engine,
+                job_id,
+                doc.filename,
+                matter_id,
+                dataset_id,
+            )
+
+            # Dispatch per-document task
+            import_text_document.delay(
+                job_id=job_id,
+                text=doc.text,
+                filename=doc.filename,
+                content_hash=doc.content_hash,
+                matter_id=matter_id,
+                doc_type=doc.doc_type,
+                page_count=doc.page_count,
+                metadata=doc.metadata,
+                pre_entities=doc.entities if doc.entities else None,
+                import_source=doc.source,
+                bulk_import_job_id=bulk_job_id,
+                email_headers=doc.email_headers,
+            )
+
+            dispatched += 1
+
+        # Rebuild HNSW if it was disabled
+        if disable_hnsw and qdrant_client:
+            from app.common.vector_store import TEXT_COLLECTION
+
+            _logger.info("bulk_import.hnsw_rebuilding")
+            qdrant_client.rebuild_hnsw_index(TEXT_COLLECTION)
+
+        # Dispatch post-ingestion hooks
+        dispatched_hooks = dispatch_post_ingestion_hooks(matter_id)
+        _logger.info(
+            "bulk_import.hooks_dispatched",
+            hooks=dispatched_hooks,
+        )
+
+        # Mark bulk job as dispatched (tasks still running in Celery)
+        complete_bulk_job(engine, bulk_job_id, "complete")
+
+        _logger.info(
+            "bulk_import.complete",
+            dispatched=dispatched,
+            skipped=skipped,
+        )
+
+        return {
+            "bulk_job_id": bulk_job_id,
+            "dispatched": dispatched,
+            "skipped": skipped,
+            "status": "complete",
+        }
+
+    except Exception as exc:
+        _logger.error(
+            "bulk_import.failed",
+            error=str(exc),
+            exc_info=True,
+        )
+        complete_bulk_job(engine, bulk_job_id, "failed", str(exc))
+        raise
+    finally:
+        engine.dispose()

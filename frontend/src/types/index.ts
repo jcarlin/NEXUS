@@ -293,3 +293,48 @@ export interface AnnotationUpdate {
   anchor?: AnnotationAnchor | null;
   color?: string | null;
 }
+
+// --- Dataset Ingestion ---
+
+export type AdapterType =
+  | "directory"
+  | "huggingface_csv"
+  | "edrm_xml"
+  | "concordance_dat";
+
+export interface DatasetIngestRequest {
+  adapter_type: AdapterType;
+  source_path: string;
+  content_dir?: string | null;
+  resume?: boolean;
+  limit?: number | null;
+  disable_hnsw?: boolean;
+}
+
+export interface DatasetIngestResponse {
+  bulk_job_id: string;
+  total_documents: number;
+  status: string;
+}
+
+export interface DryRunEstimate {
+  total_documents: number;
+  total_characters: number;
+  estimated_chunks: number;
+  estimated_tokens: number;
+  estimated_cost_usd: number;
+}
+
+export interface BulkImportStatusResponse {
+  id: string;
+  status: string;
+  adapter_type: string;
+  source_path: string;
+  total_documents: number;
+  processed_documents: number;
+  failed_documents: number;
+  skipped_documents: number;
+  created_at: string;
+  completed_at: string | null;
+  error: string | null;
+}
