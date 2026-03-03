@@ -63,6 +63,9 @@ models/
 # PaddleOCR cache
 ~/.paddleocr/
 
+# Local dataset files
+data/
+
 # MinIO local data
 minio_data/
 
