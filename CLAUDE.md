@@ -119,7 +119,7 @@ Multimodal RAG investigation platform for legal document intelligence. Ingests, 
 ## Key Patterns
 
 - **LLM abstraction** (`app/common/llm.py`): Unified client for Anthropic/OpenAI/vLLM/Ollama. Cloud→local migration = change `LLM_PROVIDER` + base URL in `.env`
-- **Multi-provider embeddings** (`app/common/embedder.py`): `EmbeddingProvider` protocol with 4 implementations (OpenAI, local, TEI, Gemini). Switch via `EMBEDDING_PROVIDER`
+- **Multi-provider embeddings** (`app/common/embedder.py`): `EmbeddingProvider` protocol with 5 implementations (OpenAI, Ollama, local, TEI, Gemini). Switch via `EMBEDDING_PROVIDER`
 - **DI singletons** (`app/dependencies.py`): All clients via `@functools.cache` factory functions (20 factories, see `_ALL_CACHED_FACTORIES`)
 - **Hybrid retrieval** (`app/query/retriever.py`): Qdrant dense+sparse with native RRF fusion + Neo4j multi-hop graph traversal + optional visual rerank
 - **Agentic query** (`app/query/graph.py`): `create_react_agent` with 12 tools → `case_context_resolve` → `investigation_agent` → `verify_citations` → `generate_follow_ups`

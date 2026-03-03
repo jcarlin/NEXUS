@@ -13,7 +13,7 @@ Multimodal RAG investigation platform for legal document intelligence. Ingests, 
 | Vector DB | Qdrant |
 | Knowledge Graph | Neo4j |
 | LLM | Claude Sonnet 4.5 (Anthropic API) |
-| Embeddings | OpenAI `text-embedding-3-large` |
+| Embeddings | Multi-provider (OpenAI, Ollama, local, Gemini, TEI) |
 | NER | GLiNER (zero-shot, CPU) |
 | Doc Parsing | Docling (PDF, DOCX, XLSX, PPTX, HTML, images) + stdlib (EML, MSG, RTF, CSV, TXT) |
 | Query Orchestration | LangGraph (agentic state graph) |
@@ -27,7 +27,7 @@ Multimodal RAG investigation platform for legal document intelligence. Ingests, 
 - [Docker](https://docs.docker.com/get-docker/) (for infrastructure services)
 - [uv](https://docs.astral.sh/uv/) (Python package manager)
 - [Anthropic API key](https://console.anthropic.com/)
-- [OpenAI API key](https://platform.openai.com/api-keys) (for embeddings)
+- [OpenAI API key](https://platform.openai.com/api-keys) (for embeddings — not needed if using Ollama or local)
 - [Ollama](https://ollama.com/) (optional — for local LLM inference)
 
 ## Quick Start
@@ -53,6 +53,20 @@ NEXUS supports 4 LLM providers. Set `LLM_PROVIDER` and the corresponding env var
 | Ollama | `ollama` | `OLLAMA_BASE_URL` |
 
 vLLM and Ollama both expose OpenAI-compatible APIs, so switching is a config change — no code changes needed. See `.env.local.example` for a full local deployment config.
+
+## Embedding Providers
+
+NEXUS supports 5 embedding providers. Set `EMBEDDING_PROVIDER` in `.env`:
+
+| Provider | `EMBEDDING_PROVIDER` | Default Model | Dimensions | Requires |
+|----------|---------------------|---------------|------------|----------|
+| OpenAI | `openai` | `text-embedding-3-large` | 1024 | `OPENAI_API_KEY` |
+| Ollama | `ollama` | `nomic-embed-text` | 768 | `OLLAMA_BASE_URL` + model pulled |
+| Local | `local` | `BAAI/bge-large-en-v1.5` | 1024 | — (auto-downloads) |
+| Gemini | `gemini` | `gemini-embedding-exp-03-07` | 1024 | `GEMINI_API_KEY` |
+| TEI | `tei` | Any HuggingFace model | varies | `TEI_EMBEDDING_URL` |
+
+Ollama and Local providers run entirely on-device — no data leaves the machine. Set `EMBEDDING_DIMENSIONS` to match your model's output size. Changing dimensions requires deleting the Qdrant `nexus_text` collection (auto-recreated on startup).
 
 ## Makefile Targets
 
