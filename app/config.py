@@ -22,6 +22,8 @@ class EmbeddingConfig(BaseModel):
     local_model: str
     batch_size: int
     tei_url: str
+    ollama_model: str
+    ollama_base_url: str
     enable_visual: bool
     visual_model: str
     visual_device: str
@@ -115,12 +117,13 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434/v1"
 
     # --- Embedding ---
-    embedding_provider: str = "openai"  # openai | local | tei | gemini
+    embedding_provider: str = "openai"  # openai | local | tei | gemini | ollama
     embedding_model: str = "text-embedding-3-large"
     gemini_embedding_model: str = "gemini-embedding-exp-03-07"
     embedding_dimensions: int = 1024
     local_embedding_model: str = "BAAI/bge-large-en-v1.5"
     tei_embedding_url: str = "http://localhost:8081"
+    ollama_embedding_model: str = "nomic-embed-text"
     enable_visual_embeddings: bool = False  # ColQwen2.5 visual reranking
     visual_embedding_model: str = "vidore/colqwen2.5-v0.2"
     visual_embedding_device: str = "mps"  # mps | cuda | cpu
@@ -280,6 +283,8 @@ class Settings(BaseSettings):
                 local_model=self.local_embedding_model,
                 batch_size=self.embedding_batch_size,
                 tei_url=self.tei_embedding_url,
+                ollama_model=self.ollama_embedding_model,
+                ollama_base_url=self.ollama_base_url.removesuffix("/v1"),
                 enable_visual=self.enable_visual_embeddings,
                 visual_model=self.visual_embedding_model,
                 visual_device=self.visual_embedding_device,

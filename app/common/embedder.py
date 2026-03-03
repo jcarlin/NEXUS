@@ -363,3 +363,71 @@ class TEIEmbeddingProvider:
     async def close(self) -> None:
         """Close the underlying HTTP client."""
         await self._client.aclose()
+
+
+# ---------------------------------------------------------------------------
+# Ollama provider (native /api/embed endpoint)
+# ---------------------------------------------------------------------------
+
+
+class OllamaEmbeddingProvider:
+    """Dense embeddings via a local Ollama server.
+
+    Calls the native ``/api/embed`` endpoint (not the OpenAI-compatible API).
+    No data leaves the machine — safe for privileged documents.
+    """
+
+    def __init__(
+        self,
+        base_url: str = "http://localhost:11434",
+        model: str = "nomic-embed-text",
+        dimensions: int = 768,
+    ) -> None:
+        self._base_url = base_url.rstrip("/")
+        self._model = model
+        self._dimensions = dimensions
+        self._client = httpx.AsyncClient(base_url=self._base_url, timeout=120.0)
+
+    @retry(
+        retry=retry_if_exception_type((httpx.ConnectError, httpx.TimeoutException)),
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=30),
+        reraise=True,
+        before_sleep=before_sleep_log(logger, "warning"),  # type: ignore[arg-type]
+    )
+    async def _embed_batch(self, texts: list[str]) -> list[list[float]]:
+        """Call the Ollama /api/embed endpoint for a batch of texts."""
+        response = await self._client.post(
+            "/api/embed",
+            json={"model": self._model, "input": texts},
+        )
+        response.raise_for_status()
+        data = response.json()
+        embeddings: list[list[float]] = data["embeddings"]
+
+        # Truncate to requested dimensions if model produces more
+        return [vec[: self._dimensions] for vec in embeddings]
+
+    async def embed_texts(self, texts: list[str]) -> list[list[float]]:
+        """Embed a batch of texts via the Ollama server."""
+        if not texts:
+            raise ValueError("Cannot embed an empty list of texts.")
+
+        result = await self._embed_batch(texts)
+
+        logger.info(
+            "embedder.batch_complete",
+            provider="ollama",
+            model=self._model,
+            count=len(texts),
+        )
+        return result
+
+    async def embed_query(self, text: str) -> list[float]:
+        """Embed a single query string."""
+        results = await self.embed_texts([text])
+        return results[0]
+
+    async def close(self) -> None:
+        """Close the underlying HTTP client."""
+        await self._client.aclose()
