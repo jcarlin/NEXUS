@@ -65,10 +65,15 @@ function LoginPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background">
-      <Card className="w-full max-w-sm">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold">NEXUS</CardTitle>
-          <CardDescription>Legal Document Intelligence Platform</CardDescription>
+      <Card className="w-full max-w-[400px] shadow-lg shadow-primary/5">
+        <CardHeader className="space-y-1 text-center pb-8">
+          <CardTitle className="text-3xl font-bold tracking-widest text-amber">
+            NEXUS
+          </CardTitle>
+          <div className="mx-auto h-px w-12 bg-amber/40" />
+          <CardDescription className="pt-2">
+            Legal Document Intelligence Platform
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">

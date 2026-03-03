@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { apiClient } from "@/api/client";
 import { useAppStore } from "@/stores/app-store";
-import { Button } from "@/components/ui/button";
+import { Pagination } from "@/components/ui/pagination";
 import { ResultSetTable } from "@/components/review/result-set-table";
 import type { DocumentResponse, PaginatedResponse } from "@/types";
 
@@ -38,31 +38,7 @@ function ResultSetPage() {
 
       <ResultSetTable data={data?.items ?? []} loading={isLoading} />
 
-      {data && data.total > limit && (
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">
-            Showing {offset + 1}&ndash;{Math.min(offset + limit, data.total)} of {data.total}
-          </span>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={offset === 0}
-              onClick={() => setOffset(Math.max(0, offset - limit))}
-            >
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={offset + limit >= data.total}
-              onClick={() => setOffset(offset + limit)}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
-      )}
+      {data && <Pagination total={data.total} offset={offset} limit={limit} onOffsetChange={setOffset} />}
     </div>
   );
 }

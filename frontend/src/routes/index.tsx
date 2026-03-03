@@ -33,6 +33,18 @@ function DashboardPage() {
     enabled: !!matterId,
   });
 
+  const { data: activeJobs, isLoading: jobsLoading } = useQuery({
+    queryKey: ["active-jobs", matterId],
+    queryFn: () =>
+      apiClient<PaginatedResponse<{ id: string }>>({
+        url: "/api/v1/jobs",
+        method: "GET",
+        params: { status: "processing", limit: 1 },
+      }),
+    enabled: !!matterId,
+    refetchInterval: 10000,
+  });
+
   const { data: hotDocs, isLoading: hotDocsLoading } = useQuery({
     queryKey: ["hot-doc-count", matterId],
     queryFn: () =>
@@ -75,9 +87,9 @@ function DashboardPage() {
         />
         <StatCard
           title="Processing"
-          value="—"
+          value={activeJobs?.total ?? 0}
           icon={Loader2}
-          loading={false}
+          loading={jobsLoading}
           description="Active pipeline jobs"
         />
       </div>

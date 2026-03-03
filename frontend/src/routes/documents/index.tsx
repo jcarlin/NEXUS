@@ -4,7 +4,9 @@ import { useState } from "react";
 import { Upload } from "lucide-react";
 import { apiClient } from "@/api/client";
 import { useAppStore } from "@/stores/app-store";
+import { useDebounce } from "@/hooks/use-debounce";
 import { Button } from "@/components/ui/button";
+import { Pagination } from "@/components/ui/pagination";
 import { DocumentTable } from "@/components/documents/document-table";
 import { DocumentFilters } from "@/components/documents/document-filters";
 import type { DocumentResponse, PaginatedResponse } from "@/types";
@@ -18,19 +20,20 @@ function DocumentsPage() {
   const matterId = useAppStore((s) => s.matterId);
   const datasetId = useAppStore((s) => s.datasetId);
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search, 300);
   const [docType, setDocType] = useState("all");
   const [privilege, setPrivilege] = useState("all");
   const [offset, setOffset] = useState(0);
   const limit = 50;
 
   const { data, isLoading } = useQuery({
-    queryKey: ["documents", matterId, search, docType, privilege, offset, datasetId],
+    queryKey: ["documents", matterId, debouncedSearch, docType, privilege, offset, datasetId],
     queryFn: () =>
       apiClient<PaginatedResponse<DocumentResponse>>({
         url: "/api/v1/documents",
         method: "GET",
         params: {
-          q: search || undefined,
+          q: debouncedSearch || undefined,
           document_type: docType !== "all" ? docType : undefined,
           dataset_id: datasetId || undefined,
           offset,
@@ -66,21 +69,7 @@ function DocumentsPage() {
 
       <DocumentTable data={data?.items ?? []} loading={isLoading} />
 
-      {data && data.total > limit && (
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">
-            Showing {offset + 1}–{Math.min(offset + limit, data.total)} of {data.total}
-          </span>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - limit))}>
-              Previous
-            </Button>
-            <Button variant="outline" size="sm" disabled={offset + limit >= data.total} onClick={() => setOffset(offset + limit)}>
-              Next
-            </Button>
-          </div>
-        </div>
-      )}
+      {data && <Pagination total={data.total} offset={offset} limit={limit} onOffsetChange={setOffset} />}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { useRef, useEffect } from "react";
+import { MessageSquare } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { UserMessage } from "./user-message";
 import { AssistantMessage } from "./assistant-message";
@@ -9,6 +10,13 @@ import type {
   EntityMention,
   CitedClaim,
 } from "@/types";
+
+const EXAMPLE_QUERIES = [
+  "Who are the key parties in this matter?",
+  "Summarize the timeline of events",
+  "Which documents mention financial transactions?",
+  "Find communications between executives",
+];
 
 interface StreamingMessage {
   text: string;
@@ -21,9 +29,10 @@ interface MessageListProps {
   messages: ChatMessage[];
   streaming?: StreamingMessage | null;
   stage?: string | null;
+  onExampleClick?: (query: string) => void;
 }
 
-export function MessageList({ messages, streaming, stage }: MessageListProps) {
+export function MessageList({ messages, streaming, stage, onExampleClick }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -34,13 +43,28 @@ export function MessageList({ messages, streaming, stage }: MessageListProps) {
     <ScrollArea className="flex-1">
       <div className="mx-auto max-w-3xl space-y-4 px-4 py-6">
         {messages.length === 0 && !streaming && (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <p className="text-lg font-medium text-muted-foreground">
-              Start an investigation query
+          <div className="flex flex-1 flex-col items-center justify-center px-4 text-center">
+            <div className="rounded-full bg-primary/10 p-4 mb-4">
+              <MessageSquare className="h-8 w-8 text-primary" />
+            </div>
+            <h2 className="text-xl font-semibold tracking-tight">Start an Investigation</h2>
+            <p className="mt-2 max-w-md text-sm text-muted-foreground">
+              Ask questions about documents, entities, timelines, or communication patterns across your corpus.
             </p>
-            <p className="mt-1 text-sm text-muted-foreground/70">
-              Ask questions about documents, entities, timelines, or patterns.
-            </p>
+            {onExampleClick && (
+              <div className="mt-6 flex flex-wrap justify-center gap-2">
+                {EXAMPLE_QUERIES.map((q) => (
+                  <button
+                    key={q}
+                    type="button"
+                    className="rounded-full border border-border bg-card px-4 py-2 text-sm transition-all duration-150 hover:bg-accent/60 hover:border-primary/30 active:scale-[0.97]"
+                    onClick={() => onExampleClick(q)}
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

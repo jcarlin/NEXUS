@@ -66,6 +66,7 @@ function ChatPage() {
               : null
           }
           stage={stage}
+          onExampleClick={handleSend}
         />
 
         {streamDone && followUps.length > 0 && (

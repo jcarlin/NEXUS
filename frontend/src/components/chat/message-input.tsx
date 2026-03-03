@@ -37,7 +37,8 @@ export function MessageInput({ onSend, disabled }: MessageInputProps) {
   };
 
   return (
-    <div className="flex items-end gap-2 border-t bg-background p-4">
+    <div className="border-t bg-background px-4 pt-4 pb-3">
+    <div className="flex items-end gap-2">
       <textarea
         ref={textareaRef}
         value={text}
@@ -47,7 +48,7 @@ export function MessageInput({ onSend, disabled }: MessageInputProps) {
         placeholder="Ask a question about the investigation..."
         rows={1}
         disabled={disabled}
-        className="flex-1 resize-none rounded-md border bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
+        className="flex-1 resize-none rounded-md border border-border/60 bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20 transition-colors disabled:opacity-50"
       />
       <Button
         size="icon"
@@ -57,6 +58,10 @@ export function MessageInput({ onSend, disabled }: MessageInputProps) {
       >
         <Send className="h-4 w-4" />
       </Button>
+    </div>
+    <p className="px-1 pt-1 text-[11px] text-muted-foreground/50">
+      Enter to send · Shift+Enter for new line
+    </p>
     </div>
   );
 }
