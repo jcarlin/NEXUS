@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import numpy as np
 import pytest
 
@@ -11,6 +12,7 @@ from app.common.embedder import (
     EmbeddingProvider,
     GeminiEmbeddingProvider,
     LocalEmbeddingProvider,
+    OllamaEmbeddingProvider,
     OpenAIEmbeddingProvider,
 )
 
@@ -284,6 +286,110 @@ def test_factory_selects_gemini_provider():
 
     # Clean up cached singleton
     deps.get_embedder.cache_clear()
+
+
+def test_factory_selects_ollama_provider():
+    """get_embedder() should return OllamaEmbeddingProvider when provider is ollama."""
+    import app.dependencies as deps
+
+    # Reset cached singleton
+    deps.get_embedder.cache_clear()
+
+    mock_settings = MagicMock()
+    mock_settings.embedding_provider = "ollama"
+    mock_settings.ollama_base_url = "http://localhost:11434/v1"
+    mock_settings.ollama_embedding_model = "nomic-embed-text"
+    mock_settings.embedding_dimensions = 768
+
+    with patch.object(deps, "get_settings", return_value=mock_settings):
+        embedder = deps.get_embedder()
+
+    assert isinstance(embedder, OllamaEmbeddingProvider)
+
+    # Clean up cached singleton
+    deps.get_embedder.cache_clear()
+
+
+# ---------------------------------------------------------------------------
+# Ollama provider
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_ollama_provider_embed_query():
+    """embed_query should return a list of floats via the Ollama /api/embed endpoint."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"embeddings": [[0.1, 0.2, 0.3, 0.4]]}
+    mock_response.raise_for_status = MagicMock()
+
+    provider = OllamaEmbeddingProvider(base_url="http://localhost:11434", model="nomic-embed-text", dimensions=4)
+    provider._client = AsyncMock(spec=httpx.AsyncClient)
+    provider._client.post = AsyncMock(return_value=mock_response)
+
+    result = await provider.embed_query("test query")
+
+    provider._client.post.assert_called_once_with(
+        "/api/embed",
+        json={"model": "nomic-embed-text", "input": ["test query"]},
+    )
+    assert result == [0.1, 0.2, 0.3, 0.4]
+
+
+@pytest.mark.asyncio
+async def test_ollama_provider_embed_texts():
+    """Multiple texts are sent in a single /api/embed call."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "embeddings": [
+            [0.1, 0.2, 0.3],
+            [0.4, 0.5, 0.6],
+        ]
+    }
+    mock_response.raise_for_status = MagicMock()
+
+    provider = OllamaEmbeddingProvider(base_url="http://localhost:11434", model="nomic-embed-text", dimensions=3)
+    provider._client = AsyncMock(spec=httpx.AsyncClient)
+    provider._client.post = AsyncMock(return_value=mock_response)
+
+    result = await provider.embed_texts(["chunk 1", "chunk 2"])
+
+    assert len(result) == 2
+    assert result[0] == [0.1, 0.2, 0.3]
+    assert result[1] == [0.4, 0.5, 0.6]
+
+
+@pytest.mark.asyncio
+async def test_ollama_provider_truncates_dimensions():
+    """Vectors are truncated to configured dimensions."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"embeddings": [[0.1, 0.2, 0.3, 0.4, 0.5]]}
+    mock_response.raise_for_status = MagicMock()
+
+    provider = OllamaEmbeddingProvider(base_url="http://localhost:11434", model="nomic-embed-text", dimensions=3)
+    provider._client = AsyncMock(spec=httpx.AsyncClient)
+    provider._client.post = AsyncMock(return_value=mock_response)
+
+    result = await provider.embed_texts(["text"])
+
+    assert len(result[0]) == 3
+    assert result[0] == [0.1, 0.2, 0.3]
+
+
+@pytest.mark.asyncio
+async def test_ollama_provider_empty_raises():
+    """embed_texts should raise ValueError on empty list."""
+    provider = OllamaEmbeddingProvider(base_url="http://localhost:11434", model="nomic-embed-text")
+    with pytest.raises(ValueError, match="empty"):
+        await provider.embed_texts([])
+
+
+def test_ollama_provider_satisfies_protocol():
+    """OllamaEmbeddingProvider is a valid EmbeddingProvider."""
+    provider = OllamaEmbeddingProvider(base_url="http://localhost:11434", model="nomic-embed-text")
+    assert isinstance(provider, EmbeddingProvider)
 
 
 def test_protocol_is_runtime_checkable():

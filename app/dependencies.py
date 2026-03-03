@@ -20,6 +20,7 @@ from app.common.embedder import (
     EmbeddingProvider,
     GeminiEmbeddingProvider,
     LocalEmbeddingProvider,
+    OllamaEmbeddingProvider,
     OpenAIEmbeddingProvider,
     TEIEmbeddingProvider,
 )
@@ -169,6 +170,12 @@ def get_embedder() -> EmbeddingProvider:
             model=settings.gemini_embedding_model,
             dimensions=settings.embedding_dimensions,
             batch_size=settings.embedding_batch_size,
+        )
+    if settings.embedding_provider == "ollama":
+        return OllamaEmbeddingProvider(
+            base_url=settings.ollama_base_url.removesuffix("/v1"),
+            model=settings.ollama_embedding_model,
+            dimensions=settings.embedding_dimensions,
         )
     return OpenAIEmbeddingProvider(
         api_key=settings.openai_api_key,

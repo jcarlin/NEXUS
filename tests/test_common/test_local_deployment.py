@@ -116,6 +116,24 @@ class TestLocalDeploymentConfig:
             if created:
                 env_local.unlink(missing_ok=True)
 
+    def test_config_loading_with_ollama_embedding_provider(self):
+        """Settings with ollama embedding provider populates nested config correctly."""
+        s = Settings(
+            llm_provider="anthropic",
+            embedding_provider="ollama",
+            ollama_base_url="http://localhost:11434/v1",
+            ollama_embedding_model="nomic-embed-text",
+            embedding_dimensions=768,
+            anthropic_api_key="test-key",
+            openai_api_key="",
+        )
+
+        assert s.embedding is not None
+        assert s.embedding.provider == "ollama"
+        assert s.embedding.ollama_model == "nomic-embed-text"
+        # /v1 suffix should be stripped for the native embedding API
+        assert s.embedding.ollama_base_url == "http://localhost:11434"
+
     def test_config_loading_with_tei_providers(self):
         """Settings accepts tei embedding provider and TEI URLs in nested config groups."""
         s = Settings(
@@ -341,6 +359,24 @@ class TestDIFactory:
             get_embedder.cache_clear()
             embedder = get_embedder()
             assert isinstance(embedder, TEIEmbeddingProvider)
+            get_embedder.cache_clear()
+
+    def test_factory_selects_ollama_embedding_provider(self):
+        """get_embedder returns OllamaEmbeddingProvider when EMBEDDING_PROVIDER=ollama."""
+        from app.common.embedder import OllamaEmbeddingProvider
+
+        mock_settings = MagicMock()
+        mock_settings.embedding_provider = "ollama"
+        mock_settings.ollama_base_url = "http://localhost:11434/v1"
+        mock_settings.ollama_embedding_model = "nomic-embed-text"
+        mock_settings.embedding_dimensions = 768
+
+        with patch("app.dependencies.get_settings", return_value=mock_settings):
+            from app.dependencies import get_embedder
+
+            get_embedder.cache_clear()
+            embedder = get_embedder()
+            assert isinstance(embedder, OllamaEmbeddingProvider)
             get_embedder.cache_clear()
 
     def test_factory_selects_tei_reranker(self):
