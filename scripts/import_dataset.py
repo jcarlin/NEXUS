@@ -12,6 +12,9 @@ Usage examples::
     # Import from Concordance DAT load file
     python scripts/import_dataset.py concordance_dat --file /path/to/loadfile.dat --matter-id <UUID>
 
+    # Import from HuggingFace CSV/Parquet dataset
+    python scripts/import_dataset.py huggingface_csv --file /path/to/dataset.parquet --matter-id <UUID>
+
     # Dry-run (count + cost estimate, no dispatch)
     python scripts/import_dataset.py directory --data-dir /path/ --matter-id <UUID> --dry-run
 
@@ -192,7 +195,7 @@ def main() -> int:  # noqa: C901
     )
     parser.add_argument(
         "adapter",
-        choices=["directory", "edrm_xml", "concordance_dat"],
+        choices=["directory", "edrm_xml", "concordance_dat", "huggingface_csv"],
         help="Dataset adapter to use",
     )
     parser.add_argument("--matter-id", required=True, help="Target matter UUID")
@@ -227,6 +230,14 @@ def main() -> int:  # noqa: C901
             print(f"Error: directory '{args.data_dir}' does not exist", file=sys.stderr)
             return 1
         adapter = adapter_cls(data_dir=args.data_dir)
+    elif args.adapter == "huggingface_csv":
+        if not args.file:
+            print("Error: --file is required for the huggingface_csv adapter", file=sys.stderr)
+            return 1
+        if not args.file.exists():
+            print(f"Error: file '{args.file}' does not exist", file=sys.stderr)
+            return 1
+        adapter = adapter_cls(file_path=args.file)
     elif args.adapter in ("edrm_xml", "concordance_dat"):
         if not args.file:
             print(f"Error: --file is required for the {args.adapter} adapter", file=sys.stderr)
