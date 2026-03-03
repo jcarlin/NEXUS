@@ -9,6 +9,7 @@ on:
     branches: [main]
     paths:
       - "frontend/**"
+  workflow_dispatch:  # Allow manual runs (needed for E2E with backend)
 
 jobs:
   unit:
@@ -36,6 +37,7 @@ jobs:
 
   e2e:
     name: Playwright E2E Tests
+    if: ${{ github.event_name == 'workflow_dispatch' }}  # Requires backend API; run manually until CI has backend support
     runs-on: ubuntu-latest
     defaults:
       run:

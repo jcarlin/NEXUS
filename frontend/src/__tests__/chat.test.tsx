@@ -62,11 +62,11 @@ describe("SSE streaming hook", () => {
   it("updates text state correctly when receiving SSE events", async () => {
     const mockFetchEventSource = vi.mocked(fetchEventSource);
 
-    let capturedOnMessage: ((event: { data: string }) => void) | undefined;
+    let capturedOnMessage: ((event: { data: string; event?: string }) => void) | undefined;
 
     mockFetchEventSource.mockImplementation(async (_url, options) => {
       const opts = options as {
-        onmessage?: (event: { data: string }) => void;
+        onmessage?: (event: { data: string; event?: string }) => void;
         onopen?: (response: Response) => Promise<void>;
       };
 
@@ -94,12 +94,13 @@ describe("SSE streaming hook", () => {
 
     // Feed SSE events through the captured callback
     act(() => {
-      capturedOnMessage!({ data: JSON.stringify({ type: "status", stage: "retrieving" }) });
+      capturedOnMessage!({ event: "status", data: JSON.stringify({ type: "status", stage: "retrieving" }) });
     });
     expect(result.current.stage).toBe("retrieving");
 
     act(() => {
       capturedOnMessage!({
+        event: "sources",
         data: JSON.stringify({
           type: "sources",
           documents: [
@@ -112,18 +113,19 @@ describe("SSE streaming hook", () => {
     expect(result.current.sources[0]?.filename).toBe("memo.pdf");
 
     act(() => {
-      capturedOnMessage!({ data: JSON.stringify({ type: "token", text: "The " }) });
+      capturedOnMessage!({ event: "token", data: JSON.stringify({ type: "token", text: "The " }) });
     });
     act(() => {
-      capturedOnMessage!({ data: JSON.stringify({ type: "token", text: "answer " }) });
+      capturedOnMessage!({ event: "token", data: JSON.stringify({ type: "token", text: "answer " }) });
     });
     act(() => {
-      capturedOnMessage!({ data: JSON.stringify({ type: "token", text: "is here." }) });
+      capturedOnMessage!({ event: "token", data: JSON.stringify({ type: "token", text: "is here." }) });
     });
     expect(result.current.streamingText).toBe("The answer is here.");
 
     act(() => {
       capturedOnMessage!({
+        event: "done",
         data: JSON.stringify({
           type: "done",
           thread_id: "t-123",
