@@ -1323,6 +1323,8 @@ def import_text_document(
     from app.config import Settings
 
     settings = Settings()
+    from sqlalchemy import text as sa_text
+
     engine = _get_sync_engine()
 
     logger.info(
@@ -1512,7 +1514,7 @@ def import_text_document(
         if import_source:
             with engine.connect() as conn:
                 conn.execute(
-                    text("UPDATE documents SET import_source = :source WHERE id = :doc_id"),
+                    sa_text("UPDATE documents SET import_source = :source WHERE id = :doc_id"),
                     {"source": import_source, "doc_id": doc_id},
                 )
                 conn.commit()
@@ -1552,7 +1554,7 @@ def import_text_document(
         if bulk_import_job_id:
             with engine.connect() as conn:
                 conn.execute(
-                    text(
+                    sa_text(
                         """
                         UPDATE bulk_import_jobs
                         SET processed_documents = processed_documents + 1,
@@ -1597,7 +1599,7 @@ def import_text_document(
             try:
                 with engine.connect() as conn:
                     conn.execute(
-                        text(
+                        sa_text(
                             """
                             UPDATE bulk_import_jobs
                             SET failed_documents = failed_documents + 1,

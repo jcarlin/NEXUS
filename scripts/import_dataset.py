@@ -28,7 +28,6 @@ Usage examples::
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 import time
 import uuid
@@ -39,153 +38,20 @@ import structlog
 # Ensure the project root is importable
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from sqlalchemy import create_engine, text
+from app.ingestion.bulk_import import (
+    AVG_CHUNKS_PER_DOC,
+    AVG_TOKENS_PER_CHUNK,
+    EMBEDDING_COST_PER_M_TOKENS,
+    _get_sync_engine,
+    check_resume,
+    complete_bulk_job,
+    create_bulk_import_job,
+    create_job_row,
+    dispatch_post_ingestion_hooks,
+    increment_skipped,
+)
 
 logger = structlog.get_logger(__name__)
-
-# Average chunks per document (empirical from legal corpus)
-_AVG_CHUNKS_PER_DOC = 4.5
-
-# OpenAI text-embedding-3-large pricing: $0.13 per 1M tokens
-_EMBEDDING_COST_PER_M_TOKENS = 0.13
-
-# Average tokens per chunk
-_AVG_TOKENS_PER_CHUNK = 350
-
-
-def dispatch_post_ingestion_hooks(matter_id: str) -> list[str]:
-    """Dispatch post-ingestion Celery tasks by name string.
-
-    Uses ``celery_app.send_task()`` to dispatch by name, so tasks that
-    don't exist yet (M10b, M11) are logged and skipped rather than
-    causing import errors.
-
-    Returns list of successfully dispatched task names.
-    """
-    from workers.celery_app import celery_app
-
-    dispatched: list[str] = []
-    hooks = [
-        ("entities.resolve_entities", {}),
-        ("ingestion.detect_inclusive_emails", {"matter_id": matter_id}),
-        ("agents.hot_document_scan", {"matter_id": matter_id}),
-        ("agents.entity_resolution_agent", {"matter_id": matter_id}),
-    ]
-
-    for task_name, kwargs in hooks:
-        try:
-            celery_app.send_task(task_name, kwargs=kwargs)
-            dispatched.append(task_name)
-            logger.info("post_ingestion.dispatched", task=task_name)
-        except Exception:
-            logger.warning("post_ingestion.skipped", task=task_name, exc_info=True)
-
-    return dispatched
-
-
-def _get_sync_engine():
-    """Create a sync engine from settings."""
-    from app.config import Settings
-
-    settings = Settings()
-    return create_engine(settings.postgres_url_sync, pool_pre_ping=True)
-
-
-def _check_resume(engine, content_hash: str, matter_id: str) -> bool:
-    """Return True if a document with this content hash already exists."""
-    with engine.connect() as conn:
-        result = conn.execute(
-            text("SELECT id FROM documents WHERE content_hash = :hash AND matter_id = :matter_id LIMIT 1"),
-            {"hash": content_hash, "matter_id": matter_id},
-        )
-        return result.first() is not None
-
-
-def _create_bulk_import_job(engine, matter_id: str, adapter_type: str, source_path: str, total: int) -> str:
-    """Insert a bulk_import_jobs row (sync) and return its UUID string."""
-    job_id = str(uuid.uuid4())
-    with engine.connect() as conn:
-        conn.execute(
-            text(
-                """
-                INSERT INTO bulk_import_jobs
-                    (id, matter_id, adapter_type, source_path, status,
-                     total_documents, processed_documents, failed_documents,
-                     skipped_documents, metadata_, created_at, updated_at)
-                VALUES
-                    (:id, :matter_id, :adapter_type, :source_path, 'processing',
-                     :total, 0, 0, 0, :metadata_, now(), now())
-                """
-            ),
-            {
-                "id": job_id,
-                "matter_id": matter_id,
-                "adapter_type": adapter_type,
-                "source_path": source_path,
-                "total": total,
-                "metadata_": json.dumps({}),
-            },
-        )
-        conn.commit()
-    return job_id
-
-
-def _create_job_row(engine, job_id: str, filename: str, matter_id: str) -> None:
-    """Create a job row in the jobs table (sync)."""
-    with engine.connect() as conn:
-        conn.execute(
-            text(
-                """
-                INSERT INTO jobs (id, filename, status, stage, progress, error,
-                                  parent_job_id, matter_id, metadata_, created_at, updated_at)
-                VALUES (:id, :filename, 'pending', 'uploading', '{}', NULL,
-                        NULL, :matter_id, :metadata_, now(), now())
-                """
-            ),
-            {
-                "id": job_id,
-                "filename": filename,
-                "matter_id": matter_id,
-                "metadata_": json.dumps({}),
-            },
-        )
-        conn.commit()
-
-
-def _complete_bulk_job(engine, bulk_job_id: str, status: str = "complete", error: str | None = None) -> None:
-    """Mark a bulk import job as complete or failed."""
-    with engine.connect() as conn:
-        conn.execute(
-            text(
-                """
-                UPDATE bulk_import_jobs
-                SET status = :status,
-                    error = :error,
-                    completed_at = now(),
-                    updated_at = now()
-                WHERE id = :id
-                """
-            ),
-            {"id": bulk_job_id, "status": status, "error": error},
-        )
-        conn.commit()
-
-
-def _increment_skipped(engine, bulk_job_id: str) -> None:
-    """Atomically increment the skipped counter on a bulk import job."""
-    with engine.connect() as conn:
-        conn.execute(
-            text(
-                """
-                UPDATE bulk_import_jobs
-                SET skipped_documents = skipped_documents + 1,
-                    updated_at = now()
-                WHERE id = :id
-                """
-            ),
-            {"id": bulk_job_id},
-        )
-        conn.commit()
 
 
 def main() -> int:  # noqa: C901
@@ -262,9 +128,9 @@ def main() -> int:  # noqa: C901
             doc_count += 1
             total_chars += len(doc.text)
 
-        est_chunks = int(doc_count * _AVG_CHUNKS_PER_DOC)
-        est_tokens = est_chunks * _AVG_TOKENS_PER_CHUNK
-        est_cost = (est_tokens / 1_000_000) * _EMBEDDING_COST_PER_M_TOKENS
+        est_chunks = int(doc_count * AVG_CHUNKS_PER_DOC)
+        est_tokens = est_chunks * AVG_TOKENS_PER_CHUNK
+        est_cost = (est_tokens / 1_000_000) * EMBEDDING_COST_PER_M_TOKENS
 
         print("\n--- Dry Run Summary ---")
         print(f"Documents found:     {doc_count}")
@@ -302,7 +168,7 @@ def main() -> int:  # noqa: C901
 
     # Create bulk import job
     source_path = str(args.data_dir or args.file)
-    bulk_job_id = _create_bulk_import_job(engine, args.matter_id, args.adapter, source_path, doc_count)
+    bulk_job_id = create_bulk_import_job(engine, args.matter_id, args.adapter, source_path, doc_count)
     print(f"Bulk import job: {bulk_job_id}")
 
     # Second pass: dispatch tasks
@@ -315,18 +181,18 @@ def main() -> int:  # noqa: C901
             # Skip empty text
             if not doc.text.strip():
                 skipped += 1
-                _increment_skipped(engine, bulk_job_id)
+                increment_skipped(engine, bulk_job_id)
                 continue
 
             # Resume: skip if content hash exists
-            if args.resume and _check_resume(engine, doc.content_hash, args.matter_id):
+            if args.resume and check_resume(engine, doc.content_hash, args.matter_id):
                 skipped += 1
-                _increment_skipped(engine, bulk_job_id)
+                increment_skipped(engine, bulk_job_id)
                 continue
 
             # Create job row
             job_id = str(uuid.uuid4())
-            _create_job_row(engine, job_id, doc.filename, args.matter_id)
+            create_job_row(engine, job_id, doc.filename, args.matter_id)
 
             # Dispatch Celery task
             import_text_document.delay(
@@ -355,7 +221,7 @@ def main() -> int:  # noqa: C901
     except KeyboardInterrupt:
         print(f"\nInterrupted. Dispatched {dispatched} tasks, skipped {skipped}.")
     except Exception as exc:
-        _complete_bulk_job(engine, bulk_job_id, "failed", str(exc))
+        complete_bulk_job(engine, bulk_job_id, "failed", str(exc))
         raise
 
     # Rebuild HNSW if it was disabled
@@ -371,7 +237,7 @@ def main() -> int:  # noqa: C901
     print(f"  Dispatched: {', '.join(dispatched_hooks) or 'none'}")
 
     # Mark bulk job complete (tasks still running in Celery)
-    _complete_bulk_job(engine, bulk_job_id, "complete")
+    complete_bulk_job(engine, bulk_job_id, "complete")
 
     elapsed = time.time() - start_time
     print("\n--- Import Summary ---")
