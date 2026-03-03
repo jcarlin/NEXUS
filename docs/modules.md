@@ -892,3 +892,137 @@ Settings exposes nested config objects via `@model_validator`:
 | **Total** | **87** |
 
 Additional test directories: `tests/test_e2e/`, `tests/test_integration/`, `tests/test_health.py`.
+
+---
+
+## API Reference
+
+```
+# Authentication
+POST   /api/v1/auth/login                    # JWT token issuance
+POST   /api/v1/auth/refresh                  # Token refresh
+GET    /api/v1/auth/me                       # Current user profile
+GET    /api/v1/auth/me/matters               # User's assigned matters
+
+# Ingestion
+POST   /api/v1/ingest                         # Single file upload
+POST   /api/v1/ingest/batch                   # Multi-file upload (accepts ZIP)
+POST   /api/v1/ingest/presigned-upload        # Get presigned upload URL
+POST   /api/v1/ingest/import/dry-run          # Bulk import dry run
+POST   /api/v1/ingest/webhook                 # MinIO bucket notification handler
+GET    /api/v1/jobs/{job_id}                  # Job status + progress
+GET    /api/v1/jobs                           # List all jobs (paginated)
+DELETE /api/v1/jobs/{job_id}                  # Cancel/delete job
+GET    /api/v1/bulk-imports/{import_id}       # Bulk import status
+
+# Query & Chat
+POST   /api/v1/query                          # Synchronous query (full response)
+POST   /api/v1/query/stream                   # SSE streaming query
+GET    /api/v1/chats                          # List chat threads
+GET    /api/v1/chats/{thread_id}              # Full chat history
+DELETE /api/v1/chats/{thread_id}              # Delete chat thread
+
+# Documents
+GET    /api/v1/documents                      # List documents (filterable)
+GET    /api/v1/documents/{id}                 # Document metadata + chunks
+GET    /api/v1/documents/{id}/preview         # Page thumbnail (presigned URL)
+GET    /api/v1/documents/{id}/download        # Original file (presigned URL)
+PATCH  /api/v1/documents/{id}/privilege       # Privilege tagging (attorney+)
+
+# Knowledge Graph & Entities
+GET    /api/v1/entities                       # Search/list entities
+GET    /api/v1/entities/{id}                  # Entity details
+GET    /api/v1/entities/{id}/connections      # Graph neighborhood
+GET    /api/v1/graph/explore                  # Graph exploration (Cypher)
+GET    /api/v1/graph/timeline/{entity}        # Entity timeline
+GET    /api/v1/graph/stats                    # Graph statistics
+GET    /api/v1/graph/communication-pairs      # Communication pairs
+GET    /api/v1/graph/reporting-chain/{person} # Org hierarchy chain
+GET    /api/v1/graph/path                     # Shortest path between entities
+
+# Cases
+POST   /api/v1/cases/{matter_id}/setup        # Upload anchor doc, start case setup
+GET    /api/v1/cases/{matter_id}/context       # Get full case context
+PATCH  /api/v1/cases/{matter_id}/context       # Edit/confirm extracted context
+POST   /api/v1/cases/{matter_id}/org-chart     # Import org chart
+
+# EDRM
+POST   /api/v1/edrm/import                    # Import EDRM/Concordance loadfile
+GET    /api/v1/edrm/export                     # Export in EDRM format
+GET    /api/v1/edrm/threads                    # Email thread listing
+GET    /api/v1/edrm/duplicates                 # Near-duplicate clusters
+
+# Analytics
+GET    /api/v1/analytics/communication-matrix  # Sender-recipient pairs
+GET    /api/v1/analytics/network-centrality     # Entity centrality rankings
+
+# Annotations
+POST   /api/v1/annotations                     # Create annotation
+GET    /api/v1/annotations                     # List annotations (filterable)
+GET    /api/v1/annotations/{id}                # Annotation detail
+PATCH  /api/v1/annotations/{id}                # Update annotation
+DELETE /api/v1/annotations/{id}                # Delete annotation
+
+# Exports & Production Sets
+POST   /api/v1/exports/production-sets         # Create production set
+GET    /api/v1/exports/production-sets         # List production sets
+GET    /api/v1/exports/production-sets/{id}    # Production set detail
+POST   /api/v1/exports/production-sets/{id}/documents  # Add docs to set
+GET    /api/v1/exports/production-sets/{id}/documents  # List docs in set
+DELETE /api/v1/exports/production-sets/{id}/documents  # Remove docs from set
+POST   /api/v1/exports/production-sets/{id}/bates      # Assign Bates numbers
+POST   /api/v1/exports                         # Start export job
+GET    /api/v1/exports/jobs                    # List export jobs
+GET    /api/v1/exports/jobs/{id}               # Export job status
+GET    /api/v1/exports/jobs/{id}/download      # Download exported file
+GET    /api/v1/exports/privilege-log/preview   # Preview privilege log
+
+# Redaction
+POST   /api/v1/documents/{id}/redact           # Apply redactions (attorney+)
+GET    /api/v1/documents/{id}/redaction-log    # Redaction audit log
+GET    /api/v1/documents/{id}/pii-detections   # Auto-detect PII
+
+# Datasets & Tags
+POST   /api/v1/datasets                        # Create dataset/folder
+GET    /api/v1/datasets                        # List datasets
+GET    /api/v1/datasets/tree                   # Hierarchical folder tree
+GET    /api/v1/datasets/{id}                   # Dataset detail
+PATCH  /api/v1/datasets/{id}                   # Update dataset
+DELETE /api/v1/datasets/{id}                   # Delete dataset
+POST   /api/v1/datasets/{id}/documents         # Add docs to dataset
+DELETE /api/v1/datasets/{id}/documents         # Remove docs from dataset
+POST   /api/v1/datasets/{id}/documents/move    # Move docs between datasets
+GET    /api/v1/datasets/{id}/documents         # List docs in dataset
+POST   /api/v1/datasets/{id}/access            # Grant dataset access
+DELETE /api/v1/datasets/{id}/access/{user_id}  # Revoke dataset access
+GET    /api/v1/datasets/{id}/access            # List dataset access
+POST   /api/v1/documents/{id}/tags             # Add tag to document
+DELETE /api/v1/documents/{id}/tags/{tag}       # Remove tag
+GET    /api/v1/documents/{id}/tags             # List document tags
+GET    /api/v1/tags                            # List all tags
+GET    /api/v1/tags/{tag}/documents            # List docs with tag
+
+# Evaluation
+GET    /api/v1/evaluation/latest               # Latest eval results
+GET    /api/v1/evaluation/datasets/{type}      # List dataset items
+POST   /api/v1/evaluation/datasets/{type}      # Add dataset item
+DELETE /api/v1/evaluation/datasets/{type}/{id} # Remove dataset item
+GET    /api/v1/evaluation/runs                 # List eval runs
+POST   /api/v1/evaluation/runs                 # Trigger eval run
+
+# Admin
+GET    /api/v1/admin/audit-log                 # Filterable audit log
+GET    /api/v1/admin/users                     # List users
+POST   /api/v1/admin/users                     # Create user
+PATCH  /api/v1/admin/users/{id}                # Update user
+DELETE /api/v1/admin/users/{id}                # Delete user
+
+# Audit (SOC 2)
+GET    /api/v1/admin/audit/ai                  # AI audit log (LLM calls)
+GET    /api/v1/admin/audit/export              # Export audit data
+GET    /api/v1/admin/audit/retention           # Get retention config
+POST   /api/v1/admin/audit/retention           # Update retention config
+
+# System
+GET    /api/v1/health                          # Health check (all services)
+```

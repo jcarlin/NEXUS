@@ -42,6 +42,8 @@ dependencies = [
     # Reranker
     "sentence-transformers>=3.0",
     "bertopic>=0.16",
+    "llvmlite<0.46",       # 0.46 lacks wheels for py3.12.12 macOS ARM64
+    "numpy<2",             # torch compiled against NumPy 1.x; 2.x causes ABI warnings
 
     # Infrastructure
     "celery[redis]>=5.5",
@@ -63,7 +65,7 @@ dependencies = [
     "datasketch>=1.6",
 
     # Auth
-    "PyJWT[cryptography]",
+    "PyJWT",
     "passlib[bcrypt]",
     "bcrypt<4.1",
     "email-validator",
