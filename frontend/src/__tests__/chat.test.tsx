@@ -6,6 +6,12 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 
 // ---- Mocks ---- //
 
+vi.mock("react-pdf", () => ({
+  Document: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  Page: () => <div />,
+  pdfjs: { GlobalWorkerOptions: { workerSrc: "" } },
+}));
+
 vi.mock("@microsoft/fetch-event-source", () => ({
   fetchEventSource: vi.fn(),
 }));
@@ -193,10 +199,10 @@ describe("AssistantMessage", () => {
       );
     });
 
-    // The [1] should be rendered as a clickable citation marker
+    // The [1] should be rendered as a clickable citation marker (button for quick view)
     const citationLink = screen.getByText("1");
     expect(citationLink).toBeInTheDocument();
-    expect(citationLink.closest("a")).toHaveAttribute("href", "/documents");
+    expect(citationLink.tagName).toBe("BUTTON");
 
     // Regular text should still be rendered
     expect(screen.getByText(/According to the testimony/)).toBeInTheDocument();

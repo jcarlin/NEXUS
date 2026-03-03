@@ -6,10 +6,11 @@ import { apiClient } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PdfViewer } from "@/components/documents/pdf-viewer";
+import { DocumentViewer } from "@/components/documents/document-viewer";
 import { MetadataPanel } from "@/components/documents/metadata-panel";
 import { AnnotationPanel } from "@/components/documents/annotation-panel";
 import { useAnnotations } from "@/hooks/use-annotations";
+import { detectDocumentType } from "@/lib/utils";
 import type { DocumentDetail, Annotation, AnnotationAnchor } from "@/types";
 
 export const Route = createFileRoute("/documents/$id")({
@@ -46,6 +47,7 @@ function DocumentDetailPage() {
 
   const { data: annotationsData } = useAnnotations(id);
   const annotations = annotationsData?.items ?? [];
+  const isPdf = doc ? detectDocumentType(doc.type, doc.filename) === "pdf" : false;
 
   const handleAnnotationClick = useCallback((annotation: Annotation) => {
     setSelectedAnnotationId(annotation.id);
@@ -104,42 +106,46 @@ function DocumentDetailPage() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          {downloadData?.download_url && doc.type === "pdf" ? (
-            <PdfViewer
+          {downloadData?.download_url ? (
+            <DocumentViewer
               url={downloadData.download_url}
+              filename={doc.filename}
+              type={doc.type}
               annotations={annotations}
               selectedAnnotationId={selectedAnnotationId}
               onAnnotationClick={handleAnnotationClick}
               onCreateHighlight={handleCreateHighlight}
             />
           ) : (
-            <div className="flex items-center justify-center rounded-md border h-[400px] text-muted-foreground">
-              Preview not available for {doc.type?.toUpperCase() ?? "this"} format
-            </div>
+            <Skeleton className="h-[400px]" />
           )}
         </div>
         <div>
-          <Tabs defaultValue="metadata">
-            <TabsList className="w-full">
-              <TabsTrigger value="metadata" className="flex-1">Metadata</TabsTrigger>
-              <TabsTrigger value="annotations" className="flex-1">
-                Annotations ({annotations.length})
-              </TabsTrigger>
-            </TabsList>
-            <TabsContent value="metadata">
-              <MetadataPanel doc={doc} />
-            </TabsContent>
-            <TabsContent value="annotations">
-              <AnnotationPanel
-                documentId={id}
-                annotations={annotations}
-                selectedId={selectedAnnotationId}
-                onSelectAnnotation={handleAnnotationClick}
-                pendingAnchor={pendingAnchor}
-                onClearPending={() => setPendingAnchor(null)}
-              />
-            </TabsContent>
-          </Tabs>
+          {isPdf ? (
+            <Tabs defaultValue="metadata">
+              <TabsList className="w-full">
+                <TabsTrigger value="metadata" className="flex-1">Metadata</TabsTrigger>
+                <TabsTrigger value="annotations" className="flex-1">
+                  Annotations ({annotations.length})
+                </TabsTrigger>
+              </TabsList>
+              <TabsContent value="metadata">
+                <MetadataPanel doc={doc} />
+              </TabsContent>
+              <TabsContent value="annotations">
+                <AnnotationPanel
+                  documentId={id}
+                  annotations={annotations}
+                  selectedId={selectedAnnotationId}
+                  onSelectAnnotation={handleAnnotationClick}
+                  pendingAnchor={pendingAnchor}
+                  onClearPending={() => setPendingAnchor(null)}
+                />
+              </TabsContent>
+            </Tabs>
+          ) : (
+            <MetadataPanel doc={doc} />
+          )}
         </div>
       </div>
     </div>

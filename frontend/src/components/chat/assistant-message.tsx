@@ -1,4 +1,4 @@
-import { useState, Fragment } from "react";
+import { useState, Fragment, useCallback } from "react";
 import {
   ChevronDown,
   ChevronUp,
@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CitationMarker } from "./citation-marker";
 import { EntityChips } from "./entity-chips";
+import { QuickViewModal } from "@/components/documents/quick-view-modal";
 import { useAppStore } from "@/stores/app-store";
 import type {
   SourceDocument,
@@ -29,7 +30,11 @@ interface AssistantMessageProps {
 }
 
 /** Parse text with [N] citation markers into React nodes. */
-function renderWithCitations(text: string, sources: SourceDocument[]) {
+function renderWithCitations(
+  text: string,
+  sources: SourceDocument[],
+  onQuickView?: (source: SourceDocument) => void,
+) {
   const parts = text.split(/(\[\d+\])/g);
   return parts.map((part, i) => {
     const match = part.match(/^\[(\d+)\]$/);
@@ -37,7 +42,14 @@ function renderWithCitations(text: string, sources: SourceDocument[]) {
       const idx = parseInt(match[1]!, 10) - 1;
       const source = sources[idx];
       if (source) {
-        return <CitationMarker key={i} index={idx} source={source} />;
+        return (
+          <CitationMarker
+            key={i}
+            index={idx}
+            source={source}
+            onQuickView={onQuickView}
+          />
+        );
       }
     }
     return <Fragment key={i}>{part}</Fragment>;
@@ -65,7 +77,12 @@ export function AssistantMessage({
 }: AssistantMessageProps) {
   const [sourcesOpen, setSourcesOpen] = useState(false);
   const [claimsOpen, setClaimsOpen] = useState(false);
+  const [selectedSource, setSelectedSource] = useState<SourceDocument | null>(null);
   const addFinding = useAppStore((s) => s.addFinding);
+
+  const handleQuickView = useCallback((source: SourceDocument) => {
+    setSelectedSource(source);
+  }, []);
 
   return (
     <div className="flex justify-start" data-testid="assistant-message">
@@ -73,7 +90,7 @@ export function AssistantMessage({
         <Card>
           <CardContent className="p-3">
             <div className="whitespace-pre-wrap text-sm leading-relaxed">
-              {renderWithCitations(content, sources)}
+              {renderWithCitations(content, sources, handleQuickView)}
               {isStreaming && (
                 <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-foreground/70" />
               )}
@@ -106,9 +123,11 @@ export function AssistantMessage({
             {sourcesOpen && (
               <div className="space-y-1 border-t px-3 py-2">
                 {sources.map((src, idx) => (
-                  <div
+                  <button
                     key={src.id}
-                    className="flex items-start gap-2 text-xs"
+                    type="button"
+                    className="flex w-full items-start gap-2 rounded-md p-1.5 text-left text-xs transition-colors hover:bg-accent"
+                    onClick={() => handleQuickView(src)}
                   >
                     <span className="mt-0.5 flex h-4 min-w-4 items-center justify-center rounded bg-primary/15 text-[10px] font-semibold text-primary">
                       {idx + 1}
@@ -127,7 +146,7 @@ export function AssistantMessage({
                     <Badge variant="secondary" className="shrink-0 text-[10px]">
                       {(src.relevance_score * 100).toFixed(0)}%
                     </Badge>
-                  </div>
+                  </button>
                 ))}
               </div>
             )}
@@ -188,6 +207,19 @@ export function AssistantMessage({
               </div>
             )}
           </div>
+        )}
+        {selectedSource && (
+          <QuickViewModal
+            open={!!selectedSource}
+            onOpenChange={(open) => { if (!open) setSelectedSource(null); }}
+            documentId={selectedSource.id}
+            filename={selectedSource.filename}
+            page={selectedSource.page}
+            excerpt={selectedSource.chunk_text}
+            score={selectedSource.relevance_score}
+            downloadUrl={selectedSource.download_url ?? undefined}
+            documentType={undefined}
+          />
         )}
       </div>
     </div>

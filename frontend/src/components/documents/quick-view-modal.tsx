@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { DocumentViewer } from "./document-viewer";
 
 interface QuickViewModalProps {
   open: boolean;
@@ -17,6 +18,8 @@ interface QuickViewModalProps {
   page?: number | null;
   excerpt?: string;
   score?: number;
+  downloadUrl?: string;
+  documentType?: string | null;
 }
 
 export function QuickViewModal({
@@ -27,10 +30,12 @@ export function QuickViewModal({
   page,
   excerpt,
   score,
+  downloadUrl,
+  documentType,
 }: QuickViewModalProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <span className="truncate">{filename}</span>
@@ -41,13 +46,22 @@ export function QuickViewModal({
           </DialogTitle>
         </DialogHeader>
 
-        {excerpt && (
-          <div className="rounded-md bg-muted p-4 text-sm leading-relaxed">
-            {excerpt}
-          </div>
-        )}
+        <div className="flex-1 min-h-0 overflow-auto">
+          {downloadUrl ? (
+            <DocumentViewer
+              url={downloadUrl}
+              filename={filename}
+              type={documentType}
+              compact
+            />
+          ) : excerpt ? (
+            <div className="rounded-md bg-muted p-4 text-sm leading-relaxed">
+              {excerpt}
+            </div>
+          ) : null}
+        </div>
 
-        <div className="flex justify-end">
+        <div className="flex justify-end pt-2 border-t">
           <Button variant="outline" size="sm" asChild>
             <Link
               to="/documents/$id"
