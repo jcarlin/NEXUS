@@ -1,120 +1,185 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { Upload, Server } from "lucide-react";
 import { apiClient } from "@/api/client";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { UploadWidget } from "@/components/documents/upload-widget";
+import { IngestForm } from "@/components/datasets/ingest-form";
+import { IngestProgress } from "@/components/datasets/ingest-progress";
+import type { BulkImportStatusResponse, PaginatedResponse } from "@/types";
 
 export const Route = createFileRoute("/documents/import")({
-  component: ImportPage,
+  component: IngestPage,
 });
 
-interface DryRunResponse {
-  estimated_documents: number;
-  estimated_chunks: number;
-  estimated_duration_minutes: number;
-  estimated_storage_mb: number;
-  warnings: string[];
-}
+function IngestPage() {
+  const [mode, setMode] = useState<"upload" | "server">("upload");
 
-function ImportPage() {
-  const [fileCount, setFileCount] = useState("");
-  const [totalSize, setTotalSize] = useState("");
-
-  const dryRun = useMutation({
-    mutationFn: (data: { source_type: string; file_count?: number; total_size_bytes?: number }) =>
-      apiClient<DryRunResponse>({
-        url: "/api/v1/ingest/import/dry-run",
-        method: "POST",
-        data,
+  const { data: history } = useQuery({
+    queryKey: ["bulk-imports-history"],
+    queryFn: () =>
+      apiClient<PaginatedResponse<BulkImportStatusResponse>>({
+        url: "/api/v1/bulk-imports",
+        method: "GET",
+        params: { limit: 20 },
       }),
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (!data) return 10000;
+      const hasActive = data.items.some((j) => j.status === "processing");
+      return hasActive ? 5000 : false;
+    },
   });
 
-  function handleDryRun() {
-    dryRun.mutate({
-      source_type: "upload",
-      file_count: fileCount ? parseInt(fileCount) : undefined,
-      total_size_bytes: totalSize ? parseInt(totalSize) * 1024 * 1024 : undefined,
-    });
-  }
-
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="space-y-6 max-w-4xl mx-auto p-6 animate-page-in">
       <div>
-        <h1 className="text-2xl font-bold">Import Documents</h1>
-        <p className="text-muted-foreground">Upload or import documents into the case.</p>
+        <h1 className="text-2xl font-semibold tracking-tight">Ingest Documents</h1>
+        <p className="text-muted-foreground">
+          Upload files or ingest from a server-side source.
+        </p>
       </div>
 
-      <Tabs defaultValue="upload">
-        <TabsList>
-          <TabsTrigger value="upload">Upload Files</TabsTrigger>
-          <TabsTrigger value="s3">S3 Bucket</TabsTrigger>
-          <TabsTrigger value="estimate">Estimate</TabsTrigger>
-        </TabsList>
+      {/* Active ingest progress */}
+      <IngestProgress />
 
-        <TabsContent value="upload" className="mt-4">
-          <UploadWidget
-            onUploadComplete={(results) => {
-              toast.success(`${results.length} file(s) uploaded successfully`);
-            }}
-          />
-        </TabsContent>
-
-        <TabsContent value="s3" className="mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Import from S3 Bucket</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label>S3 Prefix</Label>
-                <Input placeholder="s3://bucket/prefix/" />
+      {/* Ingest mode selector */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Ingest Mode</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              className={`flex items-center gap-3 rounded-lg border p-4 text-left transition-colors ${
+                mode === "upload"
+                  ? "border-primary bg-primary/5"
+                  : "border-border hover:bg-accent"
+              }`}
+              onClick={() => setMode("upload")}
+            >
+              <Upload className="h-5 w-5 shrink-0" />
+              <div>
+                <p className="text-sm font-medium">Upload Files</p>
+                <p className="text-xs text-muted-foreground">
+                  Upload from your computer
+                </p>
               </div>
-              <Button>Start Import</Button>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="estimate" className="mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Dry Run Estimate</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Number of files</Label>
-                  <Input type="number" value={fileCount} onChange={(e) => setFileCount(e.target.value)} placeholder="100" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Total size (MB)</Label>
-                  <Input type="number" value={totalSize} onChange={(e) => setTotalSize(e.target.value)} placeholder="500" />
-                </div>
+            </button>
+            <button
+              type="button"
+              className={`flex items-center gap-3 rounded-lg border p-4 text-left transition-colors ${
+                mode === "server"
+                  ? "border-primary bg-primary/5"
+                  : "border-border hover:bg-accent"
+              }`}
+              onClick={() => setMode("server")}
+            >
+              <Server className="h-5 w-5 shrink-0" />
+              <div>
+                <p className="text-sm font-medium">Server Source</p>
+                <p className="text-xs text-muted-foreground">
+                  Directory, HuggingFace, EDRM, Concordance
+                </p>
               </div>
-              <Button onClick={handleDryRun} disabled={dryRun.isPending}>
-                {dryRun.isPending ? "Estimating..." : "Run Estimate"}
-              </Button>
+            </button>
+          </div>
 
-              {dryRun.data && (
-                <div className="mt-4 rounded-md border p-4 space-y-2 text-sm">
-                  <p>Documents: <strong>{dryRun.data.estimated_documents}</strong></p>
-                  <p>Chunks: <strong>{dryRun.data.estimated_chunks}</strong></p>
-                  <p>Duration: <strong>{dryRun.data.estimated_duration_minutes} min</strong></p>
-                  <p>Storage: <strong>{dryRun.data.estimated_storage_mb} MB</strong></p>
-                  {dryRun.data.warnings.map((w, i) => (
-                    <p key={i} className="text-yellow-500 text-xs">{w}</p>
+          {mode === "upload" && (
+            <div className="pt-2">
+              <UploadWidget
+                onUploadComplete={(results) => {
+                  toast.success(
+                    `${results.length} file(s) uploaded and queued for ingestion`,
+                  );
+                }}
+              />
+            </div>
+          )}
+
+          {mode === "server" && (
+            <div className="pt-2">
+              <IngestForm datasetId={null} />
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Ingest history */}
+      {history && history.items.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Ingest History</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-xs text-muted-foreground">
+                    <th className="pb-2 pr-4 font-medium">Date</th>
+                    <th className="pb-2 pr-4 font-medium">Source</th>
+                    <th className="pb-2 pr-4 font-medium text-right">Docs</th>
+                    <th className="pb-2 pr-4 font-medium text-right">
+                      Skipped
+                    </th>
+                    <th className="pb-2 pr-4 font-medium text-right">
+                      Failed
+                    </th>
+                    <th className="pb-2 font-medium">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {history.items.map((job) => (
+                    <tr key={job.id}>
+                      <td className="py-2 pr-4 text-muted-foreground whitespace-nowrap">
+                        {new Date(job.created_at).toLocaleDateString()}
+                      </td>
+                      <td className="py-2 pr-4 truncate max-w-[200px]">
+                        {job.adapter_type ?? "upload"}
+                        {job.source_path && (
+                          <span className="text-muted-foreground">
+                            : {job.source_path.split("/").pop()}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2 pr-4 text-right tabular-nums">
+                        {job.processed_documents}/{job.total_documents}
+                      </td>
+                      <td className="py-2 pr-4 text-right tabular-nums">
+                        {job.skipped_documents}
+                      </td>
+                      <td className="py-2 pr-4 text-right tabular-nums">
+                        {job.failed_documents}
+                      </td>
+                      <td className="py-2">
+                        <Badge
+                          variant={
+                            job.status === "complete"
+                              ? "secondary"
+                              : job.status === "failed"
+                                ? "destructive"
+                                : job.status === "processing"
+                                  ? "default"
+                                  : "outline"
+                          }
+                          className="text-[10px] px-1.5 py-0"
+                        >
+                          {job.status}
+                        </Badge>
+                      </td>
+                    </tr>
                   ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

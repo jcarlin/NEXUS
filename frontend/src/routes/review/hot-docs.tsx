@@ -27,9 +27,9 @@ function HotDocsPage() {
   });
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 animate-page-in">
       <div>
-        <h1 className="text-2xl font-bold">Hot Documents</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Hot Documents</h1>
         <p className="text-sm text-muted-foreground">
           {data ? `${data.total} documents with hot score >= 0.7` : "Loading..."}
         </p>

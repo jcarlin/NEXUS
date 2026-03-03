@@ -91,9 +91,9 @@ function CaseSetupPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-page-in">
       <div>
-        <h1 className="text-2xl font-bold">Case Setup</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Case Setup</h1>
         <p className="text-muted-foreground">
           Configure case context: upload documents, define claims, parties, and terms.
         </p>

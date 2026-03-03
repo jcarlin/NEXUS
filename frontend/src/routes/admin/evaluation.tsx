@@ -55,9 +55,9 @@ function EvaluationPage() {
   const runs = runsError ? [] : (runsData?.items ?? []);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 animate-page-in">
       <div>
-        <h1 className="text-2xl font-bold">Evaluation Pipeline</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Evaluation Pipeline</h1>
         <p className="text-muted-foreground">
           Manage evaluation datasets and run quality assessments.
         </p>

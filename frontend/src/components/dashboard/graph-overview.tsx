@@ -30,11 +30,11 @@ export function GraphOverview() {
           <div className="space-y-3">
             <div className="flex gap-4">
               <div>
-                <p className="text-2xl font-bold">{(data.node_count ?? 0).toLocaleString()}</p>
+                <p className="text-2xl font-semibold tracking-tight tabular-nums">{(data.node_count ?? 0).toLocaleString()}</p>
                 <p className="text-xs text-muted-foreground">Entities</p>
               </div>
               <div>
-                <p className="text-2xl font-bold">{(data.edge_count ?? 0).toLocaleString()}</p>
+                <p className="text-2xl font-semibold tracking-tight tabular-nums">{(data.edge_count ?? 0).toLocaleString()}</p>
                 <p className="text-xs text-muted-foreground">Relationships</p>
               </div>
             </div>

@@ -20,9 +20,9 @@ function AuditLogPage() {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-page-in">
       <div>
-        <h1 className="text-2xl font-bold">Audit Log</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Audit Log</h1>
         <p className="text-muted-foreground">
           Review platform activity and API audit trail.
         </p>

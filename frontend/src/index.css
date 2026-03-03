@@ -1,38 +1,52 @@
 @import "tailwindcss";
 
 @theme inline {
-  --color-background: oklch(0.145 0 0);
+  /* Backgrounds — subtle blue-steel tint instead of pure gray */
+  --color-background: oklch(0.145 0.004 260);
   --color-foreground: oklch(0.985 0 0);
-  --color-card: oklch(0.17 0 0);
-  --color-card-foreground: oklch(0.985 0 0);
-  --color-popover: oklch(0.17 0 0);
-  --color-popover-foreground: oklch(0.985 0 0);
+  --color-card: oklch(0.185 0.005 260);
+  --color-card-foreground: oklch(0.93 0.01 80);
+  --color-popover: oklch(0.185 0.005 260);
+  --color-popover-foreground: oklch(0.93 0.01 80);
+
+  /* Primary — unchanged */
   --color-primary: oklch(0.685 0.169 237.323);
   --color-primary-foreground: oklch(0.985 0 0);
-  --color-secondary: oklch(0.269 0 0);
+
+  /* Neutrals — subtle blue-tint */
+  --color-secondary: oklch(0.269 0.007 260);
   --color-secondary-foreground: oklch(0.985 0 0);
-  --color-muted: oklch(0.269 0 0);
-  --color-muted-foreground: oklch(0.708 0 0);
-  --color-accent: oklch(0.269 0 0);
+  --color-muted: oklch(0.269 0.007 260);
+  --color-muted-foreground: oklch(0.55 0.01 260);
+  --color-accent: oklch(0.24 0.012 260);
   --color-accent-foreground: oklch(0.985 0 0);
   --color-destructive: oklch(0.577 0.245 27.325);
   --color-destructive-foreground: oklch(0.985 0 0);
-  --color-border: oklch(0.3 0 0);
-  --color-input: oklch(0.3 0 0);
+  --color-border: oklch(0.28 0.008 260);
+  --color-input: oklch(0.28 0.008 260);
   --color-ring: oklch(0.685 0.169 237.323);
+
+  /* Amber accent for active states and highlights */
+  --color-amber: oklch(0.75 0.18 75);
+  --color-amber-foreground: oklch(0.15 0.04 75);
+
+  /* Chart colors — unchanged */
   --color-chart-1: oklch(0.488 0.243 264.376);
   --color-chart-2: oklch(0.696 0.17 162.48);
   --color-chart-3: oklch(0.769 0.188 70.08);
   --color-chart-4: oklch(0.627 0.265 303.9);
   --color-chart-5: oklch(0.645 0.246 16.439);
-  --color-sidebar: oklch(0.145 0 0);
+
+  /* Sidebar — slightly darker than background for depth */
+  --color-sidebar: oklch(0.13 0.005 260);
   --color-sidebar-foreground: oklch(0.985 0 0);
   --color-sidebar-primary: oklch(0.685 0.169 237.323);
   --color-sidebar-primary-foreground: oklch(0.985 0 0);
-  --color-sidebar-accent: oklch(0.269 0 0);
+  --color-sidebar-accent: oklch(0.22 0.015 260);
   --color-sidebar-accent-foreground: oklch(0.985 0 0);
-  --color-sidebar-border: oklch(0.3 0 0);
+  --color-sidebar-border: oklch(0.25 0.008 260);
   --color-sidebar-ring: oklch(0.685 0.169 237.323);
+
   --radius-sm: 0.25rem;
   --radius-md: 0.375rem;
   --radius-lg: 0.5rem;
@@ -47,5 +61,45 @@
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  h1, h2, h3, h4 {
+    letter-spacing: -0.025em;
+  }
+}
+
+@layer utilities {
+  @keyframes fade-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes fade-in-stagger {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .animate-page-in {
+    animation: fade-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .animate-stagger-in > * {
+    opacity: 0;
+    animation: fade-in-stagger 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .animate-stagger-in > *:nth-child(1) { animation-delay: 0ms; }
+  .animate-stagger-in > *:nth-child(2) { animation-delay: 60ms; }
+  .animate-stagger-in > *:nth-child(3) { animation-delay: 120ms; }
+  .animate-stagger-in > *:nth-child(4) { animation-delay: 180ms; }
+  .animate-stagger-in > *:nth-child(5) { animation-delay: 240ms; }
+  .animate-stagger-in > *:nth-child(6) { animation-delay: 300ms; }
+  .animate-stagger-in > *:nth-child(n+7) { animation-delay: 350ms; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-page-in,
+  .animate-stagger-in > * {
+    animation: none !important;
+    opacity: 1 !important;
   }
 }

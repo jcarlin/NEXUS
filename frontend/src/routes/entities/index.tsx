@@ -53,10 +53,10 @@ function EntitiesPage() {
   });
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 animate-page-in">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Entities</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Entities</h1>
           <p className="text-sm text-muted-foreground">
             {data ? `${data.total} entities` : "Loading..."}
           </p>

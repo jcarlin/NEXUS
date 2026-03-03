@@ -27,9 +27,9 @@ function CommsMatrixPage() {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-page-in">
       <div>
-        <h1 className="text-2xl font-bold">Communication Matrix</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Communication Matrix</h1>
         <p className="text-sm text-muted-foreground">
           Visualize communication patterns between entities. Click a cell to see messages.
         </p>

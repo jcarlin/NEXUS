@@ -33,9 +33,9 @@ function TimelinePage() {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-page-in">
       <div>
-        <h1 className="text-2xl font-bold">Timeline</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Timeline</h1>
         <p className="text-sm text-muted-foreground">
           Chronological view of events for an entity.
         </p>

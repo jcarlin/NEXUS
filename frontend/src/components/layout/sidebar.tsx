@@ -4,6 +4,7 @@ import {
   MessageSquare,
   FileText,
   FolderTree,
+  Upload,
   Users,
   Network,
   BarChart3,
@@ -23,7 +24,6 @@ import { useAuthStore } from "@/stores/auth-store";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 
 interface NavItem {
   to: string;
@@ -36,6 +36,7 @@ const mainNav: NavItem[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/chat", label: "Chat", icon: MessageSquare },
   { to: "/documents", label: "Documents", icon: FileText },
+  { to: "/documents/import", label: "Ingest", icon: Upload },
   { to: "/datasets", label: "Datasets", icon: FolderTree },
   { to: "/entities", label: "Entities", icon: Users },
 ];
@@ -77,12 +78,18 @@ export function Sidebar() {
       <Link
         to={item.to}
         className={cn(
-          "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground",
-          isActive && "bg-accent text-accent-foreground",
+          "group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-all duration-150 hover:bg-accent/60 hover:text-foreground",
+          isActive && "bg-accent text-foreground",
           collapsed && "justify-center px-2",
         )}
       >
-        <Icon className="h-4 w-4 shrink-0" />
+        {isActive && (
+          <span className="absolute left-0 top-1 bottom-1 w-[3px] rounded-full bg-amber" />
+        )}
+        <Icon className={cn(
+          "h-4 w-4 shrink-0 transition-colors",
+          isActive ? "text-amber" : "text-muted-foreground group-hover:text-foreground",
+        )} />
         {!collapsed && <span>{item.label}</span>}
       </Link>
     );
@@ -123,9 +130,9 @@ export function Sidebar() {
         collapsed ? "w-14" : "w-56",
       )}
     >
-      <div className={cn("flex h-14 items-center border-b px-3", collapsed ? "justify-center" : "justify-between")}>
-        {!collapsed && <span className="text-lg font-bold tracking-tight">NEXUS</span>}
-        <Button variant="ghost" size="icon" onClick={toggleSidebar} className="h-8 w-8">
+      <div className={cn("flex h-14 items-center border-b border-sidebar-border/50 px-3", collapsed ? "justify-center" : "justify-between")}>
+        {!collapsed && <span className="text-lg font-bold tracking-widest text-amber">NEXUS</span>}
+        <Button variant="ghost" size="icon" onClick={toggleSidebar} className="h-8 w-8 text-muted-foreground hover:text-foreground">
           {collapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
         </Button>
       </div>
@@ -133,13 +140,13 @@ export function Sidebar() {
       <ScrollArea className="flex-1 px-2 py-3">
         <div className="space-y-4">
           <NavSection title="Main" items={mainNav} />
-          <Separator />
+          <div className="mx-3 h-px bg-sidebar-border/30" />
           <NavSection title="Analysis" items={analysisNav} />
-          <Separator />
+          <div className="mx-3 h-px bg-sidebar-border/30" />
           <NavSection title="Review" items={reviewNav} />
           {filterByRole(adminNav).length > 0 && (
             <>
-              <Separator />
+              <div className="mx-3 h-px bg-sidebar-border/30" />
               <NavSection title="Admin" items={adminNav} />
             </>
           )}

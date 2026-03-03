@@ -28,9 +28,9 @@ function ResultSetPage() {
   });
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 animate-page-in">
       <div>
-        <h1 className="text-2xl font-bold">Result Set</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Result Set</h1>
         <p className="text-sm text-muted-foreground">
           {data ? `${data.total} documents` : "Loading..."} &mdash; Select rows and export to CSV.
         </p>

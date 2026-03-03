@@ -97,7 +97,7 @@ function NetworkGraphPage() {
   const isLoading = entitiesLoading || connectionsLoading;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 animate-page-in">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" asChild>
@@ -107,7 +107,7 @@ function NetworkGraphPage() {
             </Link>
           </Button>
           <div>
-            <h1 className="text-2xl font-bold">Network Graph</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">Network Graph</h1>
             <p className="text-sm text-muted-foreground">
               {entitiesData
                 ? `${entitiesData.items.length} entities, ${connectionsData?.length ?? 0} connections`

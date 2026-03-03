@@ -26,10 +26,10 @@ function UsersPage() {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-page-in">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">User Management</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">User Management</h1>
           <p className="text-muted-foreground">
             Manage platform users and roles.
           </p>

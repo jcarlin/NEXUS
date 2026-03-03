@@ -21,7 +21,7 @@ export function StatCard({ title, value, icon: Icon, description, loading }: Sta
         {loading ? (
           <Skeleton className="h-7 w-20" />
         ) : (
-          <div className="text-2xl font-bold">{value}</div>
+          <div className="text-2xl font-semibold tracking-tight tabular-nums">{value}</div>
         )}
         {description && <p className="text-xs text-muted-foreground">{description}</p>}
       </CardContent>
