@@ -495,7 +495,16 @@ async def network_analysis(
     pagerank, betweenness. Returns ranked entities with scores.
     """
     from app.analytics.service import AnalyticsService
+    from app.config import Settings
     from app.dependencies import get_graph_service
+
+    settings = Settings()
+    if not settings.enable_graph_centrality:
+        return json.dumps(
+            {
+                "info": "Graph centrality is not enabled. Set ENABLE_GRAPH_CENTRALITY=true and install the Neo4j GDS plugin."
+            }
+        )
 
     filters = state.get("_filters", {})
     matter_id = filters.get("matter_id", "")

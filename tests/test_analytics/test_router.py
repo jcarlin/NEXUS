@@ -93,12 +93,13 @@ async def test_communication_matrix_endpoint(client):
 
 
 @pytest.mark.asyncio
-async def test_network_centrality_endpoint(client):
+async def test_network_centrality_endpoint(client, monkeypatch):
     """Use the client fixture. Patch AnalyticsService.get_network_centrality.
 
     GET /api/v1/analytics/network-centrality?metric=degree. Verify 200 + schema.
     Test invalid metric -> 422.
     """
+    monkeypatch.setenv("ENABLE_GRAPH_CENTRALITY", "true")
     test_matter_id = UUID("00000000-0000-0000-0000-000000000001")
 
     mock_response = NetworkCentralityResponse(

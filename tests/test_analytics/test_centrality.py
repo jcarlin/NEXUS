@@ -7,6 +7,7 @@ Covers:
 
 from __future__ import annotations
 
+import json
 from unittest.mock import AsyncMock
 
 import pytest
@@ -132,3 +133,46 @@ async def test_centrality_pagerank_betweenness(gs):
     # --- Test invalid metric ---
     with pytest.raises(ValueError, match="Invalid centrality metric"):
         await gs.compute_centrality("matter-1", "closeness")
+
+
+# ---------------------------------------------------------------------------
+# Test: network_analysis tool returns info when flag is disabled
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_network_analysis_tool_disabled_by_flag(monkeypatch):
+    """When ENABLE_GRAPH_CENTRALITY is false, the tool returns an info message
+    instead of calling Neo4j GDS."""
+    monkeypatch.setenv("ENABLE_GRAPH_CENTRALITY", "false")
+
+    from app.query.tools import network_analysis
+
+    state = {"_filters": {"matter_id": "matter-1"}}
+    result = await network_analysis.ainvoke(
+        {"metric": "degree", "state": state},
+    )
+
+    parsed = json.loads(result)
+    assert "info" in parsed
+    assert "not enabled" in parsed["info"]
+
+
+# ---------------------------------------------------------------------------
+# Test: network centrality router returns 501 when flag is disabled
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_network_centrality_endpoint_disabled_by_flag(client, monkeypatch):
+    """GET /analytics/network-centrality returns 501 when ENABLE_GRAPH_CENTRALITY
+    is false."""
+    monkeypatch.setenv("ENABLE_GRAPH_CENTRALITY", "false")
+
+    resp = await client.get(
+        "/api/v1/analytics/network-centrality",
+        params={"metric": "degree"},
+    )
+
+    assert resp.status_code == 501
+    assert "not enabled" in resp.json()["detail"]

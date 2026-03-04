@@ -9,7 +9,7 @@ from __future__ import annotations
 from uuid import UUID
 
 import structlog
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.analytics.schemas import (
@@ -55,6 +55,14 @@ async def get_network_centrality(
     matter_id: UUID = Depends(get_matter_id),
 ) -> NetworkCentralityResponse:
     """Return ranked entity centrality for the current matter."""
+    from app.config import Settings
+
+    settings = Settings()
+    if not settings.enable_graph_centrality:
+        raise HTTPException(
+            status_code=501,
+            detail="Graph centrality is not enabled. Set ENABLE_GRAPH_CENTRALITY=true.",
+        )
     gs = get_graph_service()
     return await AnalyticsService.get_network_centrality(
         gs,
