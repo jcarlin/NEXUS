@@ -34,6 +34,30 @@ function groupByTime(threads: ChatThread[]): { label: string; threads: ChatThrea
     .map(([label, items]) => ({ label, threads: items }));
 }
 
+function ThreadItem({ thread, isActive }: { thread: ChatThread; isActive: boolean }) {
+  return (
+    <Link
+      to="/chat/$threadId"
+      params={{ threadId: thread.thread_id }}
+      className={cn(
+        "flex flex-col gap-0.5 overflow-hidden rounded-md px-3 py-2 text-xs transition-colors hover:bg-accent",
+        isActive && "bg-accent",
+      )}
+    >
+      <div className="flex items-start gap-2 overflow-hidden">
+        <MessageSquare className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        <span className="line-clamp-2 font-medium">
+          {thread.first_query}
+        </span>
+      </div>
+      <div className="flex items-center justify-between pl-5.5 text-[11px] text-muted-foreground">
+        <span>{thread.message_count} messages</span>
+        <span>{formatDate(thread.last_message_at)}</span>
+      </div>
+    </Link>
+  );
+}
+
 interface ThreadSidebarProps {
   collapsed: boolean;
   onToggle: () => void;
@@ -84,7 +108,7 @@ export function ThreadSidebar({ collapsed, onToggle }: ThreadSidebarProps) {
   return (
     <div className="flex h-full w-full flex-col border-r bg-muted/30">
       <div className="flex items-center justify-between border-b px-3 py-3">
-        <span className="text-sm font-semibold">Threads</span>
+        <span className="text-sm font-semibold">Chat History</span>
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="sm" asChild>
             <Link to="/chat">
@@ -112,32 +136,29 @@ export function ThreadSidebar({ collapsed, onToggle }: ThreadSidebarProps) {
         )}
 
         <div className="p-2">
-          {groupByTime(threads).map((group) => (
+          {/* Active thread pinned at top */}
+          {activeThreadId && threads.find((t) => t.thread_id === activeThreadId) && (
+            <>
+              <ThreadItem
+                thread={threads.find((t) => t.thread_id === activeThreadId)!}
+                isActive
+              />
+              <div className="mx-3 my-1.5 border-b border-border/50" />
+            </>
+          )}
+
+          {/* Remaining threads grouped by time */}
+          {groupByTime(threads.filter((t) => t.thread_id !== activeThreadId)).map((group) => (
             <div key={group.label}>
               <p className="px-3 py-1.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
                 {group.label}
               </p>
               {group.threads.map((thread) => (
-                <Link
+                <ThreadItem
                   key={thread.thread_id}
-                  to="/chat/$threadId"
-                  params={{ threadId: thread.thread_id }}
-                  className={cn(
-                    "flex flex-col gap-0.5 rounded-md px-3 py-2 text-sm transition-colors hover:bg-accent",
-                    activeThreadId === thread.thread_id && "bg-accent",
-                  )}
-                >
-                  <div className="flex min-w-0 items-center gap-2">
-                    <MessageSquare className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                    <span className="truncate font-medium">
-                      {thread.first_query}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between pl-5.5 text-xs text-muted-foreground">
-                    <span>{thread.message_count} messages</span>
-                    <span>{formatDate(thread.last_message_at)}</span>
-                  </div>
-                </Link>
+                  thread={thread}
+                  isActive={false}
+                />
               ))}
             </div>
           ))}
