@@ -14,8 +14,10 @@ from app.query.nodes import (
     _format_context,
     _format_graph_context,
     _verify_single_claim,
+    audit_log_hook,
     build_system_prompt,
     create_nodes,
+    post_agent_extract,
 )
 
 # ---------------------------------------------------------------------------
@@ -524,3 +526,184 @@ def test_build_system_prompt_empty_messages():
 
     assert len(result) == 1
     assert isinstance(result[0], SystemMessage)
+
+
+# ---------------------------------------------------------------------------
+# post_agent_extract tests
+# ---------------------------------------------------------------------------
+
+
+async def test_post_agent_extract_extracts_response_from_ai_message():
+    """Should extract response from the last AIMessage without tool_calls."""
+    from langchain_core.messages import AIMessage, HumanMessage
+
+    state = {
+        "messages": [
+            HumanMessage(content="Who is John Doe?"),
+            AIMessage(content="Based on the evidence, John Doe is a key figure."),
+        ],
+    }
+
+    with patch("app.dependencies.get_entity_extractor") as mock_get_ee:
+        mock_ee = MagicMock()
+        mock_ee.extract.return_value = []
+        mock_get_ee.return_value = mock_ee
+
+        result = await post_agent_extract(state)
+
+    assert result["response"] == "Based on the evidence, John Doe is a key figure."
+    assert isinstance(result["source_documents"], list)
+    assert isinstance(result["entities_mentioned"], list)
+
+
+async def test_post_agent_extract_skips_ai_messages_with_tool_calls():
+    """Should skip AIMessage that has tool_calls and find the final response."""
+    from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+
+    tool_call_msg = AIMessage(
+        content="",
+        tool_calls=[{"id": "tc1", "name": "vector_search", "args": {"query": "test"}}],
+    )
+    tool_result = ToolMessage(
+        content=json.dumps(
+            [
+                {"id": "p1", "filename": "doc.pdf", "page": 1, "text": "chunk text", "score": 0.9},
+            ]
+        ),
+        tool_call_id="tc1",
+    )
+    final_response = AIMessage(content="John Doe is mentioned in doc.pdf on page 1.")
+
+    state = {
+        "messages": [
+            HumanMessage(content="Who is John Doe?"),
+            tool_call_msg,
+            tool_result,
+            final_response,
+        ],
+    }
+
+    with patch("app.dependencies.get_entity_extractor") as mock_get_ee:
+        mock_ee = MagicMock()
+        mock_ee.extract.return_value = []
+        mock_get_ee.return_value = mock_ee
+
+        result = await post_agent_extract(state)
+
+    assert result["response"] == "John Doe is mentioned in doc.pdf on page 1."
+
+
+async def test_post_agent_extract_collects_source_documents():
+    """Should collect source documents from ToolMessage results."""
+    from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+
+    tool_result = ToolMessage(
+        content=json.dumps(
+            [
+                {"id": "p1", "filename": "doc.pdf", "page": 1, "text": "chunk 1", "score": 0.9},
+                {"id": "p2", "filename": "report.pdf", "page": 3, "text": "chunk 2", "score": 0.7},
+            ]
+        ),
+        tool_call_id="tc1",
+    )
+
+    state = {
+        "messages": [
+            HumanMessage(content="test"),
+            tool_result,
+            AIMessage(content="Answer based on docs."),
+        ],
+    }
+
+    with patch("app.dependencies.get_entity_extractor") as mock_get_ee:
+        mock_ee = MagicMock()
+        mock_ee.extract.return_value = []
+        mock_get_ee.return_value = mock_ee
+
+        result = await post_agent_extract(state)
+
+    assert len(result["source_documents"]) == 2
+    assert result["source_documents"][0]["id"] == "p1"
+    assert result["source_documents"][0]["filename"] == "doc.pdf"
+    assert result["source_documents"][0]["relevance_score"] == 0.9
+    assert result["source_documents"][1]["id"] == "p2"
+
+
+async def test_post_agent_extract_deduplicates_sources():
+    """Should not include duplicate document IDs in source_documents."""
+    from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+
+    # Two tool results referencing the same document
+    tool1 = ToolMessage(
+        content=json.dumps([{"id": "p1", "filename": "doc.pdf", "page": 1, "text": "chunk", "score": 0.9}]),
+        tool_call_id="tc1",
+    )
+    tool2 = ToolMessage(
+        content=json.dumps([{"id": "p1", "filename": "doc.pdf", "page": 1, "text": "chunk", "score": 0.8}]),
+        tool_call_id="tc2",
+    )
+
+    state = {
+        "messages": [HumanMessage(content="test"), tool1, tool2, AIMessage(content="Answer.")],
+    }
+
+    with patch("app.dependencies.get_entity_extractor") as mock_get_ee:
+        mock_ee = MagicMock()
+        mock_ee.extract.return_value = []
+        mock_get_ee.return_value = mock_ee
+
+        result = await post_agent_extract(state)
+
+    assert len(result["source_documents"]) == 1
+
+
+async def test_post_agent_extract_empty_messages():
+    """Should return empty fields when no messages."""
+    state = {"messages": []}
+
+    result = await post_agent_extract(state)
+
+    assert result["response"] == ""
+    assert result["source_documents"] == []
+    assert result["entities_mentioned"] == []
+
+
+async def test_post_agent_extract_extracts_entities():
+    """Should extract entities from the response text."""
+    from langchain_core.messages import AIMessage, HumanMessage
+
+    state = {
+        "messages": [
+            HumanMessage(content="test"),
+            AIMessage(content="John Doe met with Acme Corp."),
+        ],
+    }
+
+    with patch("app.dependencies.get_entity_extractor") as mock_get_ee:
+        mock_ee = MagicMock()
+        mock_ee.extract.return_value = [
+            FakeEntity(text="John Doe", type="person", score=0.9, start=0, end=8),
+            FakeEntity(text="Acme Corp", type="organization", score=0.8, start=18, end=27),
+        ]
+        mock_get_ee.return_value = mock_ee
+
+        result = await post_agent_extract(state)
+
+    assert len(result["entities_mentioned"]) == 2
+    assert result["entities_mentioned"][0]["name"] == "John Doe"
+    assert result["entities_mentioned"][1]["name"] == "Acme Corp"
+
+
+# ---------------------------------------------------------------------------
+# audit_log_hook tests
+# ---------------------------------------------------------------------------
+
+
+async def test_audit_log_hook_returns_empty_dict():
+    """audit_log_hook must return {} to avoid writing to managed channels."""
+    with patch("app.dependencies.get_settings") as mock_settings:
+        mock_settings.return_value.enable_ai_audit_logging = False
+
+        result = await audit_log_hook({"messages": []})
+
+    assert result == {}

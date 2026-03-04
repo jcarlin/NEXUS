@@ -132,6 +132,7 @@ def test_agentic_graph_has_expected_nodes():
     expected = {
         "case_context_resolve",
         "investigation_agent",
+        "post_agent_extract",
         "verify_citations",
         "generate_follow_ups",
     }

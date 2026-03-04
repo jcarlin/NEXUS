@@ -56,6 +56,7 @@ _STAGE_MAP = {
     # Agentic nodes
     "case_context_resolve": "resolving_context",
     "investigation_agent": "investigating",
+    "post_agent_extract": "extracting_results",
     "verify_citations": "verifying_citations",
 }
 
@@ -290,13 +291,15 @@ async def _agentic_event_generator(graph, initial_state, config, db, thread_id, 
     final_state: dict[str, Any] = {}
     sources_emitted = False
 
-    async for stream_mode, chunk in graph.astream(initial_state, config, stream_mode=["messages", "updates", "custom"]):
+    async for ns, stream_mode, chunk in graph.astream(
+        initial_state, config, stream_mode=["messages", "updates", "custom"], subgraphs=True
+    ):
         if stream_mode == "updates":
             for node_name, update in chunk.items():
                 stage = _STAGE_MAP.get(node_name, node_name)
                 yield {"event": "status", "data": json.dumps({"stage": stage})}
 
-                # Emit sources when the agent finishes (source_documents populated)
+                # Emit sources when post_agent_extract populates source_documents
                 if not sources_emitted and update.get("source_documents"):
                     yield {
                         "event": "sources",
@@ -304,7 +307,9 @@ async def _agentic_event_generator(graph, initial_state, config, db, thread_id, 
                     }
                     sources_emitted = True
 
-                final_state.update(update)
+                # Only update final_state from root-level nodes (not subgraph internals)
+                if not ns:
+                    final_state.update(update)
 
         elif stream_mode == "messages":
             # Messages channel: (message_chunk, metadata) tuples

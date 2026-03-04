@@ -388,7 +388,7 @@ class GraphService:
         {where_clause}
         RETURN e.name           AS source,
                type(r)          AS relationship_type,
-               COALESCE(connected.name, connected.filename, connected.chunk_id, toString(id(connected))) AS target,
+               COALESCE(connected.name, connected.filename, connected.chunk_id, toString(elementId(connected))) AS target,
                labels(connected) AS target_labels,
                properties(r)   AS edge_properties
         LIMIT $limit

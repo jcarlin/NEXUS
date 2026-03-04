@@ -10,8 +10,8 @@ from settings to decide which variant to compile.
 
 Agentic edge structure::
 
-    START → case_context_resolve → investigation_agent → verify_citations
-          → generate_follow_ups → END
+    START → case_context_resolve → investigation_agent → post_agent_extract
+          → verify_citations → generate_follow_ups → END
 
 The ``investigation_agent`` node is a compiled ``create_react_agent`` subgraph
 that handles the entire agentic loop (tool binding, execution, routing,
@@ -207,7 +207,7 @@ def build_agentic_graph(settings: Settings, checkpointer: Any) -> Any:
 
     Architecture::
 
-        START → case_context_resolve → investigation_agent
+        START → case_context_resolve → investigation_agent → post_agent_extract
               → verify_citations → generate_follow_ups → END
 
     The ``investigation_agent`` node is a ``create_react_agent`` subgraph
@@ -221,6 +221,7 @@ def build_agentic_graph(settings: Settings, checkpointer: Any) -> Any:
         build_system_prompt,
         case_context_resolve,
         generate_follow_ups_agentic,
+        post_agent_extract,
         verify_citations,
     )
     from app.query.tools import INVESTIGATION_TOOLS
@@ -247,12 +248,14 @@ def build_agentic_graph(settings: Settings, checkpointer: Any) -> Any:
     parent = StateGraph(AgentState)
     parent.add_node("case_context_resolve", case_context_resolve)
     parent.add_node("investigation_agent", agent)
+    parent.add_node("post_agent_extract", post_agent_extract)
     parent.add_node("verify_citations", verify_citations)
     parent.add_node("generate_follow_ups", generate_follow_ups_agentic)
 
     parent.add_edge(START, "case_context_resolve")
     parent.add_edge("case_context_resolve", "investigation_agent")
-    parent.add_edge("investigation_agent", "verify_citations")
+    parent.add_edge("investigation_agent", "post_agent_extract")
+    parent.add_edge("post_agent_extract", "verify_citations")
     parent.add_edge("verify_citations", "generate_follow_ups")
     parent.add_edge("generate_follow_ups", END)
 

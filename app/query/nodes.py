@@ -841,6 +841,108 @@ async def generate_follow_ups_agentic(state: dict) -> dict:
     return {"follow_up_questions": follow_ups}
 
 
+async def post_agent_extract(state: dict) -> dict:
+    """Extract response, sources, and entities from agent messages.
+
+    The ``create_react_agent`` subgraph only writes to ``messages``.
+    This node bridges the gap by populating ``response``,
+    ``source_documents``, and ``entities_mentioned`` from the message
+    history so that downstream nodes (``verify_citations``,
+    ``generate_follow_ups``, SSE sources event) have data to work with.
+    """
+    from langchain_core.messages import AIMessage, ToolMessage
+
+    from app.query.service import _extract_text_from_content
+
+    messages = state.get("messages", [])
+
+    # 1. Extract response from the last AIMessage
+    response = ""
+    for msg in reversed(messages):
+        if isinstance(msg, AIMessage) and not msg.tool_calls:
+            response = _extract_text_from_content(msg.content)
+            if response:
+                break
+
+    # 2. Collect source_documents from ToolMessage results
+    source_documents: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
+
+    for msg in messages:
+        if not isinstance(msg, ToolMessage):
+            continue
+        content = msg.content if isinstance(msg.content, str) else str(msg.content)
+        try:
+            parsed = json.loads(content)
+        except (json.JSONDecodeError, TypeError):
+            continue
+
+        # Tool results are either a list of docs or a single dict
+        items = parsed if isinstance(parsed, list) else [parsed]
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            doc_id = item.get("id", "")
+            filename = item.get("filename", "")
+            if not doc_id or doc_id in seen_ids:
+                continue
+            if not filename:
+                continue
+            seen_ids.add(doc_id)
+            source_documents.append(
+                {
+                    "id": doc_id,
+                    "filename": filename,
+                    "page": item.get("page"),
+                    "chunk_text": item.get("text", ""),
+                    "relevance_score": round(item.get("score", 0), 4),
+                    "preview_url": None,
+                    "download_url": None,
+                }
+            )
+
+    # 3. Extract entities_mentioned from response text
+    entities_mentioned: list[dict[str, Any]] = []
+    if response:
+        try:
+            from app.dependencies import get_entity_extractor
+
+            entity_extractor = get_entity_extractor()
+            raw_entities = entity_extractor.extract(
+                response,
+                entity_types=["person", "organization", "location", "vehicle"],
+                threshold=0.4,
+            )
+            seen_names: set[str] = set()
+            for ent in raw_entities:
+                name_lower = ent.text.lower()
+                if name_lower not in seen_names:
+                    seen_names.add(name_lower)
+                    entities_mentioned.append(
+                        {
+                            "name": ent.text,
+                            "type": ent.type,
+                            "kg_id": None,
+                            "connections": 0,
+                        }
+                    )
+        except Exception:
+            logger.warning("node.post_agent_extract.entity_extraction_failed", exc_info=True)
+
+    logger.debug(
+        "node.post_agent_extract",
+        response_len=len(response),
+        source_count=len(source_documents),
+        entity_count=len(entities_mentioned),
+    )
+
+    return {
+        "response": response,
+        "source_documents": source_documents,
+        "entities_mentioned": entities_mentioned,
+    }
+
+
 async def audit_log_hook(state: dict) -> dict:
     """Post-model hook for ``create_react_agent``.
 
@@ -852,7 +954,7 @@ async def audit_log_hook(state: dict) -> dict:
 
         settings = get_settings()
         if not settings.enable_ai_audit_logging:
-            return state
+            return {}
 
         from sqlalchemy import text as sa_text
 
@@ -898,4 +1000,4 @@ async def audit_log_hook(state: dict) -> dict:
         # requests or cause the query pipeline to fail.
         logger.warning("audit_log_hook.write_failed", exc_info=True)
 
-    return state
+    return {}  # Side-effect only — returning state writes to managed channels

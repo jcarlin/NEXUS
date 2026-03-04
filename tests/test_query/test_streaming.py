@@ -76,13 +76,27 @@ async def stream_client():
 
 
 def _make_astream(events):
-    """Create an async generator from a list of (stream_mode, chunk) tuples."""
+    """Create an async generator from a list of event tuples.
+
+    Supports both 2-tuples ``(stream_mode, chunk)`` for v1 and
+    3-tuples ``(namespace, stream_mode, chunk)`` for agentic (subgraphs=True).
+    """
 
     async def astream(*args, **kwargs):
         for event in events:
             yield event
 
     return astream
+
+
+def _mock_settings(**overrides):
+    """Create a mock Settings with common defaults."""
+    from unittest.mock import MagicMock
+
+    s = MagicMock()
+    s.enable_agentic_pipeline = overrides.get("enable_agentic_pipeline", False)
+    s.enable_case_setup_agent = False
+    return s
 
 
 @pytest.mark.asyncio
@@ -102,10 +116,11 @@ async def test_stream_emits_status_events(stream_client):
     ]
     mock_graph.astream = _make_astream(events)
 
-    response = await client.post(
-        "/api/v1/query/stream",
-        json={"query": "test question"},
-    )
+    with patch("app.dependencies.get_settings", return_value=_mock_settings(enable_agentic_pipeline=False)):
+        response = await client.post(
+            "/api/v1/query/stream",
+            json={"query": "test question"},
+        )
     assert response.status_code == 200
 
     lines = response.text.strip().split("\n")
@@ -143,10 +158,11 @@ async def test_stream_emits_sources_after_rerank(stream_client):
     ]
     mock_graph.astream = _make_astream(events)
 
-    response = await client.post(
-        "/api/v1/query/stream",
-        json={"query": "test question"},
-    )
+    with patch("app.dependencies.get_settings", return_value=_mock_settings(enable_agentic_pipeline=False)):
+        response = await client.post(
+            "/api/v1/query/stream",
+            json={"query": "test question"},
+        )
 
     lines = response.text.strip().split("\n")
     sources_lines = [line for line in lines if line.startswith("event: sources")]
@@ -184,10 +200,11 @@ async def test_stream_emits_tokens(stream_client):
     ]
     mock_graph.astream = _make_astream(events)
 
-    response = await client.post(
-        "/api/v1/query/stream",
-        json={"query": "test question"},
-    )
+    with patch("app.dependencies.get_settings", return_value=_mock_settings(enable_agentic_pipeline=False)):
+        response = await client.post(
+            "/api/v1/query/stream",
+            json={"query": "test question"},
+        )
 
     lines = response.text.strip().split("\n")
     token_events = [line for line in lines if line.startswith("event: token")]
@@ -214,10 +231,11 @@ async def test_stream_emits_done_event(stream_client):
     ]
     mock_graph.astream = _make_astream(events)
 
-    response = await client.post(
-        "/api/v1/query/stream",
-        json={"query": "test question"},
-    )
+    with patch("app.dependencies.get_settings", return_value=_mock_settings(enable_agentic_pipeline=False)):
+        response = await client.post(
+            "/api/v1/query/stream",
+            json={"query": "test question"},
+        )
 
     lines = response.text.strip().split("\n")
     done_lines = [line for line in lines if line.startswith("event: done")]
@@ -241,8 +259,10 @@ async def test_stream_emits_agentic_status_events(stream_client):
     """Agentic pipeline node names map to correct SSE status events."""
     client, mock_db, mock_graph = stream_client
 
+    # Agentic generator uses subgraphs=True → 3-tuples (namespace, stream_mode, chunk)
     events = [
         (
+            (),
             "updates",
             {
                 "case_context_resolve": {
@@ -253,27 +273,34 @@ async def test_stream_emits_agentic_status_events(stream_client):
                 }
             },
         ),
-        ("updates", {"investigation_agent": {"response": "answer", "source_documents": [], "entities_mentioned": []}}),
-        ("updates", {"verify_citations": {"cited_claims": []}}),
-        ("updates", {"generate_follow_ups": {"follow_up_questions": ["Q1?", "Q2?"]}}),
+        ((), "updates", {"investigation_agent": {"messages": []}}),
+        (
+            (),
+            "updates",
+            {"post_agent_extract": {"response": "answer", "source_documents": [], "entities_mentioned": []}},
+        ),
+        ((), "updates", {"verify_citations": {"cited_claims": []}}),
+        ((), "updates", {"generate_follow_ups": {"follow_up_questions": ["Q1?", "Q2?"]}}),
     ]
     mock_graph.astream = _make_astream(events)
 
-    response = await client.post(
-        "/api/v1/query/stream",
-        json={"query": "test question"},
-    )
+    with patch("app.dependencies.get_settings", return_value=_mock_settings(enable_agentic_pipeline=True)):
+        response = await client.post(
+            "/api/v1/query/stream",
+            json={"query": "test question"},
+        )
     assert response.status_code == 200
 
     lines = response.text.strip().split("\n")
     status_events = [line for line in lines if line.startswith("event: status")]
     # Should have status events for each node
-    assert len(status_events) >= 4
+    assert len(status_events) >= 5
 
     # Check that agentic stage names appear in the data
     data_lines = [line for line in lines if line.startswith("data: ") and "stage" in line]
     stage_names = [json.loads(line[6:])["stage"] for line in data_lines]
     assert "resolving_context" in stage_names
     assert "investigating" in stage_names
+    assert "extracting_results" in stage_names
     assert "verifying_citations" in stage_names
     assert "generating_follow_ups" in stage_names
