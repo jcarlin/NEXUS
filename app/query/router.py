@@ -290,53 +290,61 @@ async def _agentic_event_generator(graph, initial_state, config, db, thread_id, 
     """
     final_state: dict[str, Any] = {}
     sources_emitted = False
+    client_disconnected = False
 
-    async for ns, stream_mode, chunk in graph.astream(
-        initial_state, config, stream_mode=["messages", "updates", "custom"], subgraphs=True
-    ):
-        if stream_mode == "updates":
-            for node_name, update in chunk.items():
-                stage = _STAGE_MAP.get(node_name, node_name)
-                yield {"event": "status", "data": json.dumps({"stage": stage})}
+    try:
+        async for ns, stream_mode, chunk in graph.astream(
+            initial_state, config, stream_mode=["messages", "updates", "custom"], subgraphs=True
+        ):
+            if stream_mode == "updates":
+                for node_name, update in chunk.items():
+                    stage = _STAGE_MAP.get(node_name, node_name)
+                    yield {"event": "status", "data": json.dumps({"stage": stage})}
 
-                # Emit sources when post_agent_extract populates source_documents
-                if not sources_emitted and update.get("source_documents"):
-                    yield {
-                        "event": "sources",
-                        "data": json.dumps({"documents": update["source_documents"]}),
-                    }
-                    sources_emitted = True
+                    # Emit sources when post_agent_extract populates source_documents
+                    if not sources_emitted and update.get("source_documents"):
+                        yield {
+                            "event": "sources",
+                            "data": json.dumps({"documents": update["source_documents"]}),
+                        }
+                        sources_emitted = True
 
-                # Only update final_state from root-level nodes (not subgraph internals)
-                if not ns:
-                    final_state.update(update)
+                    # Only update final_state from root-level nodes (not subgraph internals)
+                    if not ns:
+                        final_state.update(update)
 
-        elif stream_mode == "messages":
-            # Messages channel: (message_chunk, metadata) tuples
-            msg_chunk, metadata = chunk
-            # Only emit content tokens from the agent's final response
-            # (not tool call chunks)
-            if hasattr(msg_chunk, "content") and msg_chunk.content:
-                # Skip tool call messages
-                tool_calls = getattr(msg_chunk, "tool_call_chunks", None)
-                if not tool_calls:
-                    content = msg_chunk.content
-                    if isinstance(content, list):
-                        # Extract text from content block list
-                        for block in content:
-                            text_val = ""
-                            if isinstance(block, dict) and block.get("type") == "text":
-                                text_val = block.get("text", "")
-                            elif isinstance(block, str):
-                                text_val = block
-                            if text_val:
-                                yield {"event": "token", "data": json.dumps({"text": text_val})}
-                    elif isinstance(content, str) and content:
-                        yield {"event": "token", "data": json.dumps({"text": content})}
+            elif stream_mode == "messages":
+                # Messages channel: (message_chunk, metadata) tuples
+                msg_chunk, metadata = chunk
+                # Only emit content tokens from the agent's final response
+                # (not tool call chunks)
+                if hasattr(msg_chunk, "content") and msg_chunk.content:
+                    # Skip tool call messages
+                    tool_calls = getattr(msg_chunk, "tool_call_chunks", None)
+                    if not tool_calls:
+                        content = msg_chunk.content
+                        if isinstance(content, list):
+                            # Extract text from content block list
+                            for block in content:
+                                text_val = ""
+                                if isinstance(block, dict) and block.get("type") == "text":
+                                    text_val = block.get("text", "")
+                                elif isinstance(block, str):
+                                    text_val = block
+                                if text_val:
+                                    yield {"event": "token", "data": json.dumps({"text": text_val})}
+                        elif isinstance(content, str) and content:
+                            yield {"event": "token", "data": json.dumps({"text": content})}
 
-        elif stream_mode == "custom":
-            if isinstance(chunk, dict) and chunk.get("type") == "token":
-                yield {"event": "token", "data": json.dumps({"text": chunk["text"]})}
+            elif stream_mode == "custom":
+                if isinstance(chunk, dict) and chunk.get("type") == "token":
+                    yield {"event": "token", "data": json.dumps({"text": chunk["text"]})}
+    except GeneratorExit:
+        logger.info("query_stream.client_disconnected", thread_id=thread_id)
+        client_disconnected = True
+
+    if client_disconnected:
+        return
 
     # Extract response
     from app.dependencies import get_settings
