@@ -488,15 +488,21 @@ create_nodes = create_nodes_v1
 # ------------------------------------------------------------------
 
 
-def build_system_prompt(state: dict) -> str:
+def build_system_prompt(state: dict) -> list:
     """Build system prompt with dynamic case context injection.
 
-    Passed as the ``prompt`` parameter to ``create_react_agent`` — it
-    accepts a callable ``(state) -> str``.
+    Passed as the ``prompt`` parameter to ``create_react_agent``.
+    Returns ``[SystemMessage, ...user/assistant messages]`` so LangGraph's
+    callable-prompt path receives a proper message list (the string path
+    does this conversion automatically, but the callable path does not).
     """
+    from langchain_core.messages import SystemMessage
+
     case_context = state.get("_case_context", "")
     case_context_block = f"\n\n{case_context}" if case_context else ""
-    return INVESTIGATION_SYSTEM_PROMPT.format(case_context=case_context_block)
+    system_text = INVESTIGATION_SYSTEM_PROMPT.format(case_context=case_context_block)
+    messages = state.get("messages", [])
+    return [SystemMessage(content=system_text)] + messages
 
 
 async def case_context_resolve(state: dict) -> dict:

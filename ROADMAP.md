@@ -38,7 +38,7 @@
 | M16 | Visual Embeddings | — | Done | 16 + eval enum | Eval lift ≥ 5% or stays disabled | 2 weeks | M15 (conditional) |
 | M17 | Full Local Deployment | — | Done | 16 | Health check + benchmarks | 2 weeks | All |
 
-**Total tests: 509 backend + 35 frontend** (backend: 399 unit/functional + 12 M10b analysis + 10 M10c analytics + 10 M14 annotations/exports + 5 M16 eval + 50 tech debt + 23 M17 local deployment; all 509 passing | frontend: 33 Vitest unit/component + 2 Playwright E2E)
+**Total tests: 512 backend + 35 frontend** (backend: 402 unit/functional + 12 M10b analysis + 10 M10c analytics + 10 M14 annotations/exports + 5 M16 eval + 50 tech debt + 23 M17 local deployment; all 512 passing | frontend: 33 Vitest unit/component + 2 Playwright E2E)
 
 **6 autonomous LangGraph agents** across the pipeline (Case Setup, Investigation Orchestrator, Citation Verifier, Hot Doc Scanner, Contextual Completeness, Entity Resolution)
 
@@ -441,10 +441,11 @@ If a metric regresses beyond the threshold, the milestone must either fix the re
 - [x] SSE streaming: `_agentic_event_generator` uses `stream_mode=["messages", "updates", "custom"]`
 - [x] Backward-compatible API: `QueryResponse` adds optional `cited_claims` and `tier` fields (all with defaults)
 
-**Testing (20 tests):** ✅
-- Unit: complexity classifier — fast/standard/deep routing (3), query decomposition `_parse_claims` (1), tool functions — vector_search/graph_query/temporal_search/entity_lookup/document_retrieval/case_context + stubs (7), CitedClaim schema validation and serialization (2), iteration cap enforcement per tier (1)
+**Testing (23 tests):** ✅
+- Unit: complexity classifier — fast/standard/deep routing (3), query decomposition `_parse_claims` (1), tool functions — vector_search/graph_query/temporal_search/entity_lookup/document_retrieval/case_context + stubs (7), CitedClaim schema validation and serialization (2), iteration cap enforcement per tier (1), `build_system_prompt` returns message list with SystemMessage + case context injection (3)
 - Integration: CoVe — claim decomposition + fast-tier skip (2), Self-RAG — case_context_resolve + generate_follow_ups_agentic (2), agentic graph compilation and expected nodes (1), SSE streaming with agentic status events (1)
 - Gate: regression — 346/350 pass (4 pre-existing rerank test-ordering failures unrelated to M10)
+- **Bug fix:** `build_system_prompt` returned bare string — LangGraph's callable-prompt path skips `str→[SystemMessage]+messages` conversion, so the agent received malformed input and never called tools. Fixed to return `[SystemMessage(system_text)] + state["messages"]`.
 
 **Key files:** `app/query/graph.py`, `app/query/nodes.py`, `app/query/schemas.py`, `app/query/prompts.py`, `app/query/tools.py`
 

@@ -6,12 +6,15 @@ import json
 from dataclasses import dataclass
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from langchain_core.messages import HumanMessage, SystemMessage
+
 from app.query.nodes import (
     _decompose_claims,
     _format_chat_history,
     _format_context,
     _format_graph_context,
     _verify_single_claim,
+    build_system_prompt,
     create_nodes,
 )
 
@@ -483,3 +486,41 @@ async def test_verify_single_claim_error():
 
     assert result["verification_status"] == "unverified"
     llm.complete.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# build_system_prompt tests
+# ---------------------------------------------------------------------------
+
+
+def test_build_system_prompt_returns_message_list():
+    """build_system_prompt must return [SystemMessage, ...messages]."""
+    user_msg = HumanMessage(content="Who is John Doe?")
+    state = {"messages": [user_msg], "_case_context": ""}
+
+    result = build_system_prompt(state)
+
+    assert isinstance(result, list)
+    assert len(result) == 2
+    assert isinstance(result[0], SystemMessage)
+    assert result[1] is user_msg
+
+
+def test_build_system_prompt_includes_case_context():
+    """Case context should be injected into the system message."""
+    state = {"messages": [], "_case_context": "Key parties: Alice, Bob"}
+
+    result = build_system_prompt(state)
+
+    assert isinstance(result[0], SystemMessage)
+    assert "Key parties: Alice, Bob" in result[0].content
+
+
+def test_build_system_prompt_empty_messages():
+    """With no messages, result should be [SystemMessage] only."""
+    state = {"messages": [], "_case_context": ""}
+
+    result = build_system_prompt(state)
+
+    assert len(result) == 1
+    assert isinstance(result[0], SystemMessage)
