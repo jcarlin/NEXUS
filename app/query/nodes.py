@@ -12,6 +12,7 @@ and the streaming router.
 
 from __future__ import annotations
 
+import asyncio
 import inspect
 import json
 from typing import TYPE_CHECKING, Any
@@ -740,13 +741,14 @@ async def verify_citations(state: dict) -> dict:
     exclude_privilege = state.get("_exclude_privilege", [])
     max_claims = _get_settings().max_claims_to_verify
 
-    verified_claims: list[dict[str, Any]] = []
+    tasks = []
     for i, claim in enumerate(claims[:max_claims]):
         if not claim.get("claim_text", ""):
             continue
         claim["claim_index"] = i
-        verified = await _verify_single_claim(llm, retriever, claim, filters, exclude_privilege)
-        verified_claims.append(verified)
+        tasks.append(_verify_single_claim(llm, retriever, claim, filters, exclude_privilege))
+
+    verified_claims: list[dict[str, Any]] = list(await asyncio.gather(*tasks))
 
     logger.debug(
         "node.verify_citations",

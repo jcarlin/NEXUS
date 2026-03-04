@@ -231,7 +231,7 @@ class Settings(BaseSettings):
     export_max_documents: int = 10000
 
     # --- Citation Verification ---
-    max_claims_to_verify: int = 10
+    max_claims_to_verify: int = 5
 
     # --- Agentic Pipeline ---
     enable_agentic_pipeline: bool = True
@@ -239,6 +239,14 @@ class Settings(BaseSettings):
     agentic_recursion_limit_fast: int = 6
     agentic_recursion_limit_standard: int = 12
     agentic_recursion_limit_deep: int = 20
+
+    # --- LangSmith Tracing ---
+    langchain_tracing_v2: bool = False
+    langchain_api_key: str = ""
+    langchain_project: str = "nexus"
+
+    # --- Logging ---
+    log_level: str = "INFO"  # DEBUG | INFO | WARNING | ERROR | CRITICAL
 
     # --- Auth ---
     jwt_secret_key: str = "change-me-to-a-random-64-char-string"
