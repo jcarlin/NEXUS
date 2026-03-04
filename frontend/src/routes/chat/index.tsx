@@ -4,7 +4,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { ChatLayout } from "@/components/chat/chat-layout";
 import { MessageList } from "@/components/chat/message-list";
 import { MessageInput } from "@/components/chat/message-input";
-import { FollowUpChips } from "@/components/chat/follow-up-chips";
 import { FindingsBar } from "@/components/chat/findings-bar";
 import { useStreamQuery } from "@/hooks/use-stream-query";
 
@@ -24,7 +23,11 @@ function ChatPage() {
     entities,
     followUps,
     threadId,
+    pendingUserMessage,
+    error,
+    lastQuery,
     send,
+    cancel,
   } = useStreamQuery();
 
   const handleSend = useCallback(
@@ -33,6 +36,12 @@ function ChatPage() {
     },
     [send],
   );
+
+  const handleRetry = useCallback(() => {
+    if (lastQuery) {
+      send(lastQuery);
+    }
+  }, [lastQuery, send]);
 
   // Navigate to thread page once stream completes and we have a thread ID
   const handleFollowUp = useCallback(
@@ -64,14 +73,13 @@ function ChatPage() {
               : null
           }
           stage={stage}
+          pendingUserMessage={pendingUserMessage}
+          error={error}
+          onRetry={handleRetry}
+          followUps={streamDone ? followUps : undefined}
+          onFollowUpSelect={handleFollowUp}
           onExampleClick={handleSend}
         />
-
-        {streamDone && followUps.length > 0 && (
-          <div className="border-t px-4 py-2">
-            <FollowUpChips questions={followUps} onSelect={handleFollowUp} />
-          </div>
-        )}
 
         {streamDone && threadId && (
           <div className="flex items-center justify-center border-t px-4 py-2">
@@ -91,7 +99,12 @@ function ChatPage() {
         )}
 
         <FindingsBar />
-        <MessageInput onSend={handleSend} disabled={isStreaming} />
+        <MessageInput
+          onSend={handleSend}
+          onStop={cancel}
+          isStreaming={isStreaming}
+          disabled={isStreaming}
+        />
       </div>
     </ChatLayout>
   );

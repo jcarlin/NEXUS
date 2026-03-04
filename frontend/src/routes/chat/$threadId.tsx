@@ -6,7 +6,6 @@ import { apiClient } from "@/api/client";
 import { ChatLayout } from "@/components/chat/chat-layout";
 import { MessageList } from "@/components/chat/message-list";
 import { MessageInput } from "@/components/chat/message-input";
-import { FollowUpChips } from "@/components/chat/follow-up-chips";
 import { FindingsBar } from "@/components/chat/findings-bar";
 import { useStreamQuery } from "@/hooks/use-stream-query";
 import type { ChatMessage } from "@/types";
@@ -45,7 +44,11 @@ function ChatThreadPage() {
     citedClaims,
     entities,
     followUps,
+    pendingUserMessage,
+    error,
+    lastQuery,
     send,
+    cancel,
   } = useStreamQuery();
 
   const handleSend = useCallback(
@@ -54,6 +57,12 @@ function ChatThreadPage() {
     },
     [send, threadId],
   );
+
+  const handleRetry = useCallback(() => {
+    if (lastQuery) {
+      send(lastQuery, threadId);
+    }
+  }, [lastQuery, send, threadId]);
 
   // Auto-send follow-up if provided via search params
   useEffect(() => {
@@ -99,19 +108,20 @@ function ChatThreadPage() {
               : null
           }
           stage={stage}
+          pendingUserMessage={pendingUserMessage}
+          error={error}
+          onRetry={handleRetry}
+          followUps={streamDone ? followUps : undefined}
+          onFollowUpSelect={handleSend}
         />
 
-        {streamDone && followUps.length > 0 && (
-          <div className="border-t px-4 py-2">
-            <FollowUpChips
-              questions={followUps}
-              onSelect={handleSend}
-            />
-          </div>
-        )}
-
         <FindingsBar />
-        <MessageInput onSend={handleSend} disabled={isStreaming} />
+        <MessageInput
+          onSend={handleSend}
+          onStop={cancel}
+          isStreaming={isStreaming}
+          disabled={isStreaming}
+        />
       </div>
     </ChatLayout>
   );

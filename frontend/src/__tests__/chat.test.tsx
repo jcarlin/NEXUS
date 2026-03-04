@@ -94,8 +94,10 @@ describe("SSE streaming hook", () => {
       result.current.send("What happened?");
     });
 
-    // Should be streaming now
+    // Should be streaming now with optimistic user message
     expect(result.current.isStreaming).toBe(true);
+    expect(result.current.pendingUserMessage).toBe("What happened?");
+    expect(result.current.lastQuery).toBe("What happened?");
     expect(capturedOnMessage).toBeDefined();
 
     // Feed SSE events through the captured callback
@@ -145,6 +147,32 @@ describe("SSE streaming hook", () => {
     expect(result.current.threadId).toBe("t-123");
     expect(result.current.followUps).toEqual(["What about X?"]);
     expect(result.current.entities).toHaveLength(1);
+    expect(result.current.isStreaming).toBe(false);
+    expect(result.current.pendingUserMessage).toBeNull();
+  });
+
+  it("clears pendingUserMessage on cancel", async () => {
+    const mockFetchEventSource = vi.mocked(fetchEventSource);
+    mockFetchEventSource.mockImplementation(async (_url, options) => {
+      const opts = options as {
+        onopen?: (response: Response) => Promise<void>;
+      };
+      if (opts.onopen) {
+        await opts.onopen(new Response(null, { status: 200 }));
+      }
+    });
+
+    const { result } = renderHook(() => useStreamQuery());
+
+    await act(async () => {
+      result.current.send("Test query");
+    });
+    expect(result.current.pendingUserMessage).toBe("Test query");
+
+    act(() => {
+      result.current.cancel();
+    });
+    expect(result.current.pendingUserMessage).toBeNull();
     expect(result.current.isStreaming).toBe(false);
   });
 });

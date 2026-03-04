@@ -19,6 +19,8 @@ interface StreamState {
   followUps: string[];
   threadId: string | null;
   error: string | null;
+  pendingUserMessage: string | null;
+  lastQuery: string | null;
 }
 
 const initialState: StreamState = {
@@ -31,6 +33,8 @@ const initialState: StreamState = {
   followUps: [],
   threadId: null,
   error: null,
+  pendingUserMessage: null,
+  lastQuery: null,
 };
 
 export function useStreamQuery() {
@@ -52,6 +56,8 @@ export function useStreamQuery() {
       ...initialState,
       isStreaming: true,
       stage: "connecting",
+      pendingUserMessage: query,
+      lastQuery: query,
     });
 
     const headers: Record<string, string> = {
@@ -108,6 +114,7 @@ export function useStreamQuery() {
                 followUps: parsed.follow_ups ?? [],
                 entities: parsed.entities ?? [],
                 citedClaims: parsed.cited_claims ?? [],
+                pendingUserMessage: null,
               }));
               break;
           }
@@ -123,6 +130,7 @@ export function useStreamQuery() {
           isStreaming: false,
           stage: null,
           error: err instanceof Error ? err.message : "Stream connection failed",
+          pendingUserMessage: null,
         }));
         // Don't retry — let the user re-send
         throw err;
@@ -136,7 +144,7 @@ export function useStreamQuery() {
 
   const cancel = useCallback(() => {
     abortRef.current?.abort();
-    setState((prev) => ({ ...prev, isStreaming: false, stage: null }));
+    setState((prev) => ({ ...prev, isStreaming: false, stage: null, pendingUserMessage: null }));
   }, []);
 
   return { ...state, send, cancel };

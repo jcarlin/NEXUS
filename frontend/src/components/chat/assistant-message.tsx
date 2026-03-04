@@ -8,11 +8,12 @@ import {
   ShieldQuestion,
   Plus,
   BookOpen,
+  Sparkles,
 } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { MarkdownMessage } from "./markdown-message";
+import { MessageActions } from "./message-actions";
 import { EntityChips } from "./entity-chips";
 import { QuickViewModal } from "@/components/documents/quick-view-modal";
 import { useAppStore } from "@/stores/app-store";
@@ -69,21 +70,25 @@ export function AssistantMessage({
 
   return (
     <div className="flex justify-start" data-testid="assistant-message">
-      <div className="space-y-2">
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-sm">
-              <MarkdownMessage
-                content={content}
-                sources={sources}
-                onCitationClick={handleCitationClick}
-              />
-              {isStreaming && (
-                <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-foreground/70" />
-              )}
-            </div>
-          </CardContent>
-        </Card>
+      <div className="space-y-2 max-w-full">
+        <div className="flex items-center gap-1.5 px-1">
+          <Sparkles className="h-3.5 w-3.5 text-primary" />
+          <span className="text-xs font-medium text-muted-foreground">NEXUS</span>
+        </div>
+        <div className="px-1">
+          <div className="text-sm">
+            <MarkdownMessage
+              content={content}
+              sources={sources}
+              onCitationClick={handleCitationClick}
+            />
+            {isStreaming && (
+              <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-foreground/70" />
+            )}
+          </div>
+        </div>
+
+        {!isStreaming && content && <MessageActions content={content} />}
 
         {entities.length > 0 && (
           <div className="px-1">

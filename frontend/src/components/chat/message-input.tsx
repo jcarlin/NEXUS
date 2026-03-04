@@ -1,13 +1,15 @@
 import { useState, useRef, useCallback } from "react";
-import { Send } from "lucide-react";
+import { Send, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface MessageInputProps {
   onSend: (text: string) => void;
+  onStop?: () => void;
+  isStreaming?: boolean;
   disabled?: boolean;
 }
 
-export function MessageInput({ onSend, disabled }: MessageInputProps) {
+export function MessageInput({ onSend, onStop, isStreaming, disabled }: MessageInputProps) {
   const [text, setText] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -50,14 +52,25 @@ export function MessageInput({ onSend, disabled }: MessageInputProps) {
         disabled={disabled}
         className="flex-1 resize-none rounded-md border border-border/60 bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20 transition-colors disabled:opacity-50"
       />
-      <Button
-        size="icon"
-        aria-label="Send"
-        onClick={handleSubmit}
-        disabled={disabled || !text.trim()}
-      >
-        <Send className="h-4 w-4" />
-      </Button>
+      {isStreaming ? (
+        <Button
+          size="icon"
+          variant="destructive"
+          aria-label="Stop generating"
+          onClick={onStop}
+        >
+          <Square className="h-3.5 w-3.5" />
+        </Button>
+      ) : (
+        <Button
+          size="icon"
+          aria-label="Send"
+          onClick={handleSubmit}
+          disabled={disabled || !text.trim()}
+        >
+          <Send className="h-4 w-4" />
+        </Button>
+      )}
     </div>
     <p className="px-1 pt-1 text-[11px] text-muted-foreground/50">
       Enter to send · Shift+Enter for new line

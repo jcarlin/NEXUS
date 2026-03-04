@@ -1,6 +1,9 @@
-import { Fragment, useCallback, type ReactNode } from "react";
+import { Fragment, useState, useCallback, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { Copy, Check } from "lucide-react";
 import { CitationMarker } from "./citation-marker";
 import type { SourceDocument } from "@/types";
 
@@ -54,6 +57,39 @@ function injectCitations(
   return children;
 }
 
+function CodeBlock({ language, children }: { language: string; children: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(async () => {
+    await navigator.clipboard.writeText(children);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, [children]);
+
+  return (
+    <div className="overflow-hidden rounded-md border border-border/50">
+      <div className="flex items-center justify-between bg-muted/80 px-3 py-1.5">
+        <span className="text-[11px] font-medium text-muted-foreground">{language || "code"}</span>
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+        >
+          {copied ? <Check className="h-3 w-3 text-green-600" /> : <Copy className="h-3 w-3" />}
+          {copied ? "Copied" : "Copy"}
+        </button>
+      </div>
+      <SyntaxHighlighter
+        style={oneDark}
+        language={language || "text"}
+        customStyle={{ margin: 0, borderRadius: 0, fontSize: "0.75rem" }}
+      >
+        {children}
+      </SyntaxHighlighter>
+    </div>
+  );
+}
+
 export function MarkdownMessage({ content, sources, onCitationClick }: MarkdownMessageProps) {
   const inject = useCallback(
     (children: ReactNode) => injectCitations(children, sources, onCitationClick),
@@ -95,16 +131,10 @@ export function MarkdownMessage({ content, sources, onCitationClick }: MarkdownM
           </blockquote>
         ),
         code: ({ className, children, ...props }) => {
-          const isBlock = className?.includes("language-");
-          if (isBlock) {
-            return (
-              <code
-                className="block overflow-x-auto rounded-md bg-muted p-3 font-mono text-xs"
-                {...props}
-              >
-                {children}
-              </code>
-            );
+          const langMatch = className?.match(/language-(\w+)/);
+          if (langMatch) {
+            const code = String(children).replace(/\n$/, "");
+            return <CodeBlock language={langMatch[1]!} >{code}</CodeBlock>;
           }
           return (
             <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs" {...props}>
@@ -112,7 +142,7 @@ export function MarkdownMessage({ content, sources, onCitationClick }: MarkdownM
             </code>
           );
         },
-        pre: ({ children }) => <pre className="my-3">{children}</pre>,
+        pre: ({ children }) => <div className="my-3">{children}</div>,
         table: ({ children }) => (
           <div className="my-3 overflow-x-auto">
             <table className="w-full border-collapse text-xs">{children}</table>
