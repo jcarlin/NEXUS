@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.query.nodes import (
+    _classify_tier,
     _decompose_claims,
     _format_chat_history,
     _format_context,
@@ -707,3 +708,85 @@ async def test_audit_log_hook_returns_empty_dict():
         result = await audit_log_hook({"messages": []})
 
     assert result == {}
+
+
+async def test_audit_log_hook_fires_and_forgets():
+    """audit_log_hook spawns a background task and returns immediately."""
+    import asyncio
+
+    mock_settings = MagicMock()
+    mock_settings.enable_ai_audit_logging = True
+    mock_settings.llm_model = "test-model"
+
+    mock_session = AsyncMock()
+    mock_factory = MagicMock()
+    mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+
+    with (
+        patch("app.dependencies.get_settings", return_value=mock_settings),
+        patch("app.dependencies.get_session_factory", return_value=mock_factory),
+    ):
+        result = await audit_log_hook({"messages": []})
+
+    assert result == {}
+    # Give background task a chance to run
+    await asyncio.sleep(0.05)
+
+
+# ---------------------------------------------------------------------------
+# _classify_tier tests
+# ---------------------------------------------------------------------------
+
+
+def test_classify_tier_question_mark_fast():
+    """Short query with ? should be fast tier."""
+    assert _classify_tier("Who is John Doe?") == "fast"
+
+
+def test_classify_tier_no_question_mark_with_interrogative():
+    """Short query starting with interrogative word, no ? — still fast."""
+    assert _classify_tier("who is the main lawyer") == "fast"
+
+
+def test_classify_tier_who_are():
+    assert _classify_tier("who are the key parties") == "fast"
+
+
+def test_classify_tier_what_is():
+    assert _classify_tier("what is the settlement amount") == "fast"
+
+
+def test_classify_tier_when_did():
+    assert _classify_tier("when did the contract expire") == "fast"
+
+
+def test_classify_tier_list_the():
+    assert _classify_tier("list the defendants") == "fast"
+
+
+def test_classify_tier_which():
+    assert _classify_tier("which documents mention Epstein") == "fast"
+
+
+def test_classify_tier_deep_compare():
+    assert _classify_tier("compare the testimonies of witness A and witness B") == "deep"
+
+
+def test_classify_tier_deep_long_query():
+    long_query = " ".join(["word"] * 35)
+    assert _classify_tier(long_query) == "deep"
+
+
+def test_classify_tier_deep_analyze():
+    assert _classify_tier("analyze the relationship between the parties") == "deep"
+
+
+def test_classify_tier_standard_medium_length():
+    """Medium-length query without fast markers or deep markers → standard."""
+    assert _classify_tier("tell me about the financial transactions in this case") == "standard"
+
+
+def test_classify_tier_standard_imperative_no_marker():
+    """Imperative without recognized fast opener → standard."""
+    assert _classify_tier("describe the events leading up to the settlement") == "standard"

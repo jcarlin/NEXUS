@@ -17,10 +17,32 @@ vi.mock("@tanstack/react-router", () => ({
     to: string;
     search?: Record<string, unknown>;
   }) => <a href={props.to}>{children}</a>,
+  useParams: () => ({}),
 }));
 
+vi.mock("@tanstack/react-query", () => ({
+  useQuery: () => ({ data: [], isLoading: false }),
+}));
+
+vi.mock("@/api/client", () => ({
+  apiClient: { get: vi.fn() },
+}));
+
+vi.mock("@/components/ui/resizable", () => ({
+  ResizablePanelGroup: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="resizable-group">{children}</div>
+  ),
+  ResizablePanel: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  ResizableHandle: () => <div />,
+}));
+
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { useCitationStore } from "@/stores/citation-store";
 import { CitationSidebar } from "@/components/chat/citation-sidebar";
+import { ChatHeader } from "@/components/chat/chat-header";
+import { ChatLayout } from "@/components/chat/chat-layout";
 import type { SourceDocument } from "@/types";
 
 const MOCK_SOURCES: SourceDocument[] = [
@@ -100,6 +122,32 @@ describe("CitationSidebar", () => {
   });
 });
 
+describe("ChatLayout citation panel", () => {
+  beforeEach(() => {
+    useCitationStore.getState().close();
+  });
+
+  it("does not render citation sidebar when store is closed", () => {
+    render(
+      <ChatLayout>
+        <div>Chat content</div>
+      </ChatLayout>,
+    );
+    expect(screen.queryByTestId("citation-sidebar")).not.toBeInTheDocument();
+  });
+
+  it("renders citation sidebar when store is open with sources", () => {
+    useCitationStore.getState().openWithSources(MOCK_SOURCES, []);
+    render(
+      <ChatLayout>
+        <div>Chat content</div>
+      </ChatLayout>,
+    );
+    expect(screen.getByTestId("citation-sidebar")).toBeInTheDocument();
+    expect(screen.getByText("Sources (2)")).toBeInTheDocument();
+  });
+});
+
 describe("useCitationStore", () => {
   beforeEach(() => {
     useCitationStore.getState().close();
@@ -132,5 +180,76 @@ describe("useCitationStore", () => {
     expect(state.isOpen).toBe(false);
     expect(state.allSources).toHaveLength(0);
     expect(state.activeSource).toBeNull();
+  });
+
+  it("toggle hides sidebar but preserves sources", () => {
+    const store = useCitationStore.getState();
+    store.openWithSources(MOCK_SOURCES, []);
+    expect(useCitationStore.getState().isOpen).toBe(true);
+
+    store.toggle();
+    const after = useCitationStore.getState();
+    expect(after.isOpen).toBe(false);
+    expect(after.allSources).toHaveLength(2);
+    expect(after.activeSource).not.toBeNull();
+  });
+
+  it("toggle reopens sidebar when sources exist", () => {
+    const store = useCitationStore.getState();
+    store.openWithSources(MOCK_SOURCES, []);
+    store.toggle(); // close
+    store.toggle(); // reopen
+
+    const state = useCitationStore.getState();
+    expect(state.isOpen).toBe(true);
+    expect(state.allSources).toHaveLength(2);
+  });
+
+  it("toggle is a no-op when closed with no sources", () => {
+    const store = useCitationStore.getState();
+    store.toggle();
+
+    expect(useCitationStore.getState().isOpen).toBe(false);
+  });
+});
+
+describe("ChatHeader", () => {
+  beforeEach(() => {
+    useCitationStore.getState().close();
+  });
+
+  const renderHeader = () =>
+    render(
+      <TooltipProvider>
+        <ChatHeader />
+      </TooltipProvider>,
+    );
+
+  it("renders toggle button", () => {
+    renderHeader();
+    expect(screen.getByRole("button", { name: "Toggle citation sidebar" })).toBeInTheDocument();
+  });
+
+  it("button is disabled when no sources loaded", () => {
+    renderHeader();
+    expect(screen.getByRole("button", { name: "Toggle citation sidebar" })).toBeDisabled();
+  });
+
+  it("button is enabled when sources are loaded", () => {
+    useCitationStore.getState().openWithSources(MOCK_SOURCES, []);
+    renderHeader();
+    expect(screen.getByRole("button", { name: "Toggle citation sidebar" })).toBeEnabled();
+  });
+
+  it("calls toggle on click", () => {
+    useCitationStore.getState().openWithSources(MOCK_SOURCES, []);
+    renderHeader();
+
+    const btn = screen.getByRole("button", { name: "Toggle citation sidebar" });
+    fireEvent.click(btn);
+    expect(useCitationStore.getState().isOpen).toBe(false);
+
+    fireEvent.click(btn);
+    expect(useCitationStore.getState().isOpen).toBe(true);
   });
 });

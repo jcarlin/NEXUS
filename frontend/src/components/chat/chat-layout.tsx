@@ -28,14 +28,14 @@ export function ChatLayout({ children }: ChatLayoutProps) {
       </div>
 
       <ResizablePanelGroup direction="horizontal" className="flex-1">
-        <ResizablePanel minSize={35}>
+        <ResizablePanel id="chat-main" minSize={35}>
           {children}
         </ResizablePanel>
 
         {citationOpen && (
           <>
             <ResizableHandle withHandle />
-            <ResizablePanel defaultSize={28} minSize={20} maxSize={45}>
+            <ResizablePanel id="citation-sidebar" defaultSize={28} minSize={20} maxSize={45}>
               <CitationSidebar />
             </ResizablePanel>
           </>

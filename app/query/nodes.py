@@ -574,7 +574,7 @@ async def case_context_resolve(state: dict) -> dict:
 def _classify_tier(query: str) -> str:
     """Lightweight heuristic tier classification.
 
-    - **fast**: Short factual queries (< 15 words, no analytical markers)
+    - **fast**: Short factual queries (<= 15 words, question mark OR interrogative opener)
     - **deep**: Complex analytical queries (multi-clause, comparison words)
     - **standard**: Everything else
     """
@@ -598,8 +598,29 @@ def _classify_tier(query: str) -> str:
 
     if any(marker in query_lower for marker in deep_markers) or word_count > 30:
         return "deep"
-    if word_count <= 15 and "?" in query:
-        return "fast"
+
+    # Fast tier: short queries that are factual lookups.
+    # Don't require "?" — imperative questions like "who is the main lawyer" qualify.
+    fast_markers = [
+        "who is",
+        "what is",
+        "when did",
+        "where is",
+        "how many",
+        "name the",
+        "list the",
+        "which",
+        "who are",
+        "what are",
+        "who was",
+        "what was",
+        "where did",
+        "when was",
+    ]
+    if word_count <= 15:
+        if "?" in query or any(query_lower.startswith(m) for m in fast_markers):
+            return "fast"
+
     return "standard"
 
 
@@ -903,15 +924,18 @@ async def post_agent_extract(state: dict) -> dict:
                 }
             )
 
-    # 3. Extract entities_mentioned from response text
+    # 3. Extract entities_mentioned from response text.
+    #    GLiNER is synchronous CPU-bound work — run in a thread to avoid
+    #    blocking the async event loop (and concurrent SSE delivery).
     entities_mentioned: list[dict[str, Any]] = []
     if response:
         try:
             from app.dependencies import get_entity_extractor
 
             entity_extractor = get_entity_extractor()
-            raw_entities = entity_extractor.extract(
-                response,
+            raw_entities = await asyncio.to_thread(
+                entity_extractor.extract,
+                response[:3000],
                 entity_types=["person", "organization", "location", "vehicle"],
                 threshold=0.4,
             )
@@ -950,56 +974,67 @@ async def audit_log_hook(state: dict) -> dict:
 
     Logs each LLM call to the ``ai_audit_log`` table, preserving the SOC 2
     audit trail even though the agent bypasses ``LLMClient``.
+
+    The DB write is fire-and-forget (``asyncio.create_task``) so it doesn't
+    block the agent loop.  Failures are logged but never propagated.
     """
-    try:
-        from app.dependencies import get_session_factory, get_settings
+    from app.dependencies import get_settings
 
-        settings = get_settings()
-        if not settings.enable_ai_audit_logging:
-            return {}
+    settings = get_settings()
+    if not settings.enable_ai_audit_logging:
+        return {}
 
-        from sqlalchemy import text as sa_text
+    # Capture values synchronously before spawning the background task
+    ctx = structlog.contextvars.get_contextvars()
+    request_id = ctx.get("request_id")
 
-        ctx = structlog.contextvars.get_contextvars()
-        request_id = ctx.get("request_id")
+    messages = state.get("messages", [])
+    last_msg = messages[-1] if messages else None
 
-        # Extract token usage from the last AI message
-        messages = state.get("messages", [])
-        last_msg = messages[-1] if messages else None
+    input_tokens = None
+    output_tokens = None
+    if last_msg and hasattr(last_msg, "usage_metadata") and last_msg.usage_metadata:
+        usage = last_msg.usage_metadata
+        input_tokens = usage.get("input_tokens")
+        output_tokens = usage.get("output_tokens")
 
-        input_tokens = None
-        output_tokens = None
-        if last_msg and hasattr(last_msg, "usage_metadata") and last_msg.usage_metadata:
-            usage = last_msg.usage_metadata
-            input_tokens = usage.get("input_tokens")
-            output_tokens = usage.get("output_tokens")
+    model = settings.llm_model
 
-        factory = get_session_factory()
-        async with factory() as session:
-            await session.execute(
-                sa_text("""
-                    INSERT INTO ai_audit_log
-                        (request_id, call_type, provider, model, node_name,
-                         input_tokens, output_tokens, total_tokens,
-                         latency_ms, status)
-                    VALUES
-                        (:request_id, 'agent_step', :provider, :model,
-                         'investigation_agent', :input_tokens, :output_tokens,
-                         :total_tokens, 0, 'success')
-                """),
-                {
-                    "request_id": request_id,
-                    "provider": "anthropic",
-                    "model": settings.llm_model,
-                    "input_tokens": input_tokens,
-                    "output_tokens": output_tokens,
-                    "total_tokens": (input_tokens or 0) + (output_tokens or 0) if input_tokens is not None else None,
-                },
-            )
-            await session.commit()
-    except Exception:
-        # Acceptable degradation: audit logging must not block user
-        # requests or cause the query pipeline to fail.
-        logger.warning("audit_log_hook.write_failed", exc_info=True)
+    async def _write() -> None:
+        try:
+            from sqlalchemy import text as sa_text
 
+            from app.dependencies import get_session_factory
+
+            factory = get_session_factory()
+            async with factory() as session:
+                await session.execute(
+                    sa_text("""
+                        INSERT INTO ai_audit_log
+                            (request_id, call_type, provider, model, node_name,
+                             input_tokens, output_tokens, total_tokens,
+                             latency_ms, status)
+                        VALUES
+                            (:request_id, 'agent_step', :provider, :model,
+                             'investigation_agent', :input_tokens, :output_tokens,
+                             :total_tokens, 0, 'success')
+                    """),
+                    {
+                        "request_id": request_id,
+                        "provider": "anthropic",
+                        "model": model,
+                        "input_tokens": input_tokens,
+                        "output_tokens": output_tokens,
+                        "total_tokens": (input_tokens or 0) + (output_tokens or 0)
+                        if input_tokens is not None
+                        else None,
+                    },
+                )
+                await session.commit()
+        except Exception:
+            # Acceptable degradation: audit logging must not block user
+            # requests or cause the query pipeline to fail.
+            logger.warning("audit_log_hook.write_failed", exc_info=True)
+
+    asyncio.create_task(_write())
     return {}  # Side-effect only — returning state writes to managed channels

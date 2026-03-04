@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import logging
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import Any
 
 import structlog
 from fastapi import FastAPI, Request
@@ -13,6 +16,8 @@ from app.common.middleware import AuditLoggingMiddleware, RequestIDMiddleware, R
 from app.config import Settings
 from app.dependencies import (
     close_all,
+    get_embedder,
+    get_llm,
     get_minio,
     get_neo4j,
     get_qdrant,
@@ -25,6 +30,7 @@ logger = structlog.get_logger(__name__)
 # ---------------------------------------------------------------------------
 # Structlog configuration (called once at import time)
 # ---------------------------------------------------------------------------
+_log_level_int = getattr(logging, get_settings().log_level.upper(), logging.INFO)
 structlog.configure(
     processors=[
         structlog.contextvars.merge_contextvars,
@@ -32,7 +38,7 @@ structlog.configure(
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.dev.ConsoleRenderer(),
     ],
-    wrapper_class=structlog.make_filtering_bound_logger(0),
+    wrapper_class=structlog.make_filtering_bound_logger(_log_level_int),
     context_class=dict,
     logger_factory=structlog.PrintLoggerFactory(),
     cache_logger_on_first_use=True,
@@ -48,6 +54,15 @@ structlog.configure(
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """Initialise shared resources on startup; tear them down on shutdown."""
     settings: Settings = get_settings()
+
+    # --- LangSmith tracing (env vars consumed by LangGraph / ChatAnthropic) ---
+    if settings.langchain_tracing_v2 and settings.langchain_api_key:
+        os.environ.setdefault("LANGCHAIN_TRACING_V2", "true")
+        os.environ.setdefault("LANGCHAIN_API_KEY", settings.langchain_api_key)
+        os.environ.setdefault("LANGCHAIN_PROJECT", settings.langchain_project)
+        logger.info("startup.langsmith.enabled", project=settings.langchain_project)
+    else:
+        logger.info("startup.langsmith.disabled")
 
     logger.info("startup.begin", llm_provider=settings.llm_provider, embedding_provider=settings.embedding_provider)
 
@@ -232,6 +247,69 @@ def create_app() -> FastAPI:
         return JSONResponse(
             status_code=200 if all_ok else 503,
             content={"status": "healthy" if all_ok else "degraded", "services": status},
+        )
+
+    # --- Deep health endpoint (expensive: LLM + embedding + Qdrant stats) ---
+    @application.get("/api/v1/health/deep", tags=["system"])
+    async def health_deep(request: Request) -> JSONResponse:
+        """Extended health check that probes LLM, embedding, and Qdrant collections.
+
+        Slower than ``/health`` — makes a real LLM completion call and an
+        embedding call. Use for diagnostics, not load-balancer checks.
+        """
+        import time
+
+        services: dict[str, dict[str, Any]] = {}
+
+        # LLM completion
+        try:
+            llm = get_llm()
+            start = time.perf_counter()
+            response = await llm.complete(
+                [{"role": "user", "content": "Reply with the single word OK."}],
+                max_tokens=4,
+                temperature=0,
+            )
+            latency_ms = round((time.perf_counter() - start) * 1000)
+            services["llm"] = {
+                "status": "ok",
+                "provider": llm.provider,
+                "model": llm.model,
+                "latency_ms": latency_ms,
+                "response_preview": response[:50],
+            }
+        except Exception as exc:
+            services["llm"] = {"status": f"error: {exc}"}
+
+        # Embedding
+        try:
+            embedder = get_embedder()
+            start = time.perf_counter()
+            vec = await embedder.embed_query("health check")
+            latency_ms = round((time.perf_counter() - start) * 1000)
+            settings = get_settings()
+            services["embedding"] = {
+                "status": "ok",
+                "provider": settings.embedding_provider,
+                "dimensions": len(vec),
+                "expected_dimensions": settings.embedding_dimensions,
+                "latency_ms": latency_ms,
+            }
+        except Exception as exc:
+            services["embedding"] = {"status": f"error: {exc}"}
+
+        # Qdrant collection stats
+        try:
+            qdrant = get_qdrant()
+            info = await qdrant.get_collection_info("nexus_text")
+            services["qdrant_nexus_text"] = {"status": "ok", **info}
+        except Exception as exc:
+            services["qdrant_nexus_text"] = {"status": f"error: {exc}"}
+
+        all_ok = all((v.get("status") == "ok" if isinstance(v, dict) else v == "ok") for v in services.values())
+        return JSONResponse(
+            status_code=200 if all_ok else 503,
+            content={"status": "healthy" if all_ok else "degraded", "services": services},
         )
 
     return application

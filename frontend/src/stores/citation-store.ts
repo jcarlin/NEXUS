@@ -13,6 +13,7 @@ interface CitationSidebarState {
     activeSource?: SourceDocument,
   ) => void;
   setActiveSource: (source: SourceDocument) => void;
+  toggle: () => void;
   close: () => void;
 }
 
@@ -31,6 +32,13 @@ export const useCitationStore = create<CitationSidebarState>()((set) => ({
     }),
 
   setActiveSource: (source) => set({ activeSource: source }),
+
+  toggle: () =>
+    set((state) => {
+      if (state.isOpen) return { isOpen: false };
+      if (state.allSources.length > 0) return { isOpen: true };
+      return {};
+    }),
 
   close: () =>
     set({

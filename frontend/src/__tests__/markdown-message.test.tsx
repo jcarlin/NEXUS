@@ -87,6 +87,66 @@ describe("MarkdownMessage", () => {
     expect(screen.getByText(/The evidence shows/)).toBeInTheDocument();
   });
 
+  it("renders citation as clickable button when onCitationClick provided", () => {
+    const sources = [
+      {
+        id: "doc-1",
+        filename: "memo.pdf",
+        page: 3,
+        chunk_text: "Relevant excerpt.",
+        relevance_score: 0.9,
+      },
+    ];
+    const onClick = vi.fn();
+    render(
+      <MarkdownMessage
+        content="See source [1] for details."
+        sources={sources}
+        onCitationClick={onClick}
+      />,
+      { wrapper: Wrapper },
+    );
+    const marker = screen.getByText("1");
+    expect(marker.tagName).toBe("BUTTON");
+  });
+
+  it("renders multiple citations with correct indices", () => {
+    const sources = [
+      { id: "d1", filename: "a.pdf", page: 1, chunk_text: "A", relevance_score: 0.9 },
+      { id: "d2", filename: "b.pdf", page: 2, chunk_text: "B", relevance_score: 0.8 },
+      { id: "d3", filename: "c.pdf", page: 3, chunk_text: "C", relevance_score: 0.7 },
+    ];
+    render(
+      <MarkdownMessage
+        content="First [1], second [2], third [3]."
+        sources={sources}
+      />,
+      { wrapper: Wrapper },
+    );
+    expect(screen.getByText("1")).toBeInTheDocument();
+    expect(screen.getByText("2")).toBeInTheDocument();
+    expect(screen.getByText("3")).toBeInTheDocument();
+  });
+
+  it("leaves [N] as plain text when source index is out of range", () => {
+    render(
+      <MarkdownMessage content="Missing source [5]." sources={[]} />,
+      { wrapper: Wrapper },
+    );
+    expect(screen.getByText(/\[5\]/)).toBeInTheDocument();
+  });
+
+  it("injects citations inside bold/emphasis elements", () => {
+    const sources = [
+      { id: "d1", filename: "a.pdf", page: 1, chunk_text: "A", relevance_score: 0.9 },
+    ];
+    render(
+      <MarkdownMessage content="**important [1]**" sources={sources} />,
+      { wrapper: Wrapper },
+    );
+    expect(screen.getByText("1")).toBeInTheDocument();
+  });
+
   it("renders tables with GFM", () => {
     const table = "| Name | Role |\n|------|------|\n| Alice | CEO |\n| Bob | CTO |";
     render(<MarkdownMessage content={table} sources={[]} />, {

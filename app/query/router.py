@@ -236,18 +236,28 @@ async def query_stream(
 async def _v1_event_generator(graph, initial_state, config, db, thread_id, query_text, matter_id):
     """SSE event generator for the v1 graph."""
     final_state: dict[str, Any] = {}
+    client_disconnected = False
 
-    async for stream_mode, chunk in graph.astream(initial_state, config, stream_mode=["updates", "custom"]):
-        if stream_mode == "updates":
-            for node_name, update in chunk.items():
-                stage = _STAGE_MAP.get(node_name, node_name)
-                yield {"event": "status", "data": json.dumps({"stage": stage})}
-                if node_name == "rerank" and "source_documents" in update:
-                    yield {"event": "sources", "data": json.dumps({"documents": update["source_documents"]})}
-                final_state.update(update)
-        elif stream_mode == "custom":
-            if isinstance(chunk, dict) and chunk.get("type") == "token":
-                yield {"event": "token", "data": json.dumps({"text": chunk["text"]})}
+    try:
+        async for stream_mode, chunk in graph.astream(initial_state, config, stream_mode=["updates", "custom"]):
+            if stream_mode == "updates":
+                for node_name, update in chunk.items():
+                    if update is None:
+                        continue
+                    stage = _STAGE_MAP.get(node_name, node_name)
+                    yield {"event": "status", "data": json.dumps({"stage": stage})}
+                    if node_name == "rerank" and "source_documents" in update:
+                        yield {"event": "sources", "data": json.dumps({"documents": update["source_documents"]})}
+                    final_state.update(update)
+            elif stream_mode == "custom":
+                if isinstance(chunk, dict) and chunk.get("type") == "token":
+                    yield {"event": "token", "data": json.dumps({"text": chunk["text"]})}
+    except GeneratorExit:
+        logger.info("query_stream.client_disconnected", thread_id=thread_id)
+        client_disconnected = True
+
+    if client_disconnected:
+        return
 
     # Chat persistence failure after streaming is a data integrity issue
     # but the SSE response is already in-flight and cannot be retracted.
@@ -298,6 +308,8 @@ async def _agentic_event_generator(graph, initial_state, config, db, thread_id, 
         ):
             if stream_mode == "updates":
                 for node_name, update in chunk.items():
+                    if update is None:
+                        continue
                     stage = _STAGE_MAP.get(node_name, node_name)
                     yield {"event": "status", "data": json.dumps({"stage": stage})}
 

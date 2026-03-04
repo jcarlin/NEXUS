@@ -11,7 +11,10 @@ from settings to decide which variant to compile.
 Agentic edge structure::
 
     START → case_context_resolve → investigation_agent → post_agent_extract
-          → verify_citations → generate_follow_ups → END
+          → verify_citations  → END
+          → generate_follow_ups → END
+
+    (verify_citations and generate_follow_ups run in parallel after post_agent_extract)
 
 The ``investigation_agent`` node is a compiled ``create_react_agent`` subgraph
 that handles the entire agentic loop (tool binding, execution, routing,
@@ -208,10 +211,13 @@ def build_agentic_graph(settings: Settings, checkpointer: Any) -> Any:
     Architecture::
 
         START → case_context_resolve → investigation_agent → post_agent_extract
-              → verify_citations → generate_follow_ups → END
+              ├→ verify_citations  → END
+              └→ generate_follow_ups → END
 
-    The ``investigation_agent`` node is a ``create_react_agent`` subgraph
-    that handles the entire tool-calling loop.
+    ``verify_citations`` and ``generate_follow_ups`` run in parallel after
+    ``post_agent_extract`` since they only read from state.  The
+    ``investigation_agent`` node is a ``create_react_agent`` subgraph that
+    handles the entire tool-calling loop.
     """
     from langchain_anthropic import ChatAnthropic
     from langgraph.prebuilt import create_react_agent
@@ -255,8 +261,11 @@ def build_agentic_graph(settings: Settings, checkpointer: Any) -> Any:
     parent.add_edge(START, "case_context_resolve")
     parent.add_edge("case_context_resolve", "investigation_agent")
     parent.add_edge("investigation_agent", "post_agent_extract")
+    # verify_citations and generate_follow_ups are independent — run in parallel.
+    # Both only read from state (response, source_documents, entities_mentioned).
     parent.add_edge("post_agent_extract", "verify_citations")
-    parent.add_edge("verify_citations", "generate_follow_ups")
+    parent.add_edge("post_agent_extract", "generate_follow_ups")
+    parent.add_edge("verify_citations", END)
     parent.add_edge("generate_follow_ups", END)
 
     return parent.compile(checkpointer=checkpointer)

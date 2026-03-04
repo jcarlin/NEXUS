@@ -255,6 +255,40 @@ async def test_stream_emits_done_event(stream_client):
 
 
 @pytest.mark.asyncio
+async def test_v1_generator_exit_handled(stream_client):
+    """V1 pipeline should handle GeneratorExit without propagating errors."""
+    client, mock_db, mock_graph = stream_client
+
+    async def astream_raises_generator_exit(*args, **kwargs):
+        yield ("updates", {"classify": {"query_type": "factual"}})
+        yield ("updates", {"rewrite": {"rewritten_query": "test"}})
+        raise GeneratorExit()
+
+    mock_graph.astream = astream_raises_generator_exit
+
+    with patch("app.dependencies.get_settings", return_value=_mock_settings(enable_agentic_pipeline=False)):
+        response = await client.post(
+            "/api/v1/query/stream",
+            json={"query": "test question"},
+        )
+
+    # Stream should close gracefully — no 500 error
+    assert response.status_code == 200
+
+    lines = response.text.strip().split("\n")
+    # Should have some status events from before the disconnect
+    status_events = [line for line in lines if line.startswith("event: status")]
+    assert len(status_events) >= 1
+
+    # Should NOT have a done event (client disconnected before completion)
+    done_events = [line for line in lines if line.startswith("event: done")]
+    assert len(done_events) == 0
+
+    # Chat persistence should NOT have been called
+    mock_db.commit.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_stream_emits_agentic_status_events(stream_client):
     """Agentic pipeline node names map to correct SSE status events."""
     client, mock_db, mock_graph = stream_client
@@ -304,3 +338,37 @@ async def test_stream_emits_agentic_status_events(stream_client):
     assert "extracting_results" in stage_names
     assert "verifying_citations" in stage_names
     assert "generating_follow_ups" in stage_names
+
+
+async def test_agentic_stream_skips_none_updates(stream_client):
+    """Subgraph internals can produce None update values — must not crash."""
+    client, mock_db, mock_graph = stream_client
+
+    events = [
+        # Subgraph internal node emits None update
+        (("agent:investigation_agent",), "updates", {"agent": None}),
+        # Normal root-level node with real data
+        (
+            (),
+            "updates",
+            {"post_agent_extract": {"response": "answer", "source_documents": [], "entities_mentioned": []}},
+        ),
+        ((), "updates", {"generate_follow_ups": {"follow_up_questions": []}}),
+    ]
+    mock_graph.astream = _make_astream(events)
+
+    with patch("app.dependencies.get_settings", return_value=_mock_settings(enable_agentic_pipeline=True)):
+        response = await client.post(
+            "/api/v1/query/stream",
+            json={"query": "test question"},
+        )
+    # Should not crash with AttributeError on NoneType
+    assert response.status_code == 200
+
+    lines = response.text.strip().split("\n")
+    data_lines = [line for line in lines if line.startswith("data: ") and "stage" in line]
+    stage_names = [json.loads(line[6:])["stage"] for line in data_lines]
+    # The None update should be skipped — no status event for "agent"
+    assert "agent" not in stage_names
+    # Real nodes still emitted
+    assert "extracting_results" in stage_names

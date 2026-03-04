@@ -111,6 +111,7 @@ async def run_query_stream(client, api_url: str, headers: dict, matter_id: str, 
     sources_count = 0
     done_data: dict = {}
     tool_calls_seen = 0
+    ttft_ms: int | None = None
     query_start = time.perf_counter()
     last_stage_time = query_start
 
@@ -160,6 +161,8 @@ async def run_query_stream(client, api_url: str, headers: dict, matter_id: str, 
                     elif current_event == "token":
                         text_val = data.get("text", "")
                         tokens.append(text_val)
+                        if ttft_ms is None:
+                            ttft_ms = round((now - query_start) * 1000)
 
                     elif current_event == "sources":
                         docs = data.get("documents", [])
@@ -173,9 +176,11 @@ async def run_query_stream(client, api_url: str, headers: dict, matter_id: str, 
 
     total_ms = round((time.perf_counter() - query_start) * 1000)
     response_text = "".join(tokens)
+    token_throughput = len(tokens) / (total_ms / 1000) if total_ms > 0 and tokens else 0.0
 
     return {
         "total_ms": total_ms,
+        "ttft_ms": ttft_ms,
         "stages": stages,
         "token_count": len(tokens),
         "response_length": len(response_text),
@@ -183,6 +188,7 @@ async def run_query_stream(client, api_url: str, headers: dict, matter_id: str, 
         "sources_count": sources_count,
         "done_data": done_data,
         "tool_calls_seen": tool_calls_seen,
+        "token_throughput": round(token_throughput, 1),
     }
 
 
@@ -224,8 +230,13 @@ def print_report(health: dict, query_result: dict, args: argparse.Namespace) -> 
         return
 
     print(f'  Query: "{args.query}"')
+    ttft = query_result.get("ttft_ms")
+    ttft_str = f"{ttft}ms ({ttft / 1000:.1f}s)" if ttft is not None else "N/A (no tokens received)"
+    print(f"  Time to first token (TTFT): {ttft_str}")
     print(f"  Total time: {query_result['total_ms']}ms ({query_result['total_ms'] / 1000:.1f}s)")
     print(f"  Tokens received: {query_result['token_count']}")
+    throughput = query_result.get("token_throughput", 0)
+    print(f"  Token throughput: {throughput} tokens/s")
     print(f"  Sources found: {query_result['sources_count']}")
     print(f"  Response length: {query_result['response_length']} chars")
 

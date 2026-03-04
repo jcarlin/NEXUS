@@ -114,3 +114,25 @@ async def test_verify_citations_skips_fast_tier():
     result = await verify_citations(state)
 
     assert result == {"cited_claims": []}
+
+
+def test_agentic_graph_parallel_post_processing():
+    """verify_citations and generate_follow_ups both follow post_agent_extract."""
+    from unittest.mock import MagicMock
+
+    from app.query.graph import build_agentic_graph
+
+    mock_settings = MagicMock()
+    mock_settings.llm_model = "claude-sonnet-4-20250514"
+    mock_settings.anthropic_api_key = "sk-test"
+
+    # build_agentic_graph compiles the graph — inspect edges
+    with patch("app.query.tools.INVESTIGATION_TOOLS", []):
+        compiled = build_agentic_graph(mock_settings, checkpointer=None)
+
+    # The compiled graph's underlying graph_data stores the edges.
+    # Check that post_agent_extract fans out to both verify_citations and generate_follow_ups.
+    graph = compiled.get_graph()
+    post_extract_targets = {edge.target for edge in graph.edges if edge.source == "post_agent_extract"}
+    assert "verify_citations" in post_extract_targets
+    assert "generate_follow_ups" in post_extract_targets

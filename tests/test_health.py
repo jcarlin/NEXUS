@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 from httpx import AsyncClient
 
@@ -128,3 +130,105 @@ async def test_graph_stats_returns_200(client: AsyncClient) -> None:
     assert response.status_code == 200
     body = response.json()
     assert "total_nodes" in body
+
+
+# ---------------------------------------------------------------------------
+# Deep health endpoint
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_health_deep_returns_service_status(client: AsyncClient) -> None:
+    """Deep health should return LLM, embedding, and Qdrant status keys."""
+    mock_llm = AsyncMock()
+    mock_llm.complete = AsyncMock(return_value="OK")
+    mock_llm.provider = "anthropic"
+    mock_llm.model = "test-model"
+
+    mock_embedder = AsyncMock()
+    mock_embedder.embed_query = AsyncMock(return_value=[0.1] * 1024)
+
+    mock_qdrant = MagicMock()
+    mock_qdrant.get_collection_info = AsyncMock(
+        return_value={"name": "nexus_text", "points_count": 100, "vectors_count": 100, "status": "green"}
+    )
+
+    with (
+        patch("app.main.get_llm", return_value=mock_llm),
+        patch("app.main.get_embedder", return_value=mock_embedder),
+        patch("app.main.get_qdrant", return_value=mock_qdrant),
+    ):
+        response = await client.get("/api/v1/health/deep")
+
+    assert response.status_code in (200, 503)
+    body = response.json()
+    assert "services" in body
+    services = body["services"]
+    assert "llm" in services
+    assert "embedding" in services
+    assert "qdrant_nexus_text" in services
+
+
+@pytest.mark.asyncio
+async def test_health_deep_reports_llm_error(client: AsyncClient) -> None:
+    """Deep health should surface LLM errors in the response."""
+    mock_llm = AsyncMock()
+    mock_llm.complete = AsyncMock(side_effect=RuntimeError("API key invalid"))
+
+    mock_embedder = AsyncMock()
+    mock_embedder.embed_query = AsyncMock(return_value=[0.1] * 1024)
+
+    mock_qdrant = MagicMock()
+    mock_qdrant.get_collection_info = AsyncMock(
+        return_value={"name": "nexus_text", "points_count": 0, "vectors_count": 0, "status": "green"}
+    )
+
+    with (
+        patch("app.main.get_llm", return_value=mock_llm),
+        patch("app.main.get_embedder", return_value=mock_embedder),
+        patch("app.main.get_qdrant", return_value=mock_qdrant),
+    ):
+        response = await client.get("/api/v1/health/deep")
+
+    assert response.status_code == 503
+    body = response.json()
+    assert body["status"] == "degraded"
+    assert "error" in body["services"]["llm"]["status"]
+
+
+# ---------------------------------------------------------------------------
+# LangSmith env var safety
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_langsmith_env_vars_dont_break_graph() -> None:
+    """Setting LangSmith env vars should not break agentic graph construction."""
+    import os
+
+    from app.query.graph import build_agentic_graph
+
+    # Set LangSmith env vars (as a user would)
+    env_patch = {
+        "LANGCHAIN_TRACING_V2": "true",
+        "LANGCHAIN_API_KEY": "ls-test-fake-key",
+        "LANGCHAIN_PROJECT": "nexus-test",
+    }
+    old_vals = {k: os.environ.get(k) for k in env_patch}
+    try:
+        os.environ.update(env_patch)
+
+        mock_settings = MagicMock()
+        mock_settings.llm_model = "claude-sonnet-4-5-20250929"
+        mock_settings.anthropic_api_key = "test-key"
+        mock_settings.enable_citation_verification = True
+
+        # This should not raise
+        compiled = build_agentic_graph(mock_settings, checkpointer=False)
+        assert compiled is not None
+    finally:
+        for k, v in old_vals.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
