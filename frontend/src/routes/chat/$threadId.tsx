@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { apiClient } from "@/api/client";
-import { ThreadSidebar } from "@/components/chat/thread-sidebar";
+import { ChatLayout } from "@/components/chat/chat-layout";
 import { MessageList } from "@/components/chat/message-list";
 import { MessageInput } from "@/components/chat/message-input";
 import { FollowUpChips } from "@/components/chat/follow-up-chips";
@@ -80,17 +80,17 @@ function ChatThreadPage() {
 
   if (isLoading) {
     return (
-      <div className="-m-6 flex h-[calc(100vh-3.5rem)] items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
+      <ChatLayout>
+        <div className="flex h-full items-center justify-center">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      </ChatLayout>
     );
   }
 
   return (
-    <div className="-m-6 flex h-[calc(100vh-3.5rem)] overflow-hidden">
-      <ThreadSidebar />
-
-      <div className="flex flex-1 flex-col">
+    <ChatLayout>
+      <div className="flex h-full flex-col">
         <MessageList
           messages={messages}
           streaming={
@@ -113,6 +113,6 @@ function ChatThreadPage() {
         <FindingsBar />
         <MessageInput onSend={handleSend} disabled={isStreaming} />
       </div>
-    </div>
+    </ChatLayout>
   );
 }

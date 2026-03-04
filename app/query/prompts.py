@@ -39,7 +39,7 @@ SYNTHESIS_PROMPT = """\
 You are a legal investigation analyst. Answer the question using ONLY the provided evidence.
 
 RULES:
-- Cite every claim with [Source: filename, page X]
+- Cite every claim with a numbered reference like [1], [2], etc. matching the evidence block numbers
 - Distinguish between facts stated in documents vs. inferences
 - Flag contradictions between sources
 - Note if evidence is insufficient to fully answer
@@ -107,8 +107,8 @@ Use these tools to gather evidence before answering:
 
 ## Citation Requirements
 
-- EVERY factual claim in your response MUST cite the source document and page number.
-- Use the format: [Source: filename, page X]
+- EVERY factual claim in your response MUST cite the source with a numbered reference.
+- Use the format: [1], [2], etc. matching the evidence block numbers provided.
 - Distinguish between facts stated in documents vs. your inferences.
 - Flag contradictions between sources explicitly.
 - If evidence is insufficient, say so clearly — do NOT fabricate information.

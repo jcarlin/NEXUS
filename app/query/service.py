@@ -23,6 +23,22 @@ from app.config import Settings
 logger = structlog.get_logger(__name__)
 
 
+def _extract_text_from_content(content: str | list) -> str:
+    """Extract plain text from LLM content that may be a string or list of content blocks."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "".join(
+            block.get("text", "")
+            if isinstance(block, dict) and block.get("type") == "text"
+            else block
+            if isinstance(block, str)
+            else ""
+            for block in content
+        )
+    return str(content)
+
+
 class QueryService:
     """Static methods for query graph state construction and response extraction."""
 
@@ -135,9 +151,9 @@ class QueryService:
             for msg in reversed(messages):
                 content = ""
                 if hasattr(msg, "content"):
-                    content = msg.content if isinstance(msg.content, str) else str(msg.content)
+                    content = _extract_text_from_content(msg.content)
                 elif isinstance(msg, dict):
-                    content = msg.get("content", "")
+                    content = _extract_text_from_content(msg.get("content", ""))
                 role = getattr(msg, "type", None) or (msg.get("role") if isinstance(msg, dict) else None)
                 if role in ("ai", "assistant") and content:
                     return content

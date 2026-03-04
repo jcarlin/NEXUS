@@ -316,7 +316,17 @@ async def _agentic_event_generator(graph, initial_state, config, db, thread_id, 
                 tool_calls = getattr(msg_chunk, "tool_call_chunks", None)
                 if not tool_calls:
                     content = msg_chunk.content
-                    if isinstance(content, str) and content:
+                    if isinstance(content, list):
+                        # Extract text from content block list
+                        for block in content:
+                            text_val = ""
+                            if isinstance(block, dict) and block.get("type") == "text":
+                                text_val = block.get("text", "")
+                            elif isinstance(block, str):
+                                text_val = block
+                            if text_val:
+                                yield {"event": "token", "data": json.dumps({"text": text_val})}
+                    elif isinstance(content, str) and content:
                         yield {"event": "token", "data": json.dumps({"text": content})}
 
         elif stream_mode == "custom":

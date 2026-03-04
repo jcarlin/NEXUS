@@ -11,10 +11,11 @@ interface PresignedUploadResponse {
 
 interface UseUppyOptions {
   matterId: string | null;
+  datasetId?: string | null;
   onUploadComplete?: (results: { objectKey: string; filename: string }[]) => void;
 }
 
-export function useUppy({ matterId, onUploadComplete }: UseUppyOptions) {
+export function useUppy({ matterId, datasetId, onUploadComplete }: UseUppyOptions) {
   const uppy = useMemo(() => {
     const instance = new Uppy({
       restrictions: {
@@ -40,6 +41,7 @@ export function useUppy({ matterId, onUploadComplete }: UseUppyOptions) {
             matter_id: matterId,
           },
         });
+        instance.setFileMeta(file.id, { objectKey: res.object_key });
         return {
           method: "PUT",
           url: res.upload_url,
@@ -52,22 +54,39 @@ export function useUppy({ matterId, onUploadComplete }: UseUppyOptions) {
   }, [matterId]);
 
   useEffect(() => {
-    const handler = (result: UploadResult<Meta, Body>) => {
-      if (result.successful && onUploadComplete) {
-        onUploadComplete(
-          result.successful.map((f) => ({
-            objectKey: (f.meta?.["key"] as string) ?? f.name ?? "unknown",
-            filename: f.name ?? "unknown",
-          })),
-        );
+    const handler = async (result: UploadResult<Meta, Body>) => {
+      if (!result.successful?.length) return;
+
+      const files = result.successful.map((f) => ({
+        object_key: (f.meta?.["objectKey"] as string) ?? "",
+        filename: f.name ?? "unknown",
+      })).filter((f) => f.object_key);
+
+      if (files.length > 0) {
+        const params: Record<string, string> = {};
+        if (datasetId) params["dataset_id"] = datasetId;
+
+        await apiClient({
+          url: "/api/v1/ingest/process-uploaded",
+          method: "POST",
+          data: { files },
+          params,
+        });
       }
+
+      onUploadComplete?.(
+        result.successful.map((f) => ({
+          objectKey: (f.meta?.["objectKey"] as string) ?? f.name ?? "unknown",
+          filename: f.name ?? "unknown",
+        })),
+      );
     };
 
     uppy.on("complete", handler);
     return () => {
       uppy.off("complete", handler);
     };
-  }, [uppy, onUploadComplete]);
+  }, [uppy, matterId, datasetId, onUploadComplete]);
 
   useEffect(() => {
     return () => {

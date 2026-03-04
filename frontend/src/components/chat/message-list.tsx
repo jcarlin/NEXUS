@@ -41,9 +41,9 @@ export function MessageList({ messages, streaming, stage, onExampleClick }: Mess
 
   return (
     <ScrollArea className="flex-1">
-      <div className="mx-auto max-w-3xl space-y-4 px-4 py-6">
+      <div className="mx-auto max-w-3xl space-y-6 px-4 py-6">
         {messages.length === 0 && !streaming && (
-          <div className="flex flex-1 flex-col items-center justify-center px-4 text-center">
+          <div className="flex min-h-[60vh] flex-1 flex-col items-center justify-center px-4 text-center">
             <div className="rounded-full bg-primary/10 p-4 mb-4">
               <MessageSquare className="h-8 w-8 text-primary" />
             </div>

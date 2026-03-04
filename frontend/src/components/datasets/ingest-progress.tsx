@@ -2,10 +2,10 @@ import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/api/client";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import type { BulkImportStatusResponse } from "@/types";
+import type { BulkImportStatusResponse, PaginatedResponse } from "@/types";
 
 interface IngestProgressProps {
-  datasetId: string;
+  datasetId?: string | null;
 }
 
 const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
@@ -16,12 +16,22 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "
 
 export function IngestProgress({ datasetId }: IngestProgressProps) {
   const { data: jobs } = useQuery({
-    queryKey: ["datasets", datasetId, "ingest", "status"],
-    queryFn: () =>
-      apiClient<BulkImportStatusResponse[]>({
-        url: `/api/v1/datasets/${datasetId}/ingest/status`,
+    queryKey: datasetId
+      ? ["datasets", datasetId, "ingest", "status"]
+      : ["bulk-imports"],
+    queryFn: async () => {
+      if (datasetId) {
+        return apiClient<BulkImportStatusResponse[]>({
+          url: `/api/v1/datasets/${datasetId}/ingest/status`,
+          method: "GET",
+        });
+      }
+      const paginated = await apiClient<PaginatedResponse<BulkImportStatusResponse>>({
+        url: `/api/v1/bulk-imports`,
         method: "GET",
-      }),
+      });
+      return paginated.items;
+    },
     refetchInterval: (query) => {
       const data = query.state.data;
       if (!data) return 5000;
@@ -49,7 +59,7 @@ export function IngestProgress({ datasetId }: IngestProgressProps) {
           <div key={job.id} className="space-y-1">
             <div className="flex items-center justify-between text-xs">
               <span className="text-muted-foreground truncate max-w-[60%]">
-                {job.adapter_type}: {job.source_path.split("/").pop()}
+                {job.adapter_type}: {job.source_path?.split("/").pop()}
               </span>
               <div className="flex items-center gap-2">
                 <span className="text-muted-foreground">

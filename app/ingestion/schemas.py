@@ -145,3 +145,30 @@ class PresignedUploadResponse(BaseModel):
     upload_url: str
     object_key: str
     expires_in: int = 3600
+
+
+# ---------------------------------------------------------------------------
+# Process-uploaded schemas
+# ---------------------------------------------------------------------------
+
+
+class ProcessUploadedFile(BaseModel):
+    """A single file already uploaded to MinIO via presigned PUT."""
+
+    object_key: str = Field(..., min_length=1)
+    filename: str = Field(..., min_length=1)
+
+
+class ProcessUploadedRequest(BaseModel):
+    """Request to trigger ingestion for files already in MinIO."""
+
+    files: list[ProcessUploadedFile] = Field(..., min_length=1)
+
+
+# ---------------------------------------------------------------------------
+# Bulk import list
+# ---------------------------------------------------------------------------
+
+
+class BulkImportListResponse(PaginatedResponse[BulkImportStatusResponse]):
+    """Paginated list of bulk import jobs."""

@@ -330,6 +330,46 @@ class IngestionService:
         return row_to_dict(row)
 
     # ------------------------------------------------------------------
+    # LIST BULK IMPORTS (matter-scoped)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    async def list_bulk_imports(
+        db: AsyncSession,
+        matter_id: UUID,
+        offset: int = 0,
+        limit: int = 50,
+    ) -> tuple[list[dict], int]:
+        """Return ``(items, total_count)`` for bulk import jobs (matter-scoped)."""
+        params: dict = {"matter_id": matter_id, "offset": offset, "limit": limit}
+
+        count_result = await db.execute(
+            text("SELECT count(*) FROM bulk_import_jobs WHERE matter_id = :matter_id"),
+            params,
+        )
+        total = count_result.scalar_one()
+
+        result = await db.execute(
+            text(
+                """
+                SELECT id, matter_id, adapter_type, source_path, status,
+                       total_documents, processed_documents, failed_documents,
+                       skipped_documents, error, created_at, updated_at, completed_at
+                FROM bulk_import_jobs
+                WHERE matter_id = :matter_id
+                ORDER BY created_at DESC
+                OFFSET :offset
+                LIMIT :limit
+                """
+            ),
+            params,
+        )
+        rows = result.all()
+        items = [row_to_dict(r) for r in rows]
+
+        return items, total
+
+    # ------------------------------------------------------------------
     # DRY-RUN ESTIMATE
     # ------------------------------------------------------------------
 

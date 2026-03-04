@@ -24,7 +24,7 @@ export function MatterSelector() {
   // Auto-select the first matter when none is selected
   useEffect(() => {
     if (!matterId && matters && matters.length > 0) {
-      setMatter(matters[0].id);
+      setMatter(matters[0]!.id);
     }
   }, [matterId, matters, setMatter]);
 

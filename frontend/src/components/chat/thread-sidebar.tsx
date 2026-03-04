@@ -1,11 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "@tanstack/react-router";
-import { Plus, MessageSquare, Loader2 } from "lucide-react";
+import { Plus, MessageSquare, Loader2, PanelLeftClose, PanelLeft } from "lucide-react";
 import { apiClient } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { cn } from "@/lib/utils";
-import { truncate, formatDate } from "@/lib/utils";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { cn, formatDate } from "@/lib/utils";
 import type { ChatThread } from "@/types";
 
 function groupByTime(threads: ChatThread[]): { label: string; threads: ChatThread[] }[] {
@@ -34,7 +34,12 @@ function groupByTime(threads: ChatThread[]): { label: string; threads: ChatThrea
     .map(([label, items]) => ({ label, threads: items }));
 }
 
-export function ThreadSidebar() {
+interface ThreadSidebarProps {
+  collapsed: boolean;
+  onToggle: () => void;
+}
+
+export function ThreadSidebar({ collapsed, onToggle }: ThreadSidebarProps) {
   const params = useParams({ strict: false });
   const activeThreadId = "threadId" in params ? params.threadId : undefined;
 
@@ -50,16 +55,47 @@ export function ThreadSidebar() {
 
   const threads = data?.threads ?? [];
 
+  if (collapsed) {
+    return (
+      <div className="flex h-full w-full flex-col items-center border-r bg-muted/30 py-2 gap-1">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onToggle}>
+              <PanelLeft className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="right">Expand sidebar (⌘B)</TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
+              <Link to="/chat">
+                <Plus className="h-4 w-4" />
+              </Link>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="right">New chat</TooltipContent>
+        </Tooltip>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex h-full w-64 flex-col border-r bg-muted/30">
+    <div className="flex h-full w-full flex-col border-r bg-muted/30">
       <div className="flex items-center justify-between border-b px-3 py-3">
         <span className="text-sm font-semibold">Threads</span>
-        <Button variant="ghost" size="sm" asChild>
-          <Link to="/chat">
-            <Plus className="mr-1 h-3.5 w-3.5" />
-            New
-          </Link>
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="sm" asChild>
+            <Link to="/chat">
+              <Plus className="mr-1 h-3.5 w-3.5" />
+              New
+            </Link>
+          </Button>
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onToggle}>
+            <PanelLeftClose className="h-3.5 w-3.5" />
+          </Button>
+        </div>
       </div>
 
       <ScrollArea className="flex-1">
@@ -91,10 +127,10 @@ export function ThreadSidebar() {
                     activeThreadId === thread.thread_id && "bg-accent",
                   )}
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex min-w-0 items-center gap-2">
                     <MessageSquare className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                     <span className="truncate font-medium">
-                      {truncate(thread.first_query, 40)}
+                      {thread.first_query}
                     </span>
                   </div>
                   <div className="flex items-center justify-between pl-5.5 text-xs text-muted-foreground">

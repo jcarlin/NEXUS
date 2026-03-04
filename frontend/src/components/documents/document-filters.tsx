@@ -2,7 +2,16 @@ import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-const DOC_TYPES = ["pdf", "docx", "xlsx", "pptx", "html", "eml", "msg", "rtf", "csv", "txt"];
+const DOC_TYPES = [
+  { value: "document", label: "Document" },
+  { value: "spreadsheet", label: "Spreadsheet" },
+  { value: "presentation", label: "Presentation" },
+  { value: "email", label: "Email" },
+  { value: "text", label: "Text" },
+  { value: "data", label: "Data" },
+  { value: "web_page", label: "Web Page" },
+  { value: "image", label: "Image" },
+];
 const PRIVILEGE_OPTIONS = [
   { value: "all", label: "All" },
   { value: "privileged", label: "Privileged" },
@@ -46,8 +55,8 @@ export function DocumentFilters({
         <SelectContent>
           <SelectItem value="all">All types</SelectItem>
           {DOC_TYPES.map((t) => (
-            <SelectItem key={t} value={t}>
-              {t.toUpperCase()}
+            <SelectItem key={t.value} value={t.value}>
+              {t.label}
             </SelectItem>
           ))}
         </SelectContent>

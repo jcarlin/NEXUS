@@ -1,3 +1,4 @@
 api: .venv/bin/uvicorn app.main:app --reload --port 8000
-worker: .venv/bin/watchmedo auto-restart --directory=./app --directory=./workers --pattern='*.py' --recursive -- .venv/bin/celery -A workers.celery_app worker -l info -P solo
+worker: .venv/bin/celery -A workers.celery_app worker -l info --autoscale=4,1
 frontend: cd frontend && npm run dev
+flower: .venv/bin/celery -A workers.celery_app flower --port=5555

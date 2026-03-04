@@ -5,7 +5,6 @@ import { toast } from "sonner";
 import { Upload, Server } from "lucide-react";
 import { apiClient } from "@/api/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { UploadWidget } from "@/components/documents/upload-widget";
 import { IngestForm } from "@/components/datasets/ingest-form";

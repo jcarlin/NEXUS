@@ -23,6 +23,7 @@ from app.common.rate_limit import rate_limit_ingests
 from app.dependencies import get_db, get_minio
 from app.ingestion.schemas import (
     BatchIngestResponse,
+    BulkImportListResponse,
     BulkImportStatusResponse,
     DryRunRequest,
     DryRunResponse,
@@ -32,6 +33,7 @@ from app.ingestion.schemas import (
     JobStatusResponse,
     PresignedUploadRequest,
     PresignedUploadResponse,
+    ProcessUploadedRequest,
     S3EventNotification,
     WebhookResponse,
 )
@@ -242,6 +244,120 @@ async def get_presigned_upload_url(
     return PresignedUploadResponse(
         upload_url=upload_url,
         object_key=object_key,
+    )
+
+
+# -----------------------------------------------------------------------
+# POST /ingest/process-uploaded — trigger ingestion for presigned uploads
+# -----------------------------------------------------------------------
+
+
+@router.post("/ingest/process-uploaded", response_model=BatchIngestResponse)
+async def process_uploaded(
+    request: ProcessUploadedRequest,
+    dataset_id: UUID | None = Query(default=None, description="Auto-assign to this dataset"),
+    db: AsyncSession = Depends(get_db),
+    current_user: UserRecord = Depends(get_current_user),
+    matter_id: UUID = Depends(get_matter_id),
+    _rate_limit=Depends(rate_limit_ingests),
+):
+    """Trigger ingestion for files already uploaded to MinIO via presigned PUT.
+
+    Accepts a list of ``{object_key, filename}`` pairs.  For each file,
+    creates a job record and dispatches a ``process_document`` Celery task.
+    """
+    batch_id = uuid4()
+    job_ids: list = []
+    filenames: list[str] = []
+
+    for f in request.files:
+        job_id = uuid4()
+
+        job_row = await IngestionService.create_job(
+            db=db,
+            filename=f.filename,
+            minio_path=f.object_key,
+            job_id=job_id,
+            matter_id=matter_id,
+            dataset_id=dataset_id,
+        )
+
+        process_document.delay(str(job_row["id"]), f.object_key)
+
+        job_ids.append(job_row["id"])
+        filenames.append(f.filename)
+
+        logger.info(
+            "ingest.process_uploaded.dispatched",
+            batch_id=str(batch_id),
+            job_id=str(job_row["id"]),
+            filename=f.filename,
+            object_key=f.object_key,
+        )
+
+    return BatchIngestResponse(
+        batch_id=batch_id,
+        job_ids=job_ids,
+        filenames=filenames,
+        total_files=len(job_ids),
+    )
+
+
+# -----------------------------------------------------------------------
+# GET /bulk-imports — list all bulk import jobs (matter-scoped)
+# -----------------------------------------------------------------------
+
+
+@router.get("/bulk-imports", response_model=BulkImportListResponse)
+async def list_bulk_imports(
+    offset: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(50, ge=1, le=200, description="Max records to return"),
+    db: AsyncSession = Depends(get_db),
+    current_user: UserRecord = Depends(get_current_user),
+    matter_id: UUID = Depends(get_matter_id),
+):
+    """List all bulk import jobs for the current matter (paginated, newest first)."""
+    items, total = await IngestionService.list_bulk_imports(
+        db=db,
+        matter_id=matter_id,
+        offset=offset,
+        limit=limit,
+    )
+
+    from datetime import UTC, datetime
+
+    def _row_to_response(row: dict) -> BulkImportStatusResponse:
+        now = datetime.now(UTC)
+        created = row["created_at"]
+        elapsed = (now - created).total_seconds() if created else None
+
+        estimated_remaining = None
+        if elapsed and row.get("total_documents") and row["processed_documents"] > 0:
+            rate = row["processed_documents"] / elapsed
+            remaining_docs = row["total_documents"] - row["processed_documents"] - row["failed_documents"]
+            if rate > 0 and remaining_docs > 0:
+                estimated_remaining = remaining_docs / rate
+
+        return BulkImportStatusResponse(
+            import_id=row["id"],
+            status=row["status"],
+            adapter_type=row.get("adapter_type"),
+            total_documents=row.get("total_documents"),
+            processed_documents=row["processed_documents"],
+            failed_documents=row["failed_documents"],
+            skipped_documents=row["skipped_documents"],
+            elapsed_seconds=elapsed,
+            estimated_remaining_seconds=estimated_remaining,
+            error=row.get("error"),
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+        )
+
+    return BulkImportListResponse(
+        items=[_row_to_response(row) for row in items],
+        total=total,
+        offset=offset,
+        limit=limit,
     )
 
 

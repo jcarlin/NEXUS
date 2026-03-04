@@ -151,6 +151,7 @@ function DatasetsPage() {
   const [ingestOpen, setIngestOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newDescription, setNewDescription] = useState("");
+  const [ingestAfterCreate, setIngestAfterCreate] = useState(false);
   const [docOffset, setDocOffset] = useState(0);
   const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
   const docLimit = 50;
@@ -194,11 +195,16 @@ function DatasetsPage() {
         method: "POST",
         data,
       }),
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["datasets"] });
       setCreateOpen(false);
       setNewName("");
       setNewDescription("");
+      if (ingestAfterCreate) {
+        setSelectedId(result.id);
+        setIngestOpen(true);
+        setIngestAfterCreate(false);
+      }
     },
   });
 
@@ -312,12 +318,13 @@ function DatasetsPage() {
               <div className="flex items-center gap-2">
                 <Button
                   variant="ghost"
-                  size="icon"
-                  className="h-7 w-7"
+                  size="sm"
+                  className="h-7 gap-1 px-2"
                   onClick={() => setIngestOpen(true)}
-                  title="Import documents"
+                  title="Ingest documents"
                 >
                   <Upload className="h-4 w-4" />
+                  <span className="text-xs">Ingest</span>
                 </Button>
                 {showPermissions && (
                   <Button
@@ -497,6 +504,18 @@ function DatasetsPage() {
                 onChange={(e) => setNewDescription(e.target.value)}
                 placeholder="Optional description"
               />
+            </div>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="ingest-after-create"
+                checked={ingestAfterCreate}
+                onCheckedChange={(checked) =>
+                  setIngestAfterCreate(!!checked)
+                }
+              />
+              <Label htmlFor="ingest-after-create" className="text-sm font-normal">
+                Ingest documents into this dataset after creation
+              </Label>
             </div>
           </div>
           <DialogFooter>

@@ -9,6 +9,7 @@ interface KeyboardShortcutsOptions {
 export function useKeyboardShortcuts({ onOpenCommandPalette }: KeyboardShortcutsOptions) {
   const navigate = useNavigate();
   const toggleDefinedTerms = useAppStore((s) => s.toggleDefinedTerms);
+  const toggleThreadSidebar = useAppStore((s) => s.toggleThreadSidebar);
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -29,6 +30,13 @@ export function useKeyboardShortcuts({ onOpenCommandPalette }: KeyboardShortcuts
       if ((e.ctrlKey || e.metaKey) && e.key === "n") {
         e.preventDefault();
         navigate({ to: "/chat" });
+        return;
+      }
+
+      // Ctrl+B / Cmd+B → toggle thread sidebar
+      if ((e.ctrlKey || e.metaKey) && e.key === "b") {
+        e.preventDefault();
+        toggleThreadSidebar();
         return;
       }
 
@@ -57,5 +65,5 @@ export function useKeyboardShortcuts({ onOpenCommandPalette }: KeyboardShortcuts
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onOpenCommandPalette, navigate, toggleDefinedTerms]);
+  }, [onOpenCommandPalette, navigate, toggleDefinedTerms, toggleThreadSidebar]);
 }

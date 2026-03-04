@@ -7,6 +7,7 @@ interface AppState {
   datasetId: string | null;
   findings: CitedClaim[];
   sidebarCollapsed: boolean;
+  threadSidebarCollapsed: boolean;
   definedTermsOpen: boolean;
 
   setMatter: (matterId: string) => void;
@@ -16,6 +17,7 @@ interface AppState {
   reorderFindings: (from: number, to: number) => void;
   clearFindings: () => void;
   toggleSidebar: () => void;
+  toggleThreadSidebar: () => void;
   toggleDefinedTerms: () => void;
 }
 
@@ -26,6 +28,7 @@ export const useAppStore = create<AppState>()(
       datasetId: null,
       findings: [],
       sidebarCollapsed: false,
+      threadSidebarCollapsed: false,
       definedTermsOpen: false,
 
       setMatter: (matterId) => set({ matterId, datasetId: null }),
@@ -50,6 +53,8 @@ export const useAppStore = create<AppState>()(
       clearFindings: () => set({ findings: [] }),
       toggleSidebar: () =>
         set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
+      toggleThreadSidebar: () =>
+        set((state) => ({ threadSidebarCollapsed: !state.threadSidebarCollapsed })),
       toggleDefinedTerms: () =>
         set((state) => ({ definedTermsOpen: !state.definedTermsOpen })),
     }),
@@ -60,6 +65,7 @@ export const useAppStore = create<AppState>()(
         datasetId: state.datasetId,
         findings: state.findings,
         sidebarCollapsed: state.sidebarCollapsed,
+        threadSidebarCollapsed: state.threadSidebarCollapsed,
       }),
     },
   ),

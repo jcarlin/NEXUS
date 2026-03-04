@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { ThreadSidebar } from "@/components/chat/thread-sidebar";
+import { ChatLayout } from "@/components/chat/chat-layout";
 import { MessageList } from "@/components/chat/message-list";
 import { MessageInput } from "@/components/chat/message-input";
 import { FollowUpChips } from "@/components/chat/follow-up-chips";
@@ -54,10 +54,8 @@ function ChatPage() {
   const streamDone = !isStreaming && !!streamingText;
 
   return (
-    <div className="-m-6 flex h-[calc(100vh-3.5rem)] overflow-hidden">
-      <ThreadSidebar />
-
-      <div className="flex flex-1 flex-col">
+    <ChatLayout>
+      <div className="flex h-full flex-col">
         <MessageList
           messages={[]}
           streaming={
@@ -95,6 +93,6 @@ function ChatPage() {
         <FindingsBar />
         <MessageInput onSend={handleSend} disabled={isStreaming} />
       </div>
-    </div>
+    </ChatLayout>
   );
 }

@@ -5,12 +5,13 @@ import "@uppy/core/dist/style.min.css";
 import "@uppy/dashboard/dist/style.min.css";
 
 interface UploadWidgetProps {
+  datasetId?: string | null;
   onUploadComplete?: (results: { objectKey: string; filename: string }[]) => void;
 }
 
-export function UploadWidget({ onUploadComplete }: UploadWidgetProps) {
+export function UploadWidget({ datasetId, onUploadComplete }: UploadWidgetProps) {
   const matterId = useAppStore((s) => s.matterId);
-  const uppy = useUppy({ matterId, onUploadComplete });
+  const uppy = useUppy({ matterId, datasetId, onUploadComplete });
 
   return (
     <Dashboard

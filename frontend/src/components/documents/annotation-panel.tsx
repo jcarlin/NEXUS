@@ -71,7 +71,7 @@ export function AnnotationPanel({
     defaultValues: {
       content: "",
       annotation_type: "highlight",
-      color: COLOR_OPTIONS[0].value,
+      color: COLOR_OPTIONS[0]!.value,
     },
   });
 
