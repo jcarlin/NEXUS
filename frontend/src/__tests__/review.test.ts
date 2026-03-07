@@ -1,14 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { hotDocScoreColor } from "@/components/review/hot-doc-table";
+import { ResultSetTable } from "@/components/review/result-set-table";
 
 describe("Result set table columns", () => {
-  it("should define correct columns for the result set table", async () => {
-    // Dynamically import to verify the module exports correctly
-    const mod = await import("@/components/review/result-set-table");
-    expect(mod.ResultSetTable).toBeDefined();
+  it("should define correct columns for the result set table", () => {
+    expect(ResultSetTable).toBeDefined();
 
     // Verify the component is a function (React component)
-    expect(typeof mod.ResultSetTable).toBe("function");
+    expect(typeof ResultSetTable).toBe("function");
 
     // The table defines these column IDs: select, filename, type, created_at, hot_doc_score, anomaly_score, dedup
     // We verify by checking the source definition expectations through the exported component

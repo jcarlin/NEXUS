@@ -98,13 +98,13 @@ async def test_ingest_dataset(client: AsyncClient, tmp_path) -> None:
                 return_value=_make_dataset_response(),
             ),
             patch(
-                "app.datasets.router.run_bulk_import",
+                "app.ingestion.tasks.run_bulk_import",
                 mock_task,
             ),
             patch(
                 "app.ingestion.bulk_import.create_bulk_import_job",
                 return_value=_BULK_JOB_ID,
-            ) as mock_create_job,
+            ),
             patch(
                 "app.ingestion.bulk_import._get_sync_engine",
                 return_value=MagicMock(),
@@ -434,7 +434,7 @@ def test_run_bulk_import_task() -> None:
         ),
         patch(
             "app.ingestion.bulk_import.create_job_row",
-        ) as mock_create_job,
+        ),
         patch(
             "app.ingestion.bulk_import.complete_bulk_job",
         ) as mock_complete,
@@ -450,11 +450,10 @@ def test_run_bulk_import_task() -> None:
         from app.ingestion.tasks import run_bulk_import
 
         # Call the task function directly (not via Celery)
-        mock_self = MagicMock()
-        mock_self.request.id = "test-task-id"
+        # For bind=True tasks, calling directly passes the task instance as self
+        run_bulk_import.request.id = "test-task-id"
 
-        result = run_bulk_import.__wrapped__(
-            mock_self,
+        result = run_bulk_import(
             bulk_job_id=_BULK_JOB_ID,
             adapter_type="directory",
             source_config={"data_dir": "/tmp/test"},

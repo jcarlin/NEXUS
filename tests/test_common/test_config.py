@@ -56,7 +56,10 @@ class TestNestedConfig:
         assert s.llm_provider == "openai"
         assert s.llm.provider == "openai"
 
-    def test_nested_embedding_populated(self):
+    def test_nested_embedding_populated(self, monkeypatch):
+        monkeypatch.setenv("EMBEDDING_PROVIDER", "openai")
+        monkeypatch.setenv("EMBEDDING_DIMENSIONS", "1024")
+        monkeypatch.setenv("EMBEDDING_BATCH_SIZE", "32")
         s = Settings(anthropic_api_key="k", openai_api_key="k")
         assert s.embedding is not None
         assert s.embedding.provider == "openai"

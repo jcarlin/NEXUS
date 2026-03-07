@@ -50,6 +50,14 @@ vi.mock("@tanstack/react-router", () => ({
   }) => <a href={props.to}>{children}</a>,
 }));
 
+vi.mock("react-syntax-highlighter", () => ({
+  Prism: ({ children }: { children: string }) => <pre>{children}</pre>,
+}));
+
+vi.mock("react-syntax-highlighter/dist/esm/styles/prism", () => ({
+  oneDark: {},
+}));
+
 import { fetchEventSource } from "@microsoft/fetch-event-source";
 import { useStreamQuery } from "@/hooks/use-stream-query";
 

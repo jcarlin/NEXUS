@@ -14,6 +14,14 @@ vi.mock("@tanstack/react-router", () => ({
   }) => <a href={props.to}>{children}</a>,
 }));
 
+vi.mock("react-syntax-highlighter", () => ({
+  Prism: ({ children }: { children: string }) => <pre>{children}</pre>,
+}));
+
+vi.mock("react-syntax-highlighter/dist/esm/styles/prism", () => ({
+  oneDark: {},
+}));
+
 import { MarkdownMessage } from "@/components/chat/markdown-message";
 
 function Wrapper({ children }: { children: React.ReactNode }) {
