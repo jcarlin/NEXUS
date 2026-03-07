@@ -39,10 +39,16 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
 # ---------------------------------------------------------------------------
 
 
+_LOGGING_SKIP_PREFIXES = ("/api/v1/health",)
+
+
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
     """Logs method, path, status code, and duration for every request using structlog."""
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        if any(request.url.path.startswith(p) for p in _LOGGING_SKIP_PREFIXES):
+            return await call_next(request)
+
         start = time.perf_counter()
         response: Response | None = None
         try:

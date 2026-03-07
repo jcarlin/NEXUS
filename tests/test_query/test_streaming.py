@@ -372,3 +372,93 @@ async def test_agentic_stream_skips_none_updates(stream_client):
     assert "agent" not in stage_names
     # Real nodes still emitted
     assert "extracting_results" in stage_names
+
+
+@pytest.mark.asyncio
+async def test_agentic_stream_filters_tool_messages(stream_client):
+    """ToolMessageChunks must NOT produce token SSE events — only AIMessageChunks do."""
+    from langchain_core.messages import AIMessageChunk, ToolMessageChunk
+
+    client, mock_db, mock_graph = stream_client
+
+    events = [
+        # Root-level node update to set up state
+        (
+            (),
+            "updates",
+            {
+                "case_context_resolve": {
+                    "_case_context": "ctx",
+                    "_term_map": {},
+                    "_tier": "standard",
+                    "_skip_verification": False,
+                }
+            },
+        ),
+        # Subgraph emits a ToolMessageChunk with JSON content (should be filtered)
+        (
+            ("agent:investigation_agent",),
+            "messages",
+            (
+                ToolMessageChunk(content='{"results": [{"doc": "exhibit_a.pdf"}]}', tool_call_id="call_123"),
+                {"langgraph_node": "tools"},
+            ),
+        ),
+        # Subgraph emits an AIMessageChunk with prose (should produce tokens)
+        (
+            ("agent:investigation_agent",),
+            "messages",
+            (
+                AIMessageChunk(content="Based on the evidence"),
+                {"langgraph_node": "agent"},
+            ),
+        ),
+        # AIMessageChunk with tool_call_chunks (should be filtered)
+        (
+            ("agent:investigation_agent",),
+            "messages",
+            (
+                AIMessageChunk(
+                    content="", tool_call_chunks=[{"name": "search", "args": "{}", "id": "call_456", "index": 0}]
+                ),
+                {"langgraph_node": "agent"},
+            ),
+        ),
+        # Final extraction
+        (
+            (),
+            "updates",
+            {
+                "post_agent_extract": {
+                    "response": "Based on the evidence",
+                    "source_documents": [],
+                    "entities_mentioned": [],
+                }
+            },
+        ),
+        ((), "updates", {"generate_follow_ups": {"follow_up_questions": []}}),
+    ]
+    mock_graph.astream = _make_astream(events)
+
+    with patch("app.dependencies.get_settings", return_value=_mock_settings(enable_agentic_pipeline=True)):
+        response = await client.post(
+            "/api/v1/query/stream",
+            json={"query": "test question"},
+        )
+    assert response.status_code == 200
+
+    lines = response.text.strip().split("\n")
+    token_lines = [line for line in lines if line.startswith("event: token")]
+    # Only the AIMessageChunk with prose should produce a token event
+    assert len(token_lines) == 1
+
+    # Verify the token content is the AI prose, not JSON
+    for i, line in enumerate(lines):
+        if line.startswith("event: token"):
+            for j in range(i + 1, len(lines)):
+                if lines[j].startswith("data: "):
+                    data = json.loads(lines[j][6:])
+                    assert data["text"] == "Based on the evidence"
+                    assert "results" not in data["text"]
+                    break
+            break

@@ -33,12 +33,7 @@ export const useCitationStore = create<CitationSidebarState>()((set) => ({
 
   setActiveSource: (source) => set({ activeSource: source }),
 
-  toggle: () =>
-    set((state) => {
-      if (state.isOpen) return { isOpen: false };
-      if (state.allSources.length > 0) return { isOpen: true };
-      return {};
-    }),
+  toggle: () => set((state) => ({ isOpen: !state.isOpen })),
 
   close: () =>
     set({

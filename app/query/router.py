@@ -17,6 +17,7 @@ from uuid import UUID
 import structlog
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
+from langchain_core.messages import AIMessageChunk
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
@@ -121,7 +122,7 @@ async def query(
             dataset_doc_ids=dataset_doc_ids,
         )
 
-    config = QueryService.build_graph_config(thread_id, settings)
+    config = QueryService.build_graph_config(thread_id, settings, request.query)
     final_state = await graph.ainvoke(initial_state, config)
 
     # Extract response (agentic: from last AI message; v1: from response field)
@@ -221,7 +222,7 @@ async def query_stream(
             dataset_doc_ids=dataset_doc_ids,
         )
 
-    config = QueryService.build_graph_config(thread_id, settings)
+    config = QueryService.build_graph_config(thread_id, settings, request.query)
 
     if settings.enable_agentic_pipeline:
         return EventSourceResponse(
@@ -328,12 +329,10 @@ async def _agentic_event_generator(graph, initial_state, config, db, thread_id, 
             elif stream_mode == "messages":
                 # Messages channel: (message_chunk, metadata) tuples
                 msg_chunk, metadata = chunk
-                # Only emit content tokens from the agent's final response
-                # (not tool call chunks)
-                if hasattr(msg_chunk, "content") and msg_chunk.content:
-                    # Skip tool call messages
-                    tool_calls = getattr(msg_chunk, "tool_call_chunks", None)
-                    if not tool_calls:
+                # Only emit content tokens from AIMessageChunks
+                # (not ToolMessageChunks or tool call chunks)
+                if isinstance(msg_chunk, AIMessageChunk) and msg_chunk.content:
+                    if not msg_chunk.tool_call_chunks:
                         content = msg_chunk.content
                         if isinstance(content, list):
                             # Extract text from content block list
