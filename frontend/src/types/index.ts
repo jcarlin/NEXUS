@@ -26,6 +26,7 @@ export interface Matter {
 
 export interface SourceDocument {
   id: string;
+  doc_id?: string | null;
   filename: string;
   page?: number | null;
   chunk_text: string;

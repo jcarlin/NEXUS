@@ -21,6 +21,7 @@ class SourceDocument(BaseModel):
     """A single source passage retrieved as evidence for the answer."""
 
     id: str
+    doc_id: str | None = None
     filename: str
     page: int | None = None
     chunk_text: str

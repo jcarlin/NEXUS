@@ -242,6 +242,7 @@ def create_nodes_v1(
             source_documents.append(
                 {
                     "id": result.get("id", ""),
+                    "doc_id": result.get("doc_id", ""),
                     "filename": result.get("source_file", "unknown"),
                     "page": result.get("page_number"),
                     "chunk_text": result.get("chunk_text", ""),
@@ -915,6 +916,7 @@ async def post_agent_extract(state: dict) -> dict:
             source_documents.append(
                 {
                     "id": doc_id,
+                    "doc_id": item.get("doc_id", doc_id),
                     "filename": filename,
                     "page": item.get("page"),
                     "chunk_text": item.get("text", ""),
