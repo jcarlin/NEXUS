@@ -11,22 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-
-interface RedactionLogEntry {
-  id: string;
-  redaction_type: string;
-  pii_category: string | null;
-  page_number: number | null;
-  reason: string;
-  created_at: string;
-}
-
-interface RedactionLogResponse {
-  items: RedactionLogEntry[];
-  total: number;
-  offset: number;
-  limit: number;
-}
+import type { RedactionLogResponse } from "@/api/generated/schemas";
 
 interface Props {
   documentId: string;

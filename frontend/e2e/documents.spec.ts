@@ -18,9 +18,9 @@ test.describe("Documents", () => {
     await page.goto("/documents", { waitUntil: "domcontentloaded" });
     await page.waitForTimeout(2_000);
 
-    // Click first document link/row
-    const firstRow = page.locator("table tbody tr, [role='row']").first();
-    await firstRow.click();
+    // Click first document filename link
+    const firstLink = page.locator("table tbody tr a").first();
+    await firstLink.click();
 
     // Should navigate to a document detail page
     await expect(page).toHaveURL(/\/documents\//, { timeout: 10_000 });

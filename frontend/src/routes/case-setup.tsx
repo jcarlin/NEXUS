@@ -16,14 +16,18 @@ export const Route = createFileRoute("/case-setup")({
   component: CaseSetupPage,
 });
 
+import type { PartyRole } from "@/api/generated/schemas";
+
+// Client-side form state types — include `id` for list keying and allow empty
+// `role` for the form's initial state. These are intentionally different from
+// the generated API response schemas (ClaimResponse, PartyResponse, etc.).
+
 interface Claim {
   id: string;
   claim_number: number;
   claim_label: string;
   claim_text: string;
 }
-
-type PartyRole = "plaintiff" | "defendant" | "third_party" | "witness" | "counsel";
 
 interface Party {
   id: string;

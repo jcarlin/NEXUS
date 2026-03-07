@@ -118,6 +118,8 @@ Full local deployment with zero cloud API dependency.
 - **LangGraph agents**: `create_react_agent` for autonomous agents, `@tool` decorator with `InjectedState` for security context, prebuilt `ToolNode`. See `app/query/graph.py` and `app/cases/agent.py`. Details in `docs/agents.md`.
 - **BERTopic**: Topic clustering (feature-flagged: `ENABLE_TOPIC_CLUSTERING`). CPU inference, lazy-loaded. See `app/analytics/clustering.py`.
 - **Frontend (React)**: TanStack Router (type-safe). TanStack Query for server state. Zustand for client state. orval generates API hooks from OpenAPI spec (`npm run generate-api`). shadcn/ui components. Vitest + RTL for unit tests, Playwright for E2E.
+- **Frontend styling**: Tailwind v4 + shadcn/ui + CVA only. No inline `style={}` for static values — use Tailwind classes. Inline styles are only acceptable for truly dynamic/computed values (data-driven positions, runtime transforms, D3 bindings). CSS custom properties use `--color-*` prefix (Tailwind v4 convention — e.g. `var(--color-muted)`, not `var(--muted)`).
+- **Entity colors**: Centralized in `frontend/src/lib/colors.ts` (`ENTITY_COLORS` map + `entityColor()` helper) backed by CSS vars in `index.css`. Never duplicate color maps in graph components — import from `@/lib/colors`.
 
 ---
 

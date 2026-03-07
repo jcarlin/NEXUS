@@ -7,6 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PiiDetectionList } from "./pii-detection-list";
 import { RedactionLog } from "./redaction-log";
 
+// Local type — generated PIIDetection has optional page_number and PIICategory
+// enum, but PiiDetectionList expects required page_number: number.
 interface PIIDetection {
   category: string;
   text: string;

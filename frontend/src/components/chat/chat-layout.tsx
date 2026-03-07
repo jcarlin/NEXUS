@@ -18,6 +18,7 @@ interface ChatLayoutProps {
 
 export function ChatLayout({ children }: ChatLayoutProps) {
   const citationOpen = useCitationStore((s) => s.isOpen);
+  const citationMode = useCitationStore((s) => s.mode);
   const collapsed = useAppStore((s) => s.threadSidebarCollapsed);
   const toggle = useAppStore((s) => s.toggleThreadSidebar);
   const setSidebarCollapsed = useAppStore((s) => s.setSidebarCollapsed);
@@ -43,14 +44,15 @@ export function ChatLayout({ children }: ChatLayoutProps) {
     }
   }, [citationOpen, setSidebarCollapsed, setThreadSidebarCollapsed]);
 
-  // Programmatically resize citation panel when citationOpen changes
+  // Programmatically resize citation panel when citationOpen or mode changes
   useEffect(() => {
     if (citationOpen) {
-      citationPanelRef.current?.resize("40%");
+      const size = citationMode === "expanded" ? "65%" : "40%";
+      citationPanelRef.current?.resize(size);
     } else {
       citationPanelRef.current?.collapse();
     }
-  }, [citationOpen, citationPanelRef]);
+  }, [citationOpen, citationMode, citationPanelRef]);
 
   // Sync drag-to-collapse with store: when user drags panel below minSize, it auto-collapses to 0%
   const handleCitationResize = useCallback(
@@ -86,8 +88,8 @@ export function ChatLayout({ children }: ChatLayoutProps) {
           defaultSize="0%"
           collapsible
           collapsedSize="0%"
-          minSize="20%"
-          maxSize="50%"
+          minSize={citationMode === "expanded" ? "40%" : "20%"}
+          maxSize="75%"
           onResize={handleCitationResize}
           panelRef={citationPanelRef}
         >

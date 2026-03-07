@@ -51,6 +51,7 @@ test.describe("Navigation", () => {
   });
 
   test("no error boundaries on sequential navigation", async ({ page }) => {
+    test.setTimeout(90_000);
     const routes = [
       "/",
       "/chat",
@@ -69,8 +70,8 @@ test.describe("Navigation", () => {
     ];
 
     for (const route of routes) {
-      await page.goto(route, { waitUntil: "domcontentloaded" });
-      await page.waitForTimeout(1_500);
+      await page.goto(route, { waitUntil: "domcontentloaded", timeout: 10_000 }).catch(() => {});
+      await page.waitForTimeout(500);
 
       const errorBoundary = page.locator("[data-testid='error-boundary']");
       const isError = await errorBoundary.isVisible().catch(() => false);

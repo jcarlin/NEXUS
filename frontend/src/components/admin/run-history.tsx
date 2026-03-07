@@ -15,19 +15,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
+import type { EvalRunResponse } from "@/api/generated/schemas";
 
-interface EvalRun {
-  run_id: string;
-  mode: string;
-  created_at: string;
-  status: string;
-  metrics: Record<string, number>;
-}
-
-const columnHelper = createColumnHelper<EvalRun>();
+const columnHelper = createColumnHelper<EvalRunResponse>();
 
 const columns = [
-  columnHelper.accessor("run_id", {
+  columnHelper.accessor("id", {
     header: "Run ID",
     cell: (info) => (
       <span className="font-mono text-xs">{info.getValue().slice(0, 8)}</span>
@@ -61,7 +54,8 @@ const columns = [
   columnHelper.accessor("metrics", {
     header: "Metrics Summary",
     cell: (info) => {
-      const metrics = info.getValue();
+      const raw = info.getValue();
+      const metrics = (raw ?? {}) as Record<string, number>;
       const keys = Object.keys(metrics).slice(0, 3);
       return (
         <div className="flex gap-2">
@@ -77,7 +71,7 @@ const columns = [
 ];
 
 interface RunHistoryProps {
-  data: EvalRun[];
+  data: EvalRunResponse[];
   isLoading: boolean;
 }
 

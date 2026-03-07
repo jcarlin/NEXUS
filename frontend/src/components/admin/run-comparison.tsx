@@ -9,29 +9,25 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-
-interface EvalRun {
-  run_id: string;
-  mode: string;
-  created_at: string;
-  status: string;
-  metrics: Record<string, number>;
-}
+import type { EvalRunResponse } from "@/api/generated/schemas";
 
 interface RunComparisonProps {
-  runs: EvalRun[];
+  runs: EvalRunResponse[];
 }
 
 export function RunComparison({ runs }: RunComparisonProps) {
-  const [leftId, setLeftId] = useState<string>(runs[1]?.run_id ?? "");
-  const [rightId, setRightId] = useState<string>(runs[0]?.run_id ?? "");
+  const [leftId, setLeftId] = useState<string>(runs[1]?.id ?? "");
+  const [rightId, setRightId] = useState<string>(runs[0]?.id ?? "");
 
-  const leftRun = runs.find((r) => r.run_id === leftId);
-  const rightRun = runs.find((r) => r.run_id === rightId);
+  const leftRun = runs.find((r) => r.id === leftId);
+  const rightRun = runs.find((r) => r.id === rightId);
+
+  const leftMetrics = (leftRun?.metrics ?? {}) as Record<string, number>;
+  const rightMetrics = (rightRun?.metrics ?? {}) as Record<string, number>;
 
   const allMetrics = new Set<string>();
-  if (leftRun) Object.keys(leftRun.metrics).forEach((k) => allMetrics.add(k));
-  if (rightRun) Object.keys(rightRun.metrics).forEach((k) => allMetrics.add(k));
+  Object.keys(leftMetrics).forEach((k) => allMetrics.add(k));
+  Object.keys(rightMetrics).forEach((k) => allMetrics.add(k));
 
   return (
     <div className="space-y-4">
@@ -44,8 +40,8 @@ export function RunComparison({ runs }: RunComparisonProps) {
             </SelectTrigger>
             <SelectContent>
               {runs.map((r) => (
-                <SelectItem key={r.run_id} value={r.run_id}>
-                  {r.run_id.slice(0, 8)} ({r.mode})
+                <SelectItem key={r.id} value={r.id}>
+                  {r.id.slice(0, 8)} ({r.mode})
                 </SelectItem>
               ))}
             </SelectContent>
@@ -60,8 +56,8 @@ export function RunComparison({ runs }: RunComparisonProps) {
             </SelectTrigger>
             <SelectContent>
               {runs.map((r) => (
-                <SelectItem key={r.run_id} value={r.run_id}>
-                  {r.run_id.slice(0, 8)} ({r.mode})
+                <SelectItem key={r.id} value={r.id}>
+                  {r.id.slice(0, 8)} ({r.mode})
                 </SelectItem>
               ))}
             </SelectContent>
@@ -72,8 +68,8 @@ export function RunComparison({ runs }: RunComparisonProps) {
       {leftRun && rightRun && (
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
           {[...allMetrics].map((metric) => {
-            const leftVal = leftRun.metrics[metric] ?? 0;
-            const rightVal = rightRun.metrics[metric] ?? 0;
+            const leftVal = leftMetrics[metric] ?? 0;
+            const rightVal = rightMetrics[metric] ?? 0;
             const delta = rightVal - leftVal;
             const isLatency = metric.includes("latency") || metric.includes("ms");
             // For latency, lower is better; for others, higher is better

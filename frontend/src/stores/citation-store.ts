@@ -6,6 +6,7 @@ interface CitationSidebarState {
   activeSource: SourceDocument | null;
   allSources: SourceDocument[];
   allClaims: CitedClaim[];
+  mode: "compact" | "expanded";
 
   openWithSources: (
     sources: SourceDocument[],
@@ -13,6 +14,8 @@ interface CitationSidebarState {
     activeSource?: SourceDocument,
   ) => void;
   setActiveSource: (source: SourceDocument) => void;
+  expandView: () => void;
+  collapseView: () => void;
   toggle: () => void;
   close: () => void;
 }
@@ -22,6 +25,7 @@ export const useCitationStore = create<CitationSidebarState>()((set) => ({
   activeSource: null,
   allSources: [],
   allClaims: [],
+  mode: "compact",
 
   openWithSources: (sources, claims, activeSource) =>
     set({
@@ -32,6 +36,10 @@ export const useCitationStore = create<CitationSidebarState>()((set) => ({
     }),
 
   setActiveSource: (source) => set({ activeSource: source }),
+
+  expandView: () => set({ mode: "expanded" }),
+
+  collapseView: () => set({ mode: "compact" }),
 
   toggle: () =>
     set((state) => ({
@@ -44,5 +52,6 @@ export const useCitationStore = create<CitationSidebarState>()((set) => ({
       activeSource: null,
       allSources: [],
       allClaims: [],
+      mode: "compact",
     }),
 }));

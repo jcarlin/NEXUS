@@ -15,18 +15,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { PaginatedResponse } from "@/types";
+import type { ThreadResponse } from "@/api/generated/schemas";
 
+// Local type — the generated CommunicationMatrixResponse has different fields
+// (pairs/matter_id) than what this component receives (matrix/entities).
 interface CommMatrixResponse {
   matrix: MatrixEntry[];
   entities: string[];
-}
-
-interface ThreadResponse {
-  thread_id: string;
-  message_count: number;
-  subject: string | null;
-  earliest: string | null;
-  latest: string | null;
 }
 
 export const Route = createFileRoute("/analytics/comms")({

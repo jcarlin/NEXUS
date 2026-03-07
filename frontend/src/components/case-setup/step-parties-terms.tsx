@@ -16,8 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-
-type PartyRole = "plaintiff" | "defendant" | "third_party" | "witness" | "counsel";
+import type { PartyRole } from "@/api/generated/schemas";
 
 const PARTY_ROLES: { value: PartyRole; label: string }[] = [
   { value: "plaintiff", label: "Plaintiff" },

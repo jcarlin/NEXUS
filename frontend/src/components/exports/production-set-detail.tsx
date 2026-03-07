@@ -15,16 +15,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Pagination } from "@/components/ui/pagination";
 import type { PaginatedResponse } from "@/types";
-
-interface ProductionSetDocument {
-  id: string;
-  production_set_id: string;
-  document_id: string;
-  bates_begin: string | null;
-  bates_end: string | null;
-  filename: string | null;
-  added_at: string;
-}
+import type { ProductionSetDocumentResponse } from "@/api/generated/schemas";
 
 interface Props {
   productionSetId: string;
@@ -41,7 +32,7 @@ export function ProductionSetDetail({ productionSetId, onBack, onRefresh }: Prop
   const { data, isLoading } = useQuery({
     queryKey: ["production-set-docs", productionSetId, offset],
     queryFn: () =>
-      apiClient<PaginatedResponse<ProductionSetDocument>>({
+      apiClient<PaginatedResponse<ProductionSetDocumentResponse>>({
         url: `/api/v1/exports/production-sets/${productionSetId}/documents`,
         method: "GET",
         params: { offset, limit },

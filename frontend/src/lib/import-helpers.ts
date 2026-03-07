@@ -2,14 +2,14 @@
  * Helper functions for the ingest flow.
  */
 
+import type { ProcessUploadedRequest } from "@/api/generated/schemas";
+
 export interface UploadedFile {
   objectKey: string;
   filename: string;
 }
 
-export interface ProcessUploadedPayload {
-  files: { object_key: string; filename: string }[];
-}
+export type ProcessUploadedPayload = ProcessUploadedRequest;
 
 /**
  * Transform camelCase upload results to snake_case API payload.

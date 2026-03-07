@@ -11,6 +11,7 @@ import { MetadataPanel } from "@/components/documents/metadata-panel";
 import { AnnotationPanel } from "@/components/documents/annotation-panel";
 import { RedactionPanel } from "@/components/documents/redaction-panel";
 import { useAnnotations } from "@/hooks/use-annotations";
+import { useDocumentDownload } from "@/hooks/use-document-download";
 import { useFeatureFlag } from "@/hooks/use-feature-flags";
 import { detectDocumentType } from "@/lib/utils";
 import type { DocumentDetail, Annotation, AnnotationAnchor } from "@/types";
@@ -37,15 +38,8 @@ function DocumentDetailPage() {
       }),
   });
 
-  const { data: downloadData } = useQuery({
-    queryKey: ["document-download", id],
-    queryFn: () =>
-      apiClient<{ download_url: string }>({
-        url: `/api/v1/documents/${id}/download`,
-        method: "GET",
-      }),
-    enabled: !!doc,
-  });
+  const { downloadUrl: downloadUrlFromHook } = useDocumentDownload(doc ? id : null);
+  const downloadData = downloadUrlFromHook ? { download_url: downloadUrlFromHook } : undefined;
 
   const redactionEnabled = useFeatureFlag("redaction");
   const { data: annotationsData } = useAnnotations(id);

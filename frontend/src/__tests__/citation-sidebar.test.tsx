@@ -22,10 +22,27 @@ vi.mock("@tanstack/react-router", () => ({
 
 vi.mock("@tanstack/react-query", () => ({
   useQuery: () => ({ data: [], isLoading: false }),
+  useQueryClient: () => ({ prefetchQuery: vi.fn() }),
 }));
 
 vi.mock("@/api/client", () => ({
-  apiClient: { get: vi.fn() },
+  apiClient: vi.fn(),
+}));
+
+vi.mock("@/hooks/use-document-preview", () => ({
+  useDocumentPreview: vi.fn().mockReturnValue({
+    previewUrl: null,
+    isLoading: false,
+    error: null,
+  }),
+}));
+
+vi.mock("@/hooks/use-document-download", () => ({
+  useDocumentDownload: vi.fn().mockReturnValue({
+    downloadUrl: null,
+    isLoading: false,
+    error: null,
+  }),
 }));
 
 vi.mock("@/components/ui/resizable", () => ({

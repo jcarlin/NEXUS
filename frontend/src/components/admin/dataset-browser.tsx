@@ -17,14 +17,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
+import type { DatasetItemResponse } from "@/api/generated/schemas";
 
-interface DatasetItem {
-  question: string;
-  expected_answer: string;
-  tags: string[];
-}
-
-const columnHelper = createColumnHelper<DatasetItem>();
+const columnHelper = createColumnHelper<DatasetItemResponse>();
 
 const columns = [
   columnHelper.accessor("question", {
@@ -59,7 +54,7 @@ function DatasetTab({ type }: { type: string }) {
   const { data, isLoading } = useQuery({
     queryKey: ["eval-dataset", type],
     queryFn: () =>
-      apiClient<{ items: DatasetItem[] }>({
+      apiClient<{ items: DatasetItemResponse[] }>({
         url: `/api/v1/evaluation/datasets/${type}`,
         method: "GET",
       }),

@@ -22,17 +22,11 @@ import { UploadWidget } from "@/components/documents/upload-widget";
 import { IngestForm } from "@/components/datasets/ingest-form";
 import { IngestProgress } from "@/components/datasets/ingest-progress";
 import type { BulkImportStatusResponse, PaginatedResponse } from "@/types";
+import type { EDRMImportResponse } from "@/api/generated/schemas";
 
 export const Route = createFileRoute("/documents/import")({
   component: IngestPage,
 });
-
-interface EDRMImportResponse {
-  import_id: string;
-  status: string;
-  record_count: number;
-  message: string;
-}
 
 function IngestPage() {
   const [mode, setMode] = useState<"upload" | "server" | "edrm">("upload");

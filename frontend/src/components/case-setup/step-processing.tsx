@@ -4,12 +4,7 @@ import { Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { apiClient } from "@/api/client";
 import { useAppStore } from "@/stores/app-store";
 import { Progress } from "@/components/ui/progress";
-
-interface CaseContext {
-  status: string;
-  claims?: unknown[];
-  parties?: unknown[];
-}
+import type { CaseContextResponse } from "@/api/generated/schemas";
 
 interface StepProcessingProps {
   onProcessingComplete: () => void;
@@ -21,7 +16,7 @@ export function StepProcessing({ onProcessingComplete }: StepProcessingProps) {
   const { data, error, isError } = useQuery({
     queryKey: ["case-context", matterId],
     queryFn: () =>
-      apiClient<CaseContext>({
+      apiClient<CaseContextResponse>({
         url: `/api/v1/cases/${matterId}/context`,
         method: "GET",
       }),

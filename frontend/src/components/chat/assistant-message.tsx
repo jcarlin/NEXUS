@@ -15,7 +15,6 @@ import { Badge } from "@/components/ui/badge";
 import { MarkdownMessage } from "./markdown-message";
 import { MessageActions } from "./message-actions";
 import { EntityChips } from "./entity-chips";
-import { QuickViewModal } from "@/components/documents/quick-view-modal";
 import { useAppStore } from "@/stores/app-store";
 import { useCitationStore } from "@/stores/citation-store";
 import type {
@@ -53,7 +52,6 @@ export function AssistantMessage({
 }: AssistantMessageProps) {
   const [sourcesOpen, setSourcesOpen] = useState(false);
   const [claimsOpen, setClaimsOpen] = useState(false);
-  const [selectedSource, setSelectedSource] = useState<SourceDocument | null>(null);
   const addFinding = useAppStore((s) => s.addFinding);
   const openWithSources = useCitationStore((s) => s.openWithSources);
 
@@ -181,8 +179,9 @@ export function AssistantMessage({
           <div className="rounded-md border">
             <div className="space-y-2 px-3 py-2">
               {citedClaims.map((claim, idx) => {
-                const Icon = verificationIcon[claim.verification_status];
-                const color = verificationColor[claim.verification_status];
+                const status = (claim.verification_status ?? "unverified") as keyof typeof verificationIcon;
+                const Icon = verificationIcon[status];
+                const color = verificationColor[status];
                 return (
                   <div
                     key={idx}
@@ -217,19 +216,6 @@ export function AssistantMessage({
           </div>
         )}
 
-        {selectedSource && (
-          <QuickViewModal
-            open={!!selectedSource}
-            onOpenChange={(open) => { if (!open) setSelectedSource(null); }}
-            documentId={selectedSource.id}
-            filename={selectedSource.filename}
-            page={selectedSource.page}
-            excerpt={selectedSource.chunk_text}
-            score={selectedSource.relevance_score}
-            downloadUrl={selectedSource.download_url ?? undefined}
-            documentType={undefined}
-          />
-        )}
       </div>
     </div>
   );

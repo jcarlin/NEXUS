@@ -17,12 +17,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { DocumentResponse, PaginatedResponse } from "@/types";
-
-interface DuplicateCluster {
-  cluster_id: string;
-  document_count: number;
-  avg_score: number | null;
-}
+import type { DuplicateCluster } from "@/api/generated/schemas";
 
 export const Route = createFileRoute("/review/result-set")({
   component: ResultSetPage,

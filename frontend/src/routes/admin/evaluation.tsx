@@ -6,18 +6,11 @@ import { QualityGates } from "@/components/admin/quality-gates";
 import { DatasetBrowser } from "@/components/admin/dataset-browser";
 import { RunHistory } from "@/components/admin/run-history";
 import { RunComparison } from "@/components/admin/run-comparison";
-
 export const Route = createFileRoute("/admin/evaluation")({
   component: EvaluationPage,
 });
 
-interface EvalRun {
-  run_id: string;
-  mode: string;
-  created_at: string;
-  status: string;
-  metrics: Record<string, number>;
-}
+import type { EvalRunResponse } from "@/api/generated/schemas";
 
 interface EvaluationResult {
   metrics: Record<string, number>;
@@ -42,7 +35,7 @@ function EvaluationPage() {
   const { data: runsData, isLoading: runsLoading, isError: runsError } = useQuery({
     queryKey: ["eval-runs"],
     queryFn: () =>
-      apiClient<{ items: EvalRun[] }>({
+      apiClient<{ items: EvalRunResponse[] }>({
         url: "/api/v1/evaluation/runs",
         method: "GET",
       }),

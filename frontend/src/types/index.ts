@@ -1,29 +1,74 @@
-export type Role = "admin" | "attorney" | "paralegal" | "reviewer";
+// ---------------------------------------------------------------------------
+// Re-exports from orval-generated schemas (single source of truth)
+// ---------------------------------------------------------------------------
+// Alias where the generated name differs from established usage.
+// Import first so client-only types below can reference them.
 
-export interface User {
-  id: string;
-  email: string;
-  full_name: string;
-  role: Role;
-  is_active: boolean;
-  created_at: string;
-}
+import type {
+  EntityMention as _EntityMention,
+  CitedClaim as _CitedClaim,
+} from "@/api/generated/schemas";
 
-export interface TokenResponse {
-  access_token: string;
-  refresh_token: string;
-  token_type: string;
-  expires_in: number;
-}
+export type { Role } from "@/api/generated/schemas";
+export type { UserResponse as User } from "@/api/generated/schemas";
+export type { TokenResponse } from "@/api/generated/schemas";
+export type { MatterResponse as Matter } from "@/api/generated/schemas";
+export type { EntityMention } from "@/api/generated/schemas";
+export type { CitedClaim } from "@/api/generated/schemas";
+export type { DocumentResponse } from "@/api/generated/schemas";
+export type { DocumentDetail } from "@/api/generated/schemas";
+export type { AuditLogEntry } from "@/api/generated/schemas";
+// NOTE: Generated JobStatusResponse uses JobStatus enum (not string) and has
+// different field optionality. Keep local type.
+export type { DatasetResponse } from "@/api/generated/schemas";
+// NOTE: Generated DatasetTreeNode has optional `children` and `document_count`
+// but consumers assume these are always present. Keep local types.
+export type { TagResponse } from "@/api/generated/schemas";
+export type { DatasetAccessRole } from "@/api/generated/schemas";
+export type { DatasetAccessResponse } from "@/api/generated/schemas";
+// NOTE: Generated AnnotationType is a const enum pattern, not compatible with
+// string union usage (e.g. `Record<AnnotationType, ...>` indexing). Keep local.
+// NOTE: Generated AnnotationResponse/Create/Update use incompatible anchor and
+// annotation_type types (orval nullable wrappers vs local AnnotationAnchor).
+// Keep local types.
+export type { DatasetIngestRequest } from "@/api/generated/schemas";
+export type { DatasetIngestResponse } from "@/api/generated/schemas";
+export type { DryRunEstimate } from "@/api/generated/schemas";
+// NOTE: The generated AppIngestionSchemasBulkImportStatusResponse uses
+// `import_id` instead of `id` and lacks `source_path`, `completed_at`.
+// Keep the local type until the backend OpenAPI spec is reconciled.
+export type { ThreadResponse } from "@/api/generated/schemas";
+export type { CommunicationMatrixResponse } from "@/api/generated/schemas";
+export type { CommunicationPair } from "@/api/generated/schemas";
+export type { ProductionSetResponse } from "@/api/generated/schemas";
+export type { ExportJobResponse } from "@/api/generated/schemas";
+export type { DuplicateCluster } from "@/api/generated/schemas";
+export type { EvalRunResponse } from "@/api/generated/schemas";
+export type { EDRMImportResponse } from "@/api/generated/schemas";
+export type { PIIDetection } from "@/api/generated/schemas";
+export type { RedactionLogEntry } from "@/api/generated/schemas";
+export type { RedactionLogResponse } from "@/api/generated/schemas";
+export type { ProductionSetDocumentResponse } from "@/api/generated/schemas";
+export type { DatasetItemResponse } from "@/api/generated/schemas";
+export type { ClaimResponse } from "@/api/generated/schemas";
+export type { PartyResponse } from "@/api/generated/schemas";
+export type { PartyRole } from "@/api/generated/schemas";
+export type { DefinedTermResponse } from "@/api/generated/schemas";
+export type { LatestEvalResponse } from "@/api/generated/schemas";
+export type { CaseContextResponse } from "@/api/generated/schemas";
+export type { ProcessUploadedRequest } from "@/api/generated/schemas";
+export type { ProcessUploadedFile } from "@/api/generated/schemas";
 
-export interface Matter {
-  id: string;
-  name: string;
-  description?: string | null;
-  is_active: boolean;
-  created_at: string;
-}
+// ---------------------------------------------------------------------------
+// Client-only types (no generated equivalent)
+// ---------------------------------------------------------------------------
 
+/**
+ * Source document with optional doc_id for citation sidebar downloads.
+ * NOTE: The generated SourceDocument schema is missing `doc_id` — this is a
+ * backend OpenAPI spec gap (the field is returned at runtime). Keep this
+ * extended version until the spec is fixed.
+ */
 export interface SourceDocument {
   id: string;
   doc_id?: string | null;
@@ -33,96 +78,6 @@ export interface SourceDocument {
   relevance_score: number;
   preview_url?: string | null;
   download_url?: string | null;
-}
-
-export interface EntityMention {
-  name: string;
-  type: string;
-  kg_id?: string | null;
-  connections: number;
-}
-
-export interface CitedClaim {
-  claim_text: string;
-  document_id: string;
-  filename: string;
-  page_number?: number | null;
-  bates_range?: string | null;
-  excerpt: string;
-  grounding_score: number;
-  verification_status: "unverified" | "verified" | "flagged";
-}
-
-export interface QueryResponse {
-  response: string;
-  source_documents: SourceDocument[];
-  follow_up_questions: string[];
-  entities_mentioned: EntityMention[];
-  thread_id: string;
-  message_id: string;
-  cited_claims: CitedClaim[];
-  tier?: string | null;
-}
-
-export interface ChatThread {
-  thread_id: string;
-  message_count: number;
-  last_message_at: string;
-  first_query: string;
-}
-
-export interface ChatMessage {
-  role: "user" | "assistant";
-  content: string;
-  source_documents: SourceDocument[];
-  entities_mentioned: EntityMention[];
-  follow_up_questions: string[];
-  timestamp: string;
-}
-
-export interface DocumentResponse {
-  id: string;
-  filename: string;
-  type?: string | null;
-  page_count: number;
-  chunk_count: number;
-  entity_count: number;
-  created_at: string;
-  minio_path: string;
-  privilege_status?: string | null;
-  thread_id?: string | null;
-  is_inclusive?: boolean | null;
-  duplicate_cluster_id?: string | null;
-  version_group_id?: string | null;
-}
-
-export interface DocumentDetail extends DocumentResponse {
-  metadata_: Record<string, unknown>;
-  file_size_bytes?: number | null;
-  content_hash?: string | null;
-  job_id?: string | null;
-  updated_at?: string | null;
-  privilege_reviewed_by?: string | null;
-  privilege_reviewed_at?: string | null;
-  message_id?: string | null;
-  in_reply_to?: string | null;
-  thread_position?: number | null;
-  duplicate_score?: number | null;
-  version_number?: number | null;
-  is_final_version?: boolean | null;
-  sentiment_positive?: number | null;
-  sentiment_negative?: number | null;
-  sentiment_pressure?: number | null;
-  sentiment_opportunity?: number | null;
-  sentiment_rationalization?: number | null;
-  sentiment_intent?: number | null;
-  sentiment_concealment?: number | null;
-  hot_doc_score?: number | null;
-  context_gap_score?: number | null;
-  context_gaps?: string[] | null;
-  anomaly_score?: number | null;
-  bates_begin?: string | null;
-  bates_end?: string | null;
 }
 
 export interface EntityResponse {
@@ -157,45 +112,31 @@ export interface TimelineEvent {
   document_source?: string | null;
 }
 
-export interface AuditLogEntry {
-  id: string;
-  user_id?: string | null;
-  user_email?: string | null;
-  action: string;
-  resource: string;
-  resource_type?: string | null;
-  matter_id?: string | null;
-  ip_address: string;
-  user_agent?: string | null;
-  status_code: number;
-  duration_ms?: number | null;
-  request_id?: string | null;
-  created_at: string;
+export interface ChatThread {
+  thread_id: string;
+  message_count: number;
+  last_message_at: string;
+  first_query: string;
 }
 
-export interface PaginatedResponse<T> {
-  items: T[];
-  total: number;
-  offset: number;
-  limit: number;
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+  source_documents: SourceDocument[];
+  entities_mentioned: _EntityMention[];
+  follow_up_questions: string[];
+  timestamp: string;
 }
 
-export interface JobStatusResponse {
-  job_id: string;
-  status: string;
-  filename?: string | null;
-  document_type?: string | null;
-  error?: string | null;
-  progress?: {
-    stage: string;
-    pages_parsed: number;
-    chunks_created: number;
-    entities_extracted: number;
-    embeddings_generated: number;
-  } | null;
-  created_at: string;
-  updated_at?: string | null;
-  completed_at?: string | null;
+export interface QueryResponse {
+  response: string;
+  source_documents: SourceDocument[];
+  follow_up_questions: string[];
+  entities_mentioned: _EntityMention[];
+  thread_id: string;
+  message_id: string;
+  cited_claims: _CitedClaim[];
+  tier?: string | null;
 }
 
 export type SSEEvent =
@@ -206,65 +147,19 @@ export type SSEEvent =
       type: "done";
       thread_id: string;
       follow_ups: string[];
-      entities: EntityMention[];
-      cited_claims: CitedClaim[];
+      entities: _EntityMention[];
+      cited_claims: _CitedClaim[];
       tier?: string | null;
     };
 
-export interface DatasetResponse {
-  id: string;
-  matter_id: string;
-  name: string;
-  description: string;
-  parent_id: string | null;
-  document_count: number;
-  children_count: number;
-  created_by: string | null;
-  created_at: string;
-  updated_at: string;
+export interface PaginatedResponse<T> {
+  items: T[];
+  total: number;
+  offset: number;
+  limit: number;
 }
-
-export interface DatasetTreeNode {
-  id: string;
-  name: string;
-  description: string;
-  document_count: number;
-  children: DatasetTreeNode[];
-}
-
-export interface DatasetTreeResponse {
-  roots: DatasetTreeNode[];
-  total_datasets: number;
-}
-
-export interface TagResponse {
-  tag_name: string;
-  document_count: number;
-}
-
-// --- Dataset Access Control ---
-
-export type DatasetAccessRole = "viewer" | "editor" | "admin";
-
-export interface DatasetAccessResponse {
-  id: string;
-  dataset_id: string;
-  user_id: string;
-  access_role: DatasetAccessRole;
-  granted_by: string | null;
-  granted_at: string;
-}
-
-// --- Annotations ---
 
 export type AnnotationType = "note" | "highlight" | "tag";
-
-export interface AnnotationAnchor {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
 
 export interface Annotation {
   id: string;
@@ -295,7 +190,12 @@ export interface AnnotationUpdate {
   color?: string | null;
 }
 
-// --- Dataset Ingestion ---
+export interface AnnotationAnchor {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
 
 export type AdapterType =
   | "directory"
@@ -303,27 +203,35 @@ export type AdapterType =
   | "edrm_xml"
   | "concordance_dat";
 
-export interface DatasetIngestRequest {
-  adapter_type: AdapterType;
-  source_path: string;
-  content_dir?: string | null;
-  resume?: boolean;
-  limit?: number | null;
-  disable_hnsw?: boolean;
+export interface DatasetTreeNode {
+  id: string;
+  name: string;
+  description: string;
+  document_count: number;
+  children: DatasetTreeNode[];
 }
 
-export interface DatasetIngestResponse {
-  bulk_job_id: string;
-  total_documents: number;
+export interface DatasetTreeResponse {
+  roots: DatasetTreeNode[];
+  total_datasets: number;
+}
+
+export interface JobStatusResponse {
+  job_id: string;
   status: string;
-}
-
-export interface DryRunEstimate {
-  total_documents: number;
-  total_characters: number;
-  estimated_chunks: number;
-  estimated_tokens: number;
-  estimated_cost_usd: number;
+  filename?: string | null;
+  document_type?: string | null;
+  error?: string | null;
+  progress?: {
+    stage: string;
+    pages_parsed: number;
+    chunks_created: number;
+    entities_extracted: number;
+    embeddings_generated: number;
+  } | null;
+  created_at: string;
+  updated_at?: string | null;
+  completed_at?: string | null;
 }
 
 export interface BulkImportStatusResponse {

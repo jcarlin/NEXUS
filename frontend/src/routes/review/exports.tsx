@@ -9,41 +9,13 @@ import { ExportJobList } from "@/components/exports/export-job-list";
 import { CreateProductionSetDialog } from "@/components/exports/create-production-set-dialog";
 import { CreateExportDialog } from "@/components/exports/create-export-dialog";
 import type { PaginatedResponse } from "@/types";
+import type { ProductionSetResponse, ExportJobResponse } from "@/api/generated/schemas";
+
+export type { ProductionSetResponse as ProductionSet, ExportJobResponse as ExportJob } from "@/api/generated/schemas";
 
 export const Route = createFileRoute("/review/exports")({
   component: ExportsPage,
 });
-
-export interface ProductionSet {
-  id: string;
-  matter_id: string;
-  name: string;
-  description: string | null;
-  bates_prefix: string;
-  bates_start: number;
-  bates_padding: number;
-  next_bates: number;
-  status: string;
-  created_by: string;
-  created_at: string;
-  updated_at: string;
-  document_count: number;
-}
-
-export interface ExportJob {
-  id: string;
-  matter_id: string;
-  export_type: string;
-  export_format: string;
-  status: string;
-  parameters: Record<string, unknown>;
-  output_path: string | null;
-  file_size_bytes: number | null;
-  error: string | null;
-  created_by: string;
-  created_at: string;
-  completed_at: string | null;
-}
 
 function ExportsPage() {
   const matterId = useAppStore((s) => s.matterId);
@@ -54,7 +26,7 @@ function ExportsPage() {
   const productionSets = useQuery({
     queryKey: ["production-sets", matterId, psOffset],
     queryFn: () =>
-      apiClient<PaginatedResponse<ProductionSet>>({
+      apiClient<PaginatedResponse<ProductionSetResponse>>({
         url: "/api/v1/exports/production-sets",
         method: "GET",
         params: { offset: psOffset, limit },
@@ -65,7 +37,7 @@ function ExportsPage() {
   const exportJobs = useQuery({
     queryKey: ["export-jobs", matterId, jobOffset],
     queryFn: () =>
-      apiClient<PaginatedResponse<ExportJob>>({
+      apiClient<PaginatedResponse<ExportJobResponse>>({
         url: "/api/v1/exports/jobs",
         method: "GET",
         params: { offset: jobOffset, limit },
