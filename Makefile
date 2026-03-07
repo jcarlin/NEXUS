@@ -31,8 +31,11 @@ worker: ## Start Celery worker (autoscale: max 4, min 1)
 frontend: ## Start React frontend dev server
 	cd frontend && npm run dev
 
-test: ## Run test suite
-	$(VENV)/pytest tests/ -v
+test: ## Run full test suite (parallel)
+	$(VENV)/pytest tests/ -v -n auto
+
+test-fast: ## Run tests for a specific module (usage: make test-fast MOD=query)
+	$(VENV)/pytest tests/test_$(MOD)/ -v
 
 migrate: ## Run database migrations
 	$(VENV)/alembic upgrade head
