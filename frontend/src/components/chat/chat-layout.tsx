@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import {
   ResizablePanelGroup,
   ResizablePanel,
@@ -17,6 +17,27 @@ export function ChatLayout({ children }: ChatLayoutProps) {
   const citationOpen = useCitationStore((s) => s.isOpen);
   const collapsed = useAppStore((s) => s.threadSidebarCollapsed);
   const toggle = useAppStore((s) => s.toggleThreadSidebar);
+  const setSidebarCollapsed = useAppStore((s) => s.setSidebarCollapsed);
+  const setThreadSidebarCollapsed = useAppStore((s) => s.setThreadSidebarCollapsed);
+
+  const prevSidebarState = useRef<{ sidebar: boolean; threadSidebar: boolean } | null>(null);
+
+  useEffect(() => {
+    if (citationOpen) {
+      // Snapshot current states before collapsing
+      prevSidebarState.current = {
+        sidebar: useAppStore.getState().sidebarCollapsed,
+        threadSidebar: useAppStore.getState().threadSidebarCollapsed,
+      };
+      setSidebarCollapsed(true);
+      setThreadSidebarCollapsed(true);
+    } else if (prevSidebarState.current) {
+      // Restore previous states
+      setSidebarCollapsed(prevSidebarState.current.sidebar);
+      setThreadSidebarCollapsed(prevSidebarState.current.threadSidebar);
+      prevSidebarState.current = null;
+    }
+  }, [citationOpen, setSidebarCollapsed, setThreadSidebarCollapsed]);
 
   return (
     <div className="-m-6 flex h-[calc(100vh-3.5rem)] overflow-hidden">
@@ -35,7 +56,7 @@ export function ChatLayout({ children }: ChatLayoutProps) {
         {citationOpen && (
           <>
             <ResizableHandle withHandle />
-            <ResizablePanel id="citation-sidebar" defaultSize={28} minSize={20} maxSize={45}>
+            <ResizablePanel id="citation-sidebar" defaultSize={40} minSize={20} maxSize={50}>
               <CitationSidebar />
             </ResizablePanel>
           </>

@@ -17,7 +17,9 @@ interface AppState {
   reorderFindings: (from: number, to: number) => void;
   clearFindings: () => void;
   toggleSidebar: () => void;
+  setSidebarCollapsed: (collapsed: boolean) => void;
   toggleThreadSidebar: () => void;
+  setThreadSidebarCollapsed: (collapsed: boolean) => void;
   toggleDefinedTerms: () => void;
 }
 
@@ -53,8 +55,10 @@ export const useAppStore = create<AppState>()(
       clearFindings: () => set({ findings: [] }),
       toggleSidebar: () =>
         set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
+      setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
       toggleThreadSidebar: () =>
         set((state) => ({ threadSidebarCollapsed: !state.threadSidebarCollapsed })),
+      setThreadSidebarCollapsed: (collapsed) => set({ threadSidebarCollapsed: collapsed }),
       toggleDefinedTerms: () =>
         set((state) => ({ definedTermsOpen: !state.definedTermsOpen })),
     }),

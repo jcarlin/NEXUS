@@ -40,6 +40,7 @@ vi.mock("@/components/ui/resizable", () => ({
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useCitationStore } from "@/stores/citation-store";
+import { useAppStore } from "@/stores/app-store";
 import { CitationSidebar } from "@/components/chat/citation-sidebar";
 import { ChatHeader } from "@/components/chat/chat-header";
 import { ChatLayout } from "@/components/chat/chat-layout";
@@ -129,9 +130,11 @@ describe("ChatLayout citation panel", () => {
 
   it("does not render citation sidebar when store is closed", () => {
     render(
-      <ChatLayout>
-        <div>Chat content</div>
-      </ChatLayout>,
+      <TooltipProvider>
+        <ChatLayout>
+          <div>Chat content</div>
+        </ChatLayout>
+      </TooltipProvider>,
     );
     expect(screen.queryByTestId("citation-sidebar")).not.toBeInTheDocument();
   });
@@ -139,9 +142,11 @@ describe("ChatLayout citation panel", () => {
   it("renders citation sidebar when store is open with sources", () => {
     useCitationStore.getState().openWithSources(MOCK_SOURCES, []);
     render(
-      <ChatLayout>
-        <div>Chat content</div>
-      </ChatLayout>,
+      <TooltipProvider>
+        <ChatLayout>
+          <div>Chat content</div>
+        </ChatLayout>
+      </TooltipProvider>,
     );
     expect(screen.getByTestId("citation-sidebar")).toBeInTheDocument();
     expect(screen.getByText("Sources (2)")).toBeInTheDocument();
@@ -251,5 +256,143 @@ describe("ChatHeader", () => {
 
     fireEvent.click(btn);
     expect(useCitationStore.getState().isOpen).toBe(true);
+  });
+});
+
+describe("app-store deterministic setters", () => {
+  it("setSidebarCollapsed sets exact value", () => {
+    const store = useAppStore.getState();
+    store.setSidebarCollapsed(true);
+    expect(useAppStore.getState().sidebarCollapsed).toBe(true);
+
+    store.setSidebarCollapsed(false);
+    expect(useAppStore.getState().sidebarCollapsed).toBe(false);
+
+    store.setSidebarCollapsed(false);
+    expect(useAppStore.getState().sidebarCollapsed).toBe(false);
+  });
+
+  it("setThreadSidebarCollapsed sets exact value", () => {
+    const store = useAppStore.getState();
+    store.setThreadSidebarCollapsed(true);
+    expect(useAppStore.getState().threadSidebarCollapsed).toBe(true);
+
+    store.setThreadSidebarCollapsed(false);
+    expect(useAppStore.getState().threadSidebarCollapsed).toBe(false);
+
+    store.setThreadSidebarCollapsed(false);
+    expect(useAppStore.getState().threadSidebarCollapsed).toBe(false);
+  });
+});
+
+describe("ChatLayout sidebar auto-collapse", () => {
+  beforeEach(() => {
+    useCitationStore.getState().close();
+    useAppStore.getState().setSidebarCollapsed(false);
+    useAppStore.getState().setThreadSidebarCollapsed(false);
+  });
+
+  it("collapses both sidebars when citation sidebar opens", () => {
+    const { rerender } = render(
+      <TooltipProvider>
+        <ChatLayout>
+          <div>Chat</div>
+        </ChatLayout>
+      </TooltipProvider>,
+    );
+
+    expect(useAppStore.getState().sidebarCollapsed).toBe(false);
+    expect(useAppStore.getState().threadSidebarCollapsed).toBe(false);
+
+    useCitationStore.getState().openWithSources(MOCK_SOURCES, []);
+    rerender(
+      <TooltipProvider>
+        <ChatLayout>
+          <div>Chat</div>
+        </ChatLayout>
+      </TooltipProvider>,
+    );
+
+    expect(useAppStore.getState().sidebarCollapsed).toBe(true);
+    expect(useAppStore.getState().threadSidebarCollapsed).toBe(true);
+  });
+
+  it("restores previous sidebar states when citation sidebar closes", () => {
+    // Start with sidebars expanded
+    useAppStore.getState().setSidebarCollapsed(false);
+    useAppStore.getState().setThreadSidebarCollapsed(false);
+
+    const { rerender } = render(
+      <TooltipProvider>
+        <ChatLayout>
+          <div>Chat</div>
+        </ChatLayout>
+      </TooltipProvider>,
+    );
+
+    // Open citation sidebar
+    useCitationStore.getState().openWithSources(MOCK_SOURCES, []);
+    rerender(
+      <TooltipProvider>
+        <ChatLayout>
+          <div>Chat</div>
+        </ChatLayout>
+      </TooltipProvider>,
+    );
+
+    expect(useAppStore.getState().sidebarCollapsed).toBe(true);
+
+    // Close citation sidebar
+    useCitationStore.getState().close();
+    rerender(
+      <TooltipProvider>
+        <ChatLayout>
+          <div>Chat</div>
+        </ChatLayout>
+      </TooltipProvider>,
+    );
+
+    expect(useAppStore.getState().sidebarCollapsed).toBe(false);
+    expect(useAppStore.getState().threadSidebarCollapsed).toBe(false);
+  });
+
+  it("preserves already-collapsed state on restore", () => {
+    // Start with both sidebars already collapsed
+    useAppStore.getState().setSidebarCollapsed(true);
+    useAppStore.getState().setThreadSidebarCollapsed(true);
+
+    const { rerender } = render(
+      <TooltipProvider>
+        <ChatLayout>
+          <div>Chat</div>
+        </ChatLayout>
+      </TooltipProvider>,
+    );
+
+    // Open citation sidebar
+    useCitationStore.getState().openWithSources(MOCK_SOURCES, []);
+    rerender(
+      <TooltipProvider>
+        <ChatLayout>
+          <div>Chat</div>
+        </ChatLayout>
+      </TooltipProvider>,
+    );
+
+    expect(useAppStore.getState().sidebarCollapsed).toBe(true);
+    expect(useAppStore.getState().threadSidebarCollapsed).toBe(true);
+
+    // Close citation sidebar — should restore to collapsed (previous state)
+    useCitationStore.getState().close();
+    rerender(
+      <TooltipProvider>
+        <ChatLayout>
+          <div>Chat</div>
+        </ChatLayout>
+      </TooltipProvider>,
+    );
+
+    expect(useAppStore.getState().sidebarCollapsed).toBe(true);
+    expect(useAppStore.getState().threadSidebarCollapsed).toBe(true);
   });
 });
