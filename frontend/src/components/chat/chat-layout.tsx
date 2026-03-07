@@ -4,7 +4,7 @@ import {
   ResizablePanel,
   ResizableHandle,
 } from "@/components/ui/resizable";
-import { useGroupRef } from "react-resizable-panels";
+import { usePanelRef } from "react-resizable-panels";
 import { ThreadSidebar } from "./thread-sidebar";
 import { CitationSidebar } from "./citation-sidebar";
 import { useCitationStore } from "@/stores/citation-store";
@@ -24,7 +24,7 @@ export function ChatLayout({ children }: ChatLayoutProps) {
   const setThreadSidebarCollapsed = useAppStore((s) => s.setThreadSidebarCollapsed);
 
   const prevSidebarState = useRef<{ sidebar: boolean; threadSidebar: boolean } | null>(null);
-  const groupRef = useGroupRef();
+  const citationPanelRef = usePanelRef();
 
   useEffect(() => {
     if (citationOpen) {
@@ -43,14 +43,14 @@ export function ChatLayout({ children }: ChatLayoutProps) {
     }
   }, [citationOpen, setSidebarCollapsed, setThreadSidebarCollapsed]);
 
-  // Programmatically set panel layout when citationOpen changes
+  // Programmatically resize citation panel when citationOpen changes
   useEffect(() => {
     if (citationOpen) {
-      groupRef.current?.setLayout({ "chat-main": 60, "citation-sidebar": 40 });
+      citationPanelRef.current?.resize("40%");
     } else {
-      groupRef.current?.setLayout({ "chat-main": 100, "citation-sidebar": 0 });
+      citationPanelRef.current?.collapse();
     }
-  }, [citationOpen, groupRef]);
+  }, [citationOpen, citationPanelRef]);
 
   // Sync drag-to-collapse with store: when user drags panel below minSize, it auto-collapses to 0%
   const handleCitationResize = useCallback(
@@ -71,7 +71,7 @@ export function ChatLayout({ children }: ChatLayoutProps) {
         <ThreadSidebar collapsed={collapsed} onToggle={toggle} />
       </div>
 
-      <ResizablePanelGroup direction="horizontal" className="flex-1" groupRef={groupRef}>
+      <ResizablePanelGroup direction="horizontal" className="flex-1">
         <ResizablePanel id="chat-main" minSize={35}>
           {children}
         </ResizablePanel>
@@ -89,6 +89,7 @@ export function ChatLayout({ children }: ChatLayoutProps) {
           minSize={20}
           maxSize={50}
           onResize={handleCitationResize}
+          panelRef={citationPanelRef}
         >
           {citationOpen && <CitationSidebar />}
         </ResizablePanel>
