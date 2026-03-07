@@ -2,6 +2,13 @@ import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -10,10 +17,20 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
+type PartyRole = "plaintiff" | "defendant" | "third_party" | "witness" | "counsel";
+
+const PARTY_ROLES: { value: PartyRole; label: string }[] = [
+  { value: "plaintiff", label: "Plaintiff" },
+  { value: "defendant", label: "Defendant" },
+  { value: "third_party", label: "Third Party" },
+  { value: "witness", label: "Witness" },
+  { value: "counsel", label: "Counsel" },
+];
+
 interface Party {
   id: string;
   name: string;
-  role: string;
+  role: PartyRole | "";
 }
 
 interface DefinedTerm {
@@ -76,14 +93,23 @@ export function StepPartiesTerms({
                     />
                   </TableCell>
                   <TableCell className="p-2">
-                    <Input
+                    <Select
                       value={party.role}
-                      onChange={(e) =>
-                        onUpdateParty(party.id, "role", e.target.value)
+                      onValueChange={(val) =>
+                        onUpdateParty(party.id, "role", val)
                       }
-                      placeholder="e.g., Plaintiff"
-                      className="h-8 text-sm"
-                    />
+                    >
+                      <SelectTrigger className="h-8 text-sm">
+                        <SelectValue placeholder="Select role" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PARTY_ROLES.map((r) => (
+                          <SelectItem key={r.value} value={r.value}>
+                            {r.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </TableCell>
                   <TableCell className="p-2">
                     <Button

@@ -236,9 +236,9 @@ class Settings(BaseSettings):
     # --- Agentic Pipeline ---
     enable_agentic_pipeline: bool = True
     enable_citation_verification: bool = True
-    agentic_recursion_limit_fast: int = 16
-    agentic_recursion_limit_standard: int = 28
-    agentic_recursion_limit_deep: int = 50
+    agentic_recursion_limit_fast: int = 24
+    agentic_recursion_limit_standard: int = 40
+    agentic_recursion_limit_deep: int = 60
 
     # --- LangSmith Tracing ---
     langchain_tracing_v2: bool = False

@@ -114,6 +114,49 @@ async def test_get_document_found(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_get_document_includes_sentiment_scoring_bates(client: AsyncClient) -> None:
+    """GET /documents/{id} should return sentiment, scoring, and bates fields."""
+    doc_id = uuid4()
+    row = _fake_doc_row(
+        doc_id=doc_id,
+        sentiment_positive=0.85,
+        sentiment_negative=0.12,
+        sentiment_pressure=0.3,
+        sentiment_opportunity=0.5,
+        sentiment_rationalization=0.1,
+        sentiment_intent=0.6,
+        sentiment_concealment=0.05,
+        hot_doc_score=0.92,
+        context_gap_score=0.4,
+        context_gaps=["missing financials", "no deposition"],
+        anomaly_score=0.7,
+        bates_begin="NEXUS-000100",
+        bates_end="NEXUS-000112",
+    )
+
+    with patch(
+        "app.documents.service.DocumentService.get_document",
+        new_callable=AsyncMock,
+        return_value=row,
+    ):
+        response = await client.get(f"/api/v1/documents/{doc_id}")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["sentiment_positive"] == 0.85
+    assert body["sentiment_negative"] == 0.12
+    assert body["sentiment_pressure"] == 0.3
+    assert body["sentiment_intent"] == 0.6
+    assert body["sentiment_concealment"] == 0.05
+    assert body["hot_doc_score"] == 0.92
+    assert body["context_gap_score"] == 0.4
+    assert body["context_gaps"] == ["missing financials", "no deposition"]
+    assert body["anomaly_score"] == 0.7
+    assert body["bates_begin"] == "NEXUS-000100"
+    assert body["bates_end"] == "NEXUS-000112"
+
+
+@pytest.mark.asyncio
 async def test_get_document_not_found(client: AsyncClient) -> None:
     """GET /documents/{id} should return 404 for nonexistent document."""
     with patch(

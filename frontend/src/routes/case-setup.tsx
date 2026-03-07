@@ -16,13 +16,17 @@ export const Route = createFileRoute("/case-setup")({
 
 interface Claim {
   id: string;
-  text: string;
+  claim_number: number;
+  claim_label: string;
+  claim_text: string;
 }
+
+type PartyRole = "plaintiff" | "defendant" | "third_party" | "witness" | "counsel";
 
 interface Party {
   id: string;
   name: string;
-  role: string;
+  role: PartyRole | "";
 }
 
 interface DefinedTerm {
@@ -40,9 +44,13 @@ function CaseSetupPage() {
   const matterId = useAppStore((s) => s.matterId);
   const [step, setStep] = useState(0);
   const [uploaded, setUploaded] = useState(false);
+  // Stored for future use (e.g. direct context polling)
+  const [, setCaseContextId] = useState<string | null>(null);
   const [processingDone, setProcessingDone] = useState(false);
 
-  const [claims, setClaims] = useState<Claim[]>([{ id: genId(), text: "" }]);
+  const [claims, setClaims] = useState<Claim[]>([
+    { id: genId(), claim_number: 1, claim_label: "", claim_text: "" },
+  ]);
   const [parties, setParties] = useState<Party[]>([]);
   const [terms, setTerms] = useState<DefinedTerm[]>([]);
 
@@ -52,9 +60,16 @@ function CaseSetupPage() {
         url: `/api/v1/cases/${matterId}/context`,
         method: "PATCH",
         data: {
-          claims: claims.filter((c) => c.text.trim()).map((c) => c.text),
+          status: "confirmed",
+          claims: claims
+            .filter((c) => c.claim_text.trim())
+            .map((c) => ({
+              claim_number: c.claim_number,
+              claim_label: c.claim_label,
+              claim_text: c.claim_text,
+            })),
           parties: parties
-            .filter((p) => p.name.trim())
+            .filter((p) => p.name.trim() && p.role)
             .map((p) => ({ name: p.name, role: p.role })),
           defined_terms: terms
             .filter((t) => t.term.trim())
@@ -108,7 +123,11 @@ function CaseSetupPage() {
       >
         {step === 0 && (
           <StepUpload
-            onUploadComplete={() => setUploaded(true)}
+            onUploadComplete={(result) => {
+              setCaseContextId(result.case_context_id);
+              setUploaded(true);
+              setStep(1);
+            }}
           />
         )}
         {step === 1 && (
@@ -118,14 +137,26 @@ function CaseSetupPage() {
           <StepClaims
             claims={claims}
             onAdd={() =>
-              setClaims((prev) => [...prev, { id: genId(), text: "" }])
+              setClaims((prev) => [
+                ...prev,
+                {
+                  id: genId(),
+                  claim_number: prev.length + 1,
+                  claim_label: "",
+                  claim_text: "",
+                },
+              ])
             }
             onRemove={(id) =>
-              setClaims((prev) => prev.filter((c) => c.id !== id))
-            }
-            onUpdate={(id, text) =>
               setClaims((prev) =>
-                prev.map((c) => (c.id === id ? { ...c, text } : c)),
+                prev
+                  .filter((c) => c.id !== id)
+                  .map((c, i) => ({ ...c, claim_number: i + 1 })),
+              )
+            }
+            onUpdate={(id, field, value) =>
+              setClaims((prev) =>
+                prev.map((c) => (c.id === id ? { ...c, [field]: value } : c)),
               )
             }
           />
@@ -136,7 +167,7 @@ function CaseSetupPage() {
             onAddParty={() =>
               setParties((prev) => [
                 ...prev,
-                { id: genId(), name: "", role: "" },
+                { id: genId(), name: "", role: "" as Party["role"] },
               ])
             }
             onRemoveParty={(id) =>

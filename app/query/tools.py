@@ -458,6 +458,9 @@ async def communication_matrix(
             output["graph_emails"] = emails
 
         return json.dumps(output, default=str)
+    except Exception as exc:
+        logger.warning("tool.error", tool="communication_matrix", error=str(exc))
+        return json.dumps({"error": f"Tool failed: {type(exc).__name__}: {exc}"})
     finally:
         try:
             await db_gen.aclose()
@@ -483,25 +486,29 @@ async def topic_cluster(
     if not settings.enable_topic_clustering:
         return json.dumps({"info": "Topic clustering is not enabled. Set ENABLE_TOPIC_CLUSTERING=true."})
 
-    retriever = get_retriever()
-    results = await retriever.retrieve_text(
-        query,
-        limit=100,
-        filters=state.get("_filters"),
-        exclude_privilege_statuses=state.get("_exclude_privilege") or None,
-    )
-    texts = [r.get("chunk_text", "") for r in results if r.get("chunk_text")]
+    try:
+        retriever = get_retriever()
+        results = await retriever.retrieve_text(
+            query,
+            limit=100,
+            filters=state.get("_filters"),
+            exclude_privilege_statuses=state.get("_exclude_privilege") or None,
+        )
+        texts = [r.get("chunk_text", "") for r in results if r.get("chunk_text")]
 
-    if not texts:
-        return json.dumps({"info": "No documents found for clustering."})
+        if not texts:
+            return json.dumps({"info": "No documents found for clustering."})
 
-    clusterer = TopicClusterer(
-        enabled=True,
-        embedding_model=settings.bertopic_embedding_model,
-        min_cluster_size=settings.bertopic_min_cluster_size,
-    )
-    clusters = clusterer.cluster(texts)
-    return json.dumps([c.model_dump() for c in clusters], default=str)
+        clusterer = TopicClusterer(
+            enabled=True,
+            embedding_model=settings.bertopic_embedding_model,
+            min_cluster_size=settings.bertopic_min_cluster_size,
+        )
+        clusters = clusterer.cluster(texts)
+        return json.dumps([c.model_dump() for c in clusters], default=str)
+    except Exception as exc:
+        logger.warning("tool.error", tool="topic_cluster", error=str(exc))
+        return json.dumps({"error": f"Tool failed: {type(exc).__name__}: {exc}"})
 
 
 @tool
@@ -529,13 +536,17 @@ async def network_analysis(
     filters = state.get("_filters", {})
     matter_id = filters.get("matter_id", "")
 
-    gs = get_graph_service()
-    result = await AnalyticsService.get_network_centrality(
-        gs,
-        matter_id,
-        metric,
-    )
-    return json.dumps(result.model_dump(), default=str)
+    try:
+        gs = get_graph_service()
+        result = await AnalyticsService.get_network_centrality(
+            gs,
+            matter_id,
+            metric,
+        )
+        return json.dumps(result.model_dump(), default=str)
+    except Exception as exc:
+        logger.warning("tool.error", tool="network_analysis", error=str(exc))
+        return json.dumps({"error": f"Tool failed: {type(exc).__name__}: {exc}"})
 
 
 # ---------------------------------------------------------------------------

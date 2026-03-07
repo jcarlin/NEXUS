@@ -3,7 +3,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface Claim {
   id: string;
-  text: string;
+  claim_number: number;
+  claim_label: string;
+  claim_text: string;
 }
 
 interface Party {
@@ -48,12 +50,15 @@ export function StepConfirm({ claims, parties, terms }: StepConfirmProps) {
             <p className="text-sm text-muted-foreground">No claims defined.</p>
           ) : (
             <ul className="space-y-2">
-              {claims.map((claim, i) => (
+              {claims.map((claim) => (
                 <li key={claim.id} className="text-sm">
                   <span className="mr-2 font-mono text-xs text-muted-foreground">
-                    {i + 1}.
+                    {claim.claim_number}.
                   </span>
-                  {claim.text || <span className="italic text-muted-foreground">Empty claim</span>}
+                  {claim.claim_label && (
+                    <span className="mr-1 font-medium">{claim.claim_label}:</span>
+                  )}
+                  {claim.claim_text || <span className="italic text-muted-foreground">Empty claim</span>}
                 </li>
               ))}
             </ul>

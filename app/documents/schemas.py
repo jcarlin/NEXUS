@@ -43,6 +43,18 @@ class DocumentDetail(DocumentResponse):
     duplicate_score: float | None = None
     version_number: int | None = None
     is_final_version: bool | None = None
+    sentiment_positive: float | None = None
+    sentiment_negative: float | None = None
+    sentiment_pressure: float | None = None
+    sentiment_opportunity: float | None = None
+    sentiment_rationalization: float | None = None
+    sentiment_intent: float | None = None
+    sentiment_concealment: float | None = None
+    context_gap_score: float | None = None
+    context_gaps: list[str] = Field(default_factory=list)
+    anomaly_score: float | None = None
+    bates_begin: str | None = None
+    bates_end: str | None = None
 
 
 class DocumentListResponse(PaginatedResponse[DocumentResponse]):

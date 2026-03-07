@@ -1,14 +1,14 @@
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, CheckCircle2 } from "lucide-react";
+import { Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { apiClient } from "@/api/client";
 import { useAppStore } from "@/stores/app-store";
 import { Progress } from "@/components/ui/progress";
 
 interface CaseContext {
   status: string;
-  documents_processed?: number;
-  documents_total?: number;
+  claims?: unknown[];
+  parties?: unknown[];
 }
 
 interface StepProcessingProps {
@@ -18,7 +18,7 @@ interface StepProcessingProps {
 export function StepProcessing({ onProcessingComplete }: StepProcessingProps) {
   const matterId = useAppStore((s) => s.matterId);
 
-  const { data } = useQuery({
+  const { data, error, isError } = useQuery({
     queryKey: ["case-context", matterId],
     queryFn: () =>
       apiClient<CaseContext>({
@@ -27,24 +27,40 @@ export function StepProcessing({ onProcessingComplete }: StepProcessingProps) {
       }),
     enabled: !!matterId,
     refetchInterval: (query) => {
-      if (query.state.data?.status !== "processing") return false;
+      const status = query.state.data?.status;
+      if (status && status !== "processing") return false;
       return 3000;
     },
+    retry: (failureCount, err) => {
+      // Keep retrying on 404 — context may still be initializing
+      if (err instanceof Error && err.message.includes("404")) return failureCount < 20;
+      return failureCount < 3;
+    },
+    retryDelay: 3000,
   });
 
-  const isComplete = data?.status !== "processing";
-  const progress =
-    data?.documents_total && data.documents_total > 0
-      ? Math.round(
-          ((data.documents_processed ?? 0) / data.documents_total) * 100,
-        )
-      : 0;
+  const isComplete = data != null && data.status !== "processing";
+  const isFailed = data?.status === "failed";
 
   useEffect(() => {
-    if (isComplete && data) {
+    if (isComplete && data && !isFailed) {
       onProcessingComplete();
     }
-  }, [isComplete, data, onProcessingComplete]);
+  }, [isComplete, data, isFailed, onProcessingComplete]);
+
+  if (isFailed) {
+    return (
+      <div className="flex flex-col items-center gap-6 py-12">
+        <AlertCircle className="h-12 w-12 text-destructive" />
+        <div className="text-center">
+          <h2 className="text-lg font-semibold">Processing Failed</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            The case setup agent encountered an error. Please try again.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col items-center gap-6 py-12">
@@ -52,26 +68,30 @@ export function StepProcessing({ onProcessingComplete }: StepProcessingProps) {
         <>
           <Loader2 className="h-12 w-12 animate-spin text-primary" />
           <div className="text-center">
-            <h2 className="text-lg font-semibold">Processing Documents</h2>
+            <h2 className="text-lg font-semibold">Analyzing Document</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Parsing, chunking, and extracting entities...
+              Parsing, extracting claims, parties, and timeline...
             </p>
           </div>
           <div className="w-full max-w-sm">
-            <Progress value={progress} />
+            <Progress value={data ? 50 : 10} />
             <p className="mt-2 text-center text-xs text-muted-foreground">
-              {data?.documents_processed ?? 0} / {data?.documents_total ?? "?"}{" "}
-              documents
+              {!data ? "Waiting for analysis to start..." : "Extracting case intelligence..."}
             </p>
           </div>
+          {isError && error instanceof Error && error.message.includes("404") && (
+            <p className="text-xs text-muted-foreground">
+              Waiting for case context to initialize...
+            </p>
+          )}
         </>
       ) : (
         <>
           <CheckCircle2 className="h-12 w-12 text-green-500" />
           <div className="text-center">
-            <h2 className="text-lg font-semibold">Processing Complete</h2>
+            <h2 className="text-lg font-semibold">Analysis Complete</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              All documents have been processed. Continue to configure claims.
+              Document analyzed. Continue to review and edit claims.
             </p>
           </div>
         </>
