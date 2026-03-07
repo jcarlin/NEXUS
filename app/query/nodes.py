@@ -113,7 +113,7 @@ def create_nodes_v1(
         if category not in valid:
             category = "factual"
 
-        logger.debug("node.classify", query_type=category)
+        logger.info("node.classify", query_type=category)
         return {"query_type": category}
 
     # --- rewrite ---
@@ -163,7 +163,7 @@ def create_nodes_v1(
             entity_threshold=settings.query_entity_threshold,
         )
 
-        logger.debug(
+        logger.info(
             "node.retrieve",
             text_count=len(text_results),
             graph_count=len(graph_results),
@@ -251,7 +251,7 @@ def create_nodes_v1(
                 }
             )
 
-        logger.debug("node.rerank", fused_count=len(fused_context))
+        logger.info("node.rerank", fused_count=len(fused_context))
         return {
             "fused_context": fused_context,
             "source_documents": source_documents,
@@ -556,7 +556,7 @@ async def case_context_resolve(state: dict) -> dict:
     settings = get_settings()
     skip_verification = tier == "fast" or not settings.enable_citation_verification
 
-    logger.debug(
+    logger.info(
         "node.case_context_resolve",
         has_context=bool(case_context_text),
         term_count=len(term_map),
@@ -771,7 +771,7 @@ async def verify_citations(state: dict) -> dict:
 
     verified_claims: list[dict[str, Any]] = list(await asyncio.gather(*tasks))
 
-    logger.debug(
+    logger.info(
         "node.verify_citations",
         total_claims=len(verified_claims),
         verified=sum(1 for c in verified_claims if c.get("verification_status") == "verified"),
@@ -860,7 +860,7 @@ async def generate_follow_ups_agentic(state: dict) -> dict:
     lines = [line.strip().lstrip("0123456789.-) ") for line in raw.strip().splitlines() if line.strip()]
     follow_ups = [line for line in lines if len(line) > 10][:3]
 
-    logger.debug("node.generate_follow_ups_agentic", count=len(follow_ups))
+    logger.info("node.generate_follow_ups_agentic", count=len(follow_ups))
     return {"follow_up_questions": follow_ups}
 
 
@@ -955,7 +955,7 @@ async def post_agent_extract(state: dict) -> dict:
         except Exception:
             logger.warning("node.post_agent_extract.entity_extraction_failed", exc_info=True)
 
-    logger.debug(
+    logger.info(
         "node.post_agent_extract",
         response_len=len(response),
         source_count=len(source_documents),

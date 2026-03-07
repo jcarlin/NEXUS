@@ -181,6 +181,13 @@ class LLMClient:
             raise
 
         latency_ms = round((time.perf_counter() - start) * 1000, 2)
+        logger.info(
+            "llm.complete",
+            node=node_name,
+            latency_ms=latency_ms,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+        )
         await self._log_ai_interaction(
             messages,
             latency_ms=latency_ms,
@@ -282,6 +289,7 @@ class LLMClient:
             raise
 
         latency_ms = round((time.perf_counter() - start) * 1000, 2)
+        logger.info("llm.stream", node=node_name, latency_ms=latency_ms)
         await self._log_ai_interaction(
             messages,
             call_type="stream",

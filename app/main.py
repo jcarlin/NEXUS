@@ -44,6 +44,25 @@ structlog.configure(
     cache_logger_on_first_use=True,
 )
 
+# ---------------------------------------------------------------------------
+# Silence noisy third-party loggers (stdlib logging, not structlog)
+# ---------------------------------------------------------------------------
+logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
+for _noisy_logger in (
+    "httpx",
+    "httpcore",
+    "transformers",
+    "huggingface_hub",
+    "sentence_transformers",
+    "sentencepiece",
+    "qdrant_client",
+    "neo4j",
+    "urllib3",
+    "multipart",
+    "asyncio",
+):
+    logging.getLogger(_noisy_logger).setLevel(logging.ERROR)
+
 
 # ---------------------------------------------------------------------------
 # Lifespan: startup / shutdown
