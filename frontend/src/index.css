@@ -66,6 +66,10 @@
   h1, h2, h3, h4 {
     letter-spacing: -0.025em;
   }
+
+  button, [role="button"], a {
+    cursor: pointer;
+  }
 }
 
 @layer utilities {

@@ -72,7 +72,7 @@ export function ChatLayout({ children }: ChatLayoutProps) {
       </div>
 
       <ResizablePanelGroup direction="horizontal" className="flex-1">
-        <ResizablePanel id="chat-main" minSize={35}>
+        <ResizablePanel id="chat-main" minSize="35%">
           {children}
         </ResizablePanel>
 
@@ -83,11 +83,11 @@ export function ChatLayout({ children }: ChatLayoutProps) {
         />
         <ResizablePanel
           id="citation-sidebar"
-          defaultSize={0}
+          defaultSize="0%"
           collapsible
-          collapsedSize={0}
-          minSize={20}
-          maxSize={50}
+          collapsedSize="0%"
+          minSize="20%"
+          maxSize="50%"
           onResize={handleCitationResize}
           panelRef={citationPanelRef}
         >
