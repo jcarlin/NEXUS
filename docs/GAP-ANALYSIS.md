@@ -103,7 +103,8 @@ Living document tracking features that don't work end-to-end despite all 17 mile
 
 ## LOW — Tests and Cleanup
 
-### - [ ] L1: No E2E test for case setup wizard flow (Playwright E2E deferred — needs running backend)
+### - [x] L1: No E2E test for case setup wizard flow
+- **Fix applied**: `frontend/e2e/case-setup-wizard.spec.ts` — 5 tests covering upload, processing poll, claims, parties, and confirm PATCH schema validation. All passing against running backend.
 ### - [x] L2: No test for useStreamQuery unmount cleanup
 - Added `frontend/src/__tests__/stream-query-unmount.test.ts` — tests abort on unmount, abort on re-send, cancel behavior
 ### - [x] L3: No frontend tests for exports/redaction/EDRM pages (pages don't exist yet)
@@ -134,3 +135,4 @@ Living document tracking features that don't work end-to-end despite all 17 mile
 | L2 | Fixed | (this commit) | 2026-03-07 |
 | L3 | Fixed | (this commit) | 2026-03-07 |
 | M4 | Fixed | (this commit) | 2026-03-07 |
+| L1 | Fixed | (this commit) | 2026-03-07 |
