@@ -12,7 +12,7 @@ type RequestConfig = {
   url: string;
   method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   headers?: Record<string, string>;
-  params?: Record<string, string | number | boolean | undefined>;
+  params?: Record<string, string | number | boolean | null | undefined>;
   data?: unknown;
   signal?: AbortSignal;
 };
@@ -61,7 +61,7 @@ export async function apiClient<T>(config: RequestConfig): Promise<T> {
   if (config.params) {
     const searchParams = new URLSearchParams();
     for (const [key, value] of Object.entries(config.params)) {
-      if (value !== undefined) {
+      if (value !== undefined && value !== null) {
         searchParams.set(key, String(value));
       }
     }

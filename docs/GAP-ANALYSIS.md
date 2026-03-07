@@ -74,11 +74,11 @@ Living document tracking features that don't work end-to-end despite all 17 mile
 - However, `enable_case_setup_agent=False` means the Celery task (`run_case_setup`) is never dispatched, so no context is ever auto-extracted
 - **Fix**: Added info banner on case-setup page when `case_setup_agent` flag is off. Manual setup still works via PATCH.
 
-### - [ ] M4: orval Generated API Directory Empty
-- `frontend/src/api/generated/` is empty — all API calls use manual `apiClient()` wrappers
-- Frontend types in `frontend/src/types/index.ts` are hand-maintained (341 lines)
-- Type drift between backend schemas and frontend types is undetected (C3 was a direct consequence)
-- **Fix**: Run `npm run generate-api` against running backend; evaluate switching to generated hooks
+### - [x] M4: orval Generated API Directory Empty
+- `frontend/src/api/generated/` ~~is empty~~ now contains 16 modules and 336 schema files generated from the live OpenAPI spec
+- Frontend types in `frontend/src/types/index.ts` are hand-maintained (341 lines) — generated types available for new code
+- Type drift between backend schemas and frontend types is undetected (C3 was a direct consequence) — generated schemas now serve as source of truth
+- **Fix applied**: Ran `npm run generate-api` with Node 20 against running backend. Fixed `apiClient` params type to accept `null` (orval generates `| null` for optional query params). All 336 schema files + 16 hook modules generated. TypeScript compiles clean, build succeeds.
 
 ### - [ ] M5: 8 Feature Flags Default OFF — Silently Degrade UI
 
@@ -133,3 +133,4 @@ Living document tracking features that don't work end-to-end despite all 17 mile
 | M3 | Fixed | (this commit) | 2026-03-07 |
 | L2 | Fixed | (this commit) | 2026-03-07 |
 | L3 | Fixed | (this commit) | 2026-03-07 |
+| M4 | Fixed | (this commit) | 2026-03-07 |

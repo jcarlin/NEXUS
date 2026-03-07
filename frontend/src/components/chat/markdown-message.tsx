@@ -55,7 +55,7 @@ function injectCitations(
   }
 
   // Recurse into React elements (e.g. unresolved link references wrapping [N])
-  if (React.isValidElement(children) && children.props?.children) {
+  if (React.isValidElement<{ children?: React.ReactNode }>(children) && children.props?.children) {
     const inner = injectCitations(children.props.children, sources, onCitationClick);
     if (inner !== children.props.children) {
       return React.cloneElement(children, {}, inner);
