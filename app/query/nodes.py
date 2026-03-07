@@ -969,27 +969,64 @@ async def post_agent_extract(state: dict) -> dict:
     }
 
 
+TOOL_BUDGETS = {"fast": 5, "standard": 8, "deep": 15}
+
+
 async def audit_log_hook(state: dict) -> dict:
     """Post-model hook for ``create_react_agent``.
 
-    Logs each LLM call to the ``ai_audit_log`` table, preserving the SOC 2
-    audit trail even though the agent bypasses ``LLMClient``.
+    Two responsibilities:
 
-    The DB write is fire-and-forget (``asyncio.create_task``) so it doesn't
-    block the agent loop.  Failures are logged but never propagated.
+    1. **Audit logging** — Logs each LLM call to the ``ai_audit_log`` table,
+       preserving the SOC 2 audit trail even though the agent bypasses
+       ``LLMClient``.  The DB write is fire-and-forget
+       (``asyncio.create_task``) so it doesn't block the agent loop.
+
+    2. **Hard tool budget enforcement** — Counts completed tool calls and,
+       when the budget is exhausted, returns ``ToolMessage`` stubs that
+       resolve all pending tool calls without executing them.  This forces
+       the agent to synthesize an answer from the evidence already gathered
+       instead of looping indefinitely.
     """
+    from langchain_core.messages import AIMessage
+    from langchain_core.messages import ToolMessage as LCToolMessage
+
     from app.dependencies import get_settings
 
     settings = get_settings()
+
+    messages = state.get("messages", [])
+    last_msg = messages[-1] if messages else None
+
+    # --- Hard tool budget enforcement ---
+    tier = state.get("_tier", "standard")
+    budget = TOOL_BUDGETS.get(tier, 8)
+    tool_call_count = sum(1 for m in messages if isinstance(m, LCToolMessage))
+
+    if tool_call_count >= budget and isinstance(last_msg, AIMessage) and last_msg.tool_calls:
+        logger.info(
+            "audit_log_hook.budget_exhausted",
+            tier=tier,
+            budget=budget,
+            tool_calls=tool_call_count,
+            pending=len(last_msg.tool_calls),
+        )
+        budget_messages = [
+            LCToolMessage(
+                content="Tool budget exhausted. Synthesize your answer from the evidence already gathered.",
+                tool_call_id=call["id"],
+            )
+            for call in last_msg.tool_calls
+        ]
+        return {"messages": budget_messages}
+
+    # --- Audit logging (fire-and-forget) ---
     if not settings.enable_ai_audit_logging:
         return {}
 
     # Capture values synchronously before spawning the background task
     ctx = structlog.contextvars.get_contextvars()
     request_id = ctx.get("request_id")
-
-    messages = state.get("messages", [])
-    last_msg = messages[-1] if messages else None
 
     input_tokens = None
     output_tokens = None

@@ -790,3 +790,90 @@ def test_classify_tier_standard_medium_length():
 def test_classify_tier_standard_imperative_no_marker():
     """Imperative without recognized fast opener → standard."""
     assert _classify_tier("describe the events leading up to the settlement") == "standard"
+
+
+# ---------------------------------------------------------------------------
+# audit_log_hook — hard tool budget enforcement
+# ---------------------------------------------------------------------------
+
+
+async def test_audit_log_hook_under_budget():
+    """Under budget with tool_calls -> no intervention, returns {}."""
+    from langchain_core.messages import AIMessage, HumanMessage
+    from langchain_core.messages import ToolMessage as LCToolMessage
+
+    messages = [
+        HumanMessage(content="test"),
+        AIMessage(content="", tool_calls=[{"id": "tc1", "name": "vector_search", "args": {}}]),
+        LCToolMessage(content="result1", tool_call_id="tc1"),
+        AIMessage(content="", tool_calls=[{"id": "tc2", "name": "graph_query", "args": {}}]),
+        LCToolMessage(content="result2", tool_call_id="tc2"),
+        AIMessage(content="", tool_calls=[{"id": "tc3", "name": "entity_lookup", "args": {}}]),
+        LCToolMessage(content="result3", tool_call_id="tc3"),
+        AIMessage(content="", tool_calls=[{"id": "tc4", "name": "vector_search", "args": {}}]),
+    ]
+
+    with patch("app.dependencies.get_settings") as mock_settings:
+        mock_settings.return_value.enable_ai_audit_logging = False
+        result = await audit_log_hook({"messages": messages, "_tier": "fast"})
+
+    # 3 ToolMessages < budget of 5, so no intervention
+    assert result == {}
+
+
+async def test_audit_log_hook_over_budget_strips_tools():
+    """Over budget + AIMessage with tool_calls -> returns budget-exhausted ToolMessages."""
+    from langchain_core.messages import AIMessage, HumanMessage
+    from langchain_core.messages import ToolMessage as LCToolMessage
+
+    tool_messages = [LCToolMessage(content=f"result{i}", tool_call_id=f"tc{i}") for i in range(6)]
+    ai_with_calls = [
+        AIMessage(content="", tool_calls=[{"id": f"tc{i}", "name": "vector_search", "args": {}}]) for i in range(6)
+    ]
+    messages = [HumanMessage(content="test")]
+    for ai, tm in zip(ai_with_calls, tool_messages):
+        messages.append(ai)
+        messages.append(tm)
+    messages.append(
+        AIMessage(
+            content="",
+            tool_calls=[
+                {"id": "tc_extra1", "name": "graph_query", "args": {}},
+                {"id": "tc_extra2", "name": "entity_lookup", "args": {}},
+            ],
+        )
+    )
+
+    with patch("app.dependencies.get_settings") as mock_settings:
+        mock_settings.return_value.enable_ai_audit_logging = False
+        result = await audit_log_hook({"messages": messages, "_tier": "fast"})
+
+    assert "messages" in result
+    assert len(result["messages"]) == 2
+    for msg in result["messages"]:
+        assert isinstance(msg, LCToolMessage)
+        assert "budget exhausted" in msg.content.lower()
+    assert result["messages"][0].tool_call_id == "tc_extra1"
+    assert result["messages"][1].tool_call_id == "tc_extra2"
+
+
+async def test_audit_log_hook_over_budget_no_tools():
+    """Over budget but AIMessage has no tool_calls -> no intervention."""
+    from langchain_core.messages import AIMessage, HumanMessage
+    from langchain_core.messages import ToolMessage as LCToolMessage
+
+    tool_messages = [LCToolMessage(content=f"result{i}", tool_call_id=f"tc{i}") for i in range(6)]
+    ai_with_calls = [
+        AIMessage(content="", tool_calls=[{"id": f"tc{i}", "name": "vector_search", "args": {}}]) for i in range(6)
+    ]
+    messages = [HumanMessage(content="test")]
+    for ai, tm in zip(ai_with_calls, tool_messages):
+        messages.append(ai)
+        messages.append(tm)
+    messages.append(AIMessage(content="Here is my final answer."))
+
+    with patch("app.dependencies.get_settings") as mock_settings:
+        mock_settings.return_value.enable_ai_audit_logging = False
+        result = await audit_log_hook({"messages": messages, "_tier": "fast"})
+
+    assert result == {}

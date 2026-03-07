@@ -242,6 +242,75 @@ async def test_document_retrieval_returns_error_on_failure():
     assert "RuntimeError" in parsed["error"]
 
 
+async def test_communication_matrix_error_returns_json():
+    """communication_matrix returns error JSON instead of raising on failure."""
+    from app.query.tools import communication_matrix
+
+    async def _fake_get_db():
+        yield AsyncMock()
+
+    with (
+        patch("app.dependencies.get_db", _fake_get_db),
+        patch(
+            "app.analytics.service.AnalyticsService.get_communication_matrix",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("Neo4j connection refused"),
+        ),
+    ):
+        raw = await communication_matrix.ainvoke({"state": _SAMPLE_STATE})
+
+    parsed = json.loads(raw)
+    assert "error" in parsed
+    assert "RuntimeError" in parsed["error"]
+
+
+async def test_topic_cluster_error_returns_json():
+    """topic_cluster returns error JSON instead of raising on retriever failure."""
+    from app.query.tools import topic_cluster
+
+    mock_settings = AsyncMock()
+    mock_settings.enable_topic_clustering = True
+
+    mock_retriever = AsyncMock()
+    mock_retriever.retrieve_text.side_effect = ConnectionError("Qdrant unavailable")
+
+    with (
+        patch("app.config.Settings", return_value=mock_settings),
+        patch("app.dependencies.get_retriever", return_value=mock_retriever),
+    ):
+        raw = await topic_cluster.ainvoke({"query": "test topic", "state": _SAMPLE_STATE})
+
+    parsed = json.loads(raw)
+    assert "error" in parsed
+    assert "ConnectionError" in parsed["error"]
+
+
+async def test_network_analysis_error_returns_json():
+    """network_analysis returns error JSON instead of raising on failure."""
+    from app.query.tools import network_analysis
+
+    mock_settings = AsyncMock()
+    mock_settings.enable_graph_centrality = True
+
+    with (
+        patch("app.config.Settings", return_value=mock_settings),
+        patch(
+            "app.dependencies.get_graph_service",
+            return_value=AsyncMock(),
+        ),
+        patch(
+            "app.analytics.service.AnalyticsService.get_network_centrality",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("no such procedure"),
+        ),
+    ):
+        raw = await network_analysis.ainvoke({"metric": "degree", "state": _SAMPLE_STATE})
+
+    parsed = json.loads(raw)
+    assert "error" in parsed
+    assert "RuntimeError" in parsed["error"]
+
+
 async def test_stub_tools_in_investigation_tools():
     """Stub/feature-flagged tools are listed in INVESTIGATION_TOOLS."""
     from app.query.tools import INVESTIGATION_TOOLS
