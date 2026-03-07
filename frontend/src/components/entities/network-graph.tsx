@@ -1,20 +1,8 @@
 import { useEffect, useRef, useCallback, useImperativeHandle, forwardRef } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import * as d3 from "d3";
+import { ENTITY_COLORS, entityColor } from "@/lib/colors";
 import type { EntityResponse, EntityConnection } from "@/types";
-
-const TYPE_COLORS: Record<string, string> = {
-  PERSON: "#60a5fa",
-  ORG: "#34d399",
-  LOCATION: "#fb923c",
-  DATE: "#a78bfa",
-  MONEY: "#f472b6",
-  DEFAULT: "#94a3b8",
-};
-
-function nodeColor(type: string): string {
-  return TYPE_COLORS[type] ?? TYPE_COLORS["DEFAULT"]!;
-}
 
 interface GraphNode extends d3.SimulationNodeDatum {
   id: string;
@@ -88,7 +76,7 @@ export const NetworkGraph = forwardRef<NetworkGraphHandle, NetworkGraphProps>(
 
       // Filter entities by active types
       const filteredEntities = entities.filter(
-        (e) => activeTypes.has(e.type) || !TYPE_COLORS[e.type],
+        (e) => activeTypes.has(e.type) || !ENTITY_COLORS[e.type],
       );
       const entityNames = new Set(filteredEntities.map((e) => e.name));
 
@@ -161,7 +149,7 @@ export const NetworkGraph = forwardRef<NetworkGraphHandle, NetworkGraphProps>(
         .selectAll<SVGLineElement, GraphLink>("line")
         .data(links)
         .join("line")
-        .attr("stroke", "#525252")
+        .attr("stroke", "var(--color-border)")
         .attr("stroke-opacity", 0.5)
         .attr("stroke-width", (d) =>
           Math.max(0.5, Math.min(d.weight * 1.5, 5)),
@@ -197,9 +185,9 @@ export const NetworkGraph = forwardRef<NetworkGraphHandle, NetworkGraphProps>(
       node
         .append("circle")
         .attr("r", (d) => radiusScale(d.mention_count))
-        .attr("fill", (d) => nodeColor(d.type))
+        .attr("fill", (d) => entityColor(d.type))
         .attr("fill-opacity", 0.85)
-        .attr("stroke", (d) => nodeColor(d.type))
+        .attr("stroke", (d) => entityColor(d.type))
         .attr("stroke-opacity", 0.4)
         .attr("stroke-width", 3);
 
@@ -215,7 +203,7 @@ export const NetworkGraph = forwardRef<NetworkGraphHandle, NetworkGraphProps>(
         .attr("text-anchor", "middle")
         .attr("dy", (d) => radiusScale(d.mention_count) + 14)
         .attr("font-size", "9px")
-        .attr("fill", "#a1a1aa")
+        .attr("fill", "var(--color-muted-foreground)")
         .attr("pointer-events", "none");
 
       // Hover tooltip
@@ -242,8 +230,8 @@ export const NetworkGraph = forwardRef<NetworkGraphHandle, NetworkGraphProps>(
             .attr("stroke", (l) =>
               (l.source as GraphNode).name === d.name ||
               (l.target as GraphNode).name === d.name
-                ? nodeColor(d.type)
-                : "#525252",
+                ? entityColor(d.type)
+                : "var(--color-border)",
             );
         })
         .on("mouseleave", function () {
@@ -251,7 +239,7 @@ export const NetworkGraph = forwardRef<NetworkGraphHandle, NetworkGraphProps>(
             .select("circle")
             .attr("stroke-width", 3)
             .attr("stroke-opacity", 0.4);
-          link.attr("stroke-opacity", 0.5).attr("stroke", "#525252");
+          link.attr("stroke-opacity", 0.5).attr("stroke", "var(--color-border)");
         });
 
       // Click to navigate
@@ -278,8 +266,7 @@ export const NetworkGraph = forwardRef<NetworkGraphHandle, NetworkGraphProps>(
     return (
       <svg
         ref={svgRef}
-        className="w-full rounded-md border bg-background"
-        style={{ height: "calc(100vh - 220px)", minHeight: 400 }}
+        className="w-full rounded-md border bg-background h-[calc(100vh-220px)] min-h-[400px]"
       />
     );
   },

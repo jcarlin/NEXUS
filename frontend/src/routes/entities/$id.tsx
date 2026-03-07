@@ -9,6 +9,7 @@ import { EntityHeader } from "@/components/entities/entity-header";
 import { ConnectionsGraph } from "@/components/entities/connections-graph";
 import { DocumentMentions } from "@/components/entities/document-mentions";
 import { EntityTimeline } from "@/components/entities/entity-timeline";
+import { ReportingChain } from "@/components/entities/reporting-chain";
 import type { EntityResponse, EntityConnection } from "@/types";
 
 export const Route = createFileRoute("/entities/$id")({
@@ -81,6 +82,10 @@ function EntityDetailPage() {
       </div>
 
       <DocumentMentions entityName={data.entity.name} />
+
+      {data.entity.type === "PERSON" && (
+        <ReportingChain personName={data.entity.name} />
+      )}
     </div>
   );
 }

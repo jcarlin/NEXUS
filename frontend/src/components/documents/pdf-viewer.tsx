@@ -72,7 +72,7 @@ export function PdfViewer({
 
       <div className="overflow-auto rounded border bg-muted/30 max-h-[calc(100vh-300px)]">
         <Document file={url} onLoadSuccess={onDocumentLoadSuccess} loading={<div className="p-8 text-muted-foreground">Loading PDF...</div>}>
-          <div style={{ position: "relative" }}>
+          <div className="relative">
             <Page pageNumber={pageNumber} scale={scale} />
             {annotations && (
               <AnnotationLayer

@@ -9,7 +9,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DocumentViewer } from "@/components/documents/document-viewer";
 import { MetadataPanel } from "@/components/documents/metadata-panel";
 import { AnnotationPanel } from "@/components/documents/annotation-panel";
+import { RedactionPanel } from "@/components/documents/redaction-panel";
 import { useAnnotations } from "@/hooks/use-annotations";
+import { useFeatureFlag } from "@/hooks/use-feature-flags";
 import { detectDocumentType } from "@/lib/utils";
 import type { DocumentDetail, Annotation, AnnotationAnchor } from "@/types";
 
@@ -45,6 +47,7 @@ function DocumentDetailPage() {
     enabled: !!doc,
   });
 
+  const redactionEnabled = useFeatureFlag("redaction");
   const { data: annotationsData } = useAnnotations(id);
   const annotations = annotationsData?.items ?? [];
   const isPdf = doc ? detectDocumentType(doc.type, doc.filename) === "pdf" : false;
@@ -128,6 +131,9 @@ function DocumentDetailPage() {
                 <TabsTrigger value="annotations" className="flex-1">
                   Annotations ({annotations.length})
                 </TabsTrigger>
+                {redactionEnabled && (
+                  <TabsTrigger value="redaction" className="flex-1">Redaction</TabsTrigger>
+                )}
               </TabsList>
               <TabsContent value="metadata">
                 <MetadataPanel doc={doc} />
@@ -142,6 +148,11 @@ function DocumentDetailPage() {
                   onClearPending={() => setPendingAnchor(null)}
                 />
               </TabsContent>
+              {redactionEnabled && (
+                <TabsContent value="redaction">
+                  <RedactionPanel documentId={id} />
+                </TabsContent>
+              )}
             </Tabs>
           ) : (
             <MetadataPanel doc={doc} />

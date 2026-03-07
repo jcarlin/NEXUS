@@ -11,6 +11,7 @@ import {
   Clock,
   Flame,
   ListChecks,
+  Package,
   Settings,
   Shield,
   ScrollText,
@@ -50,6 +51,7 @@ const analysisNav: NavItem[] = [
 const reviewNav: NavItem[] = [
   { to: "/review/hot-docs", label: "Hot Docs", icon: Flame },
   { to: "/review/result-set", label: "Result Set", icon: ListChecks },
+  { to: "/review/exports", label: "Exports", icon: Package },
   { to: "/case-setup", label: "Case Setup", icon: Settings, roles: ["admin", "attorney"] },
 ];
 

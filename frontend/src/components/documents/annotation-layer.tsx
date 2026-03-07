@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from "react";
+import { cn } from "@/lib/utils";
 import type { Annotation, AnnotationAnchor } from "@/types";
 
 const TYPE_COLORS: Record<string, string> = {
@@ -97,7 +98,7 @@ export function AnnotationLayer({
     <div
       ref={containerRef}
       data-testid="annotation-layer"
-      style={{ position: "absolute", inset: 0, pointerEvents: onCreateHighlight ? "auto" : "none" }}
+      className={cn("absolute inset-0", onCreateHighlight ? "pointer-events-auto" : "pointer-events-none")}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
@@ -114,17 +115,14 @@ export function AnnotationLayer({
           <div
             key={annotation.id}
             data-testid="annotation-rect"
+            className={cn("absolute cursor-pointer pointer-events-auto rounded-sm", isSelected && "ring-2 ring-primary")}
             style={{
-              position: "absolute",
               left: `${a.x}%`,
               top: `${a.y}%`,
               width: `${a.width}%`,
               height: `${a.height}%`,
               backgroundColor: bgColor,
-              border: isSelected ? "2px solid rgb(59, 130, 246)" : "1px solid rgba(0, 0, 0, 0.1)",
-              borderRadius: 2,
-              cursor: "pointer",
-              pointerEvents: "auto",
+              border: isSelected ? undefined : "1px solid rgba(0,0,0,0.1)",
             }}
             onClick={(e) => {
               e.stopPropagation();
@@ -138,14 +136,8 @@ export function AnnotationLayer({
       {/* Drag selection preview */}
       {dragRect && (
         <div
-          style={{
-            position: "absolute",
-            ...dragRect,
-            backgroundColor: "rgba(59, 130, 246, 0.15)",
-            border: "2px dashed rgb(59, 130, 246)",
-            borderRadius: 2,
-            pointerEvents: "none",
-          }}
+          className="absolute rounded-sm pointer-events-none border-2 border-dashed border-primary bg-primary/15"
+          style={dragRect}
         />
       )}
     </div>

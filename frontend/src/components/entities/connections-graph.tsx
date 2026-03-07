@@ -2,20 +2,8 @@ import { useEffect, useRef } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import * as d3 from "d3";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { entityColor } from "@/lib/colors";
 import type { EntityResponse, EntityConnection } from "@/types";
-
-const TYPE_COLORS: Record<string, string> = {
-  PERSON: "#60a5fa",
-  ORG: "#34d399",
-  LOCATION: "#fb923c",
-  DATE: "#a78bfa",
-  MONEY: "#f472b6",
-  DEFAULT: "#94a3b8",
-};
-
-function nodeColor(type: string): string {
-  return TYPE_COLORS[type] ?? TYPE_COLORS["DEFAULT"]!;
-}
 
 interface GraphNode extends d3.SimulationNodeDatum {
   id: string;
@@ -107,7 +95,7 @@ export function ConnectionsGraph({ entity, connections }: ConnectionsGraphProps)
       .selectAll<SVGLineElement, GraphLink>("line")
       .data(links)
       .join("line")
-      .attr("stroke", "#525252")
+      .attr("stroke", "var(--color-border)")
       .attr("stroke-opacity", 0.6)
       .attr("stroke-width", (d) => Math.max(1, Math.min(d.weight, 4)));
 
@@ -139,8 +127,8 @@ export function ConnectionsGraph({ entity, connections }: ConnectionsGraphProps)
     node
       .append("circle")
       .attr("r", (d) => (d.isCenter ? 16 : 10))
-      .attr("fill", (d) => nodeColor(d.type))
-      .attr("stroke", "#1a1a1a")
+      .attr("fill", (d) => entityColor(d.type))
+      .attr("stroke", "var(--color-background)")
       .attr("stroke-width", 1.5);
 
     node
@@ -149,7 +137,7 @@ export function ConnectionsGraph({ entity, connections }: ConnectionsGraphProps)
       .attr("text-anchor", "middle")
       .attr("dy", (d) => (d.isCenter ? 28 : 22))
       .attr("font-size", "10px")
-      .attr("fill", "#a1a1aa")
+      .attr("fill", "var(--color-muted-foreground)")
       .attr("pointer-events", "none");
 
     // Click to navigate
@@ -202,8 +190,7 @@ export function ConnectionsGraph({ entity, connections }: ConnectionsGraphProps)
       <CardContent>
         <svg
           ref={svgRef}
-          className="w-full"
-          style={{ height: 350 }}
+          className="w-full h-[350px]"
         />
       </CardContent>
     </Card>

@@ -3,6 +3,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
 import { apiClient } from "@/api/client";
 import { useAppStore } from "@/stores/app-store";
+import { useFeatureFlag } from "@/hooks/use-feature-flags";
+import { FeatureDisabledBanner } from "@/components/ui/feature-disabled-banner";
 import { WizardLayout } from "@/components/case-setup/wizard-layout";
 import { StepUpload } from "@/components/case-setup/step-upload";
 import { StepProcessing } from "@/components/case-setup/step-processing";
@@ -42,6 +44,7 @@ function genId() {
 
 function CaseSetupPage() {
   const matterId = useAppStore((s) => s.matterId);
+  const caseSetupAgentEnabled = useFeatureFlag("case_setup_agent");
   const [step, setStep] = useState(0);
   const [uploaded, setUploaded] = useState(false);
   // Stored for future use (e.g. direct context polling)
@@ -107,6 +110,9 @@ function CaseSetupPage() {
 
   return (
     <div className="space-y-6 animate-page-in">
+      {!caseSetupAgentEnabled && (
+        <FeatureDisabledBanner featureName="Case Setup Agent" />
+      )}
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Case Setup</h1>
         <p className="text-muted-foreground">

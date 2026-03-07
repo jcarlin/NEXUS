@@ -95,7 +95,7 @@ export function CommMatrix({ matrix, entities, loading, onCellClick }: CommMatri
                     y={LABEL_HEIGHT + row * CELL_SIZE}
                     width={CELL_SIZE - 1}
                     height={CELL_SIZE - 1}
-                    fill={count > 0 ? colorScale(count) : "var(--muted)"}
+                    fill={count > 0 ? colorScale(count) : "var(--color-muted)"}
                     rx={2}
                     className="cursor-pointer"
                     onClick={() => onCellClick?.(sender, receiver)}

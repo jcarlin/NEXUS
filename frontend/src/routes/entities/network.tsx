@@ -11,6 +11,8 @@ import {
   type NetworkGraphHandle,
 } from "@/components/entities/network-graph";
 import { GraphControls } from "@/components/entities/graph-controls";
+import { PathFinder } from "@/components/entities/path-finder";
+import { CypherExplorer } from "@/components/entities/cypher-explorer";
 import type {
   EntityResponse,
   EntityConnection,
@@ -125,6 +127,8 @@ function NetworkGraphPage() {
         onFitView={() => graphRef.current?.fitView()}
       />
 
+      <PathFinder />
+
       {isLoading ? (
         <Skeleton
           className="w-full"
@@ -138,6 +142,8 @@ function NetworkGraphPage() {
           activeTypes={activeTypes}
         />
       )}
+
+      <CypherExplorer />
     </div>
   );
 }

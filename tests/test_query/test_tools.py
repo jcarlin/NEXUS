@@ -311,6 +311,91 @@ async def test_network_analysis_error_returns_json():
     assert "RuntimeError" in parsed["error"]
 
 
+async def test_case_context_error_returns_json():
+    """case_context returns error JSON when DB raises."""
+    from app.query.tools import case_context
+
+    async def _broken_get_db():
+        raise RuntimeError("DB connection failed")
+        yield  # noqa: unreachable — makes this an async generator
+
+    with patch("app.dependencies.get_db", _broken_get_db):
+        raw = await case_context.ainvoke({"aspect": "all", "state": _SAMPLE_STATE})
+
+    parsed = json.loads(raw)
+    assert "error" in parsed
+    assert "RuntimeError" in parsed["error"]
+
+
+async def test_sentiment_search_error_returns_json():
+    """sentiment_search returns error JSON when DB raises."""
+    from app.query.tools import sentiment_search
+
+    async def _broken_get_db():
+        raise RuntimeError("DB connection failed")
+        yield  # noqa: unreachable
+
+    with patch("app.dependencies.get_db", _broken_get_db):
+        raw = await sentiment_search.ainvoke({"query": "pressure", "dimension": "pressure", "state": _SAMPLE_STATE})
+
+    parsed = json.loads(raw)
+    assert "error" in parsed
+    assert "RuntimeError" in parsed["error"]
+
+
+async def test_hot_doc_search_error_returns_json():
+    """hot_doc_search returns error JSON when DB raises."""
+    from app.query.tools import hot_doc_search
+
+    async def _broken_get_db():
+        raise RuntimeError("DB connection failed")
+        yield  # noqa: unreachable
+
+    with patch("app.dependencies.get_db", _broken_get_db):
+        raw = await hot_doc_search.ainvoke({"state": _SAMPLE_STATE})
+
+    parsed = json.loads(raw)
+    assert "error" in parsed
+    assert "RuntimeError" in parsed["error"]
+
+
+async def test_context_gap_search_error_returns_json():
+    """context_gap_search returns error JSON when DB raises."""
+    from app.query.tools import context_gap_search
+
+    async def _broken_get_db():
+        raise RuntimeError("DB connection failed")
+        yield  # noqa: unreachable
+
+    with patch("app.dependencies.get_db", _broken_get_db):
+        raw = await context_gap_search.ainvoke({"state": _SAMPLE_STATE})
+
+    parsed = json.loads(raw)
+    assert "error" in parsed
+    assert "RuntimeError" in parsed["error"]
+
+
+async def test_tool_db_session_cleanup():
+    """_tool_db_session properly closes the generator even on success."""
+    from app.query.tools import _tool_db_session
+
+    mock_db = AsyncMock()
+    aclose_called = False
+
+    async def _fake_get_db():
+        nonlocal aclose_called
+        try:
+            yield mock_db
+        finally:
+            aclose_called = True
+
+    with patch("app.dependencies.get_db", _fake_get_db):
+        async with _tool_db_session() as db:
+            assert db is mock_db
+
+    assert aclose_called
+
+
 async def test_stub_tools_in_investigation_tools():
     """Stub/feature-flagged tools are listed in INVESTIGATION_TOOLS."""
     from app.query.tools import INVESTIGATION_TOOLS

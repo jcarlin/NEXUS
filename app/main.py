@@ -9,9 +9,11 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 import structlog
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
+from app.auth.middleware import get_current_user
 from app.common.middleware import AuditLoggingMiddleware, RequestIDMiddleware, RequestLoggingMiddleware, setup_cors
 from app.config import Settings
 from app.dependencies import (
@@ -329,6 +331,34 @@ def create_app() -> FastAPI:
         return JSONResponse(
             status_code=200 if all_ok else 503,
             content={"status": "healthy" if all_ok else "degraded", "services": services},
+        )
+
+    # --- Feature flags endpoint ---
+    class FeatureFlagsResponse(BaseModel):
+        hot_doc_detection: bool
+        case_setup_agent: bool
+        topic_clustering: bool
+        graph_centrality: bool
+        sparse_embeddings: bool
+        near_duplicate_detection: bool
+        reranker: bool
+        redaction: bool
+
+    @application.get("/api/v1/config/features", response_model=FeatureFlagsResponse, tags=["system"])
+    async def get_feature_flags(
+        current_user: Any = Depends(get_current_user),
+    ) -> FeatureFlagsResponse:
+        """Return user-visible feature flag states."""
+        settings = get_settings()
+        return FeatureFlagsResponse(
+            hot_doc_detection=settings.enable_hot_doc_detection,
+            case_setup_agent=settings.enable_case_setup_agent,
+            topic_clustering=settings.enable_topic_clustering,
+            graph_centrality=settings.enable_graph_centrality,
+            sparse_embeddings=settings.enable_sparse_embeddings,
+            near_duplicate_detection=settings.enable_near_duplicate_detection,
+            reranker=settings.enable_reranker,
+            redaction=settings.enable_redaction,
         )
 
     return application

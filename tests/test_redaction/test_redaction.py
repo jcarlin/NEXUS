@@ -1,7 +1,8 @@
 """Tests for the redaction module (M14b).
 
 These tests cover PII detection, the pikepdf redaction engine,
-redaction log immutability, router endpoints, and a full integration flow.
+redaction log immutability, router endpoints, feature flag guard,
+and a full integration flow.
 """
 
 from __future__ import annotations
@@ -238,10 +239,16 @@ async def test_post_redact_endpoint(client: AsyncClient) -> None:
         "redacted_pdf_path": f"redacted/{matter_id}/{doc_id}.pdf",
     }
 
-    with patch(
-        "app.redaction.service.RedactionService.apply_redactions",
-        new_callable=AsyncMock,
-        return_value=mock_result,
+    mock_settings = MagicMock()
+    mock_settings.enable_redaction = True
+
+    with (
+        patch("app.config.Settings", return_value=mock_settings),
+        patch(
+            "app.redaction.service.RedactionService.apply_redactions",
+            new_callable=AsyncMock,
+            return_value=mock_result,
+        ),
     ):
         response = await client.post(
             f"/api/v1/documents/{doc_id}/redact",
@@ -283,10 +290,16 @@ async def test_get_redaction_log_endpoint(client: AsyncClient) -> None:
     doc_id = uuid4()
     log_entry = _fake_redaction_log_row(document_id=doc_id)
 
-    with patch(
-        "app.redaction.service.RedactionService.get_redaction_log",
-        new_callable=AsyncMock,
-        return_value=([log_entry], 1),
+    mock_settings = MagicMock()
+    mock_settings.enable_redaction = True
+
+    with (
+        patch("app.config.Settings", return_value=mock_settings),
+        patch(
+            "app.redaction.service.RedactionService.get_redaction_log",
+            new_callable=AsyncMock,
+            return_value=([log_entry], 1),
+        ),
     ):
         response = await client.get(
             f"/api/v1/documents/{doc_id}/redaction-log",
@@ -304,6 +317,28 @@ async def test_get_redaction_log_endpoint(client: AsyncClient) -> None:
 # ---------------------------------------------------------------------------
 # 8. Integration — full flow: detect PII → redact PDF → verify
 # ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_redact_endpoint_returns_501_when_disabled(client: AsyncClient) -> None:
+    """All redaction endpoints return 501 when ENABLE_REDACTION=false."""
+    doc_id = uuid4()
+
+    # POST /documents/{id}/redact
+    r1 = await client.post(
+        f"/api/v1/documents/{doc_id}/redact",
+        json={"redactions": []},
+    )
+    assert r1.status_code == 501
+    assert "not enabled" in r1.json()["detail"].lower()
+
+    # GET /documents/{id}/redaction-log
+    r2 = await client.get(f"/api/v1/documents/{doc_id}/redaction-log")
+    assert r2.status_code == 501
+
+    # GET /documents/{id}/pii-detections
+    r3 = await client.get(f"/api/v1/documents/{doc_id}/pii-detections")
+    assert r3.status_code == 501
 
 
 def test_integration_pii_detect_redact_verify() -> None:

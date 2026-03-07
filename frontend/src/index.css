@@ -47,6 +47,14 @@
   --color-sidebar-border: oklch(0.25 0.008 260);
   --color-sidebar-ring: oklch(0.685 0.169 237.323);
 
+  /* Entity type colors — shared across graph components */
+  --color-entity-person: oklch(0.68 0.15 250);
+  --color-entity-org: oklch(0.73 0.17 165);
+  --color-entity-location: oklch(0.73 0.16 55);
+  --color-entity-date: oklch(0.65 0.18 290);
+  --color-entity-money: oklch(0.68 0.18 345);
+  --color-entity-default: oklch(0.65 0.02 260);
+
   --radius-sm: 0.25rem;
   --radius-md: 0.375rem;
   --radius-lg: 0.5rem;

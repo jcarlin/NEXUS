@@ -28,6 +28,17 @@ from app.redaction.service import RedactionService
 router = APIRouter(tags=["redaction"])
 
 
+def _require_redaction_enabled() -> None:
+    """Dependency that rejects requests when redaction is disabled."""
+    from app.config import Settings
+
+    if not Settings().enable_redaction:
+        raise HTTPException(
+            status_code=501,
+            detail="Redaction is not enabled. Set ENABLE_REDACTION=true.",
+        )
+
+
 # -----------------------------------------------------------------------
 # POST /documents/{document_id}/redact — apply redactions
 # -----------------------------------------------------------------------
@@ -40,6 +51,7 @@ router = APIRouter(tags=["redaction"])
 async def apply_redactions(
     document_id: UUID,
     body: RedactRequest,
+    _flag: None = Depends(_require_redaction_enabled),
     db: AsyncSession = Depends(get_db),
     current_user: UserRecord = Depends(require_role("attorney", "admin")),
     matter_id: UUID = Depends(get_matter_id),
@@ -77,6 +89,7 @@ async def get_redaction_log(
     document_id: UUID,
     offset: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(50, ge=1, le=200, description="Max records to return"),
+    _flag: None = Depends(_require_redaction_enabled),
     db: AsyncSession = Depends(get_db),
     current_user: UserRecord = Depends(get_current_user),
     matter_id: UUID = Depends(get_matter_id),
@@ -108,6 +121,7 @@ async def get_redaction_log(
 )
 async def detect_pii(
     document_id: UUID,
+    _flag: None = Depends(_require_redaction_enabled),
     db: AsyncSession = Depends(get_db),
     current_user: UserRecord = Depends(get_current_user),
     matter_id: UUID = Depends(get_matter_id),

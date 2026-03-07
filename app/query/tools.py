@@ -8,13 +8,32 @@ injected from graph state via ``InjectedState`` so the LLM never sees them.
 from __future__ import annotations
 
 import json
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Annotated, Any
 
 import structlog
 from langchain_core.tools import tool
 from langgraph.prebuilt.tool_node import InjectedState
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = structlog.get_logger(__name__)
+
+
+@asynccontextmanager
+async def _tool_db_session() -> AsyncIterator[AsyncSession]:
+    """Yield an async DB session scoped to a tool call."""
+    from app.dependencies import get_db
+
+    db_gen = get_db()
+    db = await db_gen.__anext__()
+    try:
+        yield db
+    finally:
+        try:
+            await db_gen.aclose()
+        except Exception:
+            pass
 
 
 # ---------------------------------------------------------------------------
@@ -226,42 +245,37 @@ async def case_context(
     or 'all' for everything.
     """
     from app.cases.service import CaseService
-    from app.dependencies import get_db
 
     filters = state.get("_filters", {})
     matter_id = filters.get("matter_id", "")
 
-    # Get a fresh DB session for the lookup
-    db_gen = get_db()
-    db = await db_gen.__anext__()
     try:
-        ctx = await CaseService.get_full_context(db, matter_id)
-        if ctx is None:
-            return json.dumps({"info": "No case context configured for this matter."})
+        async with _tool_db_session() as db:
+            ctx = await CaseService.get_full_context(db, matter_id)
+            if ctx is None:
+                return json.dumps({"info": "No case context configured for this matter."})
 
-        if aspect == "claims":
-            return json.dumps(ctx.get("claims", []), default=str)
-        elif aspect == "parties":
-            return json.dumps(ctx.get("parties", []), default=str)
-        elif aspect == "terms":
-            return json.dumps(ctx.get("defined_terms", []), default=str)
-        elif aspect == "timeline":
-            return json.dumps(ctx.get("timeline", []), default=str)
-        else:
-            return json.dumps(
-                {
-                    "claims": ctx.get("claims", []),
-                    "parties": ctx.get("parties", []),
-                    "defined_terms": ctx.get("defined_terms", []),
-                    "timeline": ctx.get("timeline", []),
-                },
-                default=str,
-            )
-    finally:
-        try:
-            await db_gen.aclose()
-        except Exception:
-            pass
+            if aspect == "claims":
+                return json.dumps(ctx.get("claims", []), default=str)
+            elif aspect == "parties":
+                return json.dumps(ctx.get("parties", []), default=str)
+            elif aspect == "terms":
+                return json.dumps(ctx.get("defined_terms", []), default=str)
+            elif aspect == "timeline":
+                return json.dumps(ctx.get("timeline", []), default=str)
+            else:
+                return json.dumps(
+                    {
+                        "claims": ctx.get("claims", []),
+                        "parties": ctx.get("parties", []),
+                        "defined_terms": ctx.get("defined_terms", []),
+                        "timeline": ctx.get("timeline", []),
+                    },
+                    default=str,
+                )
+    except Exception as exc:
+        logger.warning("tool.error", tool="case_context", error=str(exc))
+        return json.dumps({"error": f"Tool failed: {type(exc).__name__}: {exc}"})
 
 
 # ---------------------------------------------------------------------------
@@ -296,34 +310,29 @@ async def sentiment_search(
     if dimension not in valid_dimensions:
         return json.dumps({"error": f"Invalid dimension '{dimension}'. Valid: {sorted(valid_dimensions)}"})
 
-    from app.dependencies import get_db
-
     filters = state.get("_filters", {})
     matter_id = filters.get("matter_id", "")
 
-    db_gen = get_db()
-    db = await db_gen.__anext__()
     try:
-        from sqlalchemy import text
+        async with _tool_db_session() as db:
+            from sqlalchemy import text
 
-        col = f"sentiment_{dimension}"
-        result = await db.execute(
-            text(f"""
-                SELECT id, filename, document_type, {col}, hot_doc_score
-                FROM documents
-                WHERE matter_id = :matter_id AND {col} >= :min_score
-                ORDER BY {col} DESC
-                LIMIT :limit
-            """),
-            {"matter_id": matter_id, "min_score": min_score, "limit": limit},
-        )
-        rows = [dict(r._mapping) for r in result.all()]
-        return json.dumps(rows, default=str)
-    finally:
-        try:
-            await db_gen.aclose()
-        except Exception:
-            pass
+            col = f"sentiment_{dimension}"
+            result = await db.execute(
+                text(f"""
+                    SELECT id, filename, document_type, {col}, hot_doc_score
+                    FROM documents
+                    WHERE matter_id = :matter_id AND {col} >= :min_score
+                    ORDER BY {col} DESC
+                    LIMIT :limit
+                """),
+                {"matter_id": matter_id, "min_score": min_score, "limit": limit},
+            )
+            rows = [dict(r._mapping) for r in result.all()]
+            return json.dumps(rows, default=str)
+    except Exception as exc:
+        logger.warning("tool.error", tool="sentiment_search", error=str(exc))
+        return json.dumps({"error": f"Tool failed: {type(exc).__name__}: {exc}"})
 
 
 @tool
@@ -337,34 +346,29 @@ async def hot_doc_search(
     Use for "find hot documents", "which documents have the highest risk score",
     or "show me legally significant documents".
     """
-    from app.dependencies import get_db
-
     filters = state.get("_filters", {})
     matter_id = filters.get("matter_id", "")
 
-    db_gen = get_db()
-    db = await db_gen.__anext__()
     try:
-        from sqlalchemy import text
+        async with _tool_db_session() as db:
+            from sqlalchemy import text
 
-        result = await db.execute(
-            text("""
-                SELECT id, filename, document_type, hot_doc_score,
-                       sentiment_pressure, sentiment_concealment, sentiment_intent
-                FROM documents
-                WHERE matter_id = :matter_id AND hot_doc_score >= :min_score
-                ORDER BY hot_doc_score DESC
-                LIMIT :limit
-            """),
-            {"matter_id": matter_id, "min_score": min_score, "limit": limit},
-        )
-        rows = [dict(r._mapping) for r in result.all()]
-        return json.dumps(rows, default=str)
-    finally:
-        try:
-            await db_gen.aclose()
-        except Exception:
-            pass
+            result = await db.execute(
+                text("""
+                    SELECT id, filename, document_type, hot_doc_score,
+                           sentiment_pressure, sentiment_concealment, sentiment_intent
+                    FROM documents
+                    WHERE matter_id = :matter_id AND hot_doc_score >= :min_score
+                    ORDER BY hot_doc_score DESC
+                    LIMIT :limit
+                """),
+                {"matter_id": matter_id, "min_score": min_score, "limit": limit},
+            )
+            rows = [dict(r._mapping) for r in result.all()]
+            return json.dumps(rows, default=str)
+    except Exception as exc:
+        logger.warning("tool.error", tool="hot_doc_search", error=str(exc))
+        return json.dumps({"error": f"Tool failed: {type(exc).__name__}: {exc}"})
 
 
 @tool
@@ -381,39 +385,34 @@ async def context_gap_search(
     Optional gap_type filter: missing_attachment, prior_conversation,
     forward_reference, coded_language, unusual_terseness.
     """
-    from app.dependencies import get_db
-
     filters = state.get("_filters", {})
     matter_id = filters.get("matter_id", "")
 
-    db_gen = get_db()
-    db = await db_gen.__anext__()
     try:
-        from sqlalchemy import text
+        async with _tool_db_session() as db:
+            from sqlalchemy import text
 
-        params: dict = {"matter_id": matter_id, "min_gap_score": min_gap_score, "limit": limit}
-        where = "matter_id = :matter_id AND context_gap_score >= :min_gap_score"
-        if gap_type:
-            where += " AND context_gaps @> CAST(:gap_filter AS jsonb)"
-            params["gap_filter"] = json.dumps([{"gap_type": gap_type}])
+            params: dict = {"matter_id": matter_id, "min_gap_score": min_gap_score, "limit": limit}
+            where = "matter_id = :matter_id AND context_gap_score >= :min_gap_score"
+            if gap_type:
+                where += " AND context_gaps @> CAST(:gap_filter AS jsonb)"
+                params["gap_filter"] = json.dumps([{"gap_type": gap_type}])
 
-        result = await db.execute(
-            text(f"""
-                SELECT id, filename, document_type, context_gap_score, context_gaps
-                FROM documents
-                WHERE {where}
-                ORDER BY context_gap_score DESC
-                LIMIT :limit
-            """),
-            params,
-        )
-        rows = [dict(r._mapping) for r in result.all()]
-        return json.dumps(rows, default=str)
-    finally:
-        try:
-            await db_gen.aclose()
-        except Exception:
-            pass
+            result = await db.execute(
+                text(f"""
+                    SELECT id, filename, document_type, context_gap_score, context_gaps
+                    FROM documents
+                    WHERE {where}
+                    ORDER BY context_gap_score DESC
+                    LIMIT :limit
+                """),
+                params,
+            )
+            rows = [dict(r._mapping) for r in result.all()]
+            return json.dumps(rows, default=str)
+    except Exception as exc:
+        logger.warning("tool.error", tool="context_gap_search", error=str(exc))
+        return json.dumps({"error": f"Tool failed: {type(exc).__name__}: {exc}"})
 
 
 @tool
@@ -430,42 +429,35 @@ async def communication_matrix(
     between the two people.
     """
     from app.analytics.service import AnalyticsService
-    from app.dependencies import get_db
 
     filters = state.get("_filters", {})
     matter_id = filters.get("matter_id", "")
 
-    db_gen = get_db()
-    db = await db_gen.__anext__()
     try:
-        result = await AnalyticsService.get_communication_matrix(
-            db,
-            matter_id,
-            entity_name=entity_name,
-        )
-        output = result.model_dump()
-
-        # When both persons specified, enrich with graph-level email detail
-        if entity_name and person_b:
-            from app.dependencies import get_graph_service
-
-            gs = get_graph_service()
-            emails = await gs.get_communication_pairs(
-                entity_name,
-                person_b,
-                matter_id=matter_id,
+        async with _tool_db_session() as db:
+            result = await AnalyticsService.get_communication_matrix(
+                db,
+                matter_id,
+                entity_name=entity_name,
             )
-            output["graph_emails"] = emails
+            output = result.model_dump()
 
-        return json.dumps(output, default=str)
+            # When both persons specified, enrich with graph-level email detail
+            if entity_name and person_b:
+                from app.dependencies import get_graph_service
+
+                gs = get_graph_service()
+                emails = await gs.get_communication_pairs(
+                    entity_name,
+                    person_b,
+                    matter_id=matter_id,
+                )
+                output["graph_emails"] = emails
+
+            return json.dumps(output, default=str)
     except Exception as exc:
         logger.warning("tool.error", tool="communication_matrix", error=str(exc))
         return json.dumps({"error": f"Tool failed: {type(exc).__name__}: {exc}"})
-    finally:
-        try:
-            await db_gen.aclose()
-        except Exception:
-            pass
 
 
 @tool

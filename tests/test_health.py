@@ -197,6 +197,40 @@ async def test_health_deep_reports_llm_error(client: AsyncClient) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Feature flags endpoint
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_feature_flags_endpoint(client: AsyncClient) -> None:
+    """GET /api/v1/config/features returns all user-visible flags."""
+    response = await client.get("/api/v1/config/features")
+    assert response.status_code == 200
+    body = response.json()
+
+    expected_keys = {
+        "hot_doc_detection",
+        "case_setup_agent",
+        "topic_clustering",
+        "graph_centrality",
+        "sparse_embeddings",
+        "near_duplicate_detection",
+        "reranker",
+        "redaction",
+    }
+    assert expected_keys == set(body.keys())
+    # All values must be booleans
+    assert all(isinstance(v, bool) for v in body.values())
+
+
+@pytest.mark.asyncio
+async def test_feature_flags_requires_auth(unauthed_client: AsyncClient) -> None:
+    """GET /api/v1/config/features should require authentication."""
+    response = await unauthed_client.get("/api/v1/config/features")
+    assert response.status_code in (401, 403)
+
+
+# ---------------------------------------------------------------------------
 # LangSmith env var safety
 # ---------------------------------------------------------------------------
 
