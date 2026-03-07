@@ -35,14 +35,18 @@ async def vector_search(
     """
     from app.dependencies import get_retriever
 
-    retriever = get_retriever()
-    results = await retriever.retrieve_text(
-        query,
-        limit=limit,
-        filters=state.get("_filters"),
-        exclude_privilege_statuses=state.get("_exclude_privilege") or None,
-        dataset_doc_ids=state.get("_dataset_doc_ids"),
-    )
+    try:
+        retriever = get_retriever()
+        results = await retriever.retrieve_text(
+            query,
+            limit=limit,
+            filters=state.get("_filters"),
+            exclude_privilege_statuses=state.get("_exclude_privilege") or None,
+            dataset_doc_ids=state.get("_dataset_doc_ids"),
+        )
+    except Exception as exc:
+        logger.warning("tool.error", tool="vector_search", error=str(exc))
+        return json.dumps({"error": f"Tool failed: {type(exc).__name__}: {exc}"})
     # Return structured results for the agent to reason over
     formatted = [
         {
@@ -70,12 +74,16 @@ async def graph_query(
     """
     from app.dependencies import get_graph_service
 
-    gs = get_graph_service()
-    connections = await gs.get_entity_connections(
-        entity_name,
-        limit=limit,
-        exclude_privilege_statuses=state.get("_exclude_privilege") or None,
-    )
+    try:
+        gs = get_graph_service()
+        connections = await gs.get_entity_connections(
+            entity_name,
+            limit=limit,
+            exclude_privilege_statuses=state.get("_exclude_privilege") or None,
+        )
+    except Exception as exc:
+        logger.warning("tool.error", tool="graph_query", error=str(exc))
+        return json.dumps({"error": f"Tool failed: {type(exc).__name__}: {exc}"})
     return json.dumps(connections, default=str)
 
 
@@ -95,20 +103,24 @@ async def temporal_search(
     """
     from app.dependencies import get_retriever
 
-    retriever = get_retriever()
-    filters: dict[str, Any] = dict(state.get("_filters") or {})
-    if date_from:
-        filters["date_from"] = date_from
-    if date_to:
-        filters["date_to"] = date_to
+    try:
+        retriever = get_retriever()
+        filters: dict[str, Any] = dict(state.get("_filters") or {})
+        if date_from:
+            filters["date_from"] = date_from
+        if date_to:
+            filters["date_to"] = date_to
 
-    results = await retriever.retrieve_text(
-        query,
-        limit=limit,
-        filters=filters,
-        exclude_privilege_statuses=state.get("_exclude_privilege") or None,
-        dataset_doc_ids=state.get("_dataset_doc_ids"),
-    )
+        results = await retriever.retrieve_text(
+            query,
+            limit=limit,
+            filters=filters,
+            exclude_privilege_statuses=state.get("_exclude_privilege") or None,
+            dataset_doc_ids=state.get("_dataset_doc_ids"),
+        )
+    except Exception as exc:
+        logger.warning("tool.error", tool="temporal_search", error=str(exc))
+        return json.dumps({"error": f"Tool failed: {type(exc).__name__}: {exc}"})
     formatted = [
         {
             "id": r.get("id", ""),
@@ -135,27 +147,31 @@ async def entity_lookup(
     """
     from app.dependencies import get_graph_service
 
-    gs = get_graph_service()
+    try:
+        gs = get_graph_service()
 
-    # Try alias resolution from case context term map
-    term_map: dict[str, str] = state.get("_term_map", {})
-    resolved_name = term_map.get(name.lower(), name)
+        # Try alias resolution from case context term map
+        term_map: dict[str, str] = state.get("_term_map", {})
+        resolved_name = term_map.get(name.lower(), name)
 
-    entity = await gs.get_entity_by_name(resolved_name)
-    if entity is None and resolved_name != name:
-        # Fallback to original name
-        entity = await gs.get_entity_by_name(name)
+        entity = await gs.get_entity_by_name(resolved_name)
+        if entity is None and resolved_name != name:
+            # Fallback to original name
+            entity = await gs.get_entity_by_name(name)
 
-    if entity is None:
-        return json.dumps({"error": f"Entity '{name}' not found in knowledge graph."})
+        if entity is None:
+            return json.dumps({"error": f"Entity '{name}' not found in knowledge graph."})
 
-    # Also fetch connections
-    connections = await gs.get_entity_connections(
-        entity["name"],
-        limit=10,
-        exclude_privilege_statuses=state.get("_exclude_privilege") or None,
-    )
-    entity["connections"] = connections
+        # Also fetch connections
+        connections = await gs.get_entity_connections(
+            entity["name"],
+            limit=10,
+            exclude_privilege_statuses=state.get("_exclude_privilege") or None,
+        )
+        entity["connections"] = connections
+    except Exception as exc:
+        logger.warning("tool.error", tool="entity_lookup", error=str(exc))
+        return json.dumps({"error": f"Tool failed: {type(exc).__name__}: {exc}"})
     return json.dumps(entity, default=str)
 
 
@@ -171,17 +187,21 @@ async def document_retrieval(
     """
     from app.dependencies import get_retriever
 
-    retriever = get_retriever()
-    # Search with document_id filter to get all chunks for this doc
-    filters: dict[str, Any] = dict(state.get("_filters") or {})
-    filters["document_id"] = document_id
+    try:
+        retriever = get_retriever()
+        # Search with document_id filter to get all chunks for this doc
+        filters: dict[str, Any] = dict(state.get("_filters") or {})
+        filters["document_id"] = document_id
 
-    results = await retriever.retrieve_text(
-        "",  # Empty query to get all chunks by filter
-        limit=50,
-        filters=filters,
-        exclude_privilege_statuses=state.get("_exclude_privilege") or None,
-    )
+        results = await retriever.retrieve_text(
+            "",  # Empty query to get all chunks by filter
+            limit=50,
+            filters=filters,
+            exclude_privilege_statuses=state.get("_exclude_privilege") or None,
+        )
+    except Exception as exc:
+        logger.warning("tool.error", tool="document_retrieval", error=str(exc))
+        return json.dumps({"error": f"Tool failed: {type(exc).__name__}: {exc}"})
     formatted = [
         {
             "id": r.get("id", ""),

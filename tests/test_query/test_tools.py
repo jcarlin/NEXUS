@@ -177,6 +177,71 @@ async def test_case_context_returns_full_context():
     assert "timeline" in parsed
 
 
+async def test_vector_search_returns_error_on_failure():
+    """vector_search returns error JSON instead of raising when retriever fails."""
+    mock_retriever = AsyncMock()
+    mock_retriever.retrieve_text.side_effect = ConnectionError("Qdrant unavailable")
+
+    with patch("app.dependencies.get_retriever", return_value=mock_retriever):
+        raw = await vector_search.ainvoke({"query": "test", "state": _SAMPLE_STATE})
+
+    parsed = json.loads(raw)
+    assert "error" in parsed
+    assert "ConnectionError" in parsed["error"]
+
+
+async def test_graph_query_returns_error_on_failure():
+    """graph_query returns error JSON instead of raising when Neo4j fails."""
+    mock_gs = AsyncMock()
+    mock_gs.get_entity_connections.side_effect = RuntimeError("Neo4j connection refused")
+
+    with patch("app.dependencies.get_graph_service", return_value=mock_gs):
+        raw = await graph_query.ainvoke({"entity_name": "Test", "state": _SAMPLE_STATE})
+
+    parsed = json.loads(raw)
+    assert "error" in parsed
+    assert "RuntimeError" in parsed["error"]
+
+
+async def test_temporal_search_returns_error_on_failure():
+    """temporal_search returns error JSON instead of raising when retriever fails."""
+    mock_retriever = AsyncMock()
+    mock_retriever.retrieve_text.side_effect = TimeoutError("Request timed out")
+
+    with patch("app.dependencies.get_retriever", return_value=mock_retriever):
+        raw = await temporal_search.ainvoke({"query": "board meeting", "state": _SAMPLE_STATE})
+
+    parsed = json.loads(raw)
+    assert "error" in parsed
+    assert "TimeoutError" in parsed["error"]
+
+
+async def test_entity_lookup_returns_error_on_failure():
+    """entity_lookup returns error JSON instead of raising when graph service fails."""
+    mock_gs = AsyncMock()
+    mock_gs.get_entity_by_name.side_effect = ConnectionError("Neo4j unavailable")
+
+    with patch("app.dependencies.get_graph_service", return_value=mock_gs):
+        raw = await entity_lookup.ainvoke({"name": "John", "state": _SAMPLE_STATE})
+
+    parsed = json.loads(raw)
+    assert "error" in parsed
+    assert "ConnectionError" in parsed["error"]
+
+
+async def test_document_retrieval_returns_error_on_failure():
+    """document_retrieval returns error JSON instead of raising when retriever fails."""
+    mock_retriever = AsyncMock()
+    mock_retriever.retrieve_text.side_effect = RuntimeError("Service unavailable")
+
+    with patch("app.dependencies.get_retriever", return_value=mock_retriever):
+        raw = await document_retrieval.ainvoke({"document_id": "doc-1", "state": _SAMPLE_STATE})
+
+    parsed = json.loads(raw)
+    assert "error" in parsed
+    assert "RuntimeError" in parsed["error"]
+
+
 async def test_stub_tools_in_investigation_tools():
     """Stub/feature-flagged tools are listed in INVESTIGATION_TOOLS."""
     from app.query.tools import INVESTIGATION_TOOLS

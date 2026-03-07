@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { fetchEventSource } from "@microsoft/fetch-event-source";
 import { useAuthStore } from "@/stores/auth-store";
 import { useAppStore } from "@/stores/app-store";
@@ -140,6 +140,13 @@ export function useStreamQuery() {
     }).catch(() => {
       // fetchEventSource throws on abort or after onerror re-throw; safe to ignore
     });
+  }, []);
+
+  // Abort active stream on unmount to prevent resource leaks
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
   }, []);
 
   const cancel = useCallback(() => {

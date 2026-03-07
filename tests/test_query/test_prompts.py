@@ -3,6 +3,7 @@
 from app.query.prompts import (
     CLASSIFY_PROMPT,
     FOLLOWUP_PROMPT,
+    INVESTIGATION_SYSTEM_PROMPT,
     REWRITE_PROMPT,
     SYNTHESIS_PROMPT,
 )
@@ -29,7 +30,7 @@ def test_synthesis_prompt_has_required_placeholders():
 
 
 def test_synthesis_prompt_mentions_citations():
-    assert "[Source:" in SYNTHESIS_PROMPT
+    assert "[1]" in SYNTHESIS_PROMPT
 
 
 def test_followup_prompt_has_required_placeholders():
@@ -48,6 +49,21 @@ def test_rewrite_prompt_has_case_context_placeholder():
 
 def test_synthesis_prompt_has_case_context_placeholder():
     assert "{case_context}" in SYNTHESIS_PROMPT
+
+
+def test_investigation_prompt_has_tool_budget():
+    """INVESTIGATION_SYSTEM_PROMPT enforces a hard 5-call tool budget."""
+    assert "maximum 5 tool calls" in INVESTIGATION_SYSTEM_PROMPT
+    assert "MUST stop" in INVESTIGATION_SYSTEM_PROMPT
+
+
+def test_investigation_prompt_prohibits_repeated_tool_calls():
+    """INVESTIGATION_SYSTEM_PROMPT warns against calling the same tool repeatedly."""
+    assert "do NOT call the same tool" in INVESTIGATION_SYSTEM_PROMPT
+
+
+def test_investigation_prompt_has_case_context_placeholder():
+    assert "{case_context}" in INVESTIGATION_SYSTEM_PROMPT
 
 
 def test_prompts_are_formattable():
