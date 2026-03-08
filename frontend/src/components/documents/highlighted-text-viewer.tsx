@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertCircle } from "lucide-react";
 
@@ -132,7 +131,7 @@ export function HighlightedTextViewer({
   const match = highlightText ? findBestMatch(content, highlightText) : null;
 
   return (
-    <ScrollArea className={`rounded-md border bg-muted/30 ${maxH}`}>
+    <div className={`overflow-y-auto rounded-md border bg-muted/30 ${maxH}`}>
       <pre className="whitespace-pre-wrap break-words p-4 text-sm leading-relaxed">
         {match ? (
           <>
@@ -146,6 +145,6 @@ export function HighlightedTextViewer({
           content
         )}
       </pre>
-    </ScrollArea>
+    </div>
   );
 }

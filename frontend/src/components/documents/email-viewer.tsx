@@ -1,7 +1,9 @@
-import { useState, useEffect } from "react";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { useState, useEffect, useMemo } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
+
+const LINES_PER_PAGE = 80;
 
 interface EmailViewerProps {
   url: string;
@@ -40,11 +42,13 @@ function parseEml(raw: string): ParsedEmail {
 export function EmailViewer({ url, compact }: EmailViewerProps) {
   const [email, setEmail] = useState<ParsedEmail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pageNumber, setPageNumber] = useState(1);
 
   useEffect(() => {
     const controller = new AbortController();
     setEmail(null);
     setError(null);
+    setPageNumber(1);
 
     fetch(url, { signal: controller.signal })
       .then((res) => {
@@ -58,6 +62,12 @@ export function EmailViewer({ url, compact }: EmailViewerProps) {
 
     return () => controller.abort();
   }, [url]);
+
+  const { lines, numPages } = useMemo(() => {
+    if (!email) return { lines: [], numPages: 0 };
+    const allLines = email.body.split("\n");
+    return { lines: allLines, numPages: Math.max(1, Math.ceil(allLines.length / LINES_PER_PAGE)) };
+  }, [email]);
 
   if (error) {
     return (
@@ -74,28 +84,77 @@ export function EmailViewer({ url, compact }: EmailViewerProps) {
 
   const maxH = compact ? "max-h-[60vh]" : "max-h-[calc(100vh-300px)]";
 
+  const headerSection = (
+    <div className="rounded-md border bg-muted/50 p-3 text-sm">
+      {DISPLAY_HEADERS.map((key) => {
+        const value = email.headers[key];
+        if (!value) return null;
+        return (
+          <div key={key} className="flex gap-2">
+            <span className="shrink-0 font-medium text-muted-foreground w-16">
+              {key}:
+            </span>
+            <span className="break-all">{value}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  // Compact mode: no pagination, just scroll
+  if (compact) {
+    return (
+      <div className="space-y-3">
+        {headerSection}
+        <div className={`overflow-y-auto rounded-md border bg-muted/30 ${maxH}`}>
+          <pre className="whitespace-pre-wrap break-words p-4 text-sm leading-relaxed">
+            {email.body}
+          </pre>
+        </div>
+      </div>
+    );
+  }
+
+  const pageLines = lines.slice(
+    (pageNumber - 1) * LINES_PER_PAGE,
+    pageNumber * LINES_PER_PAGE,
+  );
+
   return (
     <div className="space-y-3">
-      <div className="rounded-md border bg-muted/50 p-3 text-sm">
-        {DISPLAY_HEADERS.map((key) => {
-          const value = email.headers[key];
-          if (!value) return null;
-          return (
-            <div key={key} className="flex gap-2">
-              <span className="shrink-0 font-medium text-muted-foreground w-16">
-                {key}:
-              </span>
-              <span className="break-all">{value}</span>
-            </div>
-          );
-        })}
-      </div>
+      {headerSection}
 
-      <ScrollArea className={`rounded-md border bg-muted/30 ${maxH}`}>
-        <pre className="whitespace-pre-wrap break-words p-4 text-sm leading-relaxed">
-          {email.body}
-        </pre>
-      </ScrollArea>
+      <div className="flex flex-col items-center space-y-3">
+        {numPages > 1 && (
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setPageNumber((p) => Math.max(1, p - 1))}
+              disabled={pageNumber <= 1}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-sm text-muted-foreground">
+              Page {pageNumber} of {numPages}
+            </span>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setPageNumber((p) => Math.min(numPages, p + 1))}
+              disabled={pageNumber >= numPages}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
+
+        <div className={`w-full overflow-y-auto rounded-md border bg-muted/30 ${maxH}`}>
+          <pre className="whitespace-pre-wrap break-words p-4 text-sm leading-relaxed">
+            {pageLines.join("\n")}
+          </pre>
+        </div>
+      </div>
     </div>
   );
 }
