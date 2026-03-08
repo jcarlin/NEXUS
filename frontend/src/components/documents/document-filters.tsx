@@ -2,39 +2,23 @@ import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-const DOC_TYPES = [
-  { value: "document", label: "Document" },
-  { value: "spreadsheet", label: "Spreadsheet" },
-  { value: "presentation", label: "Presentation" },
-  { value: "email", label: "Email" },
-  { value: "text", label: "Text" },
-  { value: "data", label: "Data" },
-  { value: "web_page", label: "Web Page" },
-  { value: "image", label: "Image" },
-];
-const PRIVILEGE_OPTIONS = [
-  { value: "all", label: "All" },
-  { value: "privileged", label: "Privileged" },
-  { value: "work_product", label: "Work Product" },
-  { value: "none", label: "Not Privileged" },
+const FILE_EXTENSIONS = [
+  "PDF", "DOCX", "DOC", "XLSX", "PPTX", "HTML",
+  "EML", "MSG", "TXT", "CSV", "RTF", "PNG", "JPG", "TIFF",
 ];
 
 interface DocumentFiltersProps {
   search: string;
   onSearchChange: (value: string) => void;
-  docType: string;
-  onDocTypeChange: (value: string) => void;
-  privilege: string;
-  onPrivilegeChange: (value: string) => void;
+  fileExtension: string;
+  onFileExtensionChange: (value: string) => void;
 }
 
 export function DocumentFilters({
   search,
   onSearchChange,
-  docType,
-  onDocTypeChange,
-  privilege,
-  onPrivilegeChange,
+  fileExtension,
+  onFileExtensionChange,
 }: DocumentFiltersProps) {
   return (
     <div className="flex flex-wrap items-center gap-3">
@@ -48,28 +32,15 @@ export function DocumentFilters({
         />
       </div>
 
-      <Select value={docType} onValueChange={onDocTypeChange}>
+      <Select value={fileExtension} onValueChange={onFileExtensionChange}>
         <SelectTrigger className="w-[140px]">
-          <SelectValue placeholder="Type" />
+          <SelectValue placeholder="Extension" />
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All types</SelectItem>
-          {DOC_TYPES.map((t) => (
-            <SelectItem key={t.value} value={t.value}>
-              {t.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
-      <Select value={privilege} onValueChange={onPrivilegeChange}>
-        <SelectTrigger className="w-[160px]">
-          <SelectValue placeholder="Privilege" />
-        </SelectTrigger>
-        <SelectContent>
-          {PRIVILEGE_OPTIONS.map((p) => (
-            <SelectItem key={p.value} value={p.value}>
-              {p.label}
+          {FILE_EXTENSIONS.map((ext) => (
+            <SelectItem key={ext} value={ext.toLowerCase()}>
+              {ext}
             </SelectItem>
           ))}
         </SelectContent>

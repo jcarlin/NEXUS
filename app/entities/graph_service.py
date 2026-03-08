@@ -363,6 +363,7 @@ class GraphService:
         *,
         limit: int = 50,
         exclude_privilege_statuses: list[str] | None = None,
+        matter_id: str | None = None,
     ) -> list[dict[str, Any]]:
         """Return the graph neighbourhood for a named entity.
 
@@ -372,16 +373,22 @@ class GraphService:
         When *exclude_privilege_statuses* is provided, connections to
         Document nodes with those privilege statuses are filtered out.
         """
-        where_clause = ""
+        where_clauses: list[str] = []
         params: dict[str, Any] = {"name": entity_name, "limit": limit}
 
+        if matter_id:
+            where_clauses.append("e.matter_id = $matter_id")
+            params["matter_id"] = matter_id
+
         if exclude_privilege_statuses:
-            where_clause = (
-                "WHERE (NOT connected:Document "
+            where_clauses.append(
+                "(NOT connected:Document "
                 "OR connected.privilege_status IS NULL "
                 "OR NOT connected.privilege_status IN $excluded_statuses)"
             )
             params["excluded_statuses"] = exclude_privilege_statuses
+
+        where_clause = "WHERE " + " AND ".join(where_clauses) if where_clauses else ""
 
         query = f"""
         MATCH (e:Entity {{name: $name}})-[r]-(connected)
@@ -495,6 +502,7 @@ class GraphService:
         entity_type: str | None = None,
         limit: int = 50,
         offset: int = 0,
+        matter_id: str | None = None,
     ) -> tuple[list[dict[str, Any]], int]:
         """Search entities with optional text query and type filter.
 
@@ -502,6 +510,10 @@ class GraphService:
         """
         where_clauses: list[str] = []
         params: dict[str, Any] = {"limit": limit, "offset": offset}
+
+        if matter_id:
+            where_clauses.append("e.matter_id = $matter_id")
+            params["matter_id"] = matter_id
 
         if query:
             where_clauses.append("toLower(e.name) CONTAINS toLower($query)")
@@ -544,26 +556,28 @@ class GraphService:
         self,
         name: str,
         entity_type: str | None = None,
+        matter_id: str | None = None,
     ) -> dict[str, Any] | None:
         """Look up a single entity by name (and optionally type)."""
+        where_clauses = ["e.name = $name"]
+        params: dict[str, Any] = {"name": name}
+
         if entity_type:
-            cypher = """
-            MATCH (e:Entity {name: $name, type: $entity_type})
+            where_clauses.append("e.type = $entity_type")
+            params["entity_type"] = entity_type
+
+        if matter_id:
+            where_clauses.append("e.matter_id = $matter_id")
+            params["matter_id"] = matter_id
+
+        where_str = "WHERE " + " AND ".join(where_clauses)
+        cypher = f"""
+            MATCH (e:Entity) {where_str}
             RETURN e.name AS name, e.type AS type, e.mention_count AS mention_count,
                    e.first_seen AS first_seen, e.last_seen AS last_seen,
                    coalesce(e.aliases, []) AS aliases
             LIMIT 1
             """
-            params = {"name": name, "entity_type": entity_type}
-        else:
-            cypher = """
-            MATCH (e:Entity {name: $name})
-            RETURN e.name AS name, e.type AS type, e.mention_count AS mention_count,
-                   e.first_seen AS first_seen, e.last_seen AS last_seen,
-                   coalesce(e.aliases, []) AS aliases
-            LIMIT 1
-            """
-            params = {"name": name}
 
         try:
             records = await self._run_query(cypher, params)
@@ -577,10 +591,18 @@ class GraphService:
     async def get_entity_timeline(
         self,
         entity_name: str,
+        matter_id: str | None = None,
     ) -> list[dict[str, Any]]:
         """Return chronological events / document mentions for an entity."""
-        cypher = """
-        MATCH (e:Entity {name: $name})-[r:MENTIONED_IN]->(d:Document)
+        where_clause = ""
+        params: dict[str, Any] = {"name": entity_name}
+        if matter_id:
+            where_clause = "WHERE e.matter_id = $matter_id"
+            params["matter_id"] = matter_id
+
+        cypher = f"""
+        MATCH (e:Entity {{name: $name}})-[r:MENTIONED_IN]->(d:Document)
+        {where_clause}
         RETURN d.filename AS document,
                d.type AS document_type,
                r.page_number AS page_number,
@@ -588,7 +610,7 @@ class GraphService:
         ORDER BY d.created_at
         """
         try:
-            records = await self._run_query(cypher, {"name": entity_name})
+            records = await self._run_query(cypher, params)
             logger.debug(
                 "graph.entity_timeline.fetched",
                 entity=entity_name,
@@ -1142,19 +1164,32 @@ class GraphService:
     # Graph statistics
     # ------------------------------------------------------------------
 
-    async def get_graph_stats(self) -> dict[str, Any]:
+    async def get_graph_stats(self, matter_id: str | None = None) -> dict[str, Any]:
         """Return aggregate node and edge counts for the knowledge graph."""
-        node_query = """
-        MATCH (n)
-        RETURN labels(n)[0] AS label, count(n) AS count
-        """
-        edge_query = """
-        MATCH ()-[r]->()
-        RETURN type(r) AS type, count(r) AS count
-        """
+        if matter_id:
+            node_query = """
+            MATCH (n) WHERE n.matter_id = $matter_id
+            RETURN labels(n)[0] AS label, count(n) AS count
+            """
+            edge_query = """
+            MATCH (a)-[r]->(b)
+            WHERE a.matter_id = $matter_id OR b.matter_id = $matter_id
+            RETURN type(r) AS type, count(r) AS count
+            """
+            params: dict[str, Any] = {"matter_id": matter_id}
+        else:
+            node_query = """
+            MATCH (n)
+            RETURN labels(n)[0] AS label, count(n) AS count
+            """
+            edge_query = """
+            MATCH ()-[r]->()
+            RETURN type(r) AS type, count(r) AS count
+            """
+            params = {}
         try:
-            node_records = await self._run_query(node_query)
-            edge_records = await self._run_query(edge_query)
+            node_records = await self._run_query(node_query, params)
+            edge_records = await self._run_query(edge_query, params)
 
             node_counts: dict[str, int] = {rec["label"]: rec["count"] for rec in node_records}
             edge_counts: dict[str, int] = {rec["type"]: rec["count"] for rec in edge_records}

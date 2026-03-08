@@ -21,20 +21,19 @@ function DocumentsPage() {
   const datasetId = useAppStore((s) => s.datasetId);
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 300);
-  const [docType, setDocType] = useState("all");
-  const [privilege, setPrivilege] = useState("all");
+  const [fileExtension, setFileExtension] = useState("all");
   const [offset, setOffset] = useState(0);
   const limit = 50;
 
   const { data, isLoading } = useQuery({
-    queryKey: ["documents", matterId, debouncedSearch, docType, privilege, offset, datasetId],
+    queryKey: ["documents", matterId, debouncedSearch, fileExtension, offset, datasetId],
     queryFn: () =>
       apiClient<PaginatedResponse<DocumentResponse>>({
         url: "/api/v1/documents",
         method: "GET",
         params: {
           q: debouncedSearch || undefined,
-          document_type: docType !== "all" ? docType : undefined,
+          file_extension: fileExtension !== "all" ? fileExtension : undefined,
           dataset_id: datasetId || undefined,
           offset,
           limit,
@@ -61,10 +60,8 @@ function DocumentsPage() {
       <DocumentFilters
         search={search}
         onSearchChange={(v) => { setSearch(v); setOffset(0); }}
-        docType={docType}
-        onDocTypeChange={(v) => { setDocType(v); setOffset(0); }}
-        privilege={privilege}
-        onPrivilegeChange={(v) => { setPrivilege(v); setOffset(0); }}
+        fileExtension={fileExtension}
+        onFileExtensionChange={(v) => { setFileExtension(v); setOffset(0); }}
       />
 
       <DocumentTable data={data?.items ?? []} loading={isLoading} />

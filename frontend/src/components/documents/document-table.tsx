@@ -47,13 +47,16 @@ export function DocumentTable({ data, loading }: DocumentTableProps) {
         ),
       },
       {
-        accessorKey: "type",
+        id: "extension",
         header: "Type",
-        cell: ({ row }) => (
-          <Badge variant="outline" className="text-[10px] uppercase">
-            {row.original.type ?? "—"}
-          </Badge>
-        ),
+        cell: ({ row }) => {
+          const ext = row.original.filename?.split(".").pop()?.toUpperCase();
+          return (
+            <Badge variant="outline" className="text-[10px] uppercase">
+              {ext ?? "—"}
+            </Badge>
+          );
+        },
       },
       { accessorKey: "page_count", header: "Pages" },
       {

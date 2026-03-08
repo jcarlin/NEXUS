@@ -192,10 +192,10 @@ def e2e_qdrant(e2e_services_check):
     client = QdrantClient(url="http://localhost:6333")
     collection_name = "nexus_text"
 
-    # Delete if exists (clean slate)
-    existing = {c.name for c in client.get_collections().collections}
-    if collection_name in existing:
-        client.delete_collection(collection_name)
+    # Delete ALL existing collections (clean slate — prevents config mismatches
+    # from leftover production collections with named/sparse vectors)
+    for c in client.get_collections().collections:
+        client.delete_collection(c.name)
 
     client.create_collection(
         collection_name=collection_name,
@@ -208,10 +208,11 @@ def e2e_qdrant(e2e_services_check):
     yield client
 
     # Cleanup
-    try:
-        client.delete_collection(collection_name)
-    except Exception:
-        pass
+    for c in client.get_collections().collections:
+        try:
+            client.delete_collection(c.name)
+        except Exception:
+            pass
 
 
 # ---------------------------------------------------------------------------
@@ -342,7 +343,7 @@ def celery_eager(e2e_env_vars):
 
     celery_app.conf.update(
         task_always_eager=True,
-        task_eager_propagates=True,
+        task_eager_propagates=False,
     )
 
     from app.ingestion.tasks import process_document
@@ -385,6 +386,12 @@ def run_pending_tasks() -> None:
     _PENDING_TASKS.clear()
 
     def _run_task(args: tuple) -> None:
+        # Celery uses thread-local state for the current app — set it
+        # so that subtask .delay() calls respect task_always_eager.
+        from workers.celery_app import celery_app
+
+        celery_app.set_current()
+        celery_app.set_default()
         process_document.apply(args=list(args))
 
     with ThreadPoolExecutor(max_workers=1) as executor:

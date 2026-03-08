@@ -111,6 +111,7 @@ def _row_to_detail(row: dict) -> DocumentDetail:
 @router.get("/documents", response_model=DocumentListResponse)
 async def list_documents(
     document_type: str | None = Query(None, description="Filter by document type"),
+    file_extension: str | None = Query(None, description="Filter by file extension (e.g. pdf, docx)"),
     q: str | None = Query(None, description="Search by filename (case-insensitive)"),
     hot_doc_score_min: float | None = Query(None, ge=0.0, le=1.0, description="Minimum hot doc score"),
     anomaly_score_min: float | None = Query(None, ge=0.0, le=1.0, description="Minimum anomaly score"),
@@ -126,6 +127,7 @@ async def list_documents(
     items, total = await DocumentService.list_documents(
         db=db,
         document_type=document_type,
+        file_extension=file_extension,
         filename_search=q,
         hot_doc_score_min=hot_doc_score_min,
         anomaly_score_min=anomaly_score_min,
@@ -190,12 +192,22 @@ async def document_preview(
         user_role=current_user.role,
     )
     if row is None:
+        # Qdrant payloads store job_id as doc_id — try fallback
+        row = await DocumentService.get_document_by_job(
+            db=db,
+            job_id=doc_id,
+            matter_id=matter_id,
+            user_role=current_user.role,
+        )
+    if row is None:
         raise HTTPException(status_code=404, detail=f"Document {doc_id} not found")
 
-    preview_key = f"pages/{doc_id}/page_{page:03d}.png"
+    # Page images are always stored under job_id in MinIO
+    page_key_id = str(row["job_id"]) if row.get("job_id") else str(doc_id)
+    preview_key = f"pages/{page_key_id}/page_{page:03d}.png"
     url = await storage.get_presigned_url(preview_key)
 
-    return DocumentPreview(doc_id=doc_id, page=page, image_url=url)
+    return DocumentPreview(doc_id=row["id"], page=page, image_url=url)
 
 
 # -----------------------------------------------------------------------
@@ -219,10 +231,18 @@ async def document_download(
         user_role=current_user.role,
     )
     if row is None:
+        # Qdrant payloads store job_id as doc_id — try fallback
+        row = await DocumentService.get_document_by_job(
+            db=db,
+            job_id=doc_id,
+            matter_id=matter_id,
+            user_role=current_user.role,
+        )
+    if row is None:
         raise HTTPException(status_code=404, detail=f"Document {doc_id} not found")
 
     url = await storage.get_presigned_url(row["minio_path"])
-    return {"doc_id": str(doc_id), "filename": row["filename"], "download_url": url}
+    return {"doc_id": str(row["id"]), "filename": row["filename"], "download_url": url}
 
 
 # -----------------------------------------------------------------------

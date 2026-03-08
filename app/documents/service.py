@@ -51,6 +51,7 @@ class DocumentService:
     async def list_documents(
         db: AsyncSession,
         document_type: str | None = None,
+        file_extension: str | None = None,
         filename_search: str | None = None,
         hot_doc_score_min: float | None = None,
         anomaly_score_min: float | None = None,
@@ -65,6 +66,7 @@ class DocumentService:
 
         Optional filters:
         - *document_type*: exact match on the ``document_type`` column.
+        - *file_extension*: filter by file extension (e.g. ``pdf``, ``docx``).
         - *filename_search*: case-insensitive substring match via ``ILIKE``.
         - *hot_doc_score_min*: minimum hot_doc_score threshold.
         - *anomaly_score_min*: minimum anomaly_score threshold.
@@ -94,6 +96,10 @@ class DocumentService:
         if document_type is not None:
             where_clauses.append("d.document_type = :document_type")
             params["document_type"] = document_type
+
+        if file_extension is not None:
+            where_clauses.append("d.filename ILIKE :file_ext_pattern")
+            params["file_ext_pattern"] = f"%.{file_extension}"
 
         if filename_search is not None:
             where_clauses.append("d.filename ILIKE :filename_search")
@@ -185,11 +191,29 @@ class DocumentService:
     # ------------------------------------------------------------------
 
     @staticmethod
-    async def get_document_by_job(db: AsyncSession, job_id: UUID) -> dict | None:
-        """Fetch a single document by its parent job_id."""
+    async def get_document_by_job(
+        db: AsyncSession,
+        job_id: UUID,
+        matter_id: UUID | None = None,
+        user_role: str | None = None,
+    ) -> dict | None:
+        """Fetch a single document by its parent job_id.
+
+        Supports the same *matter_id* and *user_role* privilege filtering
+        as :meth:`get_document`.
+        """
+        where = "WHERE job_id = :job_id"
+        params: dict = {"job_id": job_id}
+        if matter_id is not None:
+            where += " AND matter_id = :matter_id"
+            params["matter_id"] = matter_id
+
+        if user_role not in ("admin", "attorney"):
+            where += " AND (privilege_status IS NULL OR privilege_status NOT IN ('privileged', 'work_product'))"
+
         result = await db.execute(
-            text(f"SELECT {_COLUMNS} FROM documents WHERE job_id = :job_id"),
-            {"job_id": job_id},
+            text(f"SELECT {_COLUMNS} FROM documents {where}"),
+            params,
         )
         row = result.first()
         if row is None:

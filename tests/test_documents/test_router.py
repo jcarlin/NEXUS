@@ -86,6 +86,29 @@ async def test_list_documents_with_type_filter(client: AsyncClient) -> None:
     assert call_kwargs[1].get("document_type") == "email" or (len(call_kwargs[0]) > 1 and call_kwargs[0][1] == "email")
 
 
+@pytest.mark.asyncio
+async def test_list_documents_with_file_extension_filter(client: AsyncClient) -> None:
+    """GET /documents?file_extension=pdf should forward the filter."""
+    row = _fake_doc_row(filename="contract.pdf")
+
+    with patch(
+        "app.documents.service.DocumentService.list_documents",
+        new_callable=AsyncMock,
+        return_value=([row], 1),
+    ) as mock_list:
+        response = await client.get("/api/v1/documents?file_extension=pdf")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1
+    assert len(body["items"]) == 1
+
+    # Verify the filter was passed through
+    mock_list.assert_called_once()
+    call_kwargs = mock_list.call_args[1]
+    assert call_kwargs.get("file_extension") == "pdf"
+
+
 # ---------------------------------------------------------------------------
 # GET /documents/{doc_id}
 # ---------------------------------------------------------------------------
@@ -206,10 +229,17 @@ async def test_document_preview_returns_url(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_document_preview_not_found(client: AsyncClient) -> None:
     """GET /documents/{id}/preview should return 404 for missing document."""
-    with patch(
-        "app.documents.service.DocumentService.get_document",
-        new_callable=AsyncMock,
-        return_value=None,
+    with (
+        patch(
+            "app.documents.service.DocumentService.get_document",
+            new_callable=AsyncMock,
+            return_value=None,
+        ),
+        patch(
+            "app.documents.service.DocumentService.get_document_by_job",
+            new_callable=AsyncMock,
+            return_value=None,
+        ),
     ):
         response = await client.get(f"/api/v1/documents/{uuid4()}/preview")
 
@@ -253,11 +283,131 @@ async def test_document_download_returns_url(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_document_download_not_found(client: AsyncClient) -> None:
     """GET /documents/{id}/download should return 404 for missing document."""
-    with patch(
-        "app.documents.service.DocumentService.get_document",
-        new_callable=AsyncMock,
-        return_value=None,
+    with (
+        patch(
+            "app.documents.service.DocumentService.get_document",
+            new_callable=AsyncMock,
+            return_value=None,
+        ),
+        patch(
+            "app.documents.service.DocumentService.get_document_by_job",
+            new_callable=AsyncMock,
+            return_value=None,
+        ),
     ):
         response = await client.get(f"/api/v1/documents/{uuid4()}/download")
 
     assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Job-ID fallback (Qdrant payloads store job_id as doc_id)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_download_fallback_to_job_id(client: AsyncClient) -> None:
+    """GET /documents/{job_id}/download should resolve via job_id fallback."""
+    job_id = uuid4()
+    doc_id = uuid4()
+    row = _fake_doc_row(doc_id=doc_id, job_id=job_id)
+
+    mock_storage = MagicMock()
+    mock_storage.get_presigned_url = AsyncMock(return_value="http://minio:9000/raw/abc/report.pdf?sig=xyz")
+
+    app = client._transport.app
+    app.dependency_overrides[get_minio] = lambda: mock_storage
+    try:
+        with (
+            patch(
+                "app.documents.service.DocumentService.get_document",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "app.documents.service.DocumentService.get_document_by_job",
+                new_callable=AsyncMock,
+                return_value=row,
+            ) as mock_by_job,
+        ):
+            response = await client.get(f"/api/v1/documents/{job_id}/download")
+    finally:
+        app.dependency_overrides.pop(get_minio, None)
+
+    assert response.status_code == 200
+    body = response.json()
+    # Should return the real document id, not the job_id used in the URL
+    assert body["doc_id"] == str(doc_id)
+    assert body["filename"] == "report.pdf"
+    assert "download_url" in body
+    mock_by_job.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_preview_fallback_to_job_id(client: AsyncClient) -> None:
+    """GET /documents/{job_id}/preview should resolve via job_id fallback."""
+    job_id = uuid4()
+    doc_id = uuid4()
+    row = _fake_doc_row(doc_id=doc_id, job_id=job_id)
+
+    mock_storage = MagicMock()
+    mock_storage.get_presigned_url = AsyncMock(return_value="http://minio:9000/pages/preview.png?sig=abc")
+
+    app = client._transport.app
+    app.dependency_overrides[get_minio] = lambda: mock_storage
+    try:
+        with (
+            patch(
+                "app.documents.service.DocumentService.get_document",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "app.documents.service.DocumentService.get_document_by_job",
+                new_callable=AsyncMock,
+                return_value=row,
+            ) as mock_by_job,
+        ):
+            response = await client.get(f"/api/v1/documents/{job_id}/preview?page=3")
+    finally:
+        app.dependency_overrides.pop(get_minio, None)
+
+    assert response.status_code == 200
+    body = response.json()
+    # Should return the real document id
+    assert body["doc_id"] == str(doc_id)
+    assert body["page"] == 3
+    assert "image_url" in body
+    mock_by_job.assert_called_once()
+
+    # Verify the preview key uses job_id (page images stored under job_id)
+    presigned_call = mock_storage.get_presigned_url.call_args[0][0]
+    assert presigned_call == f"pages/{job_id}/page_003.png"
+
+
+@pytest.mark.asyncio
+async def test_preview_uses_job_id_for_page_key(client: AsyncClient) -> None:
+    """Preview should use row['job_id'] for page image path, not the URL doc_id."""
+    doc_id = uuid4()
+    job_id = uuid4()
+    row = _fake_doc_row(doc_id=doc_id, job_id=job_id)
+
+    mock_storage = MagicMock()
+    mock_storage.get_presigned_url = AsyncMock(return_value="http://minio:9000/pages/preview.png?sig=abc")
+
+    app = client._transport.app
+    app.dependency_overrides[get_minio] = lambda: mock_storage
+    try:
+        with patch(
+            "app.documents.service.DocumentService.get_document",
+            new_callable=AsyncMock,
+            return_value=row,
+        ):
+            response = await client.get(f"/api/v1/documents/{doc_id}/preview?page=1")
+    finally:
+        app.dependency_overrides.pop(get_minio, None)
+
+    assert response.status_code == 200
+    # Page images are stored under job_id, not doc_id
+    presigned_call = mock_storage.get_presigned_url.call_args[0][0]
+    assert presigned_call == f"pages/{job_id}/page_001.png"

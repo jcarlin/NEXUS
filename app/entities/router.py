@@ -38,7 +38,7 @@ async def list_entities(
     matter_id: UUID = Depends(get_matter_id),
 ):
     """Search or list extracted entities (paginated)."""
-    items, total = await gs.search_entities(query=q, entity_type=entity_type, limit=limit, offset=offset)
+    items, total = await gs.search_entities(query=q, entity_type=entity_type, limit=limit, offset=offset, matter_id=str(matter_id))
     return {
         "items": items,
         "total": total,
@@ -55,7 +55,7 @@ async def get_entity(
     matter_id: UUID = Depends(get_matter_id),
 ):
     """Return details for a single entity (looked up by name)."""
-    entity = await gs.get_entity_by_name(entity_id)
+    entity = await gs.get_entity_by_name(entity_id, matter_id=str(matter_id))
     if entity is None:
         raise HTTPException(status_code=404, detail=f"Entity '{entity_id}' not found")
     return entity
@@ -70,7 +70,7 @@ async def get_entity_connections(
     matter_id: UUID = Depends(get_matter_id),
 ):
     """Return the graph neighbourhood for an entity."""
-    entity = await gs.get_entity_by_name(entity_id)
+    entity = await gs.get_entity_by_name(entity_id, matter_id=str(matter_id))
     if entity is None:
         raise HTTPException(status_code=404, detail=f"Entity '{entity_id}' not found")
     exclude_privilege = ["privileged", "work_product"] if current_user.role not in ("admin", "attorney") else None
@@ -78,6 +78,7 @@ async def get_entity_connections(
         entity_id,
         limit=limit,
         exclude_privilege_statuses=exclude_privilege,
+        matter_id=str(matter_id),
     )
     return {"entity": entity, "connections": connections}
 
@@ -101,7 +102,7 @@ async def graph_explore(
             "Only read-only MATCH/RETURN queries are permitted.",
         )
     try:
-        records = await gs._run_query(cypher)
+        records = await gs._run_query(cypher, {"matter_id": str(matter_id)})
         return {"results": records}
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Cypher query error: {exc}")
@@ -115,7 +116,7 @@ async def graph_timeline(
     matter_id: UUID = Depends(get_matter_id),
 ):
     """Return chronological events for an entity."""
-    events = await gs.get_entity_timeline(entity)
+    events = await gs.get_entity_timeline(entity, matter_id=str(matter_id))
     return {"entity": entity, "events": events}
 
 
@@ -126,7 +127,7 @@ async def graph_stats(
     matter_id: UUID = Depends(get_matter_id),
 ):
     """Return high-level graph statistics (node and edge counts)."""
-    stats = await gs.get_graph_stats()
+    stats = await gs.get_graph_stats(matter_id=str(matter_id))
     return stats
 
 
