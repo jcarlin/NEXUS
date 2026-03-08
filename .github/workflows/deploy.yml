@@ -1,0 +1,57 @@
+name: Deploy to GCP
+
+on:
+  workflow_run:
+    workflows: ["Backend Tests"]
+    branches: [main]
+    types: [completed]
+
+concurrency:
+  group: deploy-gcp
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up gcloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy via SSH
+        uses: google-github-actions/ssh-compute@v1
+        with:
+          instance_name: ${{ vars.GCE_INSTANCE }}
+          zone: ${{ vars.GCE_ZONE }}
+          ssh_private_key: ${{ secrets.GCE_SSH_PRIVATE_KEY }}
+          command: |
+            set -euo pipefail
+            cd ~/nexus
+
+            # Pull latest code
+            git fetch origin main
+            git checkout origin/main
+
+            # Rebuild and restart changed services
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.cloud.yml up -d --build api worker
+
+            # Run any pending migrations
+            docker compose exec -T api alembic upgrade head
+
+            # Wait for health check
+            for i in $(seq 1 30); do
+              if curl -sf http://localhost:8000/api/v1/health > /dev/null 2>&1; then
+                echo "Health check passed"
+                exit 0
+              fi
+              sleep 2
+            done
+            echo "Health check failed after 60s"
+            docker compose logs --tail=50 api
+            exit 1

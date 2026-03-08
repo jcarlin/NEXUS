@@ -230,10 +230,11 @@ The report has four sections:
 - `docs/testing-guide.md` — Test infrastructure, fixtures, CI/CD, patterns
 
 ### Deployment & Operations
-- `docs/CLOUD-DEPLOY.md` — GCP + Vercel deployment guide
+- `docs/CLOUD-DEPLOY.md` — GCP + Vercel deployment guide (includes CI/CD setup, operations, backups)
 - `docs/epstein-ingestion.md` — Dataset ingestion guide
 - `docker-compose.yml` / `docker-compose.prod.yml` / `docker-compose.cloud.yml` / `docker-compose.local.yml`
-- `.github/workflows/` — CI/CD (backend tests, frontend tests, evaluation)
+- `deploy/nexus.service` — Systemd unit for auto-start on GCP VM
+- `.github/workflows/` — CI/CD (backend tests, frontend tests, evaluation, GCP deploy)
 
 ### Historical Reference (completed milestone specs)
 - `docs/M13-FRONTEND-SPEC.md` — React frontend specification

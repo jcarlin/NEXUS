@@ -189,13 +189,50 @@ docker compose logs -f api
 docker compose logs -f worker
 docker compose logs -f caddy
 
-# Redeploy after code changes
-cd ~/nexus && git pull
-docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.cloud.yml up -d --build api worker
-docker compose exec api alembic upgrade head
+# Redeploy backend (automated via CI/CD — see section below, or manually):
+# cd ~/nexus && git pull
+# docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.cloud.yml up -d --build api worker
+# docker compose exec api alembic upgrade head
 
 # Redeploy frontend
 cd frontend/ && vercel --prod
+```
+
+---
+
+## CI/CD (GitHub Actions)
+
+Pushes to `main` auto-deploy to the GCP VM after backend tests pass (`.github/workflows/deploy.yml`).
+
+### Required Setup
+
+**Repository variables** (Settings → Variables → Actions):
+- `GCE_INSTANCE` — VM name (e.g., `nexus-demo`)
+- `GCE_ZONE` — VM zone (e.g., `us-central1-a`)
+
+**Repository secrets** (Settings → Secrets → Actions):
+- `GCP_SA_KEY` — Service account JSON key with `compute.instances.get` and OS Login or metadata SSH permissions
+- `GCE_SSH_PRIVATE_KEY` — SSH private key whose public key is added to the VM (via `gcloud compute os-login ssh-keys add` or project metadata)
+
+### How It Works
+
+1. `Backend Tests` workflow runs on push to `main`
+2. On success, `Deploy to GCP` triggers via `workflow_run`
+3. Authenticates to GCP, SSHs into the VM
+4. Runs `git fetch && git checkout origin/main`
+5. Rebuilds `api` and `worker` containers
+6. Runs `alembic upgrade head`
+7. Waits for health check (60s timeout)
+
+### Manual Deploy
+
+If CI/CD is not configured, deploy manually:
+
+```bash
+gcloud compute ssh nexus-demo --zone=us-central1-a
+cd ~/nexus && git pull
+docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.cloud.yml up -d --build api worker
+docker compose exec api alembic upgrade head
 ```
 
 ---
