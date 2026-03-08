@@ -3,15 +3,20 @@ import { Link } from "@tanstack/react-router";
 import {
   useReactTable,
   getCoreRowModel,
+  getSortedRowModel,
+  getFilteredRowModel,
   flexRender,
   type ColumnDef,
   type RowSelectionState,
+  type SortingState,
 } from "@tanstack/react-table";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
+import { DataTableToolbar } from "@/components/ui/data-table-toolbar";
 import { Download } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import type { DocumentResponse } from "@/types";
@@ -23,6 +28,8 @@ interface ResultSetTableProps {
 
 export function ResultSetTable({ data, loading }: ResultSetTableProps) {
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [globalFilter, setGlobalFilter] = useState("");
 
   const columns = useMemo<ColumnDef<DocumentResponse>[]>(
     () => [
@@ -43,10 +50,11 @@ export function ResultSetTable({ data, loading }: ResultSetTableProps) {
           />
         ),
         enableSorting: false,
+        enableGlobalFilter: false,
       },
       {
         accessorKey: "filename",
-        header: "Filename",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Filename" />,
         cell: ({ row }) => (
           <Link
             to="/documents/$id"
@@ -59,7 +67,7 @@ export function ResultSetTable({ data, loading }: ResultSetTableProps) {
       },
       {
         accessorKey: "type",
-        header: "Type",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Type" />,
         cell: ({ row }) => (
           <Badge variant="outline" className="text-[10px] uppercase">
             {row.original.type ?? "--"}
@@ -68,7 +76,7 @@ export function ResultSetTable({ data, loading }: ResultSetTableProps) {
       },
       {
         accessorKey: "created_at",
-        header: "Date",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Date" />,
         cell: ({ row }) => (
           <span className="text-muted-foreground text-sm">
             {formatDate(row.original.created_at)}
@@ -77,7 +85,8 @@ export function ResultSetTable({ data, loading }: ResultSetTableProps) {
       },
       {
         id: "hot_doc_score",
-        header: "Hot Score",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Hot Score" />,
+        accessorFn: (row) => (row as DocumentResponse & { hot_doc_score?: number | null }).hot_doc_score,
         cell: ({ row }) => {
           const doc = row.original as DocumentResponse & { hot_doc_score?: number | null };
           const score = doc.hot_doc_score;
@@ -89,7 +98,8 @@ export function ResultSetTable({ data, loading }: ResultSetTableProps) {
       },
       {
         id: "anomaly_score",
-        header: "Anomaly",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Anomaly" />,
+        accessorFn: (row) => (row as DocumentResponse & { anomaly_score?: number | null }).anomaly_score,
         cell: ({ row }) => {
           const doc = row.original as DocumentResponse & { anomaly_score?: number | null };
           const score = doc.anomaly_score;
@@ -107,6 +117,8 @@ export function ResultSetTable({ data, loading }: ResultSetTableProps) {
           row.original.duplicate_cluster_id ? (
             <Badge variant="secondary" className="text-[10px]">Dup</Badge>
           ) : null,
+        enableSorting: false,
+        enableGlobalFilter: false,
       },
     ],
     [],
@@ -115,9 +127,13 @@ export function ResultSetTable({ data, loading }: ResultSetTableProps) {
   const table = useReactTable({
     data,
     columns,
-    state: { rowSelection },
+    state: { rowSelection, sorting, globalFilter },
     onRowSelectionChange: setRowSelection,
+    onSortingChange: setSorting,
+    onGlobalFilterChange: setGlobalFilter,
     getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
     enableRowSelection: true,
     getRowId: (row) => row.id,
   });
@@ -167,17 +183,19 @@ export function ResultSetTable({ data, loading }: ResultSetTableProps) {
 
   return (
     <div className="space-y-3">
-      {selectedRows.length > 0 && (
-        <div className="flex items-center gap-3">
-          <span className="text-sm text-muted-foreground">
-            {selectedRows.length} selected
-          </span>
-          <Button size="sm" variant="outline" onClick={handleExport}>
-            <Download className="mr-2 h-3 w-3" />
-            Export CSV
-          </Button>
-        </div>
-      )}
+      <DataTableToolbar table={table} searchPlaceholder="Search results...">
+        {selectedRows.length > 0 && (
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-muted-foreground">
+              {selectedRows.length} selected
+            </span>
+            <Button size="sm" variant="outline" onClick={handleExport}>
+              <Download className="mr-2 h-3 w-3" />
+              Export CSV
+            </Button>
+          </div>
+        )}
+      </DataTableToolbar>
 
       <div className="rounded-md border">
         <Table>

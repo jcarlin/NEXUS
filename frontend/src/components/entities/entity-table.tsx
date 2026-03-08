@@ -1,10 +1,13 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   useReactTable,
   getCoreRowModel,
+  getSortedRowModel,
+  getFilteredRowModel,
   flexRender,
   type ColumnDef,
+  type SortingState,
 } from "@tanstack/react-table";
 import {
   Table,
@@ -21,6 +24,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
+import { DataTableToolbar } from "@/components/ui/data-table-toolbar";
 import { formatDate } from "@/lib/utils";
 import type { EntityResponse } from "@/types";
 
@@ -42,11 +47,14 @@ interface EntityTableProps {
 }
 
 export function EntityTable({ data, loading }: EntityTableProps) {
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [globalFilter, setGlobalFilter] = useState("");
+
   const columns = useMemo<ColumnDef<EntityResponse>[]>(
     () => [
       {
         accessorKey: "name",
-        header: "Name",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Name" />,
         cell: ({ row }) => {
           const entity = row.original;
           const hasAliases = entity.aliases.length > 0;
@@ -77,23 +85,24 @@ export function EntityTable({ data, loading }: EntityTableProps) {
       },
       {
         accessorKey: "type",
-        header: "Type",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Type" />,
         cell: ({ row }) => (
           <Badge variant="outline" className={`text-[10px] uppercase ${typeBadgeClass(row.original.type)}`}>
             {row.original.type}
           </Badge>
         ),
+        filterFn: (row, _columnId, filterValue) => row.original.type === filterValue,
       },
       {
         accessorKey: "mention_count",
-        header: "Mentions",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Mentions" />,
         cell: ({ row }) => (
           <span className="tabular-nums">{row.original.mention_count}</span>
         ),
       },
       {
         accessorKey: "first_seen",
-        header: "First Seen",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="First Seen" />,
         cell: ({ row }) =>
           row.original.first_seen ? (
             <span className="text-muted-foreground">
@@ -107,10 +116,20 @@ export function EntityTable({ data, loading }: EntityTableProps) {
     [],
   );
 
+  const typeFacetOptions = useMemo(() => {
+    const types = [...new Set(data.map((e) => e.type))].sort();
+    return types.map((t) => ({ label: t, value: t }));
+  }, [data]);
+
   const table = useReactTable({
     data,
     columns,
+    state: { sorting, globalFilter },
+    onSortingChange: setSorting,
+    onGlobalFilterChange: setGlobalFilter,
     getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
   });
 
   if (loading) {
@@ -124,50 +143,60 @@ export function EntityTable({ data, loading }: EntityTableProps) {
   }
 
   return (
-    <div className="rounded-md border">
-      <Table>
-        <TableHeader>
-          {table.getHeaderGroups().map((headerGroup) => (
-            <TableRow key={headerGroup.id}>
-              {headerGroup.headers.map((header) => (
-                <TableHead key={header.id}>
-                  {header.isPlaceholder
-                    ? null
-                    : flexRender(
-                        header.column.columnDef.header,
-                        header.getContext(),
-                      )}
-                </TableHead>
-              ))}
-            </TableRow>
-          ))}
-        </TableHeader>
-        <TableBody>
-          {table.getRowModel().rows.length ? (
-            table.getRowModel().rows.map((row) => (
-              <TableRow key={row.id}>
-                {row.getVisibleCells().map((cell) => (
-                  <TableCell key={cell.id}>
-                    {flexRender(
-                      cell.column.columnDef.cell,
-                      cell.getContext(),
-                    )}
-                  </TableCell>
+    <div className="space-y-4">
+      <DataTableToolbar
+        table={table}
+        searchPlaceholder="Search entities..."
+        facetFilters={[
+          { columnId: "type", title: "All types", options: typeFacetOptions },
+        ]}
+      />
+
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id}>
+                {headerGroup.headers.map((header) => (
+                  <TableHead key={header.id}>
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(
+                          header.column.columnDef.header,
+                          header.getContext(),
+                        )}
+                  </TableHead>
                 ))}
               </TableRow>
-            ))
-          ) : (
-            <TableRow>
-              <TableCell
-                colSpan={columns.length}
-                className="h-24 text-center"
-              >
-                No entities found.
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
+            ))}
+          </TableHeader>
+          <TableBody>
+            {table.getRowModel().rows.length ? (
+              table.getRowModel().rows.map((row) => (
+                <TableRow key={row.id}>
+                  {row.getVisibleCells().map((cell) => (
+                    <TableCell key={cell.id}>
+                      {flexRender(
+                        cell.column.columnDef.cell,
+                        cell.getContext(),
+                      )}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell
+                  colSpan={columns.length}
+                  className="h-24 text-center"
+                >
+                  No entities found.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }

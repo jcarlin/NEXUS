@@ -1,23 +1,18 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   useReactTable,
   getCoreRowModel,
+  getSortedRowModel,
+  getFilteredRowModel,
   flexRender,
   createColumnHelper,
+  type SortingState,
 } from "@tanstack/react-table";
-import { Download, Search } from "lucide-react";
+import { Download } from "lucide-react";
 import type { AuditLogEntry } from "@/types";
 import { formatDateTime, cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -27,6 +22,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
+import { DataTableToolbar } from "@/components/ui/data-table-toolbar";
 
 const columnHelper = createColumnHelper<AuditLogEntry>();
 
@@ -38,27 +35,28 @@ function statusColor(code: number): string {
 
 const columns = [
   columnHelper.accessor("created_at", {
-    header: "Timestamp",
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Timestamp" />,
     cell: (info) => (
       <span className="whitespace-nowrap text-xs">{formatDateTime(info.getValue())}</span>
     ),
   }),
   columnHelper.accessor("user_email", {
-    header: "User",
+    header: ({ column }) => <DataTableColumnHeader column={column} title="User" />,
     cell: (info) => (
       <span className="text-sm">{info.getValue() ?? "anonymous"}</span>
     ),
   }),
   columnHelper.accessor("action", {
-    header: "Action",
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Action" />,
     cell: (info) => (
       <Badge variant="outline" className="font-mono text-[10px]">
         {info.getValue()}
       </Badge>
     ),
+    filterFn: (row, _columnId, filterValue) => row.original.action === filterValue,
   }),
   columnHelper.accessor("resource", {
-    header: "Resource",
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Resource" />,
     cell: (info) => (
       <span className="max-w-[200px] truncate text-xs text-muted-foreground">
         {info.getValue()}
@@ -66,7 +64,7 @@ const columns = [
     ),
   }),
   columnHelper.accessor("status_code", {
-    header: "Status",
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
     cell: (info) => {
       const code = info.getValue();
       return (
@@ -77,13 +75,13 @@ const columns = [
     },
   }),
   columnHelper.accessor("ip_address", {
-    header: "IP",
+    header: ({ column }) => <DataTableColumnHeader column={column} title="IP" />,
     cell: (info) => (
       <span className="font-mono text-xs text-muted-foreground">{info.getValue()}</span>
     ),
   }),
   columnHelper.accessor("duration_ms", {
-    header: "Duration",
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Duration" />,
     cell: (info) => {
       const ms = info.getValue();
       return ms != null ? (
@@ -101,39 +99,44 @@ interface AuditLogTableProps {
 }
 
 export function AuditLogTable({ data, isLoading }: AuditLogTableProps) {
-  const [emailFilter, setEmailFilter] = useState("");
-  const [actionFilter, setActionFilter] = useState<string>("all");
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [globalFilter, setGlobalFilter] = useState("");
 
-  const filtered = data.filter((entry) => {
-    if (emailFilter && !entry.user_email?.toLowerCase().includes(emailFilter.toLowerCase())) {
-      return false;
-    }
-    if (actionFilter !== "all" && entry.action !== actionFilter) {
-      return false;
-    }
-    return true;
-  });
-
-  const actions = [...new Set(data.map((e) => e.action))].sort();
+  const actionFacetOptions = useMemo(() => {
+    const actions = [...new Set(data.map((e) => e.action))].sort();
+    return actions.map((a) => ({ label: a, value: a }));
+  }, [data]);
 
   const table = useReactTable({
-    data: filtered,
+    data,
     columns,
+    state: { sorting, globalFilter },
+    onSortingChange: setSorting,
+    onGlobalFilterChange: setGlobalFilter,
     getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
   });
 
   function exportCSV() {
+    const rows = table.getFilteredRowModel().rows;
     const headers = ["timestamp", "user_email", "action", "resource", "status_code", "ip_address", "duration_ms"];
-    const rows = filtered.map((e) => [
-      e.created_at,
-      e.user_email ?? "",
-      e.action,
-      e.resource,
-      String(e.status_code),
-      e.ip_address,
-      String(e.duration_ms ?? ""),
-    ]);
-    const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const csvRows = [headers.join(",")];
+    for (const row of rows) {
+      const e = row.original;
+      csvRows.push(
+        [
+          e.created_at,
+          e.user_email ?? "",
+          e.action,
+          e.resource,
+          String(e.status_code),
+          e.ip_address,
+          String(e.duration_ms ?? ""),
+        ].join(","),
+      );
+    }
+    const csv = csvRows.join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -155,35 +158,18 @@ export function AuditLogTable({ data, isLoading }: AuditLogTableProps) {
 
   return (
     <div className="space-y-4">
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[200px] max-w-xs">
-          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Filter by email..."
-            value={emailFilter}
-            onChange={(e) => setEmailFilter(e.target.value)}
-            className="pl-8"
-          />
-        </div>
-        <Select value={actionFilter} onValueChange={setActionFilter}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="All actions" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All actions</SelectItem>
-            {actions.map((action) => (
-              <SelectItem key={action} value={action}>
-                {action}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <DataTableToolbar
+        table={table}
+        searchPlaceholder="Search audit logs..."
+        facetFilters={[
+          { columnId: "action", title: "All actions", options: actionFacetOptions },
+        ]}
+      >
         <Button variant="outline" size="sm" onClick={exportCSV}>
           <Download className="mr-1.5 h-3.5 w-3.5" />
           Export CSV
         </Button>
-      </div>
+      </DataTableToolbar>
 
       {/* Table */}
       <div className="rounded-md border">
@@ -224,7 +210,7 @@ export function AuditLogTable({ data, isLoading }: AuditLogTableProps) {
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Showing {filtered.length} of {data.length} entries
+        Showing {table.getFilteredRowModel().rows.length} of {data.length} entries
       </p>
     </div>
   );

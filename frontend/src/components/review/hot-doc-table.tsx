@@ -4,6 +4,7 @@ import {
   useReactTable,
   getCoreRowModel,
   getSortedRowModel,
+  getFilteredRowModel,
   getExpandedRowModel,
   flexRender,
   type ColumnDef,
@@ -12,6 +13,8 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
+import { DataTableToolbar } from "@/components/ui/data-table-toolbar";
 import { SentimentSparklines } from "@/components/review/sentiment-sparklines";
 import { formatDate } from "@/lib/utils";
 import type { DocumentDetail } from "@/types";
@@ -32,12 +35,13 @@ export function HotDocTable({ data, loading }: HotDocTableProps) {
   const [sorting, setSorting] = useState<SortingState>([
     { id: "hot_doc_score", desc: true },
   ]);
+  const [globalFilter, setGlobalFilter] = useState("");
 
   const columns = useMemo<ColumnDef<DocumentDetail>[]>(
     () => [
       {
         accessorKey: "filename",
-        header: "Filename",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Filename" />,
         cell: ({ row }) => (
           <Link
             to="/documents/$id"
@@ -51,7 +55,7 @@ export function HotDocTable({ data, loading }: HotDocTableProps) {
       },
       {
         accessorKey: "type",
-        header: "Type",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Type" />,
         cell: ({ row }) => (
           <Badge variant="outline" className="text-[10px] uppercase">
             {row.original.type ?? "--"}
@@ -61,7 +65,7 @@ export function HotDocTable({ data, loading }: HotDocTableProps) {
       },
       {
         accessorKey: "hot_doc_score",
-        header: "Hot Score",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Hot Score" />,
         cell: ({ row }) => {
           const score = row.original.hot_doc_score;
           return score != null ? (
@@ -76,7 +80,7 @@ export function HotDocTable({ data, loading }: HotDocTableProps) {
       },
       {
         accessorKey: "anomaly_score",
-        header: "Anomaly",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Anomaly" />,
         cell: ({ row }) => {
           const score = row.original.anomaly_score;
           return score != null ? (
@@ -89,7 +93,7 @@ export function HotDocTable({ data, loading }: HotDocTableProps) {
       },
       {
         accessorKey: "privilege_status",
-        header: "Privilege",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Privilege" />,
         cell: ({ row }) => {
           const status = row.original.privilege_status;
           if (!status) return <span className="text-muted-foreground">--</span>;
@@ -103,7 +107,7 @@ export function HotDocTable({ data, loading }: HotDocTableProps) {
       },
       {
         accessorKey: "created_at",
-        header: "Date",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Date" />,
         cell: ({ row }) => (
           <span className="text-muted-foreground text-sm">
             {formatDate(row.original.created_at)}
@@ -118,10 +122,12 @@ export function HotDocTable({ data, loading }: HotDocTableProps) {
   const table = useReactTable({
     data,
     columns,
-    state: { sorting },
+    state: { sorting, globalFilter },
     onSortingChange: setSorting,
+    onGlobalFilterChange: setGlobalFilter,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
     getExpandedRowModel: getExpandedRowModel(),
     getRowCanExpand: () => true,
   });
@@ -137,82 +143,80 @@ export function HotDocTable({ data, loading }: HotDocTableProps) {
   }
 
   return (
-    <div className="rounded-md border">
-      <Table>
-        <TableHeader>
-          {table.getHeaderGroups().map((headerGroup) => (
-            <TableRow key={headerGroup.id}>
-              {headerGroup.headers.map((header) => (
-                <TableHead
-                  key={header.id}
-                  className={header.column.getCanSort() ? "cursor-pointer select-none" : ""}
-                  onClick={header.column.getToggleSortingHandler()}
-                >
-                  {header.isPlaceholder
-                    ? null
-                    : flexRender(header.column.columnDef.header, header.getContext())}
-                  {header.column.getIsSorted() === "asc" && " \u25B2"}
-                  {header.column.getIsSorted() === "desc" && " \u25BC"}
-                </TableHead>
-              ))}
-            </TableRow>
-          ))}
-        </TableHeader>
-        <TableBody>
-          {table.getRowModel().rows.length ? (
-            table.getRowModel().rows.map((row) => (
-              <Fragment key={row.id}>
-                <TableRow
-                  className="cursor-pointer"
-                  onClick={() => row.toggleExpanded()}
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
-                  ))}
-                </TableRow>
-                {row.getIsExpanded() && (
-                  <TableRow key={`${row.id}-expanded`}>
-                    <TableCell colSpan={columns.length} className="bg-muted/30 p-4">
-                      <div className="flex items-start gap-6">
-                        <div>
-                          <p className="text-xs font-medium text-muted-foreground mb-1">Sentiment</p>
-                          <SentimentSparklines
-                            positive={row.original.sentiment_positive}
-                            negative={row.original.sentiment_negative}
-                            pressure={row.original.sentiment_pressure}
-                            opportunity={row.original.sentiment_opportunity}
-                            rationalization={row.original.sentiment_rationalization}
-                            intent={row.original.sentiment_intent}
-                            concealment={row.original.sentiment_concealment}
-                          />
-                        </div>
-                        {row.original.context_gaps && row.original.context_gaps.length > 0 && (
-                          <div>
-                            <p className="text-xs font-medium text-muted-foreground mb-1">Context Gaps</p>
-                            <ul className="text-xs space-y-0.5">
-                              {row.original.context_gaps.map((gap, i) => (
-                                <li key={i} className="text-muted-foreground">{gap}</li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                      </div>
-                    </TableCell>
+    <div className="space-y-4">
+      <DataTableToolbar table={table} searchPlaceholder="Search hot documents..." />
+
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id}>
+                {headerGroup.headers.map((header) => (
+                  <TableHead key={header.id}>
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(header.column.columnDef.header, header.getContext())}
+                  </TableHead>
+                ))}
+              </TableRow>
+            ))}
+          </TableHeader>
+          <TableBody>
+            {table.getRowModel().rows.length ? (
+              table.getRowModel().rows.map((row) => (
+                <Fragment key={row.id}>
+                  <TableRow
+                    className="cursor-pointer"
+                    onClick={() => row.toggleExpanded()}
+                  >
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id}>
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    ))}
                   </TableRow>
-                )}
-              </Fragment>
-            ))
-          ) : (
-            <TableRow>
-              <TableCell colSpan={columns.length} className="h-24 text-center">
-                No hot documents found.
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
+                  {row.getIsExpanded() && (
+                    <TableRow key={`${row.id}-expanded`}>
+                      <TableCell colSpan={columns.length} className="bg-muted/30 p-4">
+                        <div className="flex items-start gap-6">
+                          <div>
+                            <p className="text-xs font-medium text-muted-foreground mb-1">Sentiment</p>
+                            <SentimentSparklines
+                              positive={row.original.sentiment_positive}
+                              negative={row.original.sentiment_negative}
+                              pressure={row.original.sentiment_pressure}
+                              opportunity={row.original.sentiment_opportunity}
+                              rationalization={row.original.sentiment_rationalization}
+                              intent={row.original.sentiment_intent}
+                              concealment={row.original.sentiment_concealment}
+                            />
+                          </div>
+                          {row.original.context_gaps && row.original.context_gaps.length > 0 && (
+                            <div>
+                              <p className="text-xs font-medium text-muted-foreground mb-1">Context Gaps</p>
+                              <ul className="text-xs space-y-0.5">
+                                {row.original.context_gaps.map((gap, i) => (
+                                  <li key={i} className="text-muted-foreground">{gap}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </Fragment>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={columns.length} className="h-24 text-center">
+                  No hot documents found.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }

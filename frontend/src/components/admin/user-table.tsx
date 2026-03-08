@@ -1,8 +1,12 @@
+import { useState } from "react";
 import {
   useReactTable,
   getCoreRowModel,
+  getSortedRowModel,
+  getFilteredRowModel,
   flexRender,
   createColumnHelper,
+  type SortingState,
 } from "@tanstack/react-table";
 import type { User } from "@/types";
 import { formatDateTime } from "@/lib/utils";
@@ -16,19 +20,21 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
+import { DataTableToolbar } from "@/components/ui/data-table-toolbar";
 
 const columnHelper = createColumnHelper<User>();
 
 const columns = [
   columnHelper.accessor("email", {
-    header: "Email",
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Email" />,
     cell: (info) => <span className="font-medium">{info.getValue()}</span>,
   }),
   columnHelper.accessor("full_name", {
-    header: "Full Name",
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Full Name" />,
   }),
   columnHelper.accessor("role", {
-    header: "Role",
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Role" />,
     cell: (info) => {
       const role = info.getValue();
       const variant =
@@ -41,7 +47,7 @@ const columns = [
     },
   }),
   columnHelper.accessor("is_active", {
-    header: "Status",
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
     cell: (info) => (
       <Badge variant={info.getValue() ? "default" : "destructive"}>
         {info.getValue() ? "Active" : "Inactive"}
@@ -49,7 +55,7 @@ const columns = [
     ),
   }),
   columnHelper.accessor("created_at", {
-    header: "Created",
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Created" />,
     cell: (info) => (
       <span className="text-muted-foreground">{formatDateTime(info.getValue())}</span>
     ),
@@ -62,10 +68,18 @@ interface UserTableProps {
 }
 
 export function UserTable({ data, isLoading }: UserTableProps) {
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [globalFilter, setGlobalFilter] = useState("");
+
   const table = useReactTable({
     data,
     columns,
+    state: { sorting, globalFilter },
+    onSortingChange: setSorting,
+    onGlobalFilterChange: setGlobalFilter,
     getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
   });
 
   if (isLoading) {
@@ -79,41 +93,45 @@ export function UserTable({ data, isLoading }: UserTableProps) {
   }
 
   return (
-    <div className="rounded-md border">
-      <Table>
-        <TableHeader>
-          {table.getHeaderGroups().map((headerGroup) => (
-            <TableRow key={headerGroup.id}>
-              {headerGroup.headers.map((header) => (
-                <TableHead key={header.id}>
-                  {header.isPlaceholder
-                    ? null
-                    : flexRender(header.column.columnDef.header, header.getContext())}
-                </TableHead>
-              ))}
-            </TableRow>
-          ))}
-        </TableHeader>
-        <TableBody>
-          {table.getRowModel().rows.length ? (
-            table.getRowModel().rows.map((row) => (
-              <TableRow key={row.id}>
-                {row.getVisibleCells().map((cell) => (
-                  <TableCell key={cell.id}>
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </TableCell>
+    <div className="space-y-4">
+      <DataTableToolbar table={table} searchPlaceholder="Search users..." />
+
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id}>
+                {headerGroup.headers.map((header) => (
+                  <TableHead key={header.id}>
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(header.column.columnDef.header, header.getContext())}
+                  </TableHead>
                 ))}
               </TableRow>
-            ))
-          ) : (
-            <TableRow>
-              <TableCell colSpan={columns.length} className="h-24 text-center">
-                No users found.
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
+            ))}
+          </TableHeader>
+          <TableBody>
+            {table.getRowModel().rows.length ? (
+              table.getRowModel().rows.map((row) => (
+                <TableRow key={row.id}>
+                  {row.getVisibleCells().map((cell) => (
+                    <TableCell key={cell.id}>
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={columns.length} className="h-24 text-center">
+                  No users found.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }

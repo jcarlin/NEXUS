@@ -1,5 +1,14 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
+import {
+  useReactTable,
+  getCoreRowModel,
+  getSortedRowModel,
+  getFilteredRowModel,
+  flexRender,
+  type ColumnDef,
+  type SortingState,
+} from "@tanstack/react-table";
 import { apiClient } from "@/api/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,6 +22,8 @@ import {
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Pagination } from "@/components/ui/pagination";
+import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
+import { DataTableToolbar } from "@/components/ui/data-table-toolbar";
 import { ProductionSetDetail } from "./production-set-detail";
 import type { ProductionSet } from "@/routes/review/exports";
 
@@ -42,6 +53,8 @@ export function ProductionSetList({
   onRefresh,
 }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [globalFilter, setGlobalFilter] = useState("");
 
   const batesMutation = useMutation({
     mutationFn: (psId: string) =>
@@ -50,6 +63,85 @@ export function ProductionSetList({
         method: "POST",
       }),
     onSuccess: () => onRefresh(),
+  });
+
+  const columns = useMemo<ColumnDef<ProductionSet>[]>(
+    () => [
+      {
+        accessorKey: "name",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Name" />,
+        cell: ({ row }) => <span className="font-medium">{row.original.name}</span>,
+      },
+      {
+        accessorKey: "description",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Description" />,
+        cell: ({ row }) => (
+          <span className="text-muted-foreground max-w-[200px] truncate block">
+            {row.original.description || "\u2014"}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "document_count",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Documents" />,
+      },
+      {
+        accessorKey: "bates_prefix",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Bates Prefix" />,
+        cell: ({ row }) => (
+          <span className="font-mono text-xs">{row.original.bates_prefix}</span>
+        ),
+      },
+      {
+        accessorKey: "status",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
+        cell: ({ row }) => (
+          <Badge variant="secondary" className={statusColors[row.original.status] ?? ""}>
+            {row.original.status}
+          </Badge>
+        ),
+      },
+      {
+        accessorKey: "created_at",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Created" />,
+        cell: ({ row }) => (
+          <span className="text-muted-foreground text-xs">
+            {new Date(row.original.created_at).toLocaleDateString()}
+          </span>
+        ),
+      },
+      {
+        id: "actions",
+        cell: ({ row }) =>
+          row.original.status === "draft" ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                batesMutation.mutate(row.original.id);
+              }}
+              disabled={batesMutation.isPending}
+            >
+              Assign Bates
+            </Button>
+          ) : null,
+        enableSorting: false,
+        enableGlobalFilter: false,
+      },
+    ],
+    [batesMutation],
+  );
+
+  const table = useReactTable({
+    data,
+    columns,
+    state: { sorting, globalFilter },
+    onSortingChange: setSorting,
+    onGlobalFilterChange: setGlobalFilter,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
   });
 
   if (selectedId) {
@@ -74,66 +166,48 @@ export function ProductionSetList({
 
   return (
     <div className="space-y-4">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Name</TableHead>
-            <TableHead>Description</TableHead>
-            <TableHead>Documents</TableHead>
-            <TableHead>Bates Prefix</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Created</TableHead>
-            <TableHead />
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {data.length === 0 ? (
-            <TableRow>
-              <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                No production sets yet. Create one to get started.
-              </TableCell>
-            </TableRow>
-          ) : (
-            data.map((ps) => (
-              <TableRow
-                key={ps.id}
-                className="cursor-pointer hover:bg-muted/50"
-                onClick={() => setSelectedId(ps.id)}
-              >
-                <TableCell className="font-medium">{ps.name}</TableCell>
-                <TableCell className="text-muted-foreground max-w-[200px] truncate">
-                  {ps.description || "—"}
-                </TableCell>
-                <TableCell>{ps.document_count}</TableCell>
-                <TableCell className="font-mono text-xs">{ps.bates_prefix}</TableCell>
-                <TableCell>
-                  <Badge variant="secondary" className={statusColors[ps.status] ?? ""}>
-                    {ps.status}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-muted-foreground text-xs">
-                  {new Date(ps.created_at).toLocaleDateString()}
-                </TableCell>
-                <TableCell>
-                  {ps.status === "draft" && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        batesMutation.mutate(ps.id);
-                      }}
-                      disabled={batesMutation.isPending}
-                    >
-                      Assign Bates
-                    </Button>
-                  )}
+      <DataTableToolbar table={table} searchPlaceholder="Search production sets..." />
+
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id}>
+                {headerGroup.headers.map((header) => (
+                  <TableHead key={header.id}>
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(header.column.columnDef.header, header.getContext())}
+                  </TableHead>
+                ))}
+              </TableRow>
+            ))}
+          </TableHeader>
+          <TableBody>
+            {table.getRowModel().rows.length ? (
+              table.getRowModel().rows.map((row) => (
+                <TableRow
+                  key={row.id}
+                  className="cursor-pointer hover:bg-muted/50"
+                  onClick={() => setSelectedId(row.original.id)}
+                >
+                  {row.getVisibleCells().map((cell) => (
+                    <TableCell key={cell.id}>
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={columns.length} className="text-center text-muted-foreground py-8">
+                  No production sets yet. Create one to get started.
                 </TableCell>
               </TableRow>
-            ))
-          )}
-        </TableBody>
-      </Table>
+            )}
+          </TableBody>
+        </Table>
+      </div>
 
       {total > limit && (
         <Pagination

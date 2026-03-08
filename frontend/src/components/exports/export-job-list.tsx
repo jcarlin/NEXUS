@@ -1,4 +1,14 @@
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import {
+  useReactTable,
+  getCoreRowModel,
+  getSortedRowModel,
+  getFilteredRowModel,
+  flexRender,
+  type ColumnDef,
+  type SortingState,
+} from "@tanstack/react-table";
 import { Download } from "lucide-react";
 import { apiClient } from "@/api/client";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +23,8 @@ import {
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Pagination } from "@/components/ui/pagination";
+import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
+import { DataTableToolbar } from "@/components/ui/data-table-toolbar";
 import type { ExportJob } from "@/routes/review/exports";
 
 interface Props {
@@ -61,6 +73,80 @@ export function ExportJobList({
   limit,
   onOffsetChange,
 }: Props) {
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [globalFilter, setGlobalFilter] = useState("");
+
+  const columns = useMemo<ColumnDef<ExportJob>[]>(
+    () => [
+      {
+        accessorKey: "export_type",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Type" />,
+        cell: ({ row }) => <span className="font-medium">{row.original.export_type}</span>,
+      },
+      {
+        accessorKey: "export_format",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Format" />,
+      },
+      {
+        accessorKey: "status",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
+        cell: ({ row }) => (
+          <Badge variant="secondary" className={statusColors[row.original.status] ?? ""}>
+            {row.original.status}
+          </Badge>
+        ),
+      },
+      {
+        accessorKey: "created_at",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Created" />,
+        cell: ({ row }) => (
+          <span className="text-muted-foreground text-xs">
+            {new Date(row.original.created_at).toLocaleDateString()}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "completed_at",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Completed" />,
+        cell: ({ row }) => (
+          <span className="text-muted-foreground text-xs">
+            {row.original.completed_at
+              ? new Date(row.original.completed_at).toLocaleDateString()
+              : "\u2014"}
+          </span>
+        ),
+      },
+      {
+        id: "actions",
+        cell: ({ row }) => {
+          if (row.original.status === "complete") return <DownloadButton jobId={row.original.id} />;
+          if (row.original.status === "failed" && row.original.error) {
+            return (
+              <span className="text-xs text-destructive truncate max-w-[200px] block">
+                {row.original.error}
+              </span>
+            );
+          }
+          return null;
+        },
+        enableSorting: false,
+        enableGlobalFilter: false,
+      },
+    ],
+    [],
+  );
+
+  const table = useReactTable({
+    data,
+    columns,
+    state: { sorting, globalFilter },
+    onSortingChange: setSorting,
+    onGlobalFilterChange: setGlobalFilter,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+  });
+
   if (loading) {
     return (
       <div className="space-y-2">
@@ -73,55 +159,44 @@ export function ExportJobList({
 
   return (
     <div className="space-y-4">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Type</TableHead>
-            <TableHead>Format</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Created</TableHead>
-            <TableHead>Completed</TableHead>
-            <TableHead />
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {data.length === 0 ? (
-            <TableRow>
-              <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                No export jobs yet. Create one to get started.
-              </TableCell>
-            </TableRow>
-          ) : (
-            data.map((job) => (
-              <TableRow key={job.id}>
-                <TableCell className="font-medium">{job.export_type}</TableCell>
-                <TableCell>{job.export_format}</TableCell>
-                <TableCell>
-                  <Badge variant="secondary" className={statusColors[job.status] ?? ""}>
-                    {job.status}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-muted-foreground text-xs">
-                  {new Date(job.created_at).toLocaleDateString()}
-                </TableCell>
-                <TableCell className="text-muted-foreground text-xs">
-                  {job.completed_at
-                    ? new Date(job.completed_at).toLocaleDateString()
-                    : "—"}
-                </TableCell>
-                <TableCell>
-                  {job.status === "complete" && <DownloadButton jobId={job.id} />}
-                  {job.status === "failed" && job.error && (
-                    <span className="text-xs text-destructive truncate max-w-[200px] block">
-                      {job.error}
-                    </span>
-                  )}
+      <DataTableToolbar table={table} searchPlaceholder="Search export jobs..." />
+
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id}>
+                {headerGroup.headers.map((header) => (
+                  <TableHead key={header.id}>
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(header.column.columnDef.header, header.getContext())}
+                  </TableHead>
+                ))}
+              </TableRow>
+            ))}
+          </TableHeader>
+          <TableBody>
+            {table.getRowModel().rows.length ? (
+              table.getRowModel().rows.map((row) => (
+                <TableRow key={row.id}>
+                  {row.getVisibleCells().map((cell) => (
+                    <TableCell key={cell.id}>
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={columns.length} className="text-center text-muted-foreground py-8">
+                  No export jobs yet. Create one to get started.
                 </TableCell>
               </TableRow>
-            ))
-          )}
-        </TableBody>
-      </Table>
+            )}
+          </TableBody>
+        </Table>
+      </div>
 
       {total > limit && (
         <Pagination
