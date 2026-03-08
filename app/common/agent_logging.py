@@ -6,6 +6,7 @@ to track node-level execution without duplicating audit logic.
 
 from __future__ import annotations
 
+import functools
 import time
 from collections.abc import Callable
 from functools import wraps
@@ -124,29 +125,34 @@ async def _write_agent_audit(
     output_summary: str | None = None,
     postgres_url: str | None = None,
 ) -> None:
-    """Write a single agent_audit_log row (async)."""
+    """Write a single agent_audit_log row (async).
+
+    Uses the cached session factory from ``app.dependencies`` to avoid
+    creating (and leaking) a new async engine on every call.  The
+    ``postgres_url`` parameter is kept for API compatibility but ignored.
+    """
     try:
         from sqlalchemy import text as sa_text
 
-        if postgres_url:
-            from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+        from app.dependencies import get_session_factory
 
-            engine = create_async_engine(postgres_url)
-            try:
-                async with AsyncSession(engine) as session:
-                    await _execute_insert(session, sa_text, agent_id, node_name, matter_id, duration_ms, status, output_summary)
-                    await session.commit()
-            finally:
-                await engine.dispose()
-        else:
-            from app.dependencies import get_session_factory
-
-            factory = get_session_factory()
-            async with factory() as session:
-                await _execute_insert(session, sa_text, agent_id, node_name, matter_id, duration_ms, status, output_summary)
-                await session.commit()
+        factory = get_session_factory()
+        async with factory() as session:
+            await _execute_insert(session, sa_text, agent_id, node_name, matter_id, duration_ms, status, output_summary)
+            await session.commit()
     except Exception:
         logger.warning("agent_audit.write_failed", agent_id=agent_id, node_name=node_name, exc_info=True)
+
+
+@functools.cache
+def _get_sync_audit_engine():
+    """Return a cached sync SQLAlchemy engine for audit writes."""
+    from sqlalchemy import create_engine
+
+    from app.config import Settings
+
+    settings = Settings()
+    return create_engine(settings.postgres_url_sync, pool_pre_ping=True)
 
 
 def _write_agent_audit_sync(
@@ -159,20 +165,16 @@ def _write_agent_audit_sync(
     output_summary: str | None = None,
     postgres_url: str | None = None,
 ) -> None:
-    """Write a single agent_audit_log row (sync — for Celery workers)."""
+    """Write a single agent_audit_log row (sync — for Celery workers).
+
+    Uses a module-level cached engine via ``_get_sync_audit_engine()`` to
+    avoid creating (and leaking) a new engine on every call.  The
+    ``postgres_url`` parameter is kept for API compatibility but ignored.
+    """
     try:
-        from sqlalchemy import create_engine, text as sa_text
+        from sqlalchemy import text as sa_text
 
-        if postgres_url:
-            sync_url = postgres_url.replace("+asyncpg", "").replace("postgresql+aiosqlite", "sqlite")
-            engine = create_engine(sync_url)
-        else:
-            from app.dependencies import get_settings
-
-            settings = get_settings()
-            sync_url = settings.postgres_url.replace("+asyncpg", "")
-            engine = create_engine(sync_url)
-
+        engine = _get_sync_audit_engine()
         with engine.connect() as conn:
             conn.execute(
                 sa_text("""
