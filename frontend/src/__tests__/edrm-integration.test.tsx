@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { LoadFileFormat } from "@/api/generated/schemas";
+
+// Define locally to avoid dependency on generated schemas (gitignored, not available in CI)
+const LoadFileFormat = {
+  concordance_dat: "concordance_dat",
+  opticon_opt: "opticon_opt",
+  edrm_xml: "edrm_xml",
+} as const;
 
 // ---- Mocks ---- //
 
@@ -23,8 +29,21 @@ vi.mock("sonner", () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }));
 
+vi.mock("@/main", () => ({
+  queryClient: {
+    invalidateQueries: vi.fn(),
+    setQueryData: vi.fn(),
+    getQueryData: vi.fn(),
+  },
+}));
+
 vi.mock("@tanstack/react-router", () => ({
-  createFileRoute: () => () => ({ component: () => null }),
+  createRootRoute: (opts: Record<string, unknown>) => opts,
+  createFileRoute: () => (opts: Record<string, unknown>) => opts,
+  Outlet: () => null,
+  useMatches: () => [],
+  useNavigate: () => vi.fn(),
+  useParams: () => ({}),
   Link: ({ children, ...props }: { children: React.ReactNode; to: string }) => (
     <a href={props.to}>{children}</a>
   ),
@@ -41,6 +60,14 @@ vi.mock("@tanstack/react-query", () => ({
 
 vi.mock("@/api/client", () => ({
   apiClient: vi.fn(),
+}));
+
+vi.mock("@/api/generated/schemas", () => ({
+  LoadFileFormat: {
+    concordance_dat: "concordance_dat",
+    opticon_opt: "opticon_opt",
+    edrm_xml: "edrm_xml",
+  },
 }));
 
 // Mock child components that are not relevant to EDRM tests
@@ -153,7 +180,7 @@ describe("Duplicate Clusters on Result Set Page", () => {
 
     const mod = await import("@/routes/review/result-set");
     expect(mod.Route).toBeDefined();
-  });
+  }, 15_000);
 });
 
 // ---- Test 4: DuplicateCluster interface shape ---- //

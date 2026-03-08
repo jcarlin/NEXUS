@@ -82,15 +82,9 @@ describe("PathFinder", () => {
         entity_b: "Bob",
         paths: [
           {
-            nodes: [
-              { name: "Alice", type: "PERSON" },
-              { name: "Acme", type: "ORG" },
-              { name: "Bob", type: "PERSON" },
-            ],
-            edges: [
-              { type: "WORKS_AT", source: "Alice", target: "Acme" },
-              { type: "WORKS_AT", source: "Bob", target: "Acme" },
-            ],
+            nodes: ["Alice", "Acme", "Bob"],
+            relationships: ["WORKS_AT", "WORKS_AT"],
+            hops: 2,
           },
         ],
       },

@@ -38,7 +38,21 @@ vi.mock("@/stores/app-store", () => ({
   ),
 }));
 
+vi.mock("@/main", () => ({
+  queryClient: {
+    invalidateQueries: vi.fn(),
+    setQueryData: vi.fn(),
+    getQueryData: vi.fn(),
+  },
+}));
+
 vi.mock("@tanstack/react-router", () => ({
+  createRootRoute: (opts: Record<string, unknown>) => opts,
+  createFileRoute: () => (opts: Record<string, unknown>) => opts,
+  Outlet: () => null,
+  useMatches: () => [],
+  useNavigate: () => vi.fn(),
+  useParams: () => ({}),
   Link: ({
     children,
     ...props
@@ -60,6 +74,7 @@ vi.mock("react-syntax-highlighter/dist/esm/styles/prism", () => ({
 
 import { fetchEventSource } from "@microsoft/fetch-event-source";
 import { useStreamQuery } from "@/hooks/use-stream-query";
+import { useStreamStore } from "@/stores/stream-store";
 
 // Wrapper for tooltip-dependent components
 function Wrapper({ children }: { children: React.ReactNode }) {
@@ -152,11 +167,17 @@ describe("SSE streaming hook", () => {
       });
     });
 
-    expect(result.current.threadId).toBe("t-123");
-    expect(result.current.followUps).toEqual(["What about X?"]);
-    expect(result.current.entities).toHaveLength(1);
-    expect(result.current.isStreaming).toBe(false);
-    expect(result.current.pendingUserMessage).toBeNull();
+    // After "done", the stream store re-keys from the temp key to the real
+    // thread ID, so the hook (called without a threadId arg) returns initial
+    // state. Verify the store directly for completed stream data.
+    const storeState = useStreamStore.getState();
+    const completedStream = storeState.streams.get("t-123");
+    expect(completedStream).toBeDefined();
+    expect(completedStream!.state.threadId).toBe("t-123");
+    expect(completedStream!.state.followUps).toEqual(["What about X?"]);
+    expect(completedStream!.state.entities).toHaveLength(1);
+    expect(completedStream!.state.isStreaming).toBe(false);
+    expect(completedStream!.state.pendingUserMessage).toBeNull();
   });
 
   it("clears pendingUserMessage on cancel", async () => {
