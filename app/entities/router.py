@@ -49,6 +49,32 @@ async def list_entities(
     }
 
 
+@router.get("/entities/connections")
+async def get_entity_connections_by_query(
+    name: str = Query(..., description="Entity name"),
+    limit: int = Query(50, ge=1, le=200),
+    gs: GraphService = Depends(get_graph_service),
+    current_user: UserRecord = Depends(get_current_user),
+    matter_id: UUID = Depends(get_matter_id),
+):
+    """Return the graph neighbourhood for an entity (query-param lookup).
+
+    Preferred over the path-param variant because entity names may contain
+    slashes or other characters that break URL routing.
+    """
+    entity = await gs.get_entity_by_name(name, matter_id=str(matter_id))
+    if entity is None:
+        raise HTTPException(status_code=404, detail=f"Entity '{name}' not found")
+    exclude_privilege = ["privileged", "work_product"] if current_user.role not in ("admin", "attorney") else None
+    connections = await gs.get_entity_connections(
+        name,
+        limit=limit,
+        exclude_privilege_statuses=exclude_privilege,
+        matter_id=str(matter_id),
+    )
+    return {"entity": entity, "connections": connections}
+
+
 @router.get("/entities/{entity_id}")
 async def get_entity(
     entity_id: str,
@@ -71,7 +97,11 @@ async def get_entity_connections(
     current_user: UserRecord = Depends(get_current_user),
     matter_id: UUID = Depends(get_matter_id),
 ):
-    """Return the graph neighbourhood for an entity."""
+    """Return the graph neighbourhood for an entity (path-param variant).
+
+    Note: entity names containing slashes will fail with this endpoint.
+    Prefer ``GET /entities/connections?name=...`` instead.
+    """
     entity = await gs.get_entity_by_name(entity_id, matter_id=str(matter_id))
     if entity is None:
         raise HTTPException(status_code=404, detail=f"Entity '{entity_id}' not found")

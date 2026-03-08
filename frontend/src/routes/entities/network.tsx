@@ -61,9 +61,9 @@ function NetworkGraphPage() {
             entity: EntityResponse;
             connections: EntityConnection[];
           }>({
-            url: `/api/v1/entities/${encodeURIComponent(e.id)}/connections`,
+            url: `/api/v1/entities/connections`,
             method: "GET",
-            params: { limit: 20 },
+            params: { name: e.id, limit: 20 },
           }).catch(() => null),
         ),
       );

@@ -256,6 +256,8 @@ async def _v1_event_generator(graph, initial_state, config, db, thread_id, query
     except GeneratorExit:
         logger.info("query_stream.client_disconnected", thread_id=thread_id)
         client_disconnected = True
+    except Exception:
+        logger.error("query_stream.graph_error", thread_id=thread_id, exc_info=True)
 
     # Always persist — even on client disconnect the LLM work is valuable.
     # Partial results are better than nothing.
@@ -352,12 +354,18 @@ async def _agentic_event_generator(graph, initial_state, config, db, thread_id, 
     except GeneratorExit:
         logger.info("query_stream.client_disconnected", thread_id=thread_id)
         client_disconnected = True
+    except Exception:
+        logger.error("query_stream.graph_error", thread_id=thread_id, exc_info=True)
 
     # Extract response
-    from app.dependencies import get_settings
+    try:
+        from app.dependencies import get_settings
 
-    settings = get_settings()
-    response_text = QueryService.extract_response(final_state, settings.enable_agentic_pipeline)
+        settings = get_settings()
+        response_text = QueryService.extract_response(final_state, settings.enable_agentic_pipeline)
+    except Exception:
+        logger.error("query_stream.extract_failed", thread_id=thread_id, exc_info=True)
+        response_text = ""
 
     # Always persist — even on client disconnect the LLM work is valuable.
     # Partial results are better than nothing.

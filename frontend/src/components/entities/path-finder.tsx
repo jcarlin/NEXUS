@@ -12,20 +12,10 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
-interface PathNode {
-  name: string;
-  type: string;
-}
-
-interface PathEdge {
-  type: string;
-  source: string;
-  target: string;
-}
-
 interface PathResult {
-  nodes: PathNode[];
-  edges: PathEdge[];
+  nodes: string[];
+  relationships: string[];
+  hops: number;
 }
 
 interface PathResponse {
@@ -154,24 +144,24 @@ export function PathFinder() {
                     Path {pi + 1}
                   </p>
                   <div className="flex items-center gap-1 flex-wrap">
-                    {path.nodes.map((node, ni) => (
+                    {path.nodes.map((nodeName, ni) => (
                       <span key={ni} className="flex items-center gap-1">
                         {ni > 0 && (
                           <span className="flex items-center gap-0.5 text-muted-foreground">
                             <ArrowRight className="h-3 w-3" />
-                            {path.edges[ni - 1] != null && (
+                            {path.relationships[ni - 1] != null && (
                               <Badge
                                 variant="outline"
                                 className="text-[10px] font-normal"
                               >
-                                {path.edges[ni - 1]!.type}
+                                {path.relationships[ni - 1]}
                               </Badge>
                             )}
                             <ArrowRight className="h-3 w-3" />
                           </span>
                         )}
                         <Badge variant="secondary" className="text-xs">
-                          {node.name}
+                          {nodeName}
                         </Badge>
                       </span>
                     ))}
