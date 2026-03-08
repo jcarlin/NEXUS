@@ -117,6 +117,10 @@ export function HighlightedPdfViewer({
     requestAnimationFrame(() => {
       if (pageContainerRef.current) {
         applyHighlightToTextLayer(pageContainerRef.current, highlightText);
+        const highlighted = pageContainerRef.current.querySelector(".citation-highlight");
+        if (highlighted) {
+          highlighted.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
       }
     });
   }, [highlightText]);
@@ -127,17 +131,21 @@ export function HighlightedPdfViewer({
     const timer = setTimeout(() => {
       if (pageContainerRef.current) {
         // Clear previous highlights
-        const highlighted = pageContainerRef.current.querySelectorAll(".citation-highlight");
-        highlighted.forEach((el) => el.classList.remove("citation-highlight"));
+        const prev = pageContainerRef.current.querySelectorAll(".citation-highlight");
+        prev.forEach((el) => el.classList.remove("citation-highlight"));
         applyHighlightToTextLayer(pageContainerRef.current, highlightText);
+        const highlighted = pageContainerRef.current.querySelector(".citation-highlight");
+        if (highlighted) {
+          highlighted.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
       }
     }, 200);
     return () => clearTimeout(timer);
   }, [scale, highlightText]);
 
   return (
-    <div className="flex flex-col items-center space-y-3">
-      <div className="flex items-center gap-2">
+    <div className="flex h-full flex-col items-center gap-3">
+      <div className="flex shrink-0 items-center gap-2">
         <Button
           variant="outline"
           size="icon"
@@ -168,7 +176,7 @@ export function HighlightedPdfViewer({
         </div>
       </div>
 
-      <div className="overflow-auto rounded border bg-muted/30 max-h-[calc(100vh-300px)]">
+      <div className="min-h-0 w-full flex-1 overflow-auto rounded border bg-muted/30">
         <Document file={url} onLoadSuccess={onDocumentLoadSuccess} loading={<div className="p-8 text-muted-foreground">Loading PDF...</div>}>
           <div ref={pageContainerRef} className="relative">
             <Page

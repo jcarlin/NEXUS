@@ -53,7 +53,7 @@ export function TextViewer({ url, compact }: TextViewerProps) {
     return <Skeleton className={compact ? "h-[300px]" : "h-[500px]"} />;
   }
 
-  const maxH = compact ? "max-h-[60vh]" : "max-h-[calc(100vh-300px)]";
+  const maxH = compact ? "max-h-[60vh]" : "";
 
   // Compact mode: no pagination, just scroll
   if (compact) {
@@ -72,9 +72,9 @@ export function TextViewer({ url, compact }: TextViewerProps) {
   );
 
   return (
-    <div className="flex flex-col items-center space-y-3">
+    <div className="flex h-full flex-col items-center gap-3">
       {numPages > 1 && (
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <Button
             variant="outline"
             size="icon"
@@ -97,7 +97,7 @@ export function TextViewer({ url, compact }: TextViewerProps) {
         </div>
       )}
 
-      <div className={`w-full overflow-y-auto rounded-md border bg-muted/30 ${maxH}`}>
+      <div className={`w-full overflow-y-auto rounded-md border bg-muted/30 ${maxH} ${!compact ? "min-h-0 flex-1" : ""}`}>
         <pre className="whitespace-pre-wrap break-words p-4 text-sm leading-relaxed">
           {pageLines.join("\n")}
         </pre>

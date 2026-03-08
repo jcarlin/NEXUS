@@ -21,11 +21,11 @@ export function ImageViewer({ url, filename, compact }: ImageViewerProps) {
     );
   }
 
-  const maxH = compact ? "max-h-[60vh]" : "max-h-[calc(100vh-300px)]";
+  const maxH = compact ? "max-h-[60vh]" : "";
 
   return (
-    <div className="flex flex-col items-center space-y-3">
-      <div className="flex items-center gap-1">
+    <div className="flex h-full flex-col items-center gap-3">
+      <div className="flex shrink-0 items-center gap-1">
         <Button
           variant="outline"
           size="icon"
@@ -45,7 +45,7 @@ export function ImageViewer({ url, filename, compact }: ImageViewerProps) {
         </Button>
       </div>
 
-      <div className={`overflow-auto rounded border bg-muted/30 ${maxH}`}>
+      <div className={`overflow-auto rounded border bg-muted/30 ${maxH} ${!compact ? "min-h-0 w-full flex-1" : ""}`}>
         <img
           src={url}
           alt={filename}

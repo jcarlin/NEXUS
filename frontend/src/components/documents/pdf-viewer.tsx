@@ -38,8 +38,8 @@ export function PdfViewer({
   }, []);
 
   return (
-    <div className="flex flex-col items-center space-y-3">
-      <div className="flex items-center gap-2">
+    <div className="flex h-full flex-col items-center gap-3">
+      <div className="flex shrink-0 items-center gap-2">
         <Button
           variant="outline"
           size="icon"
@@ -70,7 +70,7 @@ export function PdfViewer({
         </div>
       </div>
 
-      <div className="overflow-auto rounded border bg-muted/30 max-h-[calc(100vh-300px)]">
+      <div className="min-h-0 w-full flex-1 overflow-auto rounded border bg-muted/30">
         <Document file={url} onLoadSuccess={onDocumentLoadSuccess} loading={<div className="p-8 text-muted-foreground">Loading PDF...</div>}>
           <div className="relative">
             <Page pageNumber={pageNumber} scale={scale} />

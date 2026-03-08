@@ -12,6 +12,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from "@/components/ui/tooltip";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -61,12 +66,19 @@ export function MatterSelector() {
   return (
     <>
       <Select value={matterId ?? undefined} onValueChange={handleValueChange}>
-        <SelectTrigger className="w-[240px]">
-          <span className="flex items-center gap-1.5">
-            <span className="text-xs text-muted-foreground">Case:</span>
-            <SelectValue placeholder="Select matter..." />
-          </span>
-        </SelectTrigger>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <SelectTrigger className="w-[280px]">
+              <span className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">Case:</span>
+                <SelectValue placeholder="Select matter..." />
+              </span>
+            </SelectTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            {matters?.find((m) => m.id === matterId)?.name ?? "Select matter..."}
+          </TooltipContent>
+        </Tooltip>
         <SelectContent>
           {matters?.map((m) => (
             <SelectItem key={m.id} value={m.id}>

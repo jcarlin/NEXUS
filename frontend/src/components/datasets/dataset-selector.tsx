@@ -8,6 +8,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from "@/components/ui/tooltip";
 import type { DatasetTreeNode, DatasetTreeResponse } from "@/types";
 
 function flattenTree(
@@ -48,12 +53,21 @@ export function DatasetSelector() {
       value={datasetId ?? "__all__"}
       onValueChange={(v) => setDataset(v === "__all__" ? null : v)}
     >
-      <SelectTrigger className="w-[220px]">
-        <span className="flex items-center gap-1.5">
-          <span className="text-xs text-muted-foreground">Dataset:</span>
-          <SelectValue placeholder="All Documents" />
-        </span>
-      </SelectTrigger>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <SelectTrigger className="w-[260px]">
+            <span className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">Dataset:</span>
+              <SelectValue placeholder="All Documents" />
+            </span>
+          </SelectTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">
+          {datasetId
+            ? items.find(({ node }) => node.id === datasetId)?.node.name ?? "All Documents"
+            : "All Documents"}
+        </TooltipContent>
+      </Tooltip>
       <SelectContent>
         <SelectItem value="__all__">All Documents</SelectItem>
         {items.map(({ node, depth }) => (

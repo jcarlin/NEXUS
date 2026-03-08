@@ -127,11 +127,11 @@ export function HighlightedTextViewer({
     return <Skeleton className={compact ? "h-[300px]" : "h-[500px]"} />;
   }
 
-  const maxH = compact ? "max-h-[60vh]" : "max-h-[calc(100vh-300px)]";
+  const maxH = compact ? "max-h-[60vh]" : "min-h-0 flex-1";
   const match = highlightText ? findBestMatch(content, highlightText) : null;
 
   return (
-    <div className={`overflow-y-auto rounded-md border bg-muted/30 ${maxH}`}>
+    <div className={`overflow-y-auto rounded-md border bg-muted/30 ${maxH} ${!compact ? "h-full" : ""}`}>
       <pre className="whitespace-pre-wrap break-words p-4 text-sm leading-relaxed">
         {match ? (
           <>

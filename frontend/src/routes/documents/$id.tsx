@@ -76,8 +76,8 @@ function DocumentDetailPage() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="flex h-full flex-col gap-4">
+      <div className="flex shrink-0 items-center justify-between">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" asChild>
             <Link to="/documents">
@@ -101,8 +101,8 @@ function DocumentDetailPage() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="flex min-h-0 flex-col lg:col-span-2">
           {downloadData?.download_url ? (
             <DocumentViewer
               url={downloadData.download_url}
@@ -117,7 +117,7 @@ function DocumentDetailPage() {
             <Skeleton className="h-[400px]" />
           )}
         </div>
-        <div>
+        <div className="min-h-0 overflow-y-auto">
           {isPdf ? (
             <Tabs defaultValue="metadata">
               <TabsList className="w-full">

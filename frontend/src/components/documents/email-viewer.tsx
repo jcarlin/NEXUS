@@ -82,7 +82,7 @@ export function EmailViewer({ url, compact }: EmailViewerProps) {
     return <Skeleton className={compact ? "h-[300px]" : "h-[500px]"} />;
   }
 
-  const maxH = compact ? "max-h-[60vh]" : "max-h-[calc(100vh-300px)]";
+  const maxH = compact ? "max-h-[60vh]" : "";
 
   const headerSection = (
     <div className="rounded-md border bg-muted/50 p-3 text-sm">
@@ -121,12 +121,12 @@ export function EmailViewer({ url, compact }: EmailViewerProps) {
   );
 
   return (
-    <div className="space-y-3">
+    <div className="flex h-full flex-col gap-3">
       {headerSection}
 
-      <div className="flex flex-col items-center space-y-3">
+      <div className="flex min-h-0 flex-1 flex-col items-center gap-3">
         {numPages > 1 && (
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <Button
               variant="outline"
               size="icon"
@@ -149,7 +149,7 @@ export function EmailViewer({ url, compact }: EmailViewerProps) {
           </div>
         )}
 
-        <div className={`w-full overflow-y-auto rounded-md border bg-muted/30 ${maxH}`}>
+        <div className={`w-full overflow-y-auto rounded-md border bg-muted/30 ${maxH} ${!compact ? "min-h-0 flex-1" : ""}`}>
           <pre className="whitespace-pre-wrap break-words p-4 text-sm leading-relaxed">
             {pageLines.join("\n")}
           </pre>
