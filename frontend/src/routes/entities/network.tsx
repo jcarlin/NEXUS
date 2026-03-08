@@ -23,7 +23,7 @@ export const Route = createFileRoute("/entities/network")({
   component: NetworkGraphPage,
 });
 
-const DEFAULT_TYPES = new Set(["PERSON", "ORG", "LOCATION", "DATE", "MONEY"]);
+const DEFAULT_TYPES = new Set(["person", "organization", "location", "date", "monetary_amount"]);
 
 function NetworkGraphPage() {
   const matterId = useAppStore((s) => s.matterId);
@@ -61,7 +61,7 @@ function NetworkGraphPage() {
             entity: EntityResponse;
             connections: EntityConnection[];
           }>({
-            url: `/api/v1/entities/${e.id}/connections`,
+            url: `/api/v1/entities/${encodeURIComponent(e.id)}/connections`,
             method: "GET",
             params: { limit: 20 },
           }).catch(() => null),

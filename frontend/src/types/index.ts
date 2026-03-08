@@ -100,9 +100,9 @@ export interface EntityConnection {
 }
 
 export interface GraphStats {
-  node_count: number;
-  edge_count: number;
-  entity_types: Record<string, number>;
+  total_nodes: number;
+  total_edges: number;
+  node_counts: Record<string, number>;
 }
 
 export interface TimelineEvent {

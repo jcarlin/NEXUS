@@ -492,12 +492,15 @@ async def get_job(
 async def list_jobs(
     offset: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(50, ge=1, le=200, description="Max records to return"),
+    status: str | None = Query(None, description="Filter by job status (e.g. processing, complete, failed)"),
     db: AsyncSession = Depends(get_db),
     current_user: UserRecord = Depends(get_current_user),
     matter_id: UUID = Depends(get_matter_id),
 ):
     """List all ingestion jobs (paginated, newest first)."""
-    items, total = await IngestionService.list_jobs(db=db, offset=offset, limit=limit, matter_id=matter_id)
+    items, total = await IngestionService.list_jobs(
+        db=db, offset=offset, limit=limit, matter_id=matter_id, status=status
+    )
     return JobListResponse(
         items=[_job_row_to_status_response(row) for row in items],
         total=total,

@@ -29,7 +29,7 @@ function EntityDetailPage() {
     queryKey: ["entity-connections", matterId, id],
     queryFn: () =>
       apiClient<ConnectionsResponse>({
-        url: `/api/v1/entities/${id}/connections`,
+        url: `/api/v1/entities/${encodeURIComponent(id)}/connections`,
         method: "GET",
         params: { limit: 50 },
       }),

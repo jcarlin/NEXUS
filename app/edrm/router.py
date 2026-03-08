@@ -165,6 +165,7 @@ async def list_threads(
             ThreadResponse(
                 thread_id=item["thread_id"],
                 message_count=item["message_count"],
+                subject=item.get("subject"),
                 earliest=item.get("earliest"),
                 latest=item.get("latest"),
             )

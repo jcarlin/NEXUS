@@ -30,16 +30,16 @@ export function GraphOverview() {
           <div className="space-y-3">
             <div className="flex gap-4">
               <div>
-                <p className="text-2xl font-semibold tracking-tight tabular-nums">{(data.node_count ?? 0).toLocaleString()}</p>
+                <p className="text-2xl font-semibold tracking-tight tabular-nums">{(data.total_nodes ?? 0).toLocaleString()}</p>
                 <p className="text-xs text-muted-foreground">Entities</p>
               </div>
               <div>
-                <p className="text-2xl font-semibold tracking-tight tabular-nums">{(data.edge_count ?? 0).toLocaleString()}</p>
+                <p className="text-2xl font-semibold tracking-tight tabular-nums">{(data.total_edges ?? 0).toLocaleString()}</p>
                 <p className="text-xs text-muted-foreground">Relationships</p>
               </div>
             </div>
             <div className="flex flex-wrap gap-1.5">
-              {Object.entries(data.entity_types ?? {})
+              {Object.entries(data.node_counts ?? {})
                 .sort(([, a], [, b]) => b - a)
                 .slice(0, 8)
                 .map(([type, count]) => (

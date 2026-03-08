@@ -135,16 +135,21 @@ class IngestionService:
         offset: int = 0,
         limit: int = 50,
         matter_id: UUID | None = None,
+        status: str | None = None,
     ) -> tuple[list[dict], int]:
         """Return ``(items, total_count)`` with offset/limit pagination.
 
         Jobs are ordered by ``created_at DESC`` (newest first).
         """
-        where = ""
+        clauses: list[str] = []
         params: dict = {"offset": offset, "limit": limit}
         if matter_id is not None:
-            where = "WHERE matter_id = :matter_id"
+            clauses.append("matter_id = :matter_id")
             params["matter_id"] = matter_id
+        if status is not None:
+            clauses.append("status = :status")
+            params["status"] = status
+        where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
 
         # Total count
         count_result = await db.execute(text(f"SELECT count(*) FROM jobs {where}"), params)

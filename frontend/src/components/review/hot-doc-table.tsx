@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   useReactTable,
@@ -161,9 +161,8 @@ export function HotDocTable({ data, loading }: HotDocTableProps) {
         <TableBody>
           {table.getRowModel().rows.length ? (
             table.getRowModel().rows.map((row) => (
-              <>
+              <Fragment key={row.id}>
                 <TableRow
-                  key={row.id}
                   className="cursor-pointer"
                   onClick={() => row.toggleExpanded()}
                 >
@@ -203,7 +202,7 @@ export function HotDocTable({ data, loading }: HotDocTableProps) {
                     </TableCell>
                   </TableRow>
                 )}
-              </>
+              </Fragment>
             ))
           ) : (
             <TableRow>

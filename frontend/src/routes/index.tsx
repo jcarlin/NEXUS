@@ -73,7 +73,7 @@ function DashboardPage() {
         />
         <StatCard
           title="Entities"
-          value={graph?.node_count ?? 0}
+          value={graph?.total_nodes ?? 0}
           icon={Users}
           loading={graphLoading}
           description="In knowledge graph"

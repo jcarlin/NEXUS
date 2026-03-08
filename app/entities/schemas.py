@@ -11,7 +11,7 @@ from app.common.models import PaginatedResponse
 class EntityResponse(BaseModel):
     """Full view of a knowledge-graph entity."""
 
-    id: UUID
+    id: str
     name: str
     type: str
     aliases: list[str] = Field(default_factory=list)

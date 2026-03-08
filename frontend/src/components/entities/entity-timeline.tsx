@@ -20,7 +20,7 @@ export function EntityTimeline({ entityId }: EntityTimelineProps) {
     queryKey: ["entity-timeline", entityId],
     queryFn: () =>
       apiClient<TimelineResponse>({
-        url: `/api/v1/graph/timeline/${entityId}`,
+        url: `/api/v1/graph/timeline/${encodeURIComponent(entityId)}`,
         method: "GET",
       }),
   });
@@ -68,7 +68,7 @@ export function EntityTimeline({ entityId }: EntityTimelineProps) {
                 </div>
                 <div className="pl-4 min-w-0">
                   <p className="text-sm">{event.description}</p>
-                  {event.entities.length > 0 && (
+                  {event.entities?.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-1">
                       {event.entities.map((e) => (
                         <Badge

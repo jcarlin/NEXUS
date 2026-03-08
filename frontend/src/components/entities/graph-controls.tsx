@@ -4,11 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Maximize2, ZoomIn, ZoomOut } from "lucide-react";
 
 const ENTITY_TYPES = [
-  { value: "PERSON", label: "Person", color: "#60a5fa" },
-  { value: "ORG", label: "Organization", color: "#34d399" },
-  { value: "LOCATION", label: "Location", color: "#fb923c" },
-  { value: "DATE", label: "Date", color: "#a78bfa" },
-  { value: "MONEY", label: "Money", color: "#f472b6" },
+  { value: "person", label: "Person", color: "#60a5fa" },
+  { value: "organization", label: "Organization", color: "#34d399" },
+  { value: "location", label: "Location", color: "#fb923c" },
+  { value: "date", label: "Date", color: "#a78bfa" },
+  { value: "monetary_amount", label: "Money", color: "#f472b6" },
 ] as const;
 
 interface GraphControlsProps {

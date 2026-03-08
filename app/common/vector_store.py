@@ -104,10 +104,7 @@ class VectorStoreClient:
             # Upgrade existing collection: add sparse vectors if enabled but missing
             if self._enable_sparse:
                 info = self.client.get_collection(TEXT_COLLECTION)
-                has_sparse = bool(
-                    info.config.params.sparse_vectors_config
-                    and "sparse" in info.config.params.sparse_vectors_config
-                )
+                has_sparse = bool(info.config.params.sparse_vectors and "sparse" in info.config.params.sparse_vectors)
                 if not has_sparse:
                     self.client.update_collection(
                         collection_name=TEXT_COLLECTION,

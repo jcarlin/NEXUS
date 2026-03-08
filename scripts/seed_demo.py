@@ -517,8 +517,35 @@ def phase4c_datasets(client: httpx.Client, token: str, settings: Settings) -> No
         "Content-Type": "application/json",
     }
 
+    # Fetch existing datasets to avoid duplicates on re-run
+    existing_datasets: dict[str, str] = {}  # name -> id
+    tree_resp = client.get(f"{_API_BASE}/datasets/tree", headers=headers, timeout=10)
+    if tree_resp.status_code == 200:
+
+        def _collect(nodes: list[dict], parent: str | None = None) -> None:
+            for n in nodes:
+                key = f"{parent}/{n['name']}" if parent else n["name"]
+                existing_datasets[key] = n["id"]
+                _collect(n.get("children", []), parent=n["name"])
+
+        _collect(tree_resp.json().get("roots", []))
+
     # Create root datasets
     def _create_dataset(name: str, description: str, parent_id: str | None = None) -> str | None:
+        # Check if dataset already exists (use parent-scoped key for children)
+        lookup_key = name
+        if parent_id:
+            # Find parent name from existing_datasets values
+            for k, v in existing_datasets.items():
+                if v == parent_id:
+                    parent_name = k.split("/")[-1] if "/" in k else k
+                    lookup_key = f"{parent_name}/{name}"
+                    break
+        if lookup_key in existing_datasets:
+            ds_id = existing_datasets[lookup_key]
+            print(f"    Dataset '{name}' already exists ({ds_id[:8]}...), skipping")
+            return ds_id
+
         payload: dict = {"name": name, "description": description}
         if parent_id:
             payload["parent_id"] = parent_id
@@ -526,11 +553,8 @@ def phase4c_datasets(client: httpx.Client, token: str, settings: Settings) -> No
         if resp.status_code == 201:
             ds_id = resp.json()["id"]
             print(f"    Created dataset: {name} ({ds_id[:8]}...)")
+            existing_datasets[lookup_key] = ds_id
             return ds_id
-        elif resp.status_code == 400 and "already exists" in resp.text.lower():
-            # Try to find existing dataset by listing
-            print(_yellow(f"    Dataset '{name}' may already exist, skipping create"))
-            return None
         else:
             print(_yellow(f"    Failed to create dataset '{name}': {resp.status_code} {resp.text[:100]}"))
             return None

@@ -17,13 +17,17 @@ import {
 import type { PaginatedResponse } from "@/types";
 import type { ThreadResponse } from "@/api/generated/schemas";
 
-// Matches the backend CommunicationPairsResponse shape
+// Matches the backend communication-matrix response shape
 interface CommMatrixApiResponse {
   pairs: Array<{
-    person_a: string;
-    person_b: string;
-    emails: Array<{ email_id: string; subject?: string; date?: string }>;
-    total: number;
+    sender_name: string;
+    sender_email: string;
+    recipient_name: string;
+    recipient_email: string;
+    relationship_type: string;
+    message_count: number;
+    earliest: string;
+    latest: string;
   }>;
   matter_id?: string;
 }
@@ -45,11 +49,11 @@ function CommsMatrixPage() {
   });
 
   const matrix: MatrixEntry[] = (data?.pairs ?? []).map((p) => ({
-    sender: p.person_a,
-    receiver: p.person_b,
-    count: p.total,
+    sender: p.sender_name,
+    receiver: p.recipient_name,
+    count: p.message_count,
   }));
-  const entities = [...new Set((data?.pairs ?? []).flatMap((p) => [p.person_a, p.person_b]))];
+  const entities = [...new Set((data?.pairs ?? []).flatMap((p) => [p.sender_name, p.recipient_name]))];
 
   return (
     <div className="space-y-6 animate-page-in">
