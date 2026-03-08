@@ -240,7 +240,7 @@ class Settings(BaseSettings):
     export_max_documents: int = 10000
 
     # --- Citation Verification ---
-    max_claims_to_verify: int = 5
+    max_claims_to_verify: int = 3
 
     # --- Agentic Pipeline ---
     enable_agentic_pipeline: bool = True

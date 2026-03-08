@@ -149,6 +149,23 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     except Exception as exc:
         logger.error("startup.postgres.failed", error=str(exc))
 
+    # --- Eager model warmup (eliminates cold-start penalty on first query) ---
+    try:
+        embedder = get_embedder()
+        await embedder.embed_query("warmup")
+        logger.info("startup.embedder.ok")
+    except Exception as exc:
+        logger.error("startup.embedder.failed", error=str(exc))
+
+    try:
+        from app.dependencies import get_entity_extractor
+
+        extractor = get_entity_extractor()
+        extractor.extract("warmup", entity_types=["person"], threshold=0.99)
+        logger.info("startup.gliner.ok")
+    except Exception as exc:
+        logger.error("startup.gliner.failed", error=str(exc))
+
     logger.info("startup.complete")
 
     yield  # Application runs here

@@ -617,8 +617,15 @@ def _classify_tier(query: str) -> str:
         "what was",
         "where did",
         "when was",
+        "what company",
+        "what organization",
+        "where did",
+        "who did",
+        "what role",
+        "what position",
+        "what job",
     ]
-    if word_count <= 15:
+    if word_count <= 20:
         if "?" in query or any(query_lower.startswith(m) for m in fast_markers):
             return "fast"
 
@@ -674,23 +681,28 @@ async def _verify_single_claim(
     claim: dict[str, Any],
     filters: dict[str, Any] | None,
     exclude_privilege: list[str],
+    claim_vector: list[float] | None = None,
 ) -> dict[str, Any]:
     """Run independent retrieval and judge whether evidence supports *claim*.
 
     Returns the *claim* dict with ``verification_status`` and ``claim_index``
-    added.  On failure, sets status to ``"unverified"`` (acceptable
+    added.  If *claim_vector* is provided, skips the embedding call in
+    retrieval (used by batch pre-embedding optimisation).
+
+    On failure, sets status to ``"unverified"`` (acceptable
     degradation — individual claim verification failure should not prevent
     other claims from being verified).
     """
     claim_text = claim.get("claim_text", "")
 
     try:
-        # Independent retrieval for verification
+        # Independent retrieval for verification (pre-computed vector skips re-embedding)
         verification_results = await retriever.retrieve_text(
             claim_text,
             limit=5,
             filters=filters,
             exclude_privilege_statuses=exclude_privilege or None,
+            query_vector=claim_vector,
         )
 
         verification_evidence = "\n".join(
@@ -763,12 +775,23 @@ async def verify_citations(state: dict) -> dict:
     exclude_privilege = state.get("_exclude_privilege", [])
     max_claims = _get_settings().max_claims_to_verify
 
+    # Batch-embed all claim texts in one API call instead of N separate calls
+    from app.dependencies import get_embedder
+
+    embedder = get_embedder()
+    claims_to_verify = [c for c in claims[:max_claims] if c.get("claim_text", "")]
+    claim_texts = [c["claim_text"] for c in claims_to_verify]
+    claim_vectors: list[list[float] | None] = [None] * len(claims_to_verify)
+    if claim_texts:
+        try:
+            claim_vectors = await embedder.embed_texts(claim_texts)
+        except Exception:
+            logger.warning("node.verify_citations.batch_embed_failed", exc_info=True)
+
     tasks = []
-    for i, claim in enumerate(claims[:max_claims]):
-        if not claim.get("claim_text", ""):
-            continue
+    for i, (claim, vector) in enumerate(zip(claims_to_verify, claim_vectors)):
         claim["claim_index"] = i
-        tasks.append(_verify_single_claim(llm, retriever, claim, filters, exclude_privilege))
+        tasks.append(_verify_single_claim(llm, retriever, claim, filters, exclude_privilege, claim_vector=vector))
 
     verified_claims: list[dict[str, Any]] = list(await asyncio.gather(*tasks))
 

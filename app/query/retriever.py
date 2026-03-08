@@ -64,9 +64,13 @@ class HybridRetriever:
         exclude_privilege_statuses: list[str] | None = None,
         prefetch_multiplier: int = 2,
         dataset_doc_ids: list[str] | None = None,
+        query_vector: list[float] | None = None,
     ) -> list[dict[str, Any]]:
-        """Embed *query* and run dense (+ optional sparse RRF) search against ``nexus_text``."""
-        vector = await self._embedder.embed_query(query)
+        """Embed *query* and run dense (+ optional sparse RRF) search against ``nexus_text``.
+
+        If *query_vector* is provided, skip the embedding call and use it directly.
+        """
+        vector = query_vector if query_vector is not None else await self._embedder.embed_query(query)
 
         sparse_vector: tuple[list[int], list[float]] | None = None
         if self._sparse_embedder is not None:
