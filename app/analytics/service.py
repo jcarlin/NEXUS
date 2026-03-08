@@ -333,7 +333,7 @@ class AnalyticsService:
                     GROUP BY sender_email, sender_name,
                              recipient_email, recipient_name
                 ),
-                asymmetric AS (
+                directional_pairs AS (
                     SELECT a.sender_name AS subordinate_name,
                            a.sender_email AS subordinate_email,
                            a.recipient_name AS superior_name,
@@ -353,7 +353,7 @@ class AnalyticsService:
                        CASE WHEN b_to_a = 0 THEN 0.9
                             ELSE ROUND((a_to_b::numeric - b_to_a) / (a_to_b + b_to_a), 2)
                        END AS confidence
-                FROM asymmetric
+                FROM directional_pairs
                 ORDER BY confidence DESC
                 """
             ),

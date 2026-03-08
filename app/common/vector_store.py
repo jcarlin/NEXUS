@@ -101,6 +101,23 @@ class VectorStoreClient:
                     "qdrant.collection_created", name=TEXT_COLLECTION, mode="dense-only", dim=self._embedding_dim
                 )
         else:
+            # Upgrade existing collection: add sparse vectors if enabled but missing
+            if self._enable_sparse:
+                info = self.client.get_collection(TEXT_COLLECTION)
+                has_sparse = bool(
+                    info.config.params.sparse_vectors_config
+                    and "sparse" in info.config.params.sparse_vectors_config
+                )
+                if not has_sparse:
+                    self.client.update_collection(
+                        collection_name=TEXT_COLLECTION,
+                        sparse_vectors_config={"sparse": SparseVectorParams()},
+                    )
+                    logger.info(
+                        "qdrant.collection_upgraded",
+                        name=TEXT_COLLECTION,
+                        added="sparse_vectors",
+                    )
             logger.info("qdrant.collection_exists", name=TEXT_COLLECTION)
 
         # --- Visual collection (multi-vector MaxSim for ColQwen2.5 reranking) ---

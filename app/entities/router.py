@@ -38,7 +38,9 @@ async def list_entities(
     matter_id: UUID = Depends(get_matter_id),
 ):
     """Search or list extracted entities (paginated)."""
-    items, total = await gs.search_entities(query=q, entity_type=entity_type, limit=limit, offset=offset, matter_id=str(matter_id))
+    items, total = await gs.search_entities(
+        query=q, entity_type=entity_type, limit=limit, offset=offset, matter_id=str(matter_id)
+    )
     return {
         "items": items,
         "total": total,
