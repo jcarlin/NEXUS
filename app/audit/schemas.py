@@ -61,6 +61,43 @@ class AgentAuditLogEntry(BaseModel):
     created_at: datetime
 
 
+class AgentAuditLogListResponse(PaginatedResponse[AgentAuditLogEntry]):
+    """Paginated list of agent audit log entries."""
+
+
+class AgentSummaryEntry(BaseModel):
+    """Aggregate performance metrics for a single agent."""
+
+    agent_id: str
+    total_actions: int = 0
+    avg_duration_ms: float | None = None
+    error_count: int = 0
+    tool_call_count: int = 0
+    node_count: int = 0
+    distinct_tools: int = 0
+    first_seen: datetime | None = None
+    last_seen: datetime | None = None
+
+
+class AgentSummaryResponse(BaseModel):
+    """Aggregate agent performance metrics."""
+
+    agents: list[AgentSummaryEntry]
+
+
+class ToolDistributionEntry(BaseModel):
+    """Usage count for a single tool."""
+
+    tool_name: str | None = None
+    call_count: int = 0
+
+
+class ToolDistributionResponse(BaseModel):
+    """Tool usage distribution across agent runs."""
+
+    tools: list[ToolDistributionEntry]
+
+
 class RetentionConfig(BaseModel):
     """Audit log retention configuration."""
 

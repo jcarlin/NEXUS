@@ -322,6 +322,171 @@ class AuditService:
         }
 
     @staticmethod
+    async def list_agent_audit_logs(
+        db: AsyncSession,
+        *,
+        agent_id: str | None = None,
+        matter_id: UUID | None = None,
+        action_type: str | None = None,
+        request_id: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        offset: int = 0,
+        limit: int = 50,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Return paginated agent audit log entries with optional filters."""
+        where_clauses: list[str] = []
+        params: dict[str, Any] = {"offset": offset, "limit": limit}
+
+        if agent_id is not None:
+            where_clauses.append("agent_id = :agent_id")
+            params["agent_id"] = agent_id
+
+        if matter_id is not None:
+            where_clauses.append("matter_id = :matter_id")
+            params["matter_id"] = matter_id
+
+        if action_type is not None:
+            where_clauses.append("action_type = :action_type")
+            params["action_type"] = action_type
+
+        if request_id is not None:
+            where_clauses.append("request_id = :request_id")
+            params["request_id"] = request_id
+
+        if date_from is not None:
+            where_clauses.append("created_at >= :date_from")
+            params["date_from"] = date_from
+
+        if date_to is not None:
+            where_clauses.append("created_at <= :date_to")
+            params["date_to"] = date_to
+
+        where_sql = ""
+        if where_clauses:
+            where_sql = "WHERE " + " AND ".join(where_clauses)
+
+        count_result = await db.execute(
+            text(f"SELECT count(*) FROM agent_audit_log {where_sql}"),
+            params,
+        )
+        total = count_result.scalar_one()
+
+        result = await db.execute(
+            text(f"""
+                SELECT id, session_id, agent_id, request_id, user_id, matter_id,
+                       action_type, action_name, input_summary, output_summary,
+                       iteration_number, duration_ms, status, created_at
+                FROM agent_audit_log
+                {where_sql}
+                ORDER BY created_at DESC
+                OFFSET :offset LIMIT :limit
+            """),
+            params,
+        )
+        rows = [dict(r) for r in result.mappings().all()]
+
+        return rows, total
+
+    @staticmethod
+    async def get_agent_summary(
+        db: AsyncSession,
+        *,
+        matter_id: UUID | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return aggregate performance metrics per agent.
+
+        Returns one row per agent_id with: total_actions, avg_duration_ms,
+        error_count, tool_call_count, distinct_tools, first_seen, last_seen.
+        """
+        where_clauses: list[str] = []
+        params: dict[str, Any] = {}
+
+        if matter_id is not None:
+            where_clauses.append("matter_id = :matter_id")
+            params["matter_id"] = matter_id
+
+        if date_from is not None:
+            where_clauses.append("created_at >= :date_from")
+            params["date_from"] = date_from
+
+        if date_to is not None:
+            where_clauses.append("created_at <= :date_to")
+            params["date_to"] = date_to
+
+        where_sql = ""
+        if where_clauses:
+            where_sql = "WHERE " + " AND ".join(where_clauses)
+
+        result = await db.execute(
+            text(f"""
+                SELECT
+                    agent_id,
+                    count(*) AS total_actions,
+                    round(avg(duration_ms)::numeric, 2) AS avg_duration_ms,
+                    count(*) FILTER (WHERE status = 'error') AS error_count,
+                    count(*) FILTER (WHERE action_type = 'tool_call') AS tool_call_count,
+                    count(*) FILTER (WHERE action_type = 'node') AS node_count,
+                    count(DISTINCT action_name) FILTER (WHERE action_type = 'tool_call') AS distinct_tools,
+                    min(created_at) AS first_seen,
+                    max(created_at) AS last_seen
+                FROM agent_audit_log
+                {where_sql}
+                GROUP BY agent_id
+                ORDER BY total_actions DESC
+            """),
+            params,
+        )
+        return [dict(r) for r in result.mappings().all()]
+
+    @staticmethod
+    async def get_tool_distribution(
+        db: AsyncSession,
+        *,
+        agent_id: str | None = None,
+        matter_id: UUID | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return tool usage distribution: count per tool name."""
+        where_clauses: list[str] = ["action_type = 'tool_call'"]
+        params: dict[str, Any] = {}
+
+        if agent_id is not None:
+            where_clauses.append("agent_id = :agent_id")
+            params["agent_id"] = agent_id
+
+        if matter_id is not None:
+            where_clauses.append("matter_id = :matter_id")
+            params["matter_id"] = matter_id
+
+        if date_from is not None:
+            where_clauses.append("created_at >= :date_from")
+            params["date_from"] = date_from
+
+        if date_to is not None:
+            where_clauses.append("created_at <= :date_to")
+            params["date_to"] = date_to
+
+        where_sql = "WHERE " + " AND ".join(where_clauses)
+
+        result = await db.execute(
+            text(f"""
+                SELECT
+                    action_name AS tool_name,
+                    count(*) AS call_count
+                FROM agent_audit_log
+                {where_sql}
+                GROUP BY action_name
+                ORDER BY call_count DESC
+            """),
+            params,
+        )
+        return [dict(r) for r in result.mappings().all()]
+
+    @staticmethod
     async def apply_retention(
         db: AsyncSession,
         retention_days: int,

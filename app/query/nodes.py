@@ -1038,6 +1038,28 @@ async def audit_log_hook(state: dict) -> dict:
         output_tokens = usage.get("output_tokens")
 
     model = settings.llm_model
+    matter_id = state.get("matter_id")
+
+    # Detect tool calls requested by the model (AIMessage with tool_calls)
+    tool_calls_to_log: list[dict[str, str | int | None]] = []
+    if isinstance(last_msg, AIMessage) and last_msg.tool_calls:
+        for call in last_msg.tool_calls:
+            tool_calls_to_log.append({
+                "tool_name": call.get("name", "unknown"),
+                "iteration": tool_call_count,
+            })
+
+    # Detect completed tool results (ToolMessages at end of message list)
+    completed_tools: list[dict[str, str | int | None]] = []
+    for msg in reversed(messages):
+        if not isinstance(msg, LCToolMessage):
+            break
+        content_preview = str(msg.content)[:200] if msg.content else ""
+        completed_tools.append({
+            "tool_call_id": msg.tool_call_id,
+            "output_length": len(str(msg.content)) if msg.content else 0,
+            "output_preview": content_preview,
+        })
 
     async def _write() -> None:
         try:
@@ -1047,6 +1069,7 @@ async def audit_log_hook(state: dict) -> dict:
 
             factory = get_session_factory()
             async with factory() as session:
+                # 1. AI audit log (existing behavior)
                 await session.execute(
                     sa_text("""
                         INSERT INTO ai_audit_log
@@ -1069,6 +1092,54 @@ async def audit_log_hook(state: dict) -> dict:
                         else None,
                     },
                 )
+
+                # 2. Agent audit log — log each tool call requested by model
+                for tool_info in tool_calls_to_log:
+                    await session.execute(
+                        sa_text("""
+                            INSERT INTO agent_audit_log
+                                (agent_id, request_id, matter_id,
+                                 action_type, action_name,
+                                 iteration_number, status)
+                            VALUES
+                                ('investigation_agent', :request_id,
+                                 CAST(:matter_id AS UUID),
+                                 'tool_call', :action_name,
+                                 :iteration_number, 'pending')
+                        """),
+                        {
+                            "request_id": request_id,
+                            "matter_id": matter_id,
+                            "action_name": tool_info["tool_name"],
+                            "iteration_number": tool_info["iteration"],
+                        },
+                    )
+
+                # 3. Agent audit log — log completed tool results
+                for tool_result in completed_tools:
+                    await session.execute(
+                        sa_text("""
+                            INSERT INTO agent_audit_log
+                                (agent_id, request_id, matter_id,
+                                 action_type, action_name,
+                                 output_summary,
+                                 iteration_number, status)
+                            VALUES
+                                ('investigation_agent', :request_id,
+                                 CAST(:matter_id AS UUID),
+                                 'tool_result', :tool_call_id,
+                                 :output_preview,
+                                 :iteration_number, 'success')
+                        """),
+                        {
+                            "request_id": request_id,
+                            "matter_id": matter_id,
+                            "tool_call_id": tool_result["tool_call_id"],
+                            "output_preview": tool_result["output_preview"],
+                            "iteration_number": tool_call_count,
+                        },
+                    )
+
                 await session.commit()
         except Exception:
             # Acceptable degradation: audit logging must not block user
