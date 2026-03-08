@@ -99,6 +99,7 @@ class FeatureFlags(BaseModel):
     agentic_pipeline: bool
     citation_verification: bool
     redaction: bool
+    google_drive: bool
 
 
 class Settings(BaseSettings):
@@ -223,6 +224,14 @@ class Settings(BaseSettings):
     enable_topic_clustering: bool = False
     bertopic_embedding_model: str = "all-MiniLM-L6-v2"
     bertopic_min_cluster_size: int = 5
+
+    # --- Google Drive ---
+    enable_google_drive: bool = False
+    gdrive_client_id: str = ""
+    gdrive_client_secret: str = ""
+    gdrive_redirect_uri: str = "http://localhost:5173/gdrive/callback"
+    gdrive_encryption_key: str = ""  # Fernet key for encrypting OAuth tokens at rest
+    gdrive_max_concurrent_downloads: int = 10
 
     # --- Redaction ---
     enable_redaction: bool = False
@@ -368,5 +377,6 @@ class Settings(BaseSettings):
                 agentic_pipeline=self.enable_agentic_pipeline,
                 citation_verification=self.enable_citation_verification,
                 redaction=self.enable_redaction,
+                google_drive=self.enable_google_drive,
             )
         return self

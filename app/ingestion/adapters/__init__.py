@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 from app.ingestion.adapters.concordance_dat import ConcordanceDATAdapter
 from app.ingestion.adapters.directory import DirectoryAdapter
 from app.ingestion.adapters.edrm_xml import EDRMXMLAdapter
+from app.ingestion.adapters.gdrive import GoogleDriveAdapter
 from app.ingestion.adapters.huggingface_csv import HuggingFaceCSVAdapter
 
 if TYPE_CHECKING:
@@ -23,6 +24,7 @@ ADAPTER_REGISTRY: dict[str, type[DatasetAdapter]] = {
     "edrm_xml": EDRMXMLAdapter,  # type: ignore[dict-item]
     "concordance_dat": ConcordanceDATAdapter,  # type: ignore[dict-item]
     "huggingface_csv": HuggingFaceCSVAdapter,  # type: ignore[dict-item]
+    "google_drive": GoogleDriveAdapter,  # type: ignore[dict-item]
 }
 
 __all__ = [
@@ -30,5 +32,6 @@ __all__ = [
     "ConcordanceDATAdapter",
     "DirectoryAdapter",
     "EDRMXMLAdapter",
+    "GoogleDriveAdapter",
     "HuggingFaceCSVAdapter",
 ]

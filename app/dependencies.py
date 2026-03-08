@@ -291,6 +291,22 @@ def get_coref_resolver():
 
 
 # ---------------------------------------------------------------------------
+# Google Drive Service (feature-flagged)
+# ---------------------------------------------------------------------------
+
+
+@functools.cache
+def get_gdrive_service():
+    """Return the ``GDriveService`` singleton, or ``None`` when disabled."""
+    settings = get_settings()
+    if not settings.enable_google_drive:
+        return None
+    from app.gdrive.service import GDriveService
+
+    return GDriveService(settings)
+
+
+# ---------------------------------------------------------------------------
 # Hybrid Retriever
 # ---------------------------------------------------------------------------
 
@@ -404,6 +420,7 @@ _ALL_CACHED_FACTORIES = [
     get_dedup_detector,
     get_coref_resolver,
     get_retriever,
+    get_gdrive_service,
     _get_checkpointer_conn,
     get_checkpointer,
     get_query_graph,

@@ -64,6 +64,13 @@ dependencies = [
     # Near-Duplicate Detection
     "datasketch>=1.6",
 
+    # Google Drive (optional, feature-flagged)
+    "google-api-python-client>=2.100",
+    "google-auth>=2.30",
+    "google-auth-oauthlib>=1.0",
+    "google-auth-httplib2>=0.2",
+    "cryptography>=42.0",
+
     # Auth
     "PyJWT",
     "passlib[bcrypt]",

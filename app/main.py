@@ -211,6 +211,13 @@ def create_app() -> FastAPI:
     application.include_router(redaction_router, prefix="/api/v1")
     application.include_router(evaluation_router, prefix="/api/v1")
 
+    # --- Feature-flagged routers ---
+    settings = get_settings()
+    if settings.enable_google_drive:
+        from app.gdrive.router import router as gdrive_router
+
+        application.include_router(gdrive_router, prefix="/api/v1")
+
     # --- Health endpoint ---
     @application.get("/api/v1/health", tags=["system"])
     async def health(request: Request) -> JSONResponse:

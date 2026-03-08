@@ -22,6 +22,7 @@ All feature flags are defined in `app/config.py` (Settings class) and read from 
 | `ENABLE_AGENTIC_PIPELINE` | **`true`** | Agentic LangGraph query pipeline (vs. v1 linear chain) |
 | `ENABLE_CITATION_VERIFICATION` | **`true`** | Self-RAG citation verification in query synthesis |
 | `ENABLE_REDACTION` | `false` | PII detection and document redaction engine |
+| `ENABLE_GOOGLE_DRIVE` | `false` | Google Drive OAuth connector for document ingestion |
 
 ---
 
@@ -179,3 +180,12 @@ All feature flags are defined in `app/config.py` (Settings class) and read from 
 - **Description**: Enables the PII detection and document redaction engine. The redaction module (`app/redaction/`) provides endpoints for detecting PII, suggesting privilege redactions, and applying redactions to PDF documents. The router is always registered in `app/main.py` but the flag signals operational readiness.
 - **Resources gated**: No DI singleton. The redaction module uses GLiNER-based PII detection (`app/redaction/pii_detector.py`) and PDF manipulation (`app/redaction/engine.py`). The router is unconditionally mounted; the flag serves as a feature-readiness indicator.
 - **Runtime impact**: When the redaction endpoints are called, PII detection runs GLiNER inference and PDF redaction performs page-level manipulation. No startup cost -- resources are loaded on-demand per request.
+
+#### `ENABLE_GOOGLE_DRIVE`
+- **Default**: `false`
+- **Module**: `app/gdrive/`
+- **Config key**: `Settings.enable_google_drive`
+- **Description**: Enables the Google Drive OAuth connector for importing documents directly from Drive. Users can connect their Google Drive account via OAuth2, browse files, and ingest them into a matter. Google-native formats (Docs/Sheets/Slides) are exported to PDF. Incremental sync tracks changes by file modification time.
+- **Resources gated**: `GDriveService` DI singleton (`app/dependencies.py:get_gdrive_service`). The `gdrive` router is only mounted in `app/main.py` when this flag is `true`. Database tables `google_drive_connections` and `google_drive_sync_state` are created by migration 014 regardless of the flag.
+- **Runtime impact**: No startup cost. Google API libraries are imported lazily. OAuth tokens are encrypted at rest with Fernet (requires `GDRIVE_ENCRYPTION_KEY`). File downloads run in Celery tasks.
+- **Related settings**: `GDRIVE_CLIENT_ID`, `GDRIVE_CLIENT_SECRET`, `GDRIVE_REDIRECT_URI`, `GDRIVE_ENCRYPTION_KEY`, `GDRIVE_MAX_CONCURRENT_DOWNLOADS`
