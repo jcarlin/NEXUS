@@ -4,7 +4,6 @@ import {
   useReactTable,
   getCoreRowModel,
   getSortedRowModel,
-  getFilteredRowModel,
   flexRender,
   type ColumnDef,
   type SortingState,
@@ -13,7 +12,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
-import { DataTableToolbar } from "@/components/ui/data-table-toolbar";
 import { formatDate } from "@/lib/utils";
 import type { DocumentResponse } from "@/types";
 
@@ -37,7 +35,6 @@ interface DocumentTableProps {
 
 export function DocumentTable({ data, loading }: DocumentTableProps) {
   const [sorting, setSorting] = useState<SortingState>([]);
-  const [globalFilter, setGlobalFilter] = useState("");
 
   const columns = useMemo<ColumnDef<DocumentResponse>[]>(
     () => [
@@ -99,20 +96,13 @@ export function DocumentTable({ data, loading }: DocumentTableProps) {
     [],
   );
 
-  const typeFacetOptions = useMemo(() => {
-    const exts = [...new Set(data.map((d) => d.filename?.split(".").pop()?.toUpperCase()).filter(Boolean))].sort();
-    return exts.map((ext) => ({ label: ext!, value: ext! }));
-  }, [data]);
-
   const table = useReactTable({
     data,
     columns,
-    state: { sorting, globalFilter },
+    state: { sorting },
     onSortingChange: setSorting,
-    onGlobalFilterChange: setGlobalFilter,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
   });
 
   if (loading) {
@@ -127,14 +117,6 @@ export function DocumentTable({ data, loading }: DocumentTableProps) {
 
   return (
     <div className="space-y-4">
-      <DataTableToolbar
-        table={table}
-        searchPlaceholder="Search documents..."
-        facetFilters={[
-          { columnId: "extension", title: "All types", options: typeFacetOptions },
-        ]}
-      />
-
       <div className="rounded-md border">
         <Table>
           <TableHeader>

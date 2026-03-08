@@ -878,6 +878,48 @@ def _stage_index(ctx: _PipelineContext) -> None:
         logger.error("task.neo4j_index_failed", doc_id=ctx.job_id, exc_info=True)
 
 
+def _update_qdrant_doc_id(ctx: _PipelineContext, doc_id: str) -> None:
+    """Update Qdrant payload to use real document ID instead of job_id placeholder."""
+    from qdrant_client import QdrantClient
+    from qdrant_client import models as qdrant_models
+
+    try:
+        client = QdrantClient(url=ctx.settings.qdrant_url)
+        filter_ = qdrant_models.Filter(
+            must=[
+                qdrant_models.FieldCondition(
+                    key="doc_id",
+                    match=qdrant_models.MatchValue(value=ctx.job_id),
+                )
+            ]
+        )
+
+        from app.common.vector_store import TEXT_COLLECTION
+
+        client.set_payload(
+            collection_name=TEXT_COLLECTION,
+            payload={"doc_id": doc_id},
+            points=filter_,
+        )
+
+        if ctx.visual_page_embeddings:
+            try:
+                from app.common.vector_store import VISUAL_COLLECTION
+
+                client.set_payload(
+                    collection_name=VISUAL_COLLECTION,
+                    payload={"doc_id": doc_id},
+                    points=filter_,
+                )
+            except Exception:
+                pass  # Visual collection may not exist
+
+        client.close()
+        logger.info("task.qdrant_doc_id_updated", job_id=ctx.job_id, doc_id=doc_id)
+    except Exception:
+        logger.warning("task.qdrant_doc_id_update_failed", job_id=ctx.job_id, exc_info=True)
+
+
 def _stage_complete(ctx: _PipelineContext) -> None:
     """Stage 6: Create document record + dispatch post-processing tasks."""
     doc_id = _create_document_record(
@@ -894,6 +936,9 @@ def _stage_complete(ctx: _PipelineContext) -> None:
         matter_id=ctx.matter_id,
         metadata=ctx.parse_result.metadata,
     )
+
+    # Update Qdrant payload with real document ID (was using job_id as placeholder)
+    _update_qdrant_doc_id(ctx, doc_id)
 
     # Auto-assign document to dataset if the job has a dataset_id
     if ctx.dataset_id:
