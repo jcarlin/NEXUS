@@ -60,6 +60,7 @@ class ChatMessage(BaseModel):
     source_documents: list[SourceDocument] = Field(default_factory=list)
     entities_mentioned: list[EntityMention] = Field(default_factory=list)
     follow_up_questions: list[str] = Field(default_factory=list)
+    cited_claims: list["CitedClaim"] = Field(default_factory=list)
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
 

@@ -141,6 +141,7 @@ async def query(
         entities_mentioned=final_state.get("entities_mentioned", []),
         follow_up_questions=final_state.get("follow_up_questions", []),
         matter_id=matter_id,
+        cited_claims=final_state.get("cited_claims", []),
     )
 
     await db.commit()
@@ -272,6 +273,7 @@ async def _v1_event_generator(graph, initial_state, config, db, thread_id, query
             entities_mentioned=final_state.get("entities_mentioned", []),
             follow_up_questions=final_state.get("follow_up_questions", []),
             matter_id=matter_id,
+            cited_claims=final_state.get("cited_claims", []),
         )
         await db.commit()
     except Exception:
@@ -380,6 +382,7 @@ async def _agentic_event_generator(graph, initial_state, config, db, thread_id, 
             entities_mentioned=final_state.get("entities_mentioned", []),
             follow_up_questions=final_state.get("follow_up_questions", []),
             matter_id=matter_id,
+            cited_claims=final_state.get("cited_claims", []),
         )
         await db.commit()
     except Exception:
@@ -471,6 +474,7 @@ async def get_chat(
             source_documents=[SourceDocument(**doc) for doc in parse_jsonb(r.get("source_documents"))],
             entities_mentioned=[EntityMention(**ent) for ent in parse_jsonb(r.get("entities_mentioned"))],
             follow_up_questions=parse_jsonb(r.get("follow_up_questions")),
+            cited_claims=[CitedClaim(**c) for c in parse_jsonb(r.get("cited_claims")) if "claim_text" in c],
             timestamp=r["created_at"],
         )
         for r in rows

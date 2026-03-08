@@ -125,6 +125,7 @@ export interface ChatMessage {
   source_documents: SourceDocument[];
   entities_mentioned: _EntityMention[];
   follow_up_questions: string[];
+  cited_claims: _CitedClaim[];
   timestamp: string;
 }
 

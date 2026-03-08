@@ -139,6 +139,7 @@ export function MessageList({
                 content={msg.content}
                 sources={msg.source_documents}
                 entities={msg.entities_mentioned}
+                citedClaims={msg.cited_claims}
               />
             ),
           )}
