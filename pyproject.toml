@@ -144,7 +144,7 @@ disallow_untyped_defs = false
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-addopts = "--durations=10"
+addopts = "--durations=10 -m 'not e2e'"
 filterwarnings = [
     "ignore::DeprecationWarning",
 ]

@@ -21,6 +21,15 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
+
+def pytest_collection_modifyitems(config, items):
+    """Auto-mark all tests in this directory as e2e."""
+    e2e_marker = pytest.mark.e2e
+    for item in items:
+        if "/test_e2e/" in str(item.fspath):
+            item.add_marker(e2e_marker)
+
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------

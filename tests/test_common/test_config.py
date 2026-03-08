@@ -32,7 +32,10 @@ class TestNestedConfig:
         assert s.database.qdrant_url == s.qdrant_url
         assert s.database.neo4j_uri == s.neo4j_uri
 
-    def test_nested_features_populated(self):
+    def test_nested_features_populated(self, monkeypatch):
+        monkeypatch.setenv("ENABLE_VISUAL_EMBEDDINGS", "false")
+        monkeypatch.setenv("ENABLE_RELATIONSHIP_EXTRACTION", "false")
+        monkeypatch.setenv("ENABLE_RERANKER", "false")
         s = Settings(anthropic_api_key="k", openai_api_key="k")
         assert s.features is not None
         assert s.features.visual_embeddings is False
@@ -57,6 +60,7 @@ class TestNestedConfig:
         assert s.llm.provider == "openai"
 
     def test_nested_embedding_populated(self, monkeypatch):
+        monkeypatch.setenv("ENABLE_VISUAL_EMBEDDINGS", "false")
         monkeypatch.setenv("EMBEDDING_PROVIDER", "openai")
         monkeypatch.setenv("EMBEDDING_DIMENSIONS", "1024")
         monkeypatch.setenv("EMBEDDING_BATCH_SIZE", "32")
@@ -68,7 +72,8 @@ class TestNestedConfig:
         assert s.embedding.batch_size == 32
         assert s.embedding.enable_visual is False
 
-    def test_nested_retrieval_populated(self):
+    def test_nested_retrieval_populated(self, monkeypatch):
+        monkeypatch.setenv("ENABLE_RERANKER", "false")
         s = Settings(anthropic_api_key="k", openai_api_key="k")
         assert s.retrieval is not None
         assert s.retrieval.text_limit == 20
@@ -83,7 +88,8 @@ class TestNestedConfig:
         assert s.auth.jwt_access_token_expire_minutes == 30
         assert s.auth.require_matter_header is True
 
-    def test_nested_processing_populated(self):
+    def test_nested_processing_populated(self, monkeypatch):
+        monkeypatch.setenv("ENABLE_RELATIONSHIP_EXTRACTION", "false")
         s = Settings(anthropic_api_key="k", openai_api_key="k")
         assert s.processing is not None
         assert s.processing.chunk_size == 512

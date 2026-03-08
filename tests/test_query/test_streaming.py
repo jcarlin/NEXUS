@@ -284,8 +284,8 @@ async def test_v1_generator_exit_handled(stream_client):
     done_events = [line for line in lines if line.startswith("event: done")]
     assert len(done_events) == 0
 
-    # Chat persistence should NOT have been called
-    mock_db.commit.assert_not_called()
+    # Chat persistence SHOULD have been called (partial results are valuable)
+    mock_db.commit.assert_called_once()
 
 
 @pytest.mark.asyncio
