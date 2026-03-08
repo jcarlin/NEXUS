@@ -98,6 +98,8 @@ async def test_create_entity_node_dual_label(gs):
     cypher = gs._run_write.call_args[0][0]
     # Should contain secondary label
     assert "SET e:Person" in cypher
+    # MERGE key should include matter_id
+    assert "matter_id: $matter_id" in cypher
     # Should pass matter_id
     params = gs._run_write.call_args[0][1]
     assert params["matter_id"] == "matter-1"
@@ -117,6 +119,8 @@ async def test_create_entity_node_unknown_type_no_label(gs):
     cypher = gs._run_write.call_args[0][0]
     # No secondary label for unknown types
     assert "SET e:" not in cypher or "SET e:Entity" not in cypher
+    # MERGE key should still include matter_id
+    assert "matter_id: $matter_id" in cypher
 
 
 @pytest.mark.asyncio

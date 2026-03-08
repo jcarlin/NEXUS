@@ -146,10 +146,9 @@ class GraphService:
         label_clause = f"SET e:{label}" if label else ""
 
         query = f"""
-        MERGE (e:Entity {{name: $name, type: $entity_type}})
+        MERGE (e:Entity {{name: $name, type: $entity_type, matter_id: $matter_id}})
         ON CREATE SET e.first_seen     = datetime(),
-                      e.mention_count  = 1,
-                      e.matter_id      = $matter_id
+                      e.mention_count  = 1
         ON MATCH  SET e.mention_count  = e.mention_count + 1,
                       e.last_seen      = datetime()
         {label_clause}
@@ -270,10 +269,9 @@ class GraphService:
 
             query = f"""
             UNWIND $entities AS ent
-            MERGE (e:Entity {{name: ent.name, type: ent.type}})
+            MERGE (e:Entity {{name: ent.name, type: ent.type, matter_id: $matter_id}})
             ON CREATE SET e.first_seen     = datetime(),
-                          e.mention_count  = 1,
-                          e.matter_id      = $matter_id
+                          e.mention_count  = 1
             ON MATCH  SET e.mention_count  = e.mention_count + 1,
                           e.last_seen      = datetime()
             {label_clause}
@@ -419,15 +417,18 @@ class GraphService:
     async def get_all_entities_by_type(
         self,
         entity_type: str,
+        matter_id: str | None = None,
     ) -> list[dict[str, Any]]:
-        """Return all entities of a given type."""
-        query = """
-        MATCH (e:Entity {type: $entity_type})
+        """Return all entities of a given type, optionally scoped by matter."""
+        matter_filter = " AND e.matter_id = $matter_id" if matter_id else ""
+        query = f"""
+        MATCH (e:Entity {{type: $entity_type}})
+        WHERE true{matter_filter}
         RETURN e.name AS name, e.type AS type, e.mention_count AS mention_count
         ORDER BY e.mention_count DESC
         """
         try:
-            records = await self._run_query(query, {"entity_type": entity_type})
+            records = await self._run_query(query, {"entity_type": entity_type, "matter_id": matter_id})
             logger.debug(
                 "graph.entities_by_type.fetched",
                 entity_type=entity_type,
@@ -443,6 +444,7 @@ class GraphService:
         canonical_name: str,
         alias_name: str,
         entity_type: str,
+        matter_id: str | None = None,
     ) -> None:
         """Merge two entity nodes, keeping the canonical name.
 
@@ -450,9 +452,10 @@ class GraphService:
         adds the alias to the canonical's aliases list, sums mention counts,
         and deletes the alias node.
         """
-        query = """
-        MATCH (canonical:Entity {name: $canonical_name, type: $entity_type})
-        MATCH (alias:Entity {name: $alias_name, type: $entity_type})
+        matter_filter = ", matter_id: $matter_id" if matter_id else ""
+        query = f"""
+        MATCH (canonical:Entity {{name: $canonical_name, type: $entity_type{matter_filter}}})
+        MATCH (alias:Entity {{name: $alias_name, type: $entity_type{matter_filter}}})
         WHERE canonical <> alias
 
         // Transfer MENTIONED_IN relationships
@@ -480,6 +483,7 @@ class GraphService:
                     "canonical_name": canonical_name,
                     "alias_name": alias_name,
                     "entity_type": entity_type,
+                    "matter_id": matter_id,
                 },
             )
             logger.info(
@@ -725,11 +729,10 @@ class GraphService:
         async def _link(name: str, addr: str, rel_type: str) -> None:
             display = name or addr.split("@")[0]
             query = f"""
-            MERGE (p:Entity:Person {{name: $display, type: 'person'}})
+            MERGE (p:Entity:Person {{name: $display, type: 'person', matter_id: $matter_id}})
             ON CREATE SET p.first_seen = datetime(),
                           p.mention_count = 1,
-                          p.email_address = $addr,
-                          p.matter_id = $matter_id
+                          p.email_address = $addr
             ON MATCH  SET p.mention_count = p.mention_count + 1,
                           p.email_address = coalesce(p.email_address, $addr)
             WITH p
@@ -1055,12 +1058,11 @@ class GraphService:
         Bridges M9b case-intelligence defined terms to graph entity nodes.
         """
         query = """
-        MERGE (alias:Entity {name: $term, type: $entity_type})
+        MERGE (alias:Entity {name: $term, type: $entity_type, matter_id: $matter_id})
         ON CREATE SET alias.first_seen = datetime(),
-                      alias.mention_count = 0,
-                      alias.matter_id = $matter_id
+                      alias.mention_count = 0
         WITH alias
-        MATCH (canonical:Entity {name: $canonical_name, type: $entity_type})
+        MATCH (canonical:Entity {name: $canonical_name, type: $entity_type, matter_id: $matter_id})
         MERGE (alias)-[:ALIAS_OF]->(canonical)
         """
         try:
@@ -1084,6 +1086,29 @@ class GraphService:
                 term=term,
                 canonical=canonical_name,
             )
+            raise
+
+    async def repair_entity_matter_ids(self) -> int:
+        """Backfill ``matter_id`` on entities that are missing it.
+
+        Infers the correct ``matter_id`` from linked ``Document`` nodes via
+        the ``MENTIONED_IN`` relationship.  Returns the number of entities
+        updated.
+        """
+        query = """
+        MATCH (e:Entity)-[:MENTIONED_IN]->(d:Document)
+        WHERE e.matter_id IS NULL AND d.matter_id IS NOT NULL
+        WITH e, collect(DISTINCT d.matter_id)[0] AS inferred
+        SET e.matter_id = inferred
+        RETURN count(e) AS updated
+        """
+        try:
+            records = await self._run_query(query)
+            updated = records[0]["updated"] if records else 0
+            logger.info("graph.repair_matter_ids.complete", updated=updated)
+            return updated
+        except Exception:
+            logger.error("graph.repair_matter_ids.failed")
             raise
 
     async def get_entities_by_names(

@@ -86,8 +86,11 @@ async def ensure_schema(driver: AsyncDriver) -> None:
     """
     async with driver.session() as session:
         # Uniqueness constraints
+        # Drop old constraint that didn't include matter_id
+        await session.run("DROP CONSTRAINT entity_name_type IF EXISTS")
+
         constraints = [
-            "CREATE CONSTRAINT entity_name_type IF NOT EXISTS FOR (e:Entity) REQUIRE (e.name, e.type) IS UNIQUE",
+            "CREATE CONSTRAINT entity_name_type_matter IF NOT EXISTS FOR (e:Entity) REQUIRE (e.name, e.type, e.matter_id) IS UNIQUE",
             "CREATE CONSTRAINT document_id IF NOT EXISTS FOR (d:Document) REQUIRE d.id IS UNIQUE",
             "CREATE CONSTRAINT chunk_id IF NOT EXISTS FOR (c:Chunk) REQUIRE c.id IS UNIQUE",
             "CREATE CONSTRAINT email_id IF NOT EXISTS FOR (em:Email) REQUIRE em.id IS UNIQUE",

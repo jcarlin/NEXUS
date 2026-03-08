@@ -16,7 +16,7 @@ from workers.celery_app import celery_app  # noqa: F401 — ensures @shared_task
 logger = structlog.get_logger(__name__)
 
 
-async def _run_resolution(entity_type: str | None = None) -> dict:
+async def _run_resolution(entity_type: str | None = None, matter_id: str | None = None) -> dict:
     """Async implementation of entity resolution."""
     from neo4j import AsyncGraphDatabase
 
@@ -46,7 +46,7 @@ async def _run_resolution(entity_type: str | None = None) -> dict:
         total_merges = 0
 
         for etype in types_to_process:
-            entities = await gs.get_all_entities_by_type(etype)
+            entities = await gs.get_all_entities_by_type(etype, matter_id=matter_id)
             if len(entities) < 2:
                 continue
 
@@ -64,6 +64,7 @@ async def _run_resolution(entity_type: str | None = None) -> dict:
                             group.canonical,
                             alias,
                             group.entity_type,
+                            matter_id=matter_id,
                         )
                         total_merges += 1
                         logger.info(
@@ -94,7 +95,7 @@ async def _run_resolution(entity_type: str | None = None) -> dict:
     default_retry_delay=60,
     acks_late=True,
 )
-def resolve_entities(self, entity_type: str | None = None) -> dict:
+def resolve_entities(self, entity_type: str | None = None, matter_id: str | None = None) -> dict:
     """Run cross-document entity resolution.
 
     Fetches entities from Neo4j by type, finds fuzzy matches, and
@@ -104,15 +105,17 @@ def resolve_entities(self, entity_type: str | None = None) -> dict:
     ----------
     entity_type:
         Optional — resolve only this entity type. If None, resolves all types.
+    matter_id:
+        Optional — scope resolution to this matter only.
 
     Returns
     -------
     Dict with ``merges_performed`` and ``entity_types_processed``.
     """
-    logger.info("task.resolve_entities.start", entity_type=entity_type)
+    logger.info("task.resolve_entities.start", entity_type=entity_type, matter_id=matter_id)
 
     try:
-        result = asyncio.run(_run_resolution(entity_type))
+        result = asyncio.run(_run_resolution(entity_type, matter_id=matter_id))
         logger.info(
             "task.resolve_entities.complete",
             merges=result["merges_performed"],

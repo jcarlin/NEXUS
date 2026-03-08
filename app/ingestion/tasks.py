@@ -982,7 +982,7 @@ def _stage_complete(ctx: _PipelineContext) -> None:
     # Trigger entity resolution (async, non-blocking)
     from app.entities.tasks import resolve_entities
 
-    resolve_entities.delay()
+    resolve_entities.delay(matter_id=ctx.matter_id)
 
 
 # ---------------------------------------------------------------------------

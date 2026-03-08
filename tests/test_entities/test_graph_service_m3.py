@@ -31,6 +31,7 @@ async def test_merge_entities(graph_service):
         canonical_name="Jeffrey Epstein",
         alias_name="J. Epstein",
         entity_type="person",
+        matter_id="matter-1",
     )
 
     graph_service._run_write.assert_called_once()
@@ -39,6 +40,7 @@ async def test_merge_entities(graph_service):
     assert params["canonical_name"] == "Jeffrey Epstein"
     assert params["alias_name"] == "J. Epstein"
     assert params["entity_type"] == "person"
+    assert params["matter_id"] == "matter-1"
 
 
 @pytest.mark.asyncio
@@ -46,12 +48,13 @@ async def test_merge_entities_cypher_structure(graph_service):
     """The merge query should contain DETACH DELETE for the alias node."""
     graph_service._run_write = AsyncMock()
 
-    await graph_service.merge_entities("A", "B", "person")
+    await graph_service.merge_entities("A", "B", "person", matter_id="m1")
 
     cypher = graph_service._run_write.call_args[0][0]
     assert "DETACH DELETE" in cypher
     assert "MERGE" in cypher
     assert "aliases" in cypher
+    assert "matter_id" in cypher
 
 
 @pytest.mark.asyncio
