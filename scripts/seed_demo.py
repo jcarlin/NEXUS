@@ -652,11 +652,11 @@ def phase4d_case_context(settings: Settings) -> None:
                 INSERT INTO case_contexts
                     (id, matter_id, anchor_document_id, status, timeline, created_at, updated_at)
                 VALUES
-                    (:id, :mid, :anchor, 'confirmed', :timeline::json, :now, :now)
+                    (:id, :mid, :anchor, 'confirmed', CAST(:timeline AS json), :now, :now)
                 ON CONFLICT (matter_id) DO UPDATE
                     SET anchor_document_id = :anchor,
                         status = 'confirmed',
-                        timeline = :timeline::json,
+                        timeline = CAST(:timeline AS json),
                         updated_at = :now
                 RETURNING id
             """),
@@ -711,7 +711,7 @@ def phase4d_case_context(settings: Settings) -> None:
                     INSERT INTO case_claims
                         (id, case_context_id, claim_number, claim_label, claim_text,
                          legal_elements, source_pages, created_at, updated_at)
-                    VALUES (:id, :cid, :num, :label, :text, :elements::json, :pages::json, :now, :now)
+                    VALUES (:id, :cid, :num, :label, :text, CAST(:elements AS json), CAST(:pages AS json), :now, :now)
                 """),
                 {
                     "id": uuid4(),
@@ -841,7 +841,7 @@ def phase4e_evaluation_data(settings: Settings) -> None:
                     INSERT INTO evaluation_dataset_items
                         (id, dataset_type, question, expected_answer, tags, metadata_, created_at)
                     VALUES
-                        (:id, 'ground_truth', :q, :a, :tags::json, :meta::json, :now)
+                        (:id, 'ground_truth', :q, :a, CAST(:tags AS json), CAST(:meta AS json), :now)
                     ON CONFLICT (id) DO NOTHING
                 """),
                 {
@@ -862,7 +862,7 @@ def phase4e_evaluation_data(settings: Settings) -> None:
                     (id, mode, status, metrics, config_overrides, total_items,
                      processed_items, created_at, completed_at)
                 VALUES
-                    (:id, 'full', 'completed', :metrics::json, :overrides::json,
+                    (:id, 'full', 'completed', CAST(:metrics AS json), CAST(:overrides AS json),
                      :total, :processed, :created, :completed)
             """),
             {
