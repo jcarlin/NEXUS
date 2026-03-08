@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { ChatLayout } from "@/components/chat/chat-layout";
-import { ChatHeader } from "@/components/chat/chat-header";
 import { MessageList } from "@/components/chat/message-list";
 import { MessageInput } from "@/components/chat/message-input";
 import { FindingsBar } from "@/components/chat/findings-bar";
@@ -75,7 +74,6 @@ function ChatPage() {
   return (
     <ChatLayout>
       <div className="flex h-full flex-col">
-        <ChatHeader />
         <MessageList
           messages={[]}
           streaming={

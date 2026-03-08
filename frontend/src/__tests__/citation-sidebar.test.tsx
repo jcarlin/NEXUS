@@ -59,7 +59,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useCitationStore } from "@/stores/citation-store";
 import { useAppStore } from "@/stores/app-store";
 import { CitationSidebar } from "@/components/chat/citation-sidebar";
-import { ChatHeader } from "@/components/chat/chat-header";
 import { ChatLayout } from "@/components/chat/chat-layout";
 import type { SourceDocument } from "@/types";
 
@@ -235,37 +234,39 @@ describe("useCitationStore", () => {
   });
 });
 
-describe("ChatHeader", () => {
+describe("ChatLayout citation toggle button", () => {
   beforeEach(() => {
     useCitationStore.getState().close();
   });
 
-  const renderHeader = () =>
+  const renderLayout = () =>
     render(
       <TooltipProvider>
-        <ChatHeader />
+        <ChatLayout>
+          <div>Chat content</div>
+        </ChatLayout>
       </TooltipProvider>,
     );
 
   it("renders toggle button", () => {
-    renderHeader();
+    renderLayout();
     expect(screen.getByRole("button", { name: "Toggle citation sidebar" })).toBeInTheDocument();
   });
 
   it("button is disabled when no sources loaded", () => {
-    renderHeader();
+    renderLayout();
     expect(screen.getByRole("button", { name: "Toggle citation sidebar" })).toBeDisabled();
   });
 
   it("button is enabled when sources are loaded", () => {
     useCitationStore.getState().openWithSources(MOCK_SOURCES, []);
-    renderHeader();
+    renderLayout();
     expect(screen.getByRole("button", { name: "Toggle citation sidebar" })).toBeEnabled();
   });
 
   it("calls toggle on click", () => {
     useCitationStore.getState().openWithSources(MOCK_SOURCES, []);
-    renderHeader();
+    renderLayout();
 
     const btn = screen.getByRole("button", { name: "Toggle citation sidebar" });
     fireEvent.click(btn);

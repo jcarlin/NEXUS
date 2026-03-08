@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "@tanstack/react-router";
-import { Plus, MessageSquare, Loader2, PanelLeftClose, PanelLeft } from "lucide-react";
+import { Plus, MessageSquare, Loader2, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { apiClient } from "@/api/client";
 import { useAppStore } from "@/stores/app-store";
 import { Button } from "@/components/ui/button";
@@ -86,8 +86,8 @@ export function ThreadSidebar({ collapsed, onToggle }: ThreadSidebarProps) {
       <div className="flex h-full w-full flex-col items-center border-r bg-muted/30 py-2 gap-1">
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onToggle}>
-              <PanelLeft className="h-4 w-4" />
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onToggle}>
+              <ChevronsRight className="h-4 w-4" />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="right">Expand sidebar (⌘B)</TooltipContent>
@@ -119,7 +119,7 @@ export function ThreadSidebar({ collapsed, onToggle }: ThreadSidebarProps) {
             </Link>
           </Button>
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onToggle}>
-            <PanelLeftClose className="h-3.5 w-3.5" />
+            <ChevronsLeft className="h-3.5 w-3.5" />
           </Button>
         </div>
       </div>

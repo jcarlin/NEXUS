@@ -5,8 +5,11 @@ import {
   ResizableHandle,
 } from "@/components/ui/resizable";
 import { usePanelRef } from "react-resizable-panels";
+import { ChevronsLeft, ChevronsRight } from "lucide-react";
 import { ThreadSidebar } from "./thread-sidebar";
 import { CitationSidebar } from "./citation-sidebar";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useCitationStore } from "@/stores/citation-store";
 import { useAppStore } from "@/stores/app-store";
 
@@ -19,6 +22,8 @@ interface ChatLayoutProps {
 export function ChatLayout({ children }: ChatLayoutProps) {
   const citationOpen = useCitationStore((s) => s.isOpen);
   const citationMode = useCitationStore((s) => s.mode);
+  const hasSources = useCitationStore((s) => s.allSources.length > 0);
+  const toggleCitation = useCitationStore((s) => s.toggle);
   const collapsed = useAppStore((s) => s.threadSidebarCollapsed);
   const toggle = useAppStore((s) => s.toggleThreadSidebar);
   const setSidebarCollapsed = useAppStore((s) => s.setSidebarCollapsed);
@@ -75,7 +80,30 @@ export function ChatLayout({ children }: ChatLayoutProps) {
 
       <ResizablePanelGroup direction="horizontal" className="flex-1">
         <ResizablePanel id="chat-main" minSize="35%">
-          {children}
+          <div className="relative h-full">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute top-2 right-2 z-10 h-7 w-7"
+                  onClick={toggleCitation}
+                  disabled={!citationOpen && !hasSources}
+                  aria-label="Toggle citation sidebar"
+                >
+                  {citationOpen ? (
+                    <ChevronsRight className="h-4 w-4" />
+                  ) : (
+                    <ChevronsLeft className="h-4 w-4" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                {citationOpen ? "Close citations" : "Open citations"}
+              </TooltipContent>
+            </Tooltip>
+            {children}
+          </div>
         </ResizablePanel>
 
         <ResizableHandle

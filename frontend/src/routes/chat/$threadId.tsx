@@ -4,7 +4,6 @@ import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { apiClient } from "@/api/client";
 import { ChatLayout } from "@/components/chat/chat-layout";
-import { ChatHeader } from "@/components/chat/chat-header";
 import { MessageList } from "@/components/chat/message-list";
 import { MessageInput } from "@/components/chat/message-input";
 import { FindingsBar } from "@/components/chat/findings-bar";
@@ -91,7 +90,6 @@ function ChatThreadPage() {
   return (
     <ChatLayout>
       <div className="flex h-full flex-col">
-        <ChatHeader />
         <MessageList
           messages={messages}
           streaming={

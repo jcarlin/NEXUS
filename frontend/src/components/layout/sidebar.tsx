@@ -16,8 +16,8 @@ import {
   Shield,
   ScrollText,
   FlaskConical,
-  PanelLeftClose,
-  PanelLeft,
+  ChevronsLeft,
+  ChevronsRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/stores/app-store";
@@ -144,9 +144,14 @@ export function Sidebar() {
     >
       <div className={cn("flex h-14 items-center border-b border-sidebar-border/50 px-3", collapsed ? "justify-center" : "justify-between")}>
         {!collapsed && <span className="text-lg font-bold tracking-widest text-amber">NEXUS</span>}
-        <Button variant="ghost" size="icon" onClick={toggleSidebar} className="h-8 w-8 text-muted-foreground hover:text-foreground">
-          {collapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="ghost" size="icon" onClick={toggleSidebar} className="h-7 w-7 text-muted-foreground hover:text-foreground">
+              {collapsed ? <ChevronsRight className="h-4 w-4" /> : <ChevronsLeft className="h-4 w-4" />}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="right">{collapsed ? "Expand sidebar" : "Collapse sidebar"}</TooltipContent>
+        </Tooltip>
       </div>
 
       <ScrollArea className="flex-1 px-2 py-3">
