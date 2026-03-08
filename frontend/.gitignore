@@ -6,6 +6,6 @@ build/
 coverage/
 test-results/
 playwright-report/
-src/routeTree.gen.ts
+# src/routeTree.gen.ts — committed for Vercel (tsc runs before vite plugin generates it)
 # src/api/generated/ — committed for Vercel (orval needs live backend to regenerate)
 e2e/.auth/
