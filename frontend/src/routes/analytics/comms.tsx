@@ -17,11 +17,15 @@ import {
 import type { PaginatedResponse } from "@/types";
 import type { ThreadResponse } from "@/api/generated/schemas";
 
-// Local type — the generated CommunicationMatrixResponse has different fields
-// (pairs/matter_id) than what this component receives (matrix/entities).
-interface CommMatrixResponse {
-  matrix: MatrixEntry[];
-  entities: string[];
+// Matches the backend CommunicationPairsResponse shape
+interface CommMatrixApiResponse {
+  pairs: Array<{
+    person_a: string;
+    person_b: string;
+    emails: Array<{ email_id: string; subject?: string; date?: string }>;
+    total: number;
+  }>;
+  matter_id?: string;
 }
 
 export const Route = createFileRoute("/analytics/comms")({
@@ -34,11 +38,18 @@ function CommsMatrixPage() {
   const { data, isLoading } = useQuery({
     queryKey: ["communication-matrix"],
     queryFn: () =>
-      apiClient<CommMatrixResponse>({
+      apiClient<CommMatrixApiResponse>({
         url: "/api/v1/analytics/communication-matrix",
         method: "GET",
       }),
   });
+
+  const matrix: MatrixEntry[] = (data?.pairs ?? []).map((p) => ({
+    sender: p.person_a,
+    receiver: p.person_b,
+    count: p.total,
+  }));
+  const entities = [...new Set((data?.pairs ?? []).flatMap((p) => [p.person_a, p.person_b]))];
 
   return (
     <div className="space-y-6 animate-page-in">
@@ -57,8 +68,8 @@ function CommsMatrixPage() {
 
         <TabsContent value="matrix">
           <CommMatrix
-            matrix={data?.matrix ?? []}
-            entities={data?.entities ?? []}
+            matrix={matrix}
+            entities={entities}
             loading={isLoading}
             onCellClick={(sender, receiver) => setDrilldown({ personA: sender, personB: receiver })}
           />

@@ -858,22 +858,24 @@ def _stage_index(ctx: _PipelineContext) -> None:
             "bcc": ctx.parse_result.metadata.get("bcc", ""),
         }
 
-    asyncio.run(
-        _index_to_neo4j(
-            settings=ctx.settings,
-            doc_id=ctx.job_id,
-            filename=ctx.filename,
-            doc_type=ctx.doc_type,
-            page_count=ctx.parse_result.page_count,
-            minio_path=ctx.minio_path,
-            entities=ctx.all_entities,
-            chunk_data=ctx.chunk_data_for_neo4j,
-            matter_id=ctx.matter_id,
-            email_metadata=email_meta,
+    try:
+        asyncio.run(
+            _index_to_neo4j(
+                settings=ctx.settings,
+                doc_id=ctx.job_id,
+                filename=ctx.filename,
+                doc_type=ctx.doc_type,
+                page_count=ctx.parse_result.page_count,
+                minio_path=ctx.minio_path,
+                entities=ctx.all_entities,
+                chunk_data=ctx.chunk_data_for_neo4j,
+                matter_id=ctx.matter_id,
+                email_metadata=email_meta,
+            )
         )
-    )
-
-    logger.info("task.neo4j_indexed", entities=len(ctx.all_entities))
+        logger.info("task.neo4j_indexed", entities=len(ctx.all_entities))
+    except Exception:
+        logger.error("task.neo4j_index_failed", doc_id=ctx.job_id, exc_info=True)
 
 
 def _stage_complete(ctx: _PipelineContext) -> None:
@@ -1478,19 +1480,23 @@ def import_text_document(
             qdrant.upsert(collection_name=TEXT_COLLECTION, points=points)
             logger.info("task.import_text.qdrant_indexed", points=len(points))
 
-        asyncio.run(
-            _index_to_neo4j(
-                settings=settings,
-                doc_id=job_id,
-                filename=filename,
-                doc_type=doc_type,
-                page_count=page_count,
-                minio_path=minio_path,
-                entities=all_entities,
-                chunk_data=chunk_data_for_neo4j,
-                matter_id=matter_id,
+        try:
+            asyncio.run(
+                _index_to_neo4j(
+                    settings=settings,
+                    doc_id=job_id,
+                    filename=filename,
+                    doc_type=doc_type,
+                    page_count=page_count,
+                    minio_path=minio_path,
+                    entities=all_entities,
+                    chunk_data=chunk_data_for_neo4j,
+                    matter_id=matter_id,
+                )
             )
-        )
+            logger.info("task.neo4j_indexed", entities=len(all_entities))
+        except Exception:
+            logger.error("task.neo4j_index_failed", doc_id=job_id, exc_info=True)
 
         # ---------------------------------------------------------------
         # Stage 6: COMPLETE — document record + post-processing

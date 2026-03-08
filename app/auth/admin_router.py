@@ -26,7 +26,15 @@ from app.auth.schemas import (
     UserUpdateRequest,
 )
 from app.auth.service import AuthService
-from app.dependencies import get_db
+from app.dependencies import get_db, get_graph_service
+from app.entities.schemas import (
+    DocumentEntityStatus,
+    KGReprocessRequest,
+    KGReprocessResponse,
+    KGResolveRequest,
+    KGResolveResponse,
+    KGStatusResponse,
+)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -242,3 +250,120 @@ async def deactivate_user(
         {"user_id": user_id},
     )
     await db.commit()
+
+
+# ------------------------------------------------------------------
+# Knowledge Graph Admin
+# ------------------------------------------------------------------
+
+
+@router.get("/knowledge-graph/status", response_model=KGStatusResponse)
+async def kg_status(
+    db: AsyncSession = Depends(get_db),
+    _current_user: UserRecord = Depends(require_role("admin")),
+) -> KGStatusResponse:
+    """Return knowledge-graph health: node/edge counts + per-document status."""
+    gs = get_graph_service()
+    stats = await gs.get_graph_stats()
+
+    # Fetch documents with entity counts from Postgres
+    result = await db.execute(
+        text("""
+            SELECT id, filename, entity_count, created_at
+            FROM documents
+            ORDER BY created_at DESC
+            LIMIT 500
+        """)
+    )
+    rows = result.mappings().all()
+
+    # Batch-check which docs have :Document nodes in Neo4j
+    doc_ids = [str(r["id"]) for r in rows]
+    indexed_ids: set[str] = set()
+    if doc_ids:
+        try:
+            neo4j_result = await gs._run_query(
+                "MATCH (d:Document) WHERE d.doc_id IN $ids RETURN d.doc_id AS did",
+                {"ids": doc_ids},
+            )
+            indexed_ids = {r["did"] for r in neo4j_result}
+        except Exception:
+            pass  # Neo4j might be down
+
+    documents = [
+        DocumentEntityStatus(
+            doc_id=r["id"],
+            filename=r["filename"],
+            entity_count=r["entity_count"] or 0,
+            neo4j_indexed=str(r["id"]) in indexed_ids,
+            created_at=r["created_at"],
+        )
+        for r in rows
+    ]
+
+    return KGStatusResponse(
+        total_nodes=stats.get("total_nodes", 0),
+        total_edges=stats.get("total_edges", 0),
+        node_counts=stats.get("node_counts", {}),
+        edge_counts=stats.get("edge_counts", {}),
+        documents=documents,
+        total_documents=len(documents),
+        indexed_documents=len([d for d in documents if d.neo4j_indexed]),
+    )
+
+
+@router.post("/knowledge-graph/reprocess", response_model=KGReprocessResponse)
+async def kg_reprocess(
+    request: KGReprocessRequest,
+    db: AsyncSession = Depends(get_db),
+    _current_user: UserRecord = Depends(require_role("admin")),
+) -> KGReprocessResponse:
+    """Dispatch a Celery task to reprocess documents into Neo4j."""
+    from app.entities.tasks import reprocess_entities_to_neo4j
+
+    if request.all_unprocessed:
+        # Find docs with entity_count > 0 that aren't in Neo4j
+        gs = get_graph_service()
+        result = await db.execute(text("SELECT id FROM documents WHERE entity_count > 0"))
+        all_ids = [str(r["id"]) for r in result.mappings().all()]
+
+        indexed_ids: set[str] = set()
+        if all_ids:
+            try:
+                neo4j_result = await gs._run_query(
+                    "MATCH (d:Document) WHERE d.doc_id IN $ids RETURN d.doc_id AS did",
+                    {"ids": all_ids},
+                )
+                indexed_ids = {r["did"] for r in neo4j_result}
+            except Exception:
+                pass
+
+        doc_ids = [did for did in all_ids if did not in indexed_ids]
+    elif request.document_ids:
+        doc_ids = [str(did) for did in request.document_ids]
+    else:
+        raise HTTPException(status_code=400, detail="Provide document_ids or set all_unprocessed=true")
+
+    if not doc_ids:
+        raise HTTPException(status_code=400, detail="No documents to reprocess")
+
+    task = reprocess_entities_to_neo4j.delay(doc_ids)
+    return KGReprocessResponse(task_id=task.id, document_count=len(doc_ids))
+
+
+@router.post("/knowledge-graph/resolve", response_model=KGResolveResponse)
+async def kg_resolve(
+    request: KGResolveRequest,
+    _current_user: UserRecord = Depends(require_role("admin")),
+) -> KGResolveResponse:
+    """Dispatch entity resolution (simple fuzzy or full agent)."""
+    if request.mode == "agent":
+        from app.entities.tasks import entity_resolution_agent
+
+        task = entity_resolution_agent.delay(matter_id="00000000-0000-0000-0000-000000000001")
+    else:
+        from app.entities.tasks import resolve_entities
+
+        task = resolve_entities.delay()
+
+    return KGResolveResponse(task_id=task.id, mode=request.mode)

@@ -75,3 +75,52 @@ class PathResponse(BaseModel):
     entity_a: str
     entity_b: str
     paths: list[dict] = Field(default_factory=list)
+
+
+class DocumentEntityStatus(BaseModel):
+    """Per-document entity/graph status for the KG admin view."""
+
+    doc_id: UUID
+    filename: str
+    entity_count: int
+    neo4j_indexed: bool
+    created_at: datetime
+
+
+class KGStatusResponse(BaseModel):
+    """Full knowledge-graph health snapshot."""
+
+    total_nodes: int
+    total_edges: int
+    node_counts: dict[str, int]
+    edge_counts: dict[str, int]
+    documents: list[DocumentEntityStatus]
+    total_documents: int
+    indexed_documents: int
+
+
+class KGReprocessRequest(BaseModel):
+    """Request to reprocess documents into Neo4j."""
+
+    document_ids: list[UUID] | None = None
+    all_unprocessed: bool = False
+
+
+class KGReprocessResponse(BaseModel):
+    """Confirmation of reprocess task dispatch."""
+
+    task_id: str
+    document_count: int
+
+
+class KGResolveRequest(BaseModel):
+    """Request to run entity resolution."""
+
+    mode: str = "simple"
+
+
+class KGResolveResponse(BaseModel):
+    """Confirmation of resolution task dispatch."""
+
+    task_id: str
+    mode: str

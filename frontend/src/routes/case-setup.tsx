@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/api/client";
 import { useAppStore } from "@/stores/app-store";
 import { useFeatureFlag } from "@/hooks/use-feature-flags";
@@ -11,6 +11,7 @@ import { StepProcessing } from "@/components/case-setup/step-processing";
 import { StepClaims } from "@/components/case-setup/step-claims";
 import { StepPartiesTerms } from "@/components/case-setup/step-parties-terms";
 import { StepConfirm } from "@/components/case-setup/step-confirm";
+import { ContextSummary } from "@/components/case-setup/context-summary";
 
 export const Route = createFileRoute("/case-setup")({
   component: CaseSetupPage,
@@ -49,6 +50,7 @@ function genId() {
 function CaseSetupPage() {
   const matterId = useAppStore((s) => s.matterId);
   const caseSetupAgentEnabled = useFeatureFlag("case_setup_agent");
+  const [forceWizard, setForceWizard] = useState(false);
   const [step, setStep] = useState(0);
   const [uploaded, setUploaded] = useState(false);
   // Stored for future use (e.g. direct context polling)
@@ -60,6 +62,26 @@ function CaseSetupPage() {
   ]);
   const [parties, setParties] = useState<Party[]>([]);
   const [terms, setTerms] = useState<DefinedTerm[]>([]);
+
+  const { data: existingContext, isLoading: contextLoading } = useQuery({
+    queryKey: ["case-context", matterId],
+    queryFn: () =>
+      apiClient<{
+        status: string;
+        claims?: Array<{ claim_number: number; claim_label: string; claim_text: string }>;
+        parties?: Array<{ name: string; role: string }>;
+        defined_terms?: Array<{ term: string; definition: string }>;
+        key_dates?: Array<{ date: string; description: string }>;
+      }>({
+        url: `/api/v1/cases/${matterId}/context`,
+        method: "GET",
+      }),
+    enabled: !!matterId,
+    retry: (failureCount, error) => {
+      if (error instanceof Error && error.message.includes("404")) return false;
+      return failureCount < 2;
+    },
+  });
 
   const saveMutation = useMutation({
     mutationFn: () =>
@@ -110,6 +132,34 @@ function CaseSetupPage() {
 
   function handleBack() {
     setStep((s) => Math.max(s - 1, 0));
+  }
+
+  if (contextLoading) {
+    return (
+      <div className="space-y-6 animate-page-in">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Case Setup</h1>
+          <p className="text-muted-foreground">Loading case context...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (existingContext?.status === "confirmed" && !forceWizard) {
+    return (
+      <div className="space-y-6 animate-page-in">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Case Setup</h1>
+          <p className="text-muted-foreground">
+            Configure case context: upload documents, define claims, parties, and terms.
+          </p>
+        </div>
+        <ContextSummary
+          context={existingContext}
+          onRerun={() => setForceWizard(true)}
+        />
+      </div>
+    );
   }
 
   return (

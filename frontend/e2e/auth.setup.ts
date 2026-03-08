@@ -16,5 +16,13 @@ setup("authenticate", async ({ page }) => {
   // Wait for matter to be selected (app needs matter context)
   await page.waitForTimeout(2_000);
 
+  // Inject demo matter into the persisted Zustand store
+  await page.evaluate(() => {
+    const raw = localStorage.getItem("nexus-app-store");
+    const store = raw ? JSON.parse(raw) : { state: {} };
+    store.state = { ...store.state, matterId: "00000000-0000-0000-0000-000000000001" };
+    localStorage.setItem("nexus-app-store", JSON.stringify(store));
+  });
+
   await page.context().storageState({ path: authFile });
 });

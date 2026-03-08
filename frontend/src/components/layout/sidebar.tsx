@@ -59,6 +59,7 @@ const adminNav: NavItem[] = [
   { to: "/admin/users", label: "Users", icon: Shield, roles: ["admin"] },
   { to: "/admin/audit-log", label: "Audit Log", icon: ScrollText, roles: ["admin"] },
   { to: "/admin/evaluation", label: "Evaluation", icon: FlaskConical, roles: ["admin"] },
+  { to: "/admin/knowledge-graph", label: "Knowledge Graph", icon: Network, roles: ["admin"] },
 ];
 
 export function Sidebar() {

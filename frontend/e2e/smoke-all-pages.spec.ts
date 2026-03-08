@@ -27,6 +27,7 @@ const PAGES: { path: string; label: string; heading?: RegExp }[] = [
   { path: "/admin/users", label: "Admin Users" },
   { path: "/admin/audit-log", label: "Audit Log" },
   { path: "/admin/evaluation", label: "Evaluation" },
+  { path: "/admin/knowledge-graph", label: "Knowledge Graph" },
 ];
 
 type PageError = {
