@@ -3,16 +3,16 @@
 # Replace {$DOMAIN} with your actual domain (set in .env or shell).
 
 {$DOMAIN:localhost} {
-    # API — proxy to FastAPI
-    handle /api/* {
-        reverse_proxy api:8000
-    }
-
-    # SSE streaming — extended timeouts
+    # SSE streaming — extended timeouts (must precede generic /api/* handler)
     handle /api/v1/query/stream {
         reverse_proxy api:8000 {
             flush_interval -1
         }
+    }
+
+    # API — proxy to FastAPI (all other /api/* routes)
+    handle /api/* {
+        reverse_proxy api:8000
     }
 
     # MinIO storage — proxy presigned URL requests

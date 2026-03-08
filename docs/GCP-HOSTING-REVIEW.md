@@ -1,0 +1,286 @@
+# GCP Hosting Review
+
+**Date:** 2026-03-08
+**Scope:** All cloud deployment configuration — `CLOUD-DEPLOY.md`, `docker-compose.cloud.yml`, `docker-compose.prod.yml`, `Caddyfile`, `Dockerfile`, `.env.example`, `frontend/vercel.json`
+
+---
+
+## Critical Issues
+
+### 1. Caddyfile route ordering bug — SSE streaming handler is unreachable
+
+The `/api/v1/query/stream` handler (lines 12-16) is defined **after** the generic `/api/*` handler (lines 8-10). Caddy's `handle` directive uses first-match semantics, so all `/api/*` requests — including SSE streams — are caught by the generic handler. The SSE-specific handler with `flush_interval -1` never executes.
+
+**Impact:** SSE responses are buffered instead of streamed. Users experience delayed, chunked responses instead of real-time token streaming.
+
+**Fix:** Move the specific SSE route before the generic API catch-all:
+
+```caddyfile
+# SSE streaming — must come BEFORE generic /api/* handler
+handle /api/v1/query/stream {
+    reverse_proxy api:8000 {
+        flush_interval -1
+    }
+}
+
+# API — proxy to FastAPI (all other /api/* routes)
+handle /api/* {
+    reverse_proxy api:8000
+}
+```
+
+### 2. Missing `.env.cloud.example` file
+
+`CLOUD-DEPLOY.md` (line 97) instructs users to `cp .env.cloud.example .env`, but this file does not exist in the repository. Users must manually adapt `.env.example` for cloud deployment, which is error-prone — they need to know which variables to change (e.g., `MINIO_PUBLIC_ENDPOINT`, `DOMAIN`, `CORS_ALLOWED_ORIGINS`) and which docker-internal URLs to override (handled by compose environment, but confusing).
+
+**Fix:** Create `.env.cloud.example` with cloud-specific defaults and comments, or update the docs to reference `.env.example` with clear instructions on which values to change.
+
+### 3. Flower dashboard exposed without authentication (port 5555)
+
+`docker-compose.prod.yml` exposes Flower on port 5555 with no authentication. While the GCP firewall only allows 80/443, the service is still bound to `0.0.0.0:5555` on the VM. Any process on the VM or any misconfigured firewall rule exposes full Celery task visibility (task names, arguments, worker status).
+
+**Fix:** Either:
+- Remove the port mapping in cloud deployments (Flower is a dev tool)
+- Add Flower's built-in auth: `--basic-auth=user:password`
+- Route Flower through Caddy with auth middleware
+
+### 4. No container resource limits
+
+None of the compose files set `mem_limit`, `cpus`, or `deploy.resources`. On a 2 vCPU / 8GB VM running 8 containers, a single runaway process (e.g., Neo4j during a large import, or Qdrant indexing) can OOM the entire VM, killing all services including the database.
+
+**Fix:** Add resource limits in `docker-compose.cloud.yml`:
+
+```yaml
+services:
+  api:
+    deploy:
+      resources:
+        limits:
+          memory: 1536M
+          cpus: '0.5'
+  postgres:
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+  qdrant:
+    deploy:
+      resources:
+        limits:
+          memory: 1536M
+  neo4j:
+    deploy:
+      resources:
+        limits:
+          memory: 1536M
+  worker:
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+  redis:
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+  minio:
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+  caddy:
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+```
+
+---
+
+## Security Concerns
+
+### 5. Internal service ports bound to host
+
+The base `docker-compose.yml` exposes all infrastructure ports to the host:
+- PostgreSQL: 5432
+- Redis: 6379
+- Qdrant: 6333, 6334
+- Neo4j: 7474 (browser), 7687 (bolt)
+- MinIO: 9000, 9001 (console)
+
+The GCP firewall only allows 80/443/SSH, but this relies entirely on the firewall being correctly configured. Defense-in-depth says these ports should not be host-bound in cloud deployments.
+
+**Fix:** Override port bindings in `docker-compose.cloud.yml` to bind only to `127.0.0.1` or remove them entirely:
+
+```yaml
+services:
+  postgres:
+    ports: !override []
+  redis:
+    ports: !override []
+  qdrant:
+    ports: !override []
+  neo4j:
+    ports: !override []
+  minio:
+    ports: !override
+      - "127.0.0.1:9000:9000"  # Only for local debug via SSH tunnel
+```
+
+### 6. SSH firewall rule uses ephemeral IP
+
+The SSH firewall rule uses `$(curl -s ifconfig.me)/32`. If the deployer's IP changes (common with residential ISPs, VPNs, or mobile), they lose SSH access and must update the rule from the GCP console. No mention of this in the docs.
+
+**Recommendation:** Document this limitation and suggest alternatives:
+- Use GCP IAP (Identity-Aware Proxy) for SSH: `gcloud compute ssh --tunnel-through-iap`
+- Use a CIDR range instead of a single IP
+- Note that the IP-based rule must be updated when your IP changes
+
+### 7. No HTTPS enforcement for MinIO presigned URLs
+
+The Caddyfile proxies `/storage/*` to MinIO, but presigned URLs generated by the application use `MINIO_PUBLIC_ENDPOINT`. If this is set to the raw MinIO endpoint (port 9000) instead of the Caddy-proxied path, presigned URLs bypass TLS.
+
+**Recommendation:** Ensure `MINIO_PUBLIC_ENDPOINT` in the cloud `.env` is set to `YOUR_DOMAIN/storage` (the Caddy-proxied path), and document this clearly.
+
+---
+
+## Reliability Gaps
+
+### 8. No backup strategy
+
+No backup procedures are documented for any persistent data:
+- **PostgreSQL** — 27 tables including audit logs, chat history, case contexts
+- **Qdrant** — All vector embeddings (expensive to regenerate)
+- **Neo4j** — Knowledge graph
+- **MinIO** — Original uploaded documents
+
+A disk failure or accidental `docker compose down -v` destroys everything.
+
+**Recommendation:** Add a backup section to `CLOUD-DEPLOY.md`:
+- PostgreSQL: `pg_dump` via cron or GCP snapshot schedules
+- GCE disk snapshots (covers all Docker volumes)
+- Document restore procedures
+
+### 9. No monitoring or alerting
+
+No health check automation, uptime monitoring, or alerting. If the VM runs out of disk, a container crashes, or the API becomes unresponsive, nobody is notified.
+
+**Recommendation:** At minimum:
+- GCP uptime checks on `https://DOMAIN/health`
+- GCP alerting on VM CPU/memory/disk thresholds
+- Consider adding a `docker compose` restart wrapper via systemd
+
+### 10. No systemd service for auto-start
+
+If the VM reboots (GCP maintenance, manual restart), Docker Compose services do not start automatically. The `restart: unless-stopped` policy only applies while Docker is running — Docker itself needs to be configured to start on boot, and `docker compose up` must be run.
+
+**Fix:** Create a systemd unit file:
+
+```ini
+[Unit]
+Description=NEXUS Docker Compose
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/home/USER/nexus
+ExecStart=/usr/bin/docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.cloud.yml up -d
+ExecStop=/usr/bin/docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.cloud.yml down
+
+[Install]
+WantedBy=multi-user.target
+```
+
+---
+
+## Performance Considerations
+
+### 11. VM sizing may be tight
+
+The e2-standard-2 (2 vCPU / 8GB RAM) runs 8 containers. Approximate memory footprint at idle:
+- PostgreSQL: ~200MB
+- Neo4j: ~500MB (JVM heap)
+- Qdrant: ~300MB (depends on collection size)
+- Redis: ~50MB
+- MinIO: ~100MB
+- FastAPI: ~200MB
+- Celery worker: ~300MB (GLiNER model loaded)
+- Caddy: ~20MB
+
+**Total idle:** ~1.7GB. Under load (query with Neo4j traversal + Qdrant search + LLM call), this can spike to 4-6GB. With a 50k+ page corpus, Qdrant and Neo4j memory usage will grow significantly.
+
+**Recommendation:** For demo with a small corpus, e2-standard-2 is adequate. For the full 50k+ page corpus, upgrade to e2-standard-4 (4 vCPU / 16GB, ~$98/mo) or e2-highmem-2 (2 vCPU / 16GB, ~$68/mo). Update the cost table in the docs accordingly.
+
+### 12. No log rotation
+
+Docker's default JSON logging driver has no size limits. On a 50GB disk, container logs can fill the disk over time, especially the Celery worker during ingestion.
+
+**Fix:** Add logging configuration in `docker-compose.cloud.yml`:
+
+```yaml
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  api:
+    logging: *default-logging
+  worker:
+    logging: *default-logging
+  # ... etc
+```
+
+---
+
+## Documentation Issues
+
+### 13. Deployment doc references nonexistent file
+
+Line 97 references `.env.cloud.example` which doesn't exist. See issue #2.
+
+### 14. No rollback procedure
+
+The redeploy instructions (`git pull` → `docker compose up --build`) have no rollback path. If a bad deploy breaks the API, there's no documented way to revert.
+
+**Recommendation:** Document:
+- `git checkout <previous-commit> && docker compose up -d --build api worker`
+- Or use tagged releases/images for safer rollbacks
+
+### 15. Missing cloud-specific env vars in `.env.example`
+
+`DOMAIN` and `MINIO_PUBLIC_ENDPOINT` are referenced in `CLOUD-DEPLOY.md` but not present (or commented out with cloud context) in `.env.example`. `MINIO_PUBLIC_ENDPOINT` has a comment but `DOMAIN` is absent entirely.
+
+**Fix:** Add `DOMAIN` to `.env.example` with a comment:
+
+```bash
+# === Cloud Deployment ===
+# DOMAIN=api.nexus-demo.com  # Used by Caddy for TLS provisioning (cloud deploy only)
+```
+
+---
+
+## Summary
+
+| # | Issue | Severity | Effort |
+|---|-------|----------|--------|
+| 1 | Caddyfile SSE route unreachable | **Critical** | 5 min |
+| 2 | Missing `.env.cloud.example` | High | 15 min |
+| 3 | Flower exposed without auth | High | 5 min |
+| 4 | No container resource limits | High | 15 min |
+| 5 | Internal ports bound to host | Medium | 10 min |
+| 6 | SSH firewall uses ephemeral IP | Medium | Docs only |
+| 7 | MinIO presigned URL TLS gap | Medium | Docs only |
+| 8 | No backup strategy | High | 30 min |
+| 9 | No monitoring/alerting | Medium | 30 min |
+| 10 | No systemd auto-start | Medium | 10 min |
+| 11 | VM sizing may be tight | Low | Docs only |
+| 12 | No log rotation | Medium | 5 min |
+| 13 | Docs reference missing file | High | See #2 |
+| 14 | No rollback procedure | Medium | Docs only |
+| 15 | Missing DOMAIN in .env.example | Low | 2 min |
+
+**Recommended priority:** Fix #1 (Caddyfile bug) immediately — it breaks the core streaming UX. Then address #2-4 before any cloud deployment.
