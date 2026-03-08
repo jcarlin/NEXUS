@@ -117,7 +117,7 @@ class RelationshipExtractor:
             if self._provider == "anthropic":
                 result = client.chat.completions.create(
                     model=self._model,
-                    max_tokens=2048,
+                    max_tokens=16384,
                     messages=[{"role": "user", "content": prompt}],
                     response_model=RelationshipList,
                 )
