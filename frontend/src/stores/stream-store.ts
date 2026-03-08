@@ -107,8 +107,6 @@ export const useStreamStore = create<StreamStore>()((set, get) => ({
     if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
     if (matterId) headers["X-Matter-ID"] = matterId;
 
-    const store = get();
-
     fetchEventSource(`${API_BASE}/api/v1/query/stream`, {
       method: "POST",
       headers,

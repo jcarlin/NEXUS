@@ -172,7 +172,7 @@ JWT_SECRET_KEY=$JWT_SECRET
 JWT_ALGORITHM=HS256
 JWT_ACCESS_TOKEN_EXPIRE_MINUTES=60
 JWT_REFRESH_TOKEN_EXPIRE_DAYS=30
-CORS_ALLOWED_ORIGINS=*
+CORS_ALLOWED_ORIGINS=
 REQUIRE_MATTER_HEADER=true
 CELERY_CONCURRENCY=2
 CHUNK_SIZE=512
@@ -270,7 +270,7 @@ log "  Health:     http://$EXTERNAL_IP:8000/api/v1/health"
 log "  API Docs:   http://$EXTERNAL_IP:8000/docs"
 log ""
 log "  Admin login:"
-log "    Email:    admin@nexus.local"
+log "    Email:    admin@nexus-demo.com"
 log "    Password: $ADMIN_PASSWORD"
 log ""
 log "  GCP Project: $PROJECT_ID"
