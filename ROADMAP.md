@@ -2,7 +2,7 @@
 
 > Multimodal RAG Investigation Platform for Legal Document Intelligence
 
-**Last updated:** 2026-03-01
+**Last updated:** 2026-03-08
 
 ---
 
@@ -37,12 +37,16 @@
 | M15 | Retrieval Tuning | — | Done | 5 + 4 eval | Eval improvement ≥ 0.03 | 1 week | M9, M8b |
 | M16 | Visual Embeddings | — | Done | 16 + eval enum | Eval lift ≥ 5% or stays disabled | 2 weeks | M15 (conditional) |
 | M17 | Full Local Deployment | — | Done | 16 | Health check + benchmarks | 2 weeks | All |
+| TD | Tech Debt (M5 + L1–L5) | — | Done | 50 | Regression | — | — |
+| M18 | OIDC/SSO Authentication | — | Done | 16 | Regression + migration | — | M6 |
+| M19 | Memo Drafting Pipeline | — | Done | 22 | Regression + migration | — | M10 |
+| M20 | Observability & Load Testing | — | Done | 23 | Regression | — | M17 |
 
-**Total tests: 512 backend + 35 frontend** (backend: 402 unit/functional + 12 M10b analysis + 10 M10c analytics + 10 M14 annotations/exports + 5 M16 eval + 50 tech debt + 23 M17 local deployment; all 512 passing | frontend: 33 Vitest unit/component + 2 Playwright E2E)
+**Total tests: 772 backend + 36 frontend test files** (772 backend tests passing; frontend: 36 Vitest unit/component test files + 2 Playwright E2E specs)
 
 **6 autonomous LangGraph agents** across the pipeline (Case Setup, Investigation Orchestrator, Citation Verifier, Hot Doc Scanner, Contextual Completeness, Entity Resolution)
 
-**All milestones complete.** M5b through M17 — full local deployment with zero cloud API dependency.
+**All milestones complete.** M0–M20 — full local deployment with zero cloud API dependency, OIDC/SSO, memo drafting, and Prometheus observability.
 
 **Cloud demo hosting:** GCP + Vercel deployment tested and working. Run `./scripts/cloud-deploy.sh` to deploy, `./scripts/cloud-teardown.sh` to tear down. See `docs/CLOUD-DEPLOY.md` for full guide. Config files: `Caddyfile`, `docker-compose.cloud.yml`, `.env.cloud.example`, `frontend/vercel.json`, `scripts/seed_admin.py`.
 
@@ -72,6 +76,9 @@ M13 (React Frontend — case setup wizard, result set browser, analytics views)
 **Phase 4 — Optimization (weeks 32-36):**
 M16 (Visual Embeddings) — conditional on M9 eval showing text retrieval gaps
 → M17 (Full Local Deployment)
+
+**Phase 5 — Enterprise & Observability (weeks 37+):**
+M18 (OIDC/SSO) + M19 (Memo Drafting) + M20 (Observability & Load Testing) — parallel
 
 **Why M8b is first:** Attorney-client privilege risk. Cannot process real client documents through external embedding APIs without an abstraction layer that supports local alternatives.
 
@@ -228,6 +235,26 @@ If a metric regresses beyond the threshold, the milestone must either fix the re
 
 **Testing (15 tests):** `tests/test_auth/test_service.py`, `test_router.py`, `test_middleware.py` — JWT issuance and validation, password hashing, role-based access control, matter scoping header enforcement, API key fallback, auth dependency overrides. Gate: regression.
 
+### M6b: EDRM Interop + Email Intelligence (2 weeks)
+*Legal ecosystem interoperability — required for any firm using Relativity/DISCO. Depends on M6.*
+
+- [x] Concordance DAT and Opticon OPT load file import parser
+- [x] EDRM XML import/export support
+- [x] Email threading engine: RFC 5322 headers (Message-ID, In-Reply-To, References) + subject fallback
+- [x] Inclusive email chain detection (identify most complete version of each thread)
+- [x] Near-duplicate detection: MinHash + LSH via `datasketch` library (Jaccard threshold ≥0.80)
+- [x] Document version detection: filename pattern extraction (v1, draft, final, revised)
+- [x] Alembic migration 005: `thread_id`, `is_inclusive`, `duplicate_cluster_id`, `version_group_id` fields on documents table + `edrm_import_log` table
+- [x] EDRM API router: POST /edrm/import, GET /edrm/export, GET /edrm/threads, GET /edrm/duplicates
+**Testing (15 tests):**
+- Load files (4): parse DAT, parse OPT, parse EDRM XML, EDRM XML round-trip
+- Threading (7): subject normalization (3), thread by References (1), thread by In-Reply-To (1), subject fallback (1), inclusive detection (1)
+- Dedup (3): exact duplicate detected, near-duplicate above threshold, dissimilar docs not matched
+- Version (1): filename pattern extraction
+- Gate: regression + migration upgrade and downgrade succeed
+
+**Key files:** `app/edrm/`, `app/ingestion/threading.py`, `app/ingestion/dedup.py`, `migrations/versions/005_edrm_email_intelligence.py`
+
 ### M7: Audit + Privilege
 - Alembic migration 003: `audit_log` table, `privilege_status` + `privilege_reviewed_by` + `privilege_reviewed_at` on `documents`
 - `PrivilegeStatus` enum: `privileged`, `work_product`, `confidential`, `not_privileged`
@@ -244,6 +271,24 @@ If a metric regresses beyond the threshold, the milestone must either fix the re
 - 20 tests: privilege CRUD (4), privilege filtering (3), Qdrant must_not filter (1), Neo4j Cypher filter (1), graph traversal privilege (3), audit middleware (5), admin endpoint (2), helper functions (1)
 
 **Testing (20 tests):** `tests/test_documents/test_privilege.py`, `tests/test_common/test_audit_middleware.py`, `tests/test_auth/test_admin_router.py`, plus privilege tests in `test_query/test_nodes.py` and `test_query/test_retriever.py` — privilege CRUD, 3-layer privilege filtering (SQL + Qdrant + Neo4j), audit middleware fire-and-forget logging, admin audit-log endpoint, graph traversal privilege enforcement. Gate: regression.
+
+### M7b: SOC 2 Audit Readiness (1 week)
+*Extends M7's audit infrastructure for SOC 2 compliance. Depends on M7.*
+
+- [x] Immutable audit trail: PostgreSQL RULE-based append-only enforcement on audit_log, ai_audit_log, agent_audit_log
+- [x] Audit all AI interactions: every LLM call logged with prompt hash (SHA-256), model, token count, latency, node_name
+- [x] Agent audit log schema: agent_audit_log table ready for M10+ agent action logging
+- [x] Session-level audit grouping: X-Session-ID header binding via RequestIDMiddleware, correlated across all audit tables
+- [x] Audit log retention policy: configurable retention period, dry-run/apply endpoints
+- [x] Export audit logs as CSV/JSON for compliance review (admin-only endpoints)
+- [x] Alembic migration 004: ai_audit_log, agent_audit_log tables + session_id on audit_log + immutability rules
+- [x] Admin audit API: GET /admin/audit/ai, GET /admin/audit/export, GET/POST /admin/audit/retention
+**Testing (10 tests):**
+- Unit: AI call INSERT verification (1), prompt hash determinism (2), CSV export format (1), list with filters (1), migration immutability rules (1)
+- Integration: session_id from header (1), session_id auto-generation (1), admin endpoint 200 (1), non-admin 403 (1)
+- Gate: regression + migration upgrade and downgrade succeed
+
+**Key files:** `app/audit/`, `app/common/llm.py`, `app/common/middleware.py`, `migrations/versions/004_soc2_audit.py`
 
 ### M8: Retrieval Infrastructure
 - Sparse embeddings via FastEmbed BM42 (`app/ingestion/sparse_embedder.py`) — feature-flagged via `ENABLE_SPARSE_EMBEDDINGS`
@@ -269,55 +314,7 @@ If a metric regresses beyond the threshold, the milestone must either fix the re
 
 **Testing (11 tests):** `tests/test_common/test_embedder.py` — OpenAI provider embed_texts/embed_query contract, local provider lazy loading and async compat, DI factory provider selection, EmbeddingProvider protocol conformance, audit logging of external API calls. Gate: regression.
 
----
-
-## Next Up
-
-### M6b: EDRM Interop + Email Intelligence (2 weeks)
-*Legal ecosystem interoperability — required for any firm using Relativity/DISCO. Depends on M6.*
-
-- [x] Concordance DAT and Opticon OPT load file import parser
-- [x] EDRM XML import/export support
-- [x] Email threading engine: RFC 5322 headers (Message-ID, In-Reply-To, References) + subject fallback
-- [x] Inclusive email chain detection (identify most complete version of each thread)
-- [x] Near-duplicate detection: MinHash + LSH via `datasketch` library (Jaccard threshold ≥0.80)
-- [x] Document version detection: filename pattern extraction (v1, draft, final, revised)
-- [x] Alembic migration 005: `thread_id`, `is_inclusive`, `duplicate_cluster_id`, `version_group_id` fields on documents table + `edrm_import_log` table
-- [x] EDRM API router: POST /edrm/import, GET /edrm/export, GET /edrm/threads, GET /edrm/duplicates
-**Testing (15 tests):**
-- Load files (4): parse DAT, parse OPT, parse EDRM XML, EDRM XML round-trip
-- Threading (7): subject normalization (3), thread by References (1), thread by In-Reply-To (1), subject fallback (1), inclusive detection (1)
-- Dedup (3): exact duplicate detected, near-duplicate above threshold, dissimilar docs not matched
-- Version (1): filename pattern extraction
-- Gate: regression + migration upgrade and downgrade succeed
-
-**Key files:** `app/edrm/`, `app/ingestion/threading.py`, `app/ingestion/dedup.py`, `migrations/versions/005_edrm_email_intelligence.py`
-
----
-
-### M7b: SOC 2 Audit Readiness (1 week)
-*Extends M7's audit infrastructure for SOC 2 compliance. Depends on M7.*
-
-- [x] Immutable audit trail: PostgreSQL RULE-based append-only enforcement on audit_log, ai_audit_log, agent_audit_log
-- [x] Audit all AI interactions: every LLM call logged with prompt hash (SHA-256), model, token count, latency, node_name
-- [x] Agent audit log schema: agent_audit_log table ready for M10+ agent action logging
-- [x] Session-level audit grouping: X-Session-ID header binding via RequestIDMiddleware, correlated across all audit tables
-- [x] Audit log retention policy: configurable retention period, dry-run/apply endpoints
-- [x] Export audit logs as CSV/JSON for compliance review (admin-only endpoints)
-- [x] Alembic migration 004: ai_audit_log, agent_audit_log tables + session_id on audit_log + immutability rules
-- [x] Admin audit API: GET /admin/audit/ai, GET /admin/audit/export, GET/POST /admin/audit/retention
-**Testing (10 tests):**
-- Unit: AI call INSERT verification (1), prompt hash determinism (2), CSV export format (1), list with filters (1), migration immutability rules (1)
-- Integration: session_id from header (1), session_id auto-generation (1), admin endpoint 200 (1), non-admin 403 (1)
-- Gate: regression + migration upgrade and downgrade succeed
-
-**Key files:** `app/audit/`, `app/common/llm.py`, `app/common/middleware.py`, `migrations/versions/004_soc2_audit.py`
-
----
-
----
-
-### M9: Evaluation Framework (2 weeks) ✅
+### M9: Evaluation Framework (2 weeks)
 *Measure before you optimize. Must come before retrieval tuning and agentic query.*
 
 - [x] Ground-truth Q&A dataset: 5 seed questions with expected answers, source documents, AND expected citation ranges (expandable to 50-100)
@@ -352,10 +349,6 @@ If a metric regresses beyond the threshold, the milestone must either fix the re
 
 **Key files:** `evaluation/` directory, `scripts/evaluate.py`, `app/common/vector_store.py` (sparse-only query)
 
----
-
-## Future
-
 ### M9b: Case Intelligence Layer (2 weeks)
 *The foundation that makes Q1-Q10 flow like a real investigation, not 10 disconnected queries. Depends on M9.*
 
@@ -388,8 +381,6 @@ If a metric regresses beyond the threshold, the milestone must either fix the re
 **Key files:** `app/cases/agent.py` (Case Setup Agent), `app/cases/schemas.py`, `app/cases/service.py`, `app/cases/router.py`, `app/cases/context_resolver.py`, `app/cases/tasks.py`, `app/cases/prompts.py`, `migrations/versions/006_case_intelligence.py`
 
 **Why this matters:** Without this, the lawyer must re-explain "Claim A means the fraud allegation described in paragraph 42 of the Complaint" every single query. Harvey and CoCounsel both maintain persistent case context. This is what separates a legal investigation tool from a generic chatbot.
-
----
 
 ### M10: Agentic Query Pipeline (2.5 weeks)
 *Replace the fixed 8-node chain with an adaptive, case-context-aware agent loop. Depends on M8, M9, M9b.*
@@ -449,8 +440,6 @@ If a metric regresses beyond the threshold, the milestone must either fix the re
 
 **Key files:** `app/query/graph.py`, `app/query/nodes.py`, `app/query/schemas.py`, `app/query/prompts.py`, `app/query/tools.py`
 
----
-
 ### M10b: Sentiment + Hot Document Detection (1.5 weeks)
 *Enables Q7-Q8: finding legally significant emotions, admissions, concealment patterns. Depends on M10.*
 
@@ -481,9 +470,7 @@ If a metric regresses beyond the threshold, the milestone must either fix the re
 
 **Key files:** `app/analysis/sentiment.py`, `app/analysis/completeness.py`, `app/analysis/anomaly.py`, `app/analysis/tasks.py`, `app/analysis/schemas.py`, `app/query/tools.py`
 
----
-
-### M10c: Communication Analytics + Pre-computed Matrices (1 week) — DONE
+### M10c: Communication Analytics + Pre-computed Matrices (1 week)
 *Enables Q5 and Q10: org hierarchy analysis and full communication network analytics. Depends on M10, M11.*
 
 - [x] Alembic migration 008: `communication_pairs` and `org_chart_entries` tables
@@ -503,9 +490,7 @@ If a metric regresses beyond the threshold, the milestone must either fix the re
 
 **Key files:** `app/analytics/service.py`, `app/analytics/schemas.py`, `app/analytics/clustering.py`, `app/analytics/router.py`, `app/entities/graph_service.py` (compute_centrality), `app/query/tools.py` (3 tool implementations)
 
----
-
-### Tech Debt Completion (M5 + L1–L5) — DONE
+### Tech Debt Completion (M5 + L1–L5)
 
 *Post-M10c audit identified 16 tech debt items across 4 priorities. Completed 5 of 6 actionable items (L3 skipped by design). Zero regressions.*
 
@@ -542,8 +527,6 @@ If a metric regresses beyond the threshold, the milestone must either fix the re
 - Gate: regression (484 passed)
 
 **Key files:** `app/ingestion/tasks.py`, `app/query/nodes.py`, `app/common/middleware.py`, `app/analysis/tasks.py`, `app/cases/tasks.py`, `app/config.py`, `app/dependencies.py`
-
----
 
 ### M11: Knowledge Graph Enhancement (2.5 weeks)
 *Multi-hop traversal, temporal queries, coreference resolution, and entity resolution overhaul. Depends on M10.*
@@ -594,9 +577,7 @@ If a metric regresses beyond the threshold, the milestone must either fix the re
 - All nodes carry `matter_id` for tenant isolation
 - Qdrant↔Neo4j integration: vector search results map to Neo4j nodes by `entity_id`, enabling graph context enrichment
 
----
-
-### M12: Bulk Import + EDRM (2 weeks) — DONE
+### M12: Bulk Import + EDRM (2 weeks)
 *Can run in parallel with M10-M11. Depends on M6 (matter scoping), M6b (EDRM parsers), and M8 (sparse embeddings).*
 
 - [x] Alembic migration 007: `import_source` column, `content_hash` index, `bulk_import_jobs` table
@@ -621,8 +602,6 @@ If a metric regresses beyond the threshold, the milestone must either fix the re
 **Key files:** `app/ingestion/bulk_import.py`, `app/ingestion/adapters/`, `scripts/import_dataset.py`, `migrations/versions/007_bulk_import.py`
 
 See `docs/M6-BULK-IMPORT.md` for full spec.
-
----
 
 ### M13: React Frontend (3.5 weeks)
 *Replace Streamlit prototype. Depends on M6 (auth), M7 (privilege UI), M10 (agentic query), M10b (sentiment), M10c (analytics), M9b (case context).*
@@ -846,8 +825,6 @@ frontend/
 
 **Key files:** New `frontend/` directory (React app, replaces Streamlit `frontend/app.py`)
 
----
-
 ### M13b: Dataset & Collection Management (2.5 weeks)
 *Sub-matter document organization with access controls. Depends on M13.*
 
@@ -891,9 +868,7 @@ frontend/
 
 **Key files:** `app/datasets/` (schemas.py, service.py, router.py), `migrations/versions/013_datasets.py`, `frontend/src/routes/datasets/index.tsx`, `frontend/src/components/datasets/`
 
----
-
-### M14: Annotations + Export + EDRM — Backend (2.5 weeks) ✅
+### M14: Annotations + Export + EDRM — Backend (2.5 weeks)
 *Litigation support backend: annotations, production sets, Bates numbering, court-ready exports. Frontend (PDF overlay, export UI) deferred to post-M13.*
 
 - [x] Alembic migration 010: `annotations`, `production_sets`, `production_set_documents`, `export_jobs` tables + `bates_begin`/`bates_end` columns on `documents`
@@ -912,9 +887,7 @@ frontend/
 
 **Key files:** `app/annotations/` (schemas, service, router), `app/exports/` (schemas, service, router, tasks, generators), `migrations/versions/010_annotations_exports.py`
 
----
-
-### M14b: Redaction (1.5 weeks) — Done
+### M14b: Redaction (1.5 weeks)
 *Legal production compliance — required for GDPR, CCPA, ABA Rule 1.6. Depends on M14.*
 
 - [x] Permanent redaction engine: remove underlying text data + metadata, not just visual masking
@@ -943,9 +916,7 @@ frontend/
 
 **Key files:** `app/redaction/` (schemas, pii_detector, engine, service, router), `migrations/versions/011_redactions.py`
 
----
-
-### M15: Retrieval Tuning (1 week) — Done
+### M15: Retrieval Tuning (1 week)
 *Data-driven optimization using evaluation framework. Depends on M9, M8b.*
 
 - [x] Enable reranker and measure impact on MRR/Recall
@@ -980,9 +951,7 @@ frontend/
 
 **Key files:** `app/config.py`, `app/query/nodes.py`, `app/query/retriever.py`, `app/common/vector_store.py`, `evaluation/tuning.py`, `evaluation/schemas.py`, `scripts/evaluate.py`
 
----
-
-### M16: Visual Embeddings (2 weeks, conditional) ✅
+### M16: Visual Embeddings (2 weeks, conditional)
 *Only pursue if evaluation shows text retrieval missing table/figure content. Depends on M15.*
 
 - [x] ColQwen2.5-v0.2 inference wrapper (`app/ingestion/visual_embedder.py`) — lazy-loaded, MPS/CUDA/CPU, bfloat16
@@ -996,6 +965,8 @@ frontend/
 - [x] Evaluation schema: `VISUAL` and `VISUAL_FUSION` retrieval modes
 - [x] Config: 7 new settings (`visual_embedding_model`, `_device`, `_batch_size`, `_dim`, `visual_rerank_weight`, `_top_n`, `visual_page_dpi`)
 - [x] Optional dependency group: `pip install -e ".[visual]"` (colpali-engine, transformers, torch, pdf2image)
+
+**Deferred items** (conditional on GPU availability and eval results):
 - [ ] Re-run evaluation: measure lift over text-only *(requires GPU/MPS + poppler + visual deps installed)*
 - [ ] **Decision gate: if lift < 5% on legal docs, deprioritize**
 - [ ] Handwriting recognition supplement: LlamaParse agentic OCR or dedicated handwriting model for margin annotations, initials, handwritten notes (Docling does not support handwriting)
@@ -1009,8 +980,6 @@ frontend/
 - Gate: regression pass (344/350) + **decision gate pending eval run**
 
 **Key files:** `app/ingestion/visual_embedder.py` (new), `app/common/vector_store.py`, `app/query/retriever.py`, `app/query/nodes.py`, `app/config.py`, `app/dependencies.py`
-
----
 
 ### M17: Full Local Deployment (2 weeks)
 *Zero cloud API dependency. Config change only — no code changes.*
@@ -1030,6 +999,76 @@ frontend/
 - Gate: regression + health check returns 200 with all local providers + benchmarks documented in this file
 
 **Key files:** `docker-compose.local.yml`, `.env.local.example`, `app/common/embedder.py`, `app/query/reranker.py`, `app/dependencies.py`, `app/config.py`, `scripts/benchmark_local.py`
+
+### M18: OIDC/SSO Authentication
+*Enterprise SSO via OpenID Connect. Depends on M6.*
+
+- [x] `OIDCProvider` class (`app/auth/oidc.py`): authlib-based OIDC flow with discovery, token exchange, and userinfo
+- [x] JIT user provisioning: auto-create user on first SSO login with default role
+- [x] Account linking: match SSO email to existing local accounts
+- [x] Group-to-role mapping: configurable OIDC group claims → NEXUS roles (admin, attorney, paralegal, reviewer)
+- [x] SSO endpoints (`app/auth/oidc_router.py`): `GET /auth/oidc/info` (provider info for frontend SSO button), `GET /auth/oidc/callback` (handle OIDC callback)
+- [x] Pydantic schemas (`app/auth/oidc_schemas.py`): `OIDCProviderInfo`, `OIDCCallbackResponse`
+- [x] Alembic migration 005: `sso_provider`, `sso_subject_id` columns on users table
+- [x] Frontend callback page: `frontend/src/routes/auth/oidc/callback.tsx`
+- [x] DI factory: `get_oidc_provider()` returns `None` when `ENABLE_SSO=false`
+- [x] Feature flag: `ENABLE_SSO` in config (default: `false`)
+- [x] Config: `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_ISSUER_URL`, `OIDC_REDIRECT_URI`, `OIDC_PROVIDER_NAME`, `OIDC_ROLE_MAPPING`
+
+**Testing (16 tests):**
+- `tests/test_auth/test_oidc.py` — provider init and config validation, discovery URL construction, authorization URL generation, token exchange, userinfo fetch, JIT user provisioning, account linking, group-to-role mapping, callback flow, error handling, feature flag gating
+- Gate: regression + migration
+
+**Key files:** `app/auth/oidc.py`, `app/auth/oidc_router.py`, `app/auth/oidc_schemas.py`, `migrations/versions/005_add_sso_columns.py`, `frontend/src/routes/auth/oidc/callback.tsx`
+
+### M19: Memo Drafting Pipeline
+*LLM-powered legal memo generation from investigation results. Depends on M10.*
+
+- [x] `app/memos/` module: schemas, service, router, prompts
+- [x] `POST /memos` — generate a legal memo from a chat thread or ad-hoc query
+- [x] `GET /memos` — list memos for a matter (paginated)
+- [x] `GET /memos/{memo_id}` — retrieve a single memo
+- [x] `DELETE /memos/{memo_id}` — delete a memo
+- [x] Memo generation via LLM with structured prompts (`app/memos/prompts.py`)
+- [x] Alembic migration 015: `memos` table (matter_id FK, thread_id FK nullable, query, title, content, created_by, created_at)
+- [x] Feature flag: `ENABLE_MEMO_DRAFTING` in config (default: `false`)
+- [x] Matter-scoped: all queries filter by `matter_id`
+
+**Testing (22 tests):**
+- `tests/test_memos/` — memo generation, CRUD operations, matter scoping, validation, error handling, prompt rendering, feature flag gating
+- Gate: regression + migration
+
+**Key files:** `app/memos/` (schemas.py, service.py, router.py, prompts.py), `migrations/versions/015_memos.py`
+
+### M20: Observability & Load Testing
+*Production monitoring and performance validation. Depends on M17.*
+
+- [x] `app/common/metrics.py` — 9 Prometheus metrics: query duration/count, LLM calls/duration/tokens, ingestion jobs/duration, embedding calls/duration
+- [x] `track_duration()` context manager for histogram observation
+- [x] Prometheus `/metrics` endpoint (feature-flagged via `ENABLE_PROMETHEUS_METRICS`)
+- [x] `monitoring/` directory: Docker Compose stack (`docker-compose.monitoring.yml`) with Prometheus + Grafana
+- [x] Grafana dashboards (`monitoring/dashboards/`) + provisioning config (`monitoring/grafana-provisioning/`)
+- [x] Prometheus scrape config (`monitoring/prometheus.yml`)
+- [x] `load_tests/` directory: Locust load testing suite with 5 workflows (health, query, document list, ingestion, chat)
+- [x] Load test config (`load_tests/config.py`), requirements (`load_tests/requirements.txt`)
+- [x] CI workflow: `.github/workflows/load-test.yml` — automated load test runs
+- [x] Feature flag: `ENABLE_PROMETHEUS_METRICS` in config (default: `false`)
+
+**Testing (23 tests):**
+- `tests/test_common/test_metrics.py` — counter increments, histogram observation, label handling, track_duration context manager, no-op behavior when disabled, metric registry validation
+- Gate: regression
+
+**Key files:** `app/common/metrics.py`, `monitoring/` (docker-compose.monitoring.yml, prometheus.yml, dashboards/, grafana-provisioning/), `load_tests/` (locustfile.py, config.py), `.github/workflows/load-test.yml`
+
+---
+
+## Future
+
+### Deferred M16 Items (conditional on GPU + eval results)
+- [ ] Re-run visual embedding evaluation with GPU/MPS to measure lift over text-only
+- [ ] Decision gate: if lift < 5% on legal docs, deprioritize visual embeddings
+- [ ] Handwriting recognition: LlamaParse agentic OCR or dedicated model for margin annotations, initials, handwritten notes
+- [ ] Light-ColQwen2 compression: semantic clustering (merge factor 9) + Qdrant binary quantization (16x compression)
 
 ---
 
@@ -1056,6 +1095,9 @@ M6 ───┬── M6b ────────────┤
                                         └── M14 ── M14b
                                                       All ── M17
                                    M15 ── M16 (conditional)
+                                   M6 ── M18 (SSO)
+                                   M10 ── M19 (memos)
+                                   M17 ── M20 (observability)
 ```
 
 ---

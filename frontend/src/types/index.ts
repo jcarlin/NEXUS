@@ -60,6 +60,27 @@ export type { ProcessUploadedRequest } from "@/api/generated/schemas";
 export type { ProcessUploadedFile } from "@/api/generated/schemas";
 
 // ---------------------------------------------------------------------------
+// Memo types
+// ---------------------------------------------------------------------------
+
+export interface MemoSection {
+  heading: string;
+  content: string;
+  citations: string[];
+}
+
+export interface MemoResponse {
+  id: string;
+  matter_id: string;
+  thread_id: string | null;
+  title: string;
+  sections: MemoSection[];
+  format: "markdown" | "html";
+  created_by: string;
+  created_at: string;
+}
+
+// ---------------------------------------------------------------------------
 // Client-only types (no generated equivalent)
 // ---------------------------------------------------------------------------
 

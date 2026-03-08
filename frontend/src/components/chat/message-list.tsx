@@ -38,6 +38,7 @@ interface MessageListProps {
   followUps?: string[];
   onFollowUpSelect?: (query: string) => void;
   onExampleClick?: (query: string) => void;
+  threadId?: string;
 }
 
 const SCROLL_THRESHOLD = 80;
@@ -52,6 +53,7 @@ export function MessageList({
   followUps,
   onFollowUpSelect,
   onExampleClick,
+  threadId,
 }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLElement | null>(null);
@@ -140,6 +142,7 @@ export function MessageList({
                 sources={msg.source_documents}
                 entities={msg.entities_mentioned}
                 citedClaims={msg.cited_claims}
+                threadId={threadId}
               />
             ),
           )}

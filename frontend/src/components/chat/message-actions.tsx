@@ -1,12 +1,14 @@
 import { useState, useCallback } from "react";
 import { Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { GenerateMemoButton } from "./generate-memo-button";
 
 interface MessageActionsProps {
   content: string;
+  threadId?: string;
 }
 
-export function MessageActions({ content }: MessageActionsProps) {
+export function MessageActions({ content, threadId }: MessageActionsProps) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = useCallback(async () => {
@@ -30,6 +32,7 @@ export function MessageActions({ content }: MessageActionsProps) {
         )}
         {copied ? "Copied" : "Copy"}
       </Button>
+      {threadId && <GenerateMemoButton threadId={threadId} />}
     </div>
   );
 }

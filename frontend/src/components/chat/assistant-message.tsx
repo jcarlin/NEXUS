@@ -29,6 +29,7 @@ interface AssistantMessageProps {
   entities: EntityMention[];
   citedClaims?: CitedClaim[];
   isStreaming?: boolean;
+  threadId?: string;
 }
 
 const verificationIcon = {
@@ -49,6 +50,7 @@ export function AssistantMessage({
   entities,
   citedClaims = [],
   isStreaming,
+  threadId,
 }: AssistantMessageProps) {
   const [sourcesOpen, setSourcesOpen] = useState(false);
   const [claimsOpen, setClaimsOpen] = useState(false);
@@ -86,7 +88,7 @@ export function AssistantMessage({
           </div>
         </div>
 
-        {!isStreaming && content && <MessageActions content={content} />}
+        {!isStreaming && content && <MessageActions content={content} threadId={threadId} />}
 
         {entities.length > 0 && (
           <div className="px-1">

@@ -103,6 +103,7 @@ function ChatThreadPage() {
           onRetry={handleRetry}
           followUps={streamDone ? followUps : undefined}
           onFollowUpSelect={handleSend}
+          threadId={threadId}
         />
 
         <FindingsBar />
