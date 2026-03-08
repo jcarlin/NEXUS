@@ -69,8 +69,8 @@ export function MatterSelector() {
         <Tooltip>
           <TooltipTrigger asChild>
             <SelectTrigger className="w-[280px]">
-              <span className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">Case:</span>
+              <span className="flex items-center">
+                <span className="mr-2 text-xs text-muted-foreground">Case:</span>
                 <SelectValue placeholder="Select matter..." />
               </span>
             </SelectTrigger>

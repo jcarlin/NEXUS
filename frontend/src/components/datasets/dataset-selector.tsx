@@ -56,8 +56,8 @@ export function DatasetSelector() {
       <Tooltip>
         <TooltipTrigger asChild>
           <SelectTrigger className="w-[260px]">
-            <span className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">Dataset:</span>
+            <span className="flex items-center">
+              <span className="mr-2 text-xs text-muted-foreground">Dataset:</span>
               <SelectValue placeholder="All Documents" />
             </span>
           </SelectTrigger>
