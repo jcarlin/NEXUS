@@ -1,0 +1,127 @@
+ACME CORP
+MINUTES OF THE BOARD OF DIRECTORS
+REGULAR MEETING — JANUARY 25, 2025
+
+===================================================================
+
+PRESENT:
+    John Reeves, Chief Executive Officer and Chairman
+    Margaret Liu, Independent Director
+    Thomas Bradley, Independent Director
+    Patricia Fernandez, Independent Director
+    David Park, Independent Director (no relation to Lisa Park)
+
+ALSO PRESENT:
+    Michael Torres, Partner, outside counsel
+    Sarah Chen, Senior Associate, outside counsel
+    Jennifer Walsh, Corporate Secretary
+
+ABSENT:
+    None
+
+LOCATION:
+    Acme Corp headquarters, 1000 Innovation Drive, San Jose, CA
+
+CALL TO ORDER:
+    The meeting was called to order at 9:00 AM PST by Chairman Reeves.
+
+===================================================================
+
+1. APPROVAL OF MINUTES
+
+MOTION: Director Bradley moved to approve the minutes of the December 12,
+2024 regular meeting. Seconded by Director Liu.
+VOTE: Approved unanimously (5-0).
+
+===================================================================
+
+2. CEO REPORT — PROPOSED MERGER WITH PINNACLE INDUSTRIES
+
+Chairman Reeves presented the proposed merger with Pinnacle Industries,
+Inc., referring the Board to his letter dated January 20, 2025,
+previously distributed to all directors.
+
+Key points of the presentation:
+
+(a) Strategic Rationale: Combined entity would have revenues exceeding
+    $280M. Complementary product lines in cloud analytics (Acme) and
+    on-premises data warehousing (Pinnacle). Estimated $50M in annual
+    cost synergies within 24 months.
+
+(b) Transaction Structure: Stock-for-stock merger at approximately
+    1.35 exchange ratio. Total transaction value approximately $420M.
+    Alpine Merger Sub, Inc. to be created as a wholly owned subsidiary
+    for the reverse triangular merger.
+
+(c) Risk Factors: Chairman Reeves disclosed two areas of concern:
+    - Environmental contamination at Pinnacle's Denver manufacturing
+      plant (4500 Industrial Blvd, Denver, CO). Phase II assessment
+      underway by EcoTech Environmental Consultants. Estimated
+      remediation costs: $3.2M to $7.8M.
+    - SEC voluntary inquiry into Pinnacle's revenue recognition
+      practices for FY 2022-2023. No formal investigation or Wells
+      notice issued. Outside counsel Robert Kim of Wilson & Drake LLP
+      is coordinating Pinnacle's response.
+
+(d) Due Diligence Plan: Michael Torres outlined the due diligence
+    scope and timeline. Key deadline: March 30, 2025. Sarah Chen is
+    leading the day-to-day document review and analysis.
+
+Director Fernandez asked about the environmental exposure. Michael
+Torres responded that remediation cost estimates range from $3.2M to
+$7.8M, and that the merger agreement will include an indemnification
+provision with an environmental cap. Lisa Park (Pinnacle CFO) has
+indicated willingness to increase Pinnacle's environmental reserve.
+
+Director Liu inquired about the SEC inquiry's potential impact on
+closing. Torres advised that Robert Kim believes the matter will be
+resolved through the voluntary process, but recommended that the
+merger agreement include a condition precedent tied to SEC resolution.
+
+Director Bradley raised the question of employee retention at
+Pinnacle. Chairman Reeves stated that key employee retention
+agreements would be negotiated as part of the definitive agreement.
+
+MOTION: Director Liu moved to authorize management to proceed with
+due diligence and negotiate a definitive merger agreement with
+Pinnacle Industries, Inc., subject to Board approval of the final
+terms. Seconded by Director Fernandez.
+VOTE: Approved unanimously (5-0).
+
+===================================================================
+
+3. FINANCIAL UPDATE — Q4 2024
+
+Chairman Reeves presented the Q4 2024 financial summary:
+
+    Revenue:           $71.2M (up 3.9% from Q3)
+    Operating Income:  $13.1M (up 6.5% from Q3)
+    Net Income:        $9.4M (up 5.6% from Q3)
+    Total Assets:      $252M
+
+The Board noted the continued positive financial trajectory.
+
+===================================================================
+
+4. EXECUTIVE SESSION
+
+At 11:30 AM, the Board entered executive session (independent
+directors only) to discuss CEO compensation and merger-related
+executive retention matters.
+
+[Executive session minutes maintained separately by Corporate Secretary]
+
+===================================================================
+
+5. ADJOURNMENT
+
+There being no further business, the meeting was adjourned at
+12:15 PM PST.
+
+MOTION: Director Bradley moved to adjourn. Seconded by Director Park.
+VOTE: Approved unanimously (5-0).
+
+___________________________________
+Jennifer Walsh, Corporate Secretary
+
+Date approved: ___________________

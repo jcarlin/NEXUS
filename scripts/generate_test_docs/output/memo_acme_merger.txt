@@ -1,0 +1,89 @@
+PRIVILEGED AND CONFIDENTIAL
+ATTORNEY WORK PRODUCT
+
+MEMORANDUM
+
+TO:      Michael Torres, Partner
+FROM:    Sarah Chen, Senior Associate
+DATE:    January 25, 2025
+RE:      Acme Corp / Pinnacle Industries Merger -- Due Diligence Summary
+
+-----------------------------------------------------------------------
+
+I. EXECUTIVE SUMMARY
+
+This memorandum summarizes the current status of due diligence in
+connection with the proposed merger between Acme Corp ("Acme") and
+Pinnacle Industries ("Pinnacle"). The merger was publicly announced on
+January 15, 2025, with a due diligence deadline of March 30, 2025.
+
+Based on our review to date, two issues require immediate attention:
+(1) potential environmental liability at Pinnacle's Denver manufacturing
+plant, and (2) a pending inquiry by the Securities and Exchange
+Commission ("SEC") into Pinnacle's revenue recognition practices.
+
+II. KEY PERSONNEL
+
+The following individuals are central to the transaction:
+
+    - John Reeves, Chief Executive Officer, Acme Corp
+    - Lisa Park, Chief Financial Officer, Pinnacle Industries
+    - Robert Kim, outside counsel at Wilson & Drake LLP, representing
+      Pinnacle Industries in the transaction
+    - Michael Torres (this firm), lead partner overseeing due diligence
+    - Sarah Chen (this firm), senior associate conducting document review
+
+III. ENVIRONMENTAL LIABILITY -- DENVER PLANT
+
+Pinnacle operates a manufacturing facility at 4500 Industrial Blvd,
+Denver, CO 80216 (the "Denver Plant"). A Phase I environmental site
+assessment conducted in September 2024 identified recognized
+environmental conditions ("RECs") related to historical solvent use.
+
+A Phase II investigation is underway. Preliminary soil sampling
+indicates trichloroethylene ("TCE") contamination exceeding Colorado
+Department of Public Health and Environment ("CDPHE") action levels in
+two monitoring wells on the eastern boundary of the property.
+
+Remediation costs are estimated at $3.2M to $7.8M depending on the
+extent of the plume. I spoke with John Reeves on January 22, 2025, and
+he expressed concern that these costs could affect the merger valuation.
+Reeves indicated that Acme's board would need to see a remediation cost
+cap or indemnification provision before proceeding.
+
+Lisa Park has represented that Pinnacle has set aside a $2M reserve for
+environmental matters, but acknowledged this may be insufficient.
+Robert Kim at Wilson & Drake LLP is reviewing Pinnacle's insurance
+coverage for environmental claims.
+
+IV. SEC INQUIRY
+
+On November 8, 2024, the SEC's Division of Enforcement issued a
+voluntary document request to Pinnacle Industries regarding revenue
+recognition practices in fiscal years 2022 and 2023. The inquiry
+focuses on Pinnacle's treatment of long-term service contracts and
+whether revenue was prematurely recognized in violation of ASC 606.
+
+Lisa Park has been coordinating Pinnacle's response with Robert Kim.
+As of the date of this memorandum, the SEC has not issued a formal
+order of investigation or Wells notice. Robert Kim has advised that he
+expects the inquiry to be resolved without enforcement action, but
+cautions that the timeline is uncertain.
+
+We should obtain copies of all communications between Pinnacle and the
+SEC, as well as Pinnacle's internal accounting workpapers for the
+periods under review.
+
+V. NEXT STEPS
+
+1. Obtain the Phase II environmental report (expected February 15, 2025).
+2. Review Pinnacle's environmental insurance policies.
+3. Request all SEC correspondence and internal response memoranda.
+4. Schedule a meeting with Robert Kim to discuss SEC inquiry timeline.
+5. Prepare a risk matrix for the Acme Corp board of directors.
+
+Due diligence must be substantially complete by March 30, 2025.
+
+-----------------------------------------------------------------------
+This memorandum is protected by the attorney-client privilege and the
+work product doctrine. Do not distribute outside the firm.

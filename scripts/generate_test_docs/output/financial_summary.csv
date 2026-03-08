@@ -1,0 +1,19 @@
+entity,metric,value,period
+Acme Corp,Revenue,68500000,Q3 2024
+Acme Corp,Operating Income,12300000,Q3 2024
+Acme Corp,Net Income,8900000,Q3 2024
+Acme Corp,Total Assets,245000000,Q3 2024
+Acme Corp,Revenue,71200000,Q4 2024
+Acme Corp,Operating Income,13100000,Q4 2024
+Acme Corp,Net Income,9400000,Q4 2024
+Acme Corp,Total Assets,252000000,Q4 2024
+Pinnacle Industries,Revenue,62100000,Q3 2024
+Pinnacle Industries,Operating Income,9800000,Q3 2024
+Pinnacle Industries,Net Income,6700000,Q3 2024
+Pinnacle Industries,Total Assets,198000000,Q3 2024
+Pinnacle Industries,Revenue,64800000,Q4 2024
+Pinnacle Industries,Operating Income,10200000,Q4 2024
+Pinnacle Industries,Net Income,7100000,Q4 2024
+Pinnacle Industries,Total Assets,203000000,Q4 2024
+Pinnacle Industries,Environmental Reserve,2000000,Q4 2024
+Pinnacle Industries,SEC Inquiry Related Legal Costs,450000,Q4 2024

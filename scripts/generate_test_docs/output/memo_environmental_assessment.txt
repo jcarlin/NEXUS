@@ -1,0 +1,98 @@
+ECOTECH ENVIRONMENTAL CONSULTANTS
+Phase II Environmental Site Assessment — Preliminary Findings
+===================================================================
+
+Site:           Pinnacle Industries Denver Manufacturing Facility
+Address:        4500 Industrial Blvd, Denver, CO 80216
+Client:         Wilson & Drake LLP (on behalf of Pinnacle Industries)
+Project No:     ECT-2024-1847
+Date:           February 14, 2025
+Prepared by:    Dr. Amanda Reyes, P.E., Senior Environmental Engineer
+Reviewed by:    James Whitfield, P.G., Principal Geologist
+
+===================================================================
+
+1. EXECUTIVE SUMMARY
+
+EcoTech Environmental Consultants ("EcoTech") was retained by Wilson &
+Drake LLP, on behalf of Pinnacle Industries, Inc. ("Pinnacle"), to
+conduct a Phase II Environmental Site Assessment ("ESA") at the Denver
+manufacturing facility (the "Site"). This assessment follows the Phase I
+ESA completed in September 2024, which identified recognized
+environmental conditions ("RECs") associated with historical solvent use.
+
+PRINCIPAL FINDINGS:
+
+Trichloroethylene ("TCE") contamination has been confirmed in
+groundwater at concentrations exceeding the Colorado Department of
+Public Health and Environment ("CDPHE") Regulation 41 groundwater
+quality standards in two of six monitoring wells.
+
+- Well MW-3 (eastern boundary): TCE at 12.4 ug/L (standard: 5.0 ug/L)
+- Well MW-5 (southeast corner): TCE at 8.7 ug/L (standard: 5.0 ug/L)
+- Wells MW-1, MW-2, MW-4, MW-6: Below detection limits
+
+The contamination plume appears to originate from the former solvent
+storage area near Building C and extends approximately 200 feet toward
+the eastern property boundary.
+
+2. SITE HISTORY
+
+The Site has been used for manufacturing since 1978. Historical records
+indicate that chlorinated solvents, including TCE and perchloroethylene
+("PCE"), were used as degreasing agents in the machining operations
+conducted in Building C from approximately 1982 through 2003.
+
+Three underground storage tanks ("USTs") were removed in 2005. Tank
+closure reports (Colorado OPS File Nos. 12-4478, 12-4479, 12-4480)
+indicated minor soil staining but no groundwater impacts at that time.
+
+3. REMEDIATION COST ESTIMATES
+
+Based on the current extent of contamination and applicable CDPHE
+standards, EcoTech has developed the following remediation cost
+estimates under three scenarios:
+
+Low Scenario (limited plume, in-situ treatment):
+    - Monitored Natural Attenuation + Enhanced Bioremediation
+    - Estimated cost: $3.2M over 5 years
+    - Timeline: 3-5 years to achieve compliance
+
+Mid Scenario (moderate plume, active treatment):
+    - Groundwater Pump-and-Treat + Soil Vapor Extraction
+    - Estimated cost: $5.1M over 7 years
+    - Timeline: 5-7 years to achieve compliance
+
+High Scenario (extended plume, aggressive treatment):
+    - Full-Scale Pump-and-Treat + Thermal Remediation
+    - Estimated cost: $7.8M over 10 years
+    - Timeline: 7-10 years to achieve compliance
+
+4. REGULATORY STATUS
+
+The Site is not currently listed on the CDPHE Contaminated Sites list
+or the EPA National Priorities List. However, based on these findings,
+notification to CDPHE under the Voluntary Cleanup Program may be
+advisable. Robert Kim of Wilson & Drake LLP has been advised of this
+recommendation.
+
+5. RECOMMENDATIONS
+
+(a) Install two additional monitoring wells (MW-7, MW-8) along the
+    eastern boundary to delineate the full extent of the plume.
+(b) Conduct quarterly groundwater monitoring for a minimum of one year.
+(c) Evaluate in-situ bioremediation pilot testing in the vicinity
+    of MW-3 and MW-5.
+(d) Notify CDPHE and consider enrollment in the Voluntary Cleanup
+    Program to obtain a No Further Action determination upon
+    completion of remediation.
+
+===================================================================
+This report was prepared for the exclusive use of Wilson & Drake LLP
+and Pinnacle Industries. Distribution to third parties requires
+written consent from EcoTech Environmental Consultants.
+
+EcoTech Environmental Consultants
+8900 E. Hampden Ave, Suite 200
+Denver, CO 80231
+(303) 555-0175

@@ -1,0 +1,79 @@
+PRIVILEGED AND CONFIDENTIAL
+
+MEMORANDUM
+
+TO:      Litigation Team
+FROM:    Michael Torres, Partner
+DATE:    February 5, 2025
+RE:      Privilege Review Protocol -- Acme Corp / Pinnacle Industries Matter
+
+-----------------------------------------------------------------------
+
+I. PURPOSE
+
+This memorandum establishes the protocol for privilege review and
+document categorization in connection with the Acme Corp / Pinnacle
+Industries merger due diligence (the "Acme/Pinnacle Matter").
+
+Given the volume of documents involved -- estimated at 12,000 to 15,000
+pages -- we will use a tiered review approach to ensure that privileged
+and work product materials are properly identified before any production
+to opposing counsel or regulatory bodies.
+
+II. REVIEW TIERS
+
+Tier 1 -- Automated Pre-Screen
+    All documents will be processed through our document management
+    system to flag potential privilege indicators (e.g., attorney names,
+    "privileged," "work product," "attorney-client").
+
+Tier 2 -- First-Level Review
+    Associates will review flagged documents and categorize them as:
+    (A) Clearly privileged -- withhold
+    (B) Potentially privileged -- escalate to Tier 3
+    (C) Not privileged -- clear for production
+    (D) Partially privileged -- redact and escalate
+
+Tier 3 -- Senior Review
+    I will personally review all Tier 2 escalations along with
+    Sarah Chen, who has the deepest familiarity with the transaction
+    documents. Sarah's work product memoranda, including her due
+    diligence summary dated January 25, 2025, are themselves
+    privileged and must be withheld in their entirety.
+
+III. SPECIAL HANDLING -- ROBERT KIM COMMUNICATIONS
+
+Communications between Robert Kim of Wilson & Drake LLP and Lisa Park
+of Pinnacle Industries require careful analysis. As outside counsel to
+Pinnacle, Robert Kim's communications with Lisa Park may be protected
+by Pinnacle's attorney-client privilege. However, to the extent that
+these communications were shared with third parties or discuss business
+(rather than legal) matters, the privilege may have been waived.
+
+All Kim-Park communications should be flagged and escalated to Tier 3
+review. Do not produce any such documents without my express approval.
+
+IV. KEY CUSTODIANS
+
+The following individuals have been identified as key custodians whose
+files must be collected and reviewed:
+
+    - Sarah Chen (this firm) -- all work product related to Acme/Pinnacle
+    - Michael Torres (this firm) -- client communications, strategy memos
+    - John Reeves, CEO of Acme Corp -- board communications, merger planning
+    - Lisa Park, CFO of Pinnacle Industries -- financial records, SEC responses
+    - Robert Kim, Wilson & Drake LLP -- legal advice, SEC inquiry coordination
+
+V. DEADLINES
+
+Document collection must be complete by February 20, 2025. Tier 1
+processing should be finished by February 28, 2025. Tier 2 review
+must be substantially complete by March 15, 2025, to allow sufficient
+time for Tier 3 review before the overall due diligence deadline of
+March 30, 2025.
+
+Please direct any questions to me or Sarah Chen.
+
+-----------------------------------------------------------------------
+This memorandum is protected by the attorney-client privilege.
+Distribution is limited to members of the litigation team.

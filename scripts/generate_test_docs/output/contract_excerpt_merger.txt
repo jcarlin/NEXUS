@@ -1,0 +1,92 @@
+DRAFT — SUBJECT TO REVISION
+PRIVILEGED AND CONFIDENTIAL
+
+AGREEMENT AND PLAN OF MERGER
+
+by and among
+
+ACME CORP,
+a Delaware corporation ("Parent"),
+
+PINNACLE INDUSTRIES, INC.,
+a Colorado corporation (the "Company"),
+
+and
+
+ALPINE MERGER SUB, INC.,
+a Colorado corporation and wholly owned subsidiary of Parent ("Merger Sub")
+
+Dated as of [________], 2025
+
+===================================================================
+
+ARTICLE I — THE MERGER
+
+Section 1.1  The Merger. Upon the terms and subject to the conditions
+set forth in this Agreement, and in accordance with the Colorado
+Business Corporation Act (the "CBCA"), at the Effective Time, Merger
+Sub shall be merged with and into the Company (the "Merger"), with
+the Company surviving the Merger as a wholly owned subsidiary of
+Parent (the "Surviving Corporation").
+
+Section 1.2  Closing Date. The closing of the Merger (the "Closing")
+shall take place on the third business day following the satisfaction
+or waiver of the conditions set forth in Article VII (other than those
+conditions that by their nature can only be satisfied at the Closing),
+unless another date is agreed to in writing by the parties (the
+"Closing Date"). The target Closing Date is [Q3 2025].
+
+===================================================================
+
+ARTICLE V — REPRESENTATIONS AND WARRANTIES OF THE COMPANY
+
+Section 5.15  Environmental Matters.
+
+(a) Except as set forth in Section 5.15 of the Company Disclosure
+Schedule, the Company and its Subsidiaries are in compliance in
+all material respects with all applicable Environmental Laws.
+
+(b) "Environmental Cap" means the aggregate amount of Five Million
+Dollars ($5,000,000) with respect to Losses arising out of or
+related to the environmental condition of the Denver Plant (as
+defined in Section 5.15(c)).
+
+(c) "Denver Plant" means the manufacturing facility located at
+4500 Industrial Blvd, Denver, CO 80216, including all buildings,
+improvements, fixtures, and underlying real property.
+
+(d) "Material Adverse Change" or "Material Adverse Effect" means
+any change, event, occurrence, or development that, individually
+or in the aggregate, has had or would reasonably be expected to
+have a material adverse effect on (i) the business, assets,
+liabilities, financial condition, or results of operations of
+the Company and its Subsidiaries, taken as a whole, or (ii) the
+ability of the Company to consummate the Merger; provided,
+however, that none of the following shall constitute a Material
+Adverse Change: [market conditions, industry changes, etc.]
+
+===================================================================
+
+ARTICLE VIII — INDEMNIFICATION
+
+Section 8.3  Environmental Indemnification.
+
+(a) The Company shall indemnify Parent against any Losses arising
+from the environmental condition of the Denver Plant, subject to
+the Environmental Cap.
+
+(b) The first Three Million Five Hundred Thousand Dollars ($3,500,000)
+of such Losses shall be borne exclusively by the Company from
+the Environmental Reserve established pursuant to Section 5.15(e).
+
+(c) Losses between $3,500,000 and the Environmental Cap shall be
+shared sixty percent (60%) by the Company and forty percent (40%)
+by Parent.
+
+===================================================================
+
+[REMAINDER OF AGREEMENT INTENTIONALLY OMITTED — DRAFT IN PROGRESS]
+
+Prepared by: Wilson & Drake LLP
+Contact: Robert Kim, Partner
+Date: February 2025
