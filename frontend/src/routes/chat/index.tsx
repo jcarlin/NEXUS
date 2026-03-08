@@ -1,6 +1,5 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
 import { ChatLayout } from "@/components/chat/chat-layout";
 import { ChatHeader } from "@/components/chat/chat-header";
 import { MessageList } from "@/components/chat/message-list";
@@ -14,7 +13,6 @@ export const Route = createFileRoute("/chat/")({
 
 function ChatPage() {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const {
     streamingText,
     sources,
@@ -44,6 +42,18 @@ function ChatPage() {
     }
   }, [lastQuery, send]);
 
+  // Auto-navigate to thread page once stream completes with a threadId
+  const navigatedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!isStreaming && threadId && navigatedRef.current !== threadId) {
+      navigatedRef.current = threadId;
+      void navigate({
+        to: "/chat/$threadId",
+        params: { threadId },
+      });
+    }
+  }, [isStreaming, threadId, navigate]);
+
   // Navigate to thread page once stream completes and we have a thread ID
   const handleFollowUp = useCallback(
     (question: string) => {
@@ -60,7 +70,6 @@ function ChatPage() {
     [threadId, navigate, send],
   );
 
-  // If streaming is done and we got a threadId, offer navigation
   const streamDone = !isStreaming && !!streamingText;
 
   return (
@@ -82,23 +91,6 @@ function ChatPage() {
           onFollowUpSelect={handleFollowUp}
           onExampleClick={handleSend}
         />
-
-        {streamDone && threadId && (
-          <div className="flex items-center justify-center border-t px-4 py-2">
-            <button
-              onClick={() => {
-                void queryClient.invalidateQueries({ queryKey: ["chat-threads"] });
-                void navigate({
-                  to: "/chat/$threadId",
-                  params: { threadId },
-                });
-              }}
-              className="text-xs text-primary hover:underline"
-            >
-              Continue this conversation
-            </button>
-          </div>
-        )}
 
         <FindingsBar />
         <MessageInput

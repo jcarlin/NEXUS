@@ -215,3 +215,85 @@ async def test_delete_chat_not_found(query_client):
 
     response = await client.delete(f"/api/v1/chats/{uuid.uuid4()}")
     assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# SSE disconnect persistence tests
+# ---------------------------------------------------------------------------
+
+
+async def test_v1_generator_persists_on_client_disconnect():
+    """When a client disconnects mid-stream, the v1 generator should still
+    persist the user and assistant messages to the database."""
+    from app.query.router import _v1_event_generator
+
+    mock_db = AsyncMock()
+    mock_db.execute = AsyncMock()
+    mock_db.commit = AsyncMock()
+
+    thread_id = str(uuid.uuid4())
+    matter_id = uuid.UUID("00000000-0000-0000-0000-000000000001")
+
+    # Create a mock graph that raises GeneratorExit to simulate client disconnect
+    async def _mock_astream(*args, **kwargs):
+        yield ("updates", {"rerank": {"source_documents": []}})
+        yield ("custom", {"type": "token", "text": "partial response"})
+        # Simulate client disconnect
+        raise GeneratorExit()
+
+    mock_graph = MagicMock()
+    mock_graph.astream = _mock_astream
+
+    # Consume the generator — it should persist even after GeneratorExit
+    events = []
+    async for event in _v1_event_generator(mock_graph, {}, {}, mock_db, thread_id, "test query", matter_id):
+        events.append(event)
+
+    # No "done" event should be yielded (client is gone)
+    done_events = [e for e in events if e.get("event") == "done"]
+    assert len(done_events) == 0
+
+    # But messages should still be persisted (2 execute calls for save_message)
+    assert mock_db.execute.call_count >= 2
+    assert mock_db.commit.call_count >= 1
+
+
+async def test_agentic_generator_persists_on_client_disconnect():
+    """When a client disconnects mid-stream, the agentic generator should still
+    persist the user and assistant messages to the database."""
+    from app.query.router import _agentic_event_generator
+
+    mock_db = AsyncMock()
+    mock_db.execute = AsyncMock()
+    mock_db.commit = AsyncMock()
+
+    thread_id = str(uuid.uuid4())
+    matter_id = uuid.UUID("00000000-0000-0000-0000-000000000001")
+
+    async def _mock_astream(*args, **kwargs):
+        yield ((), "updates", {"post_agent_extract": {"source_documents": [{"id": "p1"}]}})
+        raise GeneratorExit()
+
+    mock_graph = MagicMock()
+    mock_graph.astream = _mock_astream
+
+    # Mock settings for extract_response
+    with patch("app.dependencies.get_settings") as mock_get_settings:
+        mock_settings = MagicMock()
+        mock_settings.enable_agentic_pipeline = True
+        mock_get_settings.return_value = mock_settings
+
+        with patch("app.query.service.QueryService.extract_response", return_value="partial"):
+            events = []
+            async for event in _agentic_event_generator(
+                mock_graph, {}, {}, mock_db, thread_id, "test query", matter_id
+            ):
+                events.append(event)
+
+    # No "done" event
+    done_events = [e for e in events if e.get("event") == "done"]
+    assert len(done_events) == 0
+
+    # Messages persisted
+    assert mock_db.execute.call_count >= 2
+    assert mock_db.commit.call_count >= 1

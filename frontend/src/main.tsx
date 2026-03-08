@@ -6,7 +6,7 @@ import { Toaster } from "sonner";
 import { routeTree } from "./routeTree.gen";
 import "./index.css";
 
-const queryClient = new QueryClient({
+export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 30_000,

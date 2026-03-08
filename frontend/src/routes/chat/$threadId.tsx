@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { apiClient } from "@/api/client";
 import { ChatLayout } from "@/components/chat/chat-layout";
@@ -25,7 +25,6 @@ export const Route = createFileRoute("/chat/$threadId")({
 function ChatThreadPage() {
   const { threadId } = Route.useParams();
   const { followUp } = Route.useSearch();
-  const queryClient = useQueryClient();
   const followUpSentRef = useRef<string | null>(null);
 
   const { data, isLoading } = useQuery({
@@ -50,40 +49,31 @@ function ChatThreadPage() {
     lastQuery,
     send,
     cancel,
-  } = useStreamQuery();
+  } = useStreamQuery(threadId);
 
   const handleSend = useCallback(
     (text: string) => {
-      send(text, threadId);
+      send(text);
     },
-    [send, threadId],
+    [send],
   );
 
   const handleRetry = useCallback(() => {
     if (lastQuery) {
-      send(lastQuery, threadId);
+      send(lastQuery);
     }
-  }, [lastQuery, send, threadId]);
+  }, [lastQuery, send]);
 
   // Auto-send follow-up if provided via search params
   useEffect(() => {
     if (followUp && !isLoading && followUpSentRef.current !== followUp) {
       followUpSentRef.current = followUp;
-      send(followUp, threadId);
+      send(followUp);
     }
-  }, [followUp, isLoading, send, threadId]);
+  }, [followUp, isLoading, send]);
 
-  // Refetch thread after streaming completes
-  const prevStreaming = useRef(isStreaming);
-  useEffect(() => {
-    if (prevStreaming.current && !isStreaming) {
-      void queryClient.invalidateQueries({
-        queryKey: ["chat-thread", threadId],
-      });
-      void queryClient.invalidateQueries({ queryKey: ["chat-threads"] });
-    }
-    prevStreaming.current = isStreaming;
-  }, [isStreaming, threadId, queryClient]);
+  // Cache invalidation is handled by the stream store on `done` events —
+  // no need for a prevStreaming ref here.
 
   const messages = data?.messages ?? [];
   const streamDone = !isStreaming && !!streamingText;

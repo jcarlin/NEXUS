@@ -257,12 +257,8 @@ async def _v1_event_generator(graph, initial_state, config, db, thread_id, query
         logger.info("query_stream.client_disconnected", thread_id=thread_id)
         client_disconnected = True
 
-    if client_disconnected:
-        return
-
-    # Chat persistence failure after streaming is a data integrity issue
-    # but the SSE response is already in-flight and cannot be retracted.
-    # Log at error level with full traceback so it can be investigated.
+    # Always persist — even on client disconnect the LLM work is valuable.
+    # Partial results are better than nothing.
     try:
         await ChatService.save_message(db, thread_id, "user", query_text, matter_id=matter_id)
         await ChatService.save_message(
@@ -278,6 +274,9 @@ async def _v1_event_generator(graph, initial_state, config, db, thread_id, query
         await db.commit()
     except Exception:
         logger.error("query_stream.save_failed", thread_id=thread_id, exc_info=True)
+
+    if client_disconnected:
+        return
 
     yield {
         "event": "done",
@@ -354,18 +353,14 @@ async def _agentic_event_generator(graph, initial_state, config, db, thread_id, 
         logger.info("query_stream.client_disconnected", thread_id=thread_id)
         client_disconnected = True
 
-    if client_disconnected:
-        return
-
     # Extract response
     from app.dependencies import get_settings
 
     settings = get_settings()
     response_text = QueryService.extract_response(final_state, settings.enable_agentic_pipeline)
 
-    # Chat persistence failure after streaming is a data integrity issue
-    # but the SSE response is already in-flight and cannot be retracted.
-    # Log at error level with full traceback so it can be investigated.
+    # Always persist — even on client disconnect the LLM work is valuable.
+    # Partial results are better than nothing.
     try:
         await ChatService.save_message(db, thread_id, "user", query_text, matter_id=matter_id)
         await ChatService.save_message(
@@ -381,6 +376,9 @@ async def _agentic_event_generator(graph, initial_state, config, db, thread_id, 
         await db.commit()
     except Exception:
         logger.error("query_stream.save_failed", thread_id=thread_id, exc_info=True)
+
+    if client_disconnected:
+        return
 
     yield {
         "event": "done",
