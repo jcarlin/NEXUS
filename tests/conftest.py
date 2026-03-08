@@ -62,67 +62,56 @@ def test_settings() -> Settings:
 
 
 # ---------------------------------------------------------------------------
-# Async HTTP client backed by the FastAPI ASGI app
+# Session-scoped app — created once, reused by all tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="session")
+def _test_app():
+    """Build the FastAPI app once per session with noop lifespan."""
+    from app import main as main_module
+
+    async def _noop_lifespan(app):
+        yield
+
+    with patch.object(main_module, "lifespan", _noop_lifespan):
+        app = main_module.create_app()
+
+    from app.auth.middleware import get_current_user, get_matter_id
+    from app.common.rate_limit import rate_limit_ingests, rate_limit_queries
+
+    app.dependency_overrides[rate_limit_queries] = lambda: None
+    app.dependency_overrides[rate_limit_ingests] = lambda: None
+    app.dependency_overrides[get_current_user] = lambda: _TEST_USER
+    app.dependency_overrides[get_matter_id] = lambda: _TEST_MATTER_ID
+
+    return app
+
+
+# ---------------------------------------------------------------------------
+# Async HTTP clients backed by the shared app
 # ---------------------------------------------------------------------------
 
 
 @pytest.fixture()
-async def client() -> AsyncIterator[AsyncClient]:
-    """Yield an ``httpx.AsyncClient`` wired directly to the NEXUS app.
-
-    All external service dependencies are patched out so that tests run
-    without Docker infrastructure.
-
-    Auth dependencies (``get_current_user`` and ``get_matter_id``) are
-    overridden to always return a test user and default matter, so that
-    existing tests don't need auth headers.
-    """
-    # Patch the lifespan so it does not try to connect to real services.
-    from app import main as main_module
-
-    async def _noop_lifespan(app):
-        yield
-
-    with patch.object(main_module, "lifespan", _noop_lifespan):
-        # Re-create the app with the patched lifespan
-        test_app = main_module.create_app()
-
-        # Override rate limiters to no-op so tests aren't blocked
-        from app.common.rate_limit import rate_limit_ingests, rate_limit_queries
-
-        test_app.dependency_overrides[rate_limit_queries] = lambda: None
-        test_app.dependency_overrides[rate_limit_ingests] = lambda: None
-
-        # Override auth dependencies so all existing tests pass without auth headers
-        from app.auth.middleware import get_current_user, get_matter_id
-
-        test_app.dependency_overrides[get_current_user] = lambda: _TEST_USER
-        test_app.dependency_overrides[get_matter_id] = lambda: _TEST_MATTER_ID
-
-        transport = ASGITransport(app=test_app)
-        async with AsyncClient(transport=transport, base_url="http://testserver") as ac:
-            yield ac
+async def client(_test_app) -> AsyncIterator[AsyncClient]:
+    """Function-scoped client — reuses session app, resets overrides after each test."""
+    saved = dict(_test_app.dependency_overrides)
+    transport = ASGITransport(app=_test_app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as ac:
+        yield ac
+    _test_app.dependency_overrides = saved
 
 
 @pytest.fixture()
-async def unauthed_client() -> AsyncIterator[AsyncClient]:
-    """Yield an ``httpx.AsyncClient`` WITHOUT auth overrides.
+async def unauthed_client(_test_app) -> AsyncIterator[AsyncClient]:
+    """Client without auth overrides — restores after test."""
+    saved = dict(_test_app.dependency_overrides)
+    from app.auth.middleware import get_current_user, get_matter_id
 
-    Used by auth-specific tests to exercise real auth middleware.
-    """
-    from app import main as main_module
-
-    async def _noop_lifespan(app):
-        yield
-
-    with patch.object(main_module, "lifespan", _noop_lifespan):
-        test_app = main_module.create_app()
-
-        from app.common.rate_limit import rate_limit_ingests, rate_limit_queries
-
-        test_app.dependency_overrides[rate_limit_queries] = lambda: None
-        test_app.dependency_overrides[rate_limit_ingests] = lambda: None
-
-        transport = ASGITransport(app=test_app)
-        async with AsyncClient(transport=transport, base_url="http://testserver") as ac:
-            yield ac
+    _test_app.dependency_overrides.pop(get_current_user, None)
+    _test_app.dependency_overrides.pop(get_matter_id, None)
+    transport = ASGITransport(app=_test_app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as ac:
+        yield ac
+    _test_app.dependency_overrides = saved
