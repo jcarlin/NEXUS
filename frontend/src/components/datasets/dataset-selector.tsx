@@ -48,8 +48,11 @@ export function DatasetSelector() {
       value={datasetId ?? "__all__"}
       onValueChange={(v) => setDataset(v === "__all__" ? null : v)}
     >
-      <SelectTrigger className="w-[200px]">
-        <SelectValue placeholder="All Documents" />
+      <SelectTrigger className="w-[220px]">
+        <span className="flex items-center gap-1.5">
+          <span className="text-xs text-muted-foreground">Dataset:</span>
+          <SelectValue placeholder="All Documents" />
+        </span>
       </SelectTrigger>
       <SelectContent>
         <SelectItem value="__all__">All Documents</SelectItem>

@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "@tanstack/react-router";
 import { Plus, MessageSquare, Loader2, PanelLeftClose, PanelLeft } from "lucide-react";
 import { apiClient } from "@/api/client";
+import { useAppStore } from "@/stores/app-store";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -64,11 +65,12 @@ interface ThreadSidebarProps {
 }
 
 export function ThreadSidebar({ collapsed, onToggle }: ThreadSidebarProps) {
+  const matterId = useAppStore((s) => s.matterId);
   const params = useParams({ strict: false });
   const activeThreadId = "threadId" in params ? params.threadId : undefined;
 
   const { data, isLoading } = useQuery({
-    queryKey: ["chat-threads"],
+    queryKey: ["chat-threads", matterId],
     queryFn: () =>
       apiClient<{ threads: ChatThread[] }>({
         url: "/api/v1/chats",
