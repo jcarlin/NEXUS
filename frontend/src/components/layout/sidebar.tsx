@@ -73,8 +73,17 @@ export function Sidebar() {
     return items.filter((item) => !item.roles || (userRole && item.roles.includes(userRole)));
   }
 
+  const allPaths = [...mainNav, ...analysisNav, ...reviewNav, ...adminNav].map((i) => i.to);
+
   function NavLink({ item }: { item: NavItem }) {
-    const isActive = matchRoute({ to: item.to, fuzzy: true });
+    const isMatch = matchRoute({ to: item.to, fuzzy: true });
+    // Suppress active state if a more specific sibling also matches (e.g. /documents vs /documents/import)
+    const isShadowed =
+      isMatch &&
+      allPaths.some(
+        (p) => p !== item.to && p.startsWith(item.to) && matchRoute({ to: p, fuzzy: true }),
+      );
+    const isActive = isMatch && !isShadowed;
     const Icon = item.icon;
 
     const link = (
