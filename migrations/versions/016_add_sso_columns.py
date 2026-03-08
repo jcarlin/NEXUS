@@ -1,7 +1,7 @@
 """Add SSO columns to users table.
 
-Revision ID: 005
-Revises: 004
+Revision ID: 016
+Revises: 015
 Create Date: 2026-03-08 00:00:00.000000
 
 """
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "005"
-down_revision: str | None = "004"
+revision: str = "016"
+down_revision: str | None = "015"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
