@@ -401,14 +401,19 @@ def create_resolution_nodes(settings: dict[str, Any]) -> dict[str, Any]:
 
         return {}
 
+    # Wrap all nodes with agent audit logging
+    from app.common.agent_logging import log_agent_node
+
+    postgres_url = settings.get("postgres_url")
+
     return {
-        "extract": extract,
-        "deduplicate": deduplicate,
-        "resolve_coreferences": resolve_coreferences,
-        "merge": merge,
-        "infer_hierarchy": infer_hierarchy,
-        "link_defined_terms": link_defined_terms,
-        "present_uncertain": present_uncertain,
+        "extract": log_agent_node("entity_resolution", "extract", postgres_url=postgres_url)(extract),
+        "deduplicate": log_agent_node("entity_resolution", "deduplicate", postgres_url=postgres_url)(deduplicate),
+        "resolve_coreferences": log_agent_node("entity_resolution", "resolve_coreferences", postgres_url=postgres_url)(resolve_coreferences),
+        "merge": log_agent_node("entity_resolution", "merge", postgres_url=postgres_url)(merge),
+        "infer_hierarchy": log_agent_node("entity_resolution", "infer_hierarchy", postgres_url=postgres_url)(infer_hierarchy),
+        "link_defined_terms": log_agent_node("entity_resolution", "link_defined_terms", postgres_url=postgres_url)(link_defined_terms),
+        "present_uncertain": log_agent_node("entity_resolution", "present_uncertain", postgres_url=postgres_url)(present_uncertain),
     }
 
 

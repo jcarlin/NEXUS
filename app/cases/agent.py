@@ -283,13 +283,18 @@ def create_case_setup_nodes(llm_settings: dict[str, Any]) -> dict[str, Any]:
         asyncio.run(_populate())
         return {}
 
+    # Wrap all nodes with agent audit logging
+    from app.common.agent_logging import log_agent_node
+
+    postgres_url = llm_settings.get("postgres_url")
+
     return {
-        "parse_anchor_doc": parse_anchor_doc,
-        "extract_claims": extract_claims,
-        "extract_parties": extract_parties,
-        "extract_defined_terms": extract_defined_terms,
-        "build_timeline": build_timeline,
-        "populate_graph": populate_graph,
+        "parse_anchor_doc": log_agent_node("case_setup", "parse_anchor_doc", postgres_url=postgres_url)(parse_anchor_doc),
+        "extract_claims": log_agent_node("case_setup", "extract_claims", postgres_url=postgres_url)(extract_claims),
+        "extract_parties": log_agent_node("case_setup", "extract_parties", postgres_url=postgres_url)(extract_parties),
+        "extract_defined_terms": log_agent_node("case_setup", "extract_defined_terms", postgres_url=postgres_url)(extract_defined_terms),
+        "build_timeline": log_agent_node("case_setup", "build_timeline", postgres_url=postgres_url)(build_timeline),
+        "populate_graph": log_agent_node("case_setup", "populate_graph", postgres_url=postgres_url)(populate_graph),
     }
 
 
