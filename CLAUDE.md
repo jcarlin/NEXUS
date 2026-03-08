@@ -21,7 +21,7 @@ Full local deployment with zero cloud API dependency.
 3. **Read before you write.** Always read the files you intend to modify. Understand the existing patterns, imports, and conventions in that specific file before making changes.
 4. **Check `ROADMAP.md` for context.** Know which milestone is current, what's done, and what's planned. Don't build something that's already scoped for a later milestone, and don't break assumptions from completed milestones.
 5. **Plans include tests.** Every plan/todo must include writing tests as an explicit step — not an afterthought.
-6. **Finish the loop: implement → test → fix → verify → update ROADMAP → commit.** While iterating, run `pytest tests/test_{affected_modules}/ -v` for the modules you changed. Before the final commit, run `pytest tests/ -v` once to catch cross-module regressions. If tests fail, fix the issues and re-run until all tests pass. Only then update `ROADMAP.md` to reflect what was completed (check off items, update status, adjust test counts). Finally, commit all changes with a clear message. Work is not done until the roadmap is current and the commit is made.
+6. **Finish the loop: implement → test → fix → verify → update ROADMAP → commit.** While iterating, run `pytest tests/test_{affected_modules}/ -v` for the modules you changed. Before the final commit, run the full suite using 4 parallel agents (see rule 39) to catch cross-module regressions. If tests fail, fix the issues and re-run until all tests pass. Only then update `ROADMAP.md` to reflect what was completed (check off items, update status, adjust test counts). Finally, commit all changes with a clear message. Work is not done until the roadmap is current and the commit is made.
 7. **One concern per change.** Don't refactor adjacent code, add unrelated improvements, or "clean up" things that aren't part of the current task.
 8. **When unsure about a library API, look it up.** Do not guess at method signatures, parameter names, or return types from memory. Libraries in this project (LangGraph, Qdrant client, Instructor, Docling, FastEmbed, GLiNER, etc.) evolve rapidly and your training data may be stale. Search the web for current official documentation, read the actual installed source in `.venv/`, or ask. Confidently writing an outdated or incorrect API call wastes more time than checking.
 9. **High-blast-radius changes need confirmation.** Docker configs, Alembic migrations that drop/rename columns, dependency version changes, and anything touching auth middleware — always flag these and get explicit approval before applying.
@@ -87,6 +87,15 @@ Full local deployment with zero cloud API dependency.
 36. **Every new feature or bug fix needs tests.** Tests mirror the module structure: `tests/test_{domain}/`. Use the existing `conftest.py` fixtures (mock services, AsyncClient, patched lifespan).
 37. **Mock external services, test your logic.** Tests should not require running infrastructure. Mock Qdrant, Neo4j, MinIO, Redis, LLM APIs. Test that your code calls them correctly with the right parameters.
 38. **Celery task `.delay()` is sync.** Mock it with `MagicMock`, not `AsyncMock`.
+39. **Parallel test execution.** When running the full test suite, use the Agent tool to split across 4 parallel agents by module group. Each agent runs in a worktree for isolation. This cuts wall-clock time from ~2min to ~30s. Use this grouping (balanced by test count):
+    - **Agent 1** (~177 tests): `tests/test_query/`
+    - **Agent 2** (~183 tests): `tests/test_ingestion/ tests/test_entities/`
+    - **Agent 3** (~166 tests): `tests/test_common/ tests/test_documents/ tests/test_datasets/`
+    - **Agent 4** (~218 tests): `tests/test_auth/ tests/test_cases/ tests/test_analytics/ tests/test_edrm/ tests/test_analysis/ tests/test_annotations/ tests/test_audit/ tests/test_evaluation/ tests/test_exports/ tests/test_redaction/ tests/test_scripts/ tests/test_gdrive/`
+
+    Each agent runs: `.venv/bin/python3 -m pytest <dirs> -v -x --tb=short`
+    Exclude `tests/test_e2e/` and `tests/test_integration/` from parallel runs (they need the full stack).
+    Known pre-existing failures to exclude: `test_rerank_takes_top_10`, `test_v1_generator_exit`, `test_nested_features_populated`.
 
 ### Enterprise & Security
 
