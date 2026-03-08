@@ -10,8 +10,8 @@ All fixtures skip gracefully if Docker services are unreachable.
 
 from __future__ import annotations
 
+import asyncio
 import os
-import time
 from collections.abc import AsyncIterator
 from io import BytesIO
 from pathlib import Path
@@ -222,7 +222,6 @@ def e2e_qdrant(e2e_services_check):
 @pytest.fixture(scope="session")
 def e2e_neo4j(e2e_services_check):
     """Ensure Neo4j schema, clear existing data."""
-    import asyncio
 
     from neo4j import AsyncGraphDatabase
 
@@ -322,20 +321,76 @@ def e2e_redis(e2e_services_check):
 # ---------------------------------------------------------------------------
 
 
+_PENDING_TASKS: list[tuple[str, str]] = []
+"""Accumulated (job_id, minio_path) pairs from patched ``.delay()`` calls."""
+
+
 @pytest.fixture(scope="session")
 def celery_eager(e2e_env_vars):
-    """Configure Celery for eager (synchronous) execution."""
+    """Patch ``process_document.delay()`` to be a no-op that records args.
+
+    Celery eager mode cannot work inside FastAPI's async handler because
+    the task calls ``asyncio.run()`` which conflicts with the running
+    event loop.  Instead we capture the task args and run the task
+    directly from the test fixture via ``run_pending_tasks()``.
+
+    Celery eager mode IS still enabled so that subtasks dispatched from
+    within ``process_document`` (e.g. ``resolve_entities.delay()``) run
+    in-process without needing a real broker connection.
+    """
     from workers.celery_app import celery_app
 
     celery_app.conf.update(
         task_always_eager=True,
         task_eager_propagates=True,
     )
+
+    from app.ingestion.tasks import process_document
+
+    _original_delay = process_document.delay
+
+    def _capture_delay(*args, **kwargs):
+        """Store the task args for later execution — don't run anything."""
+        _PENDING_TASKS.append(args[:2])  # (job_id, minio_path)
+
+    process_document.delay = _capture_delay  # type: ignore[assignment]
+
     yield
+
+    process_document.delay = _original_delay  # type: ignore[assignment]
     celery_app.conf.update(
         task_always_eager=False,
         task_eager_propagates=False,
     )
+
+
+def run_pending_tasks() -> None:
+    """Execute captured ``process_document`` calls in a fresh thread.
+
+    Each task gets its own event loop in a separate thread so that
+    ``asyncio.run()`` inside the task doesn't conflict with FastAPI's loop.
+
+    Uses ``task.apply()`` (not direct call) so that:
+    1. The ``bind=True`` self parameter is handled correctly.
+    2. Subtask ``.delay()`` calls respect ``task_always_eager=True``.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    from app.ingestion.tasks import process_document
+
+    if not _PENDING_TASKS:
+        return
+
+    tasks = list(_PENDING_TASKS)
+    _PENDING_TASKS.clear()
+
+    def _run_task(args: tuple) -> None:
+        process_document.apply(args=list(args))
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        for args in tasks:
+            future = executor.submit(_run_task, args)
+            future.result()  # Block until task completes
 
 
 # ---------------------------------------------------------------------------
@@ -517,19 +572,16 @@ async def ingested_document(
     data = resp.json()
     job_id = data["job_id"]
 
-    # In eager mode the task runs synchronously, so the job should already
-    # be complete. Poll briefly just in case.
-    for _ in range(10):
-        resp = await e2e_client.get(
-            f"/api/v1/jobs/{job_id}",
-            headers=admin_auth_headers,
-        )
-        assert resp.status_code == 200
-        status = resp.json()
-        if status["status"] in ("complete", "failed"):
-            break
-        time.sleep(0.5)
+    # .delay() was captured as a no-op — run the task in a thread now.
+    run_pending_tasks()
 
+    # Task completed synchronously (in thread) — fetch final status.
+    resp = await e2e_client.get(
+        f"/api/v1/jobs/{job_id}",
+        headers=admin_auth_headers,
+    )
+    assert resp.status_code == 200
+    status = resp.json()
     assert status["status"] == "complete", f"Job did not complete: {status}"
     return status
 

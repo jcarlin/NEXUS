@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { LoadFileFormat } from "@/api/generated/schemas";
 
 // ---- Mocks ---- //
 
@@ -75,10 +76,12 @@ beforeEach(() => {
 
 describe("EDRM Import on Ingest Page", () => {
   it("EDRM format values match backend LoadFileFormat enum", () => {
-    // These must match the backend LoadFileFormat StrEnum in app/edrm/schemas.py
-    const frontendFormats = ["concordance_dat", "opticon_opt", "edrm_xml"];
-    const backendFormats = ["concordance_dat", "opticon_opt", "edrm_xml"];
-    expect(frontendFormats).toEqual(backendFormats);
+    // Verify the generated enum has exactly the expected values
+    const generatedFormats = Object.values(LoadFileFormat);
+    expect(generatedFormats).toContain("concordance_dat");
+    expect(generatedFormats).toContain("opticon_opt");
+    expect(generatedFormats).toContain("edrm_xml");
+    expect(generatedFormats).toHaveLength(3);
   });
 
   it("import endpoint path matches backend router", () => {
@@ -212,10 +215,10 @@ describe("ThreadResponse type", () => {
 
 describe("EDRM format options", () => {
   it("supports the three backend-defined formats", () => {
-    const formats = ["concordance_dat", "opticon_opt", "edrm_xml"];
+    const formats = Object.values(LoadFileFormat);
     expect(formats).toHaveLength(3);
-    expect(formats).toContain("concordance_dat");
-    expect(formats).toContain("opticon_opt");
-    expect(formats).toContain("edrm_xml");
+    expect(formats).toContain(LoadFileFormat.concordance_dat);
+    expect(formats).toContain(LoadFileFormat.opticon_opt);
+    expect(formats).toContain(LoadFileFormat.edrm_xml);
   });
 });

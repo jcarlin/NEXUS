@@ -1,6 +1,17 @@
 import { test, expect } from "@playwright/test";
+import {
+  collectConsoleErrors,
+  expectNoConsoleErrors,
+} from "./helpers/console-errors";
 
 test.describe("Chat", () => {
+  test("chat page renders without console errors", async ({ page }) => {
+    const errors = collectConsoleErrors(page);
+    await page.goto("/chat", { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(3_000);
+    expectNoConsoleErrors(errors);
+  });
+
   test("shows existing thread in sidebar", async ({ page }) => {
     await page.goto("/chat", { waitUntil: "domcontentloaded" });
     await page.waitForTimeout(3_000);
@@ -51,5 +62,42 @@ test.describe("Chat", () => {
       )
       .filter({ hasText: /.{20,}/ });
     await expect(response.first()).toBeVisible({ timeout: 60_000 });
+  });
+
+  test("thread detail shows message history", async ({ page }) => {
+    await page.goto("/chat", { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(3_000);
+
+    // Click the first thread link (href contains /chat/)
+    const threadLink = page.locator("aside a[href*='/chat/']").first();
+    if (await threadLink.isVisible().catch(() => false)) {
+      await threadLink.click();
+      await expect(page).toHaveURL(/\/chat\//, { timeout: 10_000 });
+      await page.waitForTimeout(2_000);
+
+      // Should show messages from assistant
+      const messages = page.locator(
+        "[data-testid='assistant-message'], [class*='message']",
+      );
+      await expect(messages.first()).toBeVisible({ timeout: 10_000 });
+    }
+  });
+
+  test("new chat has empty input ready", async ({ page }) => {
+    await page.goto("/chat", { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2_000);
+
+    // Message input should be present and empty
+    const input = page.getByPlaceholder(/ask|question|query|message/i);
+    await expect(input).toBeVisible({ timeout: 10_000 });
+    await expect(input).toHaveValue("");
+  });
+
+  test("message input has send button", async ({ page }) => {
+    await page.goto("/chat", { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2_000);
+
+    const sendButton = page.getByRole("button", { name: /send|submit|ask/i });
+    await expect(sendButton).toBeVisible({ timeout: 10_000 });
   });
 });

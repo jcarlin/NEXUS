@@ -1,6 +1,30 @@
 import { test, expect } from "@playwright/test";
+import {
+  collectConsoleErrors,
+  expectNoConsoleErrors,
+} from "./helpers/console-errors";
 
 test.describe("Documents", () => {
+  test("document list renders without console errors", async ({ page }) => {
+    const errors = collectConsoleErrors(page);
+    await page.goto("/documents", { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(3_000);
+    expectNoConsoleErrors(errors);
+  });
+
+  test("document detail renders without console errors", async ({ page }) => {
+    const errors = collectConsoleErrors(page);
+    await page.goto("/documents", { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2_000);
+    const firstLink = page.locator("table tbody tr a").first();
+    if (await firstLink.isVisible().catch(() => false)) {
+      await firstLink.click();
+      await expect(page).toHaveURL(/\/documents\//, { timeout: 10_000 });
+      await page.waitForTimeout(3_000);
+      expectNoConsoleErrors(errors);
+    }
+  });
+
   test("document list shows seeded documents", async ({ page }) => {
     await page.goto("/documents", { waitUntil: "domcontentloaded" });
     await page.waitForTimeout(2_000);
@@ -42,5 +66,86 @@ test.describe("Documents", () => {
       )
       .first();
     await expect(uploadArea).toBeAttached({ timeout: 10_000 });
+  });
+
+  test("document detail page shows document info panel", async ({ page }) => {
+    await page.goto("/documents", { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2_000);
+
+    // Navigate to first document detail
+    const firstLink = page.locator("table tbody tr a").first();
+    await firstLink.click();
+    await expect(page).toHaveURL(/\/documents\//, { timeout: 10_000 });
+    await page.waitForTimeout(2_000);
+
+    // Document Info panel should be visible (right sidebar)
+    await expect(page.getByText("Document Info")).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(page.getByText("Filename")).toBeVisible();
+  });
+
+  test("document detail shows page/chunk/entity counts", async ({ page }) => {
+    await page.goto("/documents", { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2_000);
+
+    const firstLink = page.locator("table tbody tr a").first();
+    await firstLink.click();
+    await expect(page).toHaveURL(/\/documents\//, { timeout: 10_000 });
+    await page.waitForTimeout(2_000);
+
+    // Subtitle shows page/chunk/entity counts
+    await expect(
+      page.getByText(/\d+ pages? \| \d+ chunks? \| \d+ entit/i),
+    ).toBeVisible({ timeout: 10_000 });
+  });
+
+  test("document detail shows filename heading", async ({ page }) => {
+    await page.goto("/documents", { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2_000);
+
+    const firstLink = page.locator("table tbody tr a").first();
+    const linkText = await firstLink.textContent();
+    await firstLink.click();
+    await expect(page).toHaveURL(/\/documents\//, { timeout: 10_000 });
+    await page.waitForTimeout(2_000);
+
+    // Document heading should show the filename
+    if (linkText) {
+      const heading = page.getByRole("heading", { name: linkText.trim() });
+      await expect(heading).toBeVisible({ timeout: 10_000 });
+    }
+  });
+
+  test("document detail has download button", async ({ page }) => {
+    await page.goto("/documents", { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2_000);
+
+    const firstLink = page.locator("table tbody tr a").first();
+    await firstLink.click();
+    await expect(page).toHaveURL(/\/documents\//, { timeout: 10_000 });
+    await page.waitForTimeout(2_000);
+
+    // Download button should be present
+    const downloadBtn = page.getByRole("button", { name: /download/i });
+    if (await downloadBtn.isVisible().catch(() => false)) {
+      await expect(downloadBtn).toBeEnabled();
+    }
+  });
+
+  test("document detail back button returns to list", async ({ page }) => {
+    await page.goto("/documents", { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2_000);
+
+    const firstLink = page.locator("table tbody tr a").first();
+    await firstLink.click();
+    await expect(page).toHaveURL(/\/documents\//, { timeout: 10_000 });
+    await page.waitForTimeout(2_000);
+
+    // Back button should navigate to /documents
+    const backBtn = page.locator("a[href='/documents']").first();
+    await expect(backBtn).toBeVisible({ timeout: 5_000 });
+    await backBtn.click();
+    await expect(page).toHaveURL("/documents", { timeout: 10_000 });
   });
 });

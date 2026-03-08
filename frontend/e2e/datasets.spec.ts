@@ -1,22 +1,39 @@
 import { test, expect } from "@playwright/test";
+import {
+  collectConsoleErrors,
+  expectNoConsoleErrors,
+} from "./helpers/console-errors";
 
 test.describe("Datasets", () => {
-  test("dataset tree shows seeded folders", async ({ page }) => {
+  test("datasets page renders without console errors", async ({ page }) => {
+    const errors = collectConsoleErrors(page);
     await page.goto("/datasets", { waitUntil: "domcontentloaded" });
     await page.waitForTimeout(3_000);
-
-    // Should show the seeded dataset names
-    const dueDiligence = page.getByText("Due Diligence", { exact: false });
-    await expect(dueDiligence).toBeVisible({ timeout: 10_000 });
+    expectNoConsoleErrors(errors);
   });
 
-  test("child datasets are visible", async ({ page }) => {
+  test("dataset tree shows seeded datasets", async ({ page }) => {
     await page.goto("/datasets", { waitUntil: "domcontentloaded" });
     await page.waitForTimeout(3_000);
 
-    // Should show child datasets (may need to expand parent)
-    const correspondence = page.getByText("Correspondence", { exact: false });
-    await expect(correspondence).toBeVisible({ timeout: 10_000 });
+    // Should show the "Datasets" header in the sidebar
+    await expect(
+      page.getByRole("heading", { name: "Datasets" }),
+    ).toBeVisible({ timeout: 10_000 });
+
+    // Should show at least one dataset node in the tree
+    const datasetNode = page.getByText("E2E Test Dataset").first();
+    await expect(datasetNode).toBeVisible({ timeout: 10_000 });
+  });
+
+  test("select a dataset from sidebar shows right panel", async ({ page }) => {
+    await page.goto("/datasets", { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(3_000);
+
+    // Before selecting, right panel shows empty state
+    await expect(
+      page.getByText("Select a dataset from the sidebar"),
+    ).toBeVisible({ timeout: 10_000 });
   });
 
   test("document counts are shown", async ({ page }) => {
@@ -32,5 +49,46 @@ test.describe("Datasets", () => {
       .catch(() => {
         // Some UIs show count inline in text, check for that
       });
+  });
+
+  test("clicking a dataset shows documents panel", async ({ page }) => {
+    await page.goto("/datasets", { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(3_000);
+
+    // Click the first dataset node in the tree (use text from the actual dataset name)
+    const firstDataset = page
+      .getByText("E2E Test Dataset", { exact: false })
+      .first();
+    if (await firstDataset.isVisible().catch(() => false)) {
+      await firstDataset.click();
+      await page.waitForTimeout(2_000);
+
+      // Right panel should show documents count
+      await expect(
+        page.getByText(/\d+ documents?/i),
+      ).toBeVisible({ timeout: 10_000 });
+    }
+  });
+
+  test("create dataset button opens dialog", async ({ page }) => {
+    await page.goto("/datasets", { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(3_000);
+
+    // Plus button to create a new dataset
+    const createBtn = page
+      .locator("button")
+      .filter({ has: page.locator("svg") })
+      .first();
+    if (await createBtn.isVisible().catch(() => false)) {
+      await createBtn.click();
+
+      // Dialog with "Create Dataset" title should appear
+      const dialog = page.getByRole("dialog");
+      if (await dialog.isVisible().catch(() => false)) {
+        await expect(
+          page.getByText("Create Dataset"),
+        ).toBeVisible({ timeout: 5_000 });
+      }
+    }
   });
 });

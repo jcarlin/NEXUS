@@ -17,6 +17,7 @@ interface EmailEntry {
   message_id: string;
 }
 
+// NOTE: no generated equivalent — backend endpoint not in OpenAPI spec
 interface CommPairResponse {
   person_a: string;
   person_b: string;

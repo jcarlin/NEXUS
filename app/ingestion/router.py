@@ -135,12 +135,15 @@ async def ingest_single(
         dataset_id=dataset_id,
     )
 
-    # 4. Dispatch Celery task
+    # 4. Commit so the job row is visible to the Celery worker's sync connection
+    await db.commit()
+
+    # 5. Dispatch Celery task
     process_document.delay(str(job_row["id"]), minio_path)
 
     logger.info("ingest.task_dispatched", job_id=str(job_row["id"]))
 
-    # 5. Return response
+    # 6. Return response
     return IngestResponse(
         job_id=job_row["id"],
         status=JobStatus.PENDING,
@@ -200,20 +203,26 @@ async def ingest_batch(
             dataset_id=dataset_id,
         )
 
-        process_document.delay(str(job_row["id"]), minio_path)
-
         job_ids.append(job_row["id"])
         filenames.append(filename)
+
+    if not job_ids:
+        raise HTTPException(status_code=400, detail="All uploaded files were empty")
+
+    # Commit all job rows so they are visible to the Celery worker's sync connection
+    await db.commit()
+
+    # Dispatch all tasks after commit
+    for job_id_val, fname in zip(job_ids, filenames):
+        minio_path = f"raw/{job_id_val}/{fname}"
+        process_document.delay(str(job_id_val), minio_path)
 
         logger.info(
             "ingest.batch.file_dispatched",
             batch_id=str(batch_id),
-            job_id=str(job_row["id"]),
-            filename=filename,
+            job_id=str(job_id_val),
+            filename=fname,
         )
-
-    if not job_ids:
-        raise HTTPException(status_code=400, detail="All uploaded files were empty")
 
     return BatchIngestResponse(
         batch_id=batch_id,
@@ -270,6 +279,7 @@ async def process_uploaded(
     job_ids: list = []
     filenames: list[str] = []
 
+    minio_paths: list[str] = []
     for f in request.files:
         job_id = uuid4()
 
@@ -282,17 +292,22 @@ async def process_uploaded(
             dataset_id=dataset_id,
         )
 
-        process_document.delay(str(job_row["id"]), f.object_key)
-
         job_ids.append(job_row["id"])
         filenames.append(f.filename)
+        minio_paths.append(f.object_key)
+
+    # Commit all job rows so they are visible to the Celery worker's sync connection
+    await db.commit()
+
+    for job_id_val, fname, mpath in zip(job_ids, filenames, minio_paths):
+        process_document.delay(str(job_id_val), mpath)
 
         logger.info(
             "ingest.process_uploaded.dispatched",
             batch_id=str(batch_id),
-            job_id=str(job_row["id"]),
-            filename=f.filename,
-            object_key=f.object_key,
+            job_id=str(job_id_val),
+            filename=fname,
+            object_key=mpath,
         )
 
     return BatchIngestResponse(
@@ -394,6 +409,8 @@ async def ingest_webhook(
         raise HTTPException(status_code=400, detail="No event records in payload")
 
     job_ids: list[str] = []
+    object_keys: list[str] = []
+    event_names: list[str] = []
 
     for record in payload.Records:
         # Only process object-created events
@@ -418,22 +435,26 @@ async def ingest_webhook(
             minio_path=object_key,
         )
 
-        # Dispatch Celery task
-        process_document.delay(str(job_row["id"]), object_key)
-
         job_ids.append(str(job_row["id"]))
-
-        logger.info(
-            "webhook.job_dispatched",
-            job_id=str(job_row["id"]),
-            object_key=object_key,
-            event_name=record.eventName,
-        )
+        object_keys.append(object_key)
+        event_names.append(record.eventName)
 
     if not job_ids:
         raise HTTPException(
             status_code=400,
             detail="No actionable s3:ObjectCreated events found in payload",
+        )
+
+    # Commit all job rows so they are visible to the Celery worker's sync connection
+    await db.commit()
+
+    for jid, okey, ename in zip(job_ids, object_keys, event_names):
+        process_document.delay(jid, okey)
+        logger.info(
+            "webhook.job_dispatched",
+            job_id=jid,
+            object_key=okey,
+            event_name=ename,
         )
 
     return WebhookResponse(

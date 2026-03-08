@@ -91,6 +91,7 @@ dev = [
     "datasets>=2.14",
     "honcho>=1.1",
     "watchdog>=4.0",
+    "fpdf2>=2.7",
 ]
 coreference = [
     "coreferee>=1.4",

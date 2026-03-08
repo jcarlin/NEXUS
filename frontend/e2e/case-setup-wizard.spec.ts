@@ -1,6 +1,18 @@
 import { test, expect } from "@playwright/test";
+import { CaseStatus, PartyRole } from "./helpers/schema-constants";
+import {
+  collectConsoleErrors,
+  expectNoConsoleErrors,
+} from "./helpers/console-errors";
 
 test.describe("Case Setup Wizard Flow", () => {
+  test("case setup page renders without console errors", async ({ page }) => {
+    const errors = collectConsoleErrors(page);
+    await page.goto("/case-setup", { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(3_000);
+    expectNoConsoleErrors(errors);
+  });
+
   test("upload step shows file upload area and triggers POST", async ({
     page,
   }) => {
@@ -28,7 +40,7 @@ test.describe("Case Setup Wizard Flow", () => {
         body: JSON.stringify({
           job_id: "test-job-1",
           case_context_id: "ctx-1",
-          status: "processing",
+          status: CaseStatus.processing,
           created_at: "2024-01-01T00:00:00Z",
         }),
       }),
@@ -65,7 +77,10 @@ test.describe("Case Setup Wizard Flow", () => {
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          status: pollCount <= 1 ? "processing" : "confirmed",
+          id: "ctx-1",
+          matter_id: "00000000-0000-0000-0000-000000000001",
+          anchor_document_id: "doc-1",
+          status: pollCount <= 1 ? CaseStatus.processing : CaseStatus.confirmed,
           claims: [
             {
               claim_number: 1,
@@ -73,7 +88,9 @@ test.describe("Case Setup Wizard Flow", () => {
               claim_text: "Breach of fiduciary duty",
             },
           ],
-          parties: [{ name: "Test Corp", role: "defendant" }],
+          parties: [{ name: "Test Corp", role: PartyRole.defendant }],
+          created_at: "2024-01-01T00:00:00Z",
+          updated_at: "2024-01-01T00:00:00Z",
         }),
       });
     });
@@ -86,7 +103,7 @@ test.describe("Case Setup Wizard Flow", () => {
         body: JSON.stringify({
           job_id: "test-job-1",
           case_context_id: "ctx-1",
-          status: "processing",
+          status: CaseStatus.processing,
           created_at: "2024-01-01T00:00:00Z",
         }),
       }),
@@ -168,9 +185,14 @@ test.describe("Case Setup Wizard Flow", () => {
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          status: "confirmed",
+          id: "ctx-1",
+          matter_id: "00000000-0000-0000-0000-000000000001",
+          anchor_document_id: "doc-1",
+          status: CaseStatus.confirmed,
           claims: [],
           parties: [],
+          created_at: "2024-01-01T00:00:00Z",
+          updated_at: "2024-01-01T00:00:00Z",
         }),
       });
     });
@@ -183,7 +205,7 @@ test.describe("Case Setup Wizard Flow", () => {
         body: JSON.stringify({
           job_id: "j-1",
           case_context_id: "ctx-1",
-          status: "processing",
+          status: CaseStatus.processing,
           created_at: "2024-01-01T00:00:00Z",
         }),
       }),
@@ -223,7 +245,7 @@ test.describe("Case Setup Wizard Flow", () => {
     // Verify PATCH was sent
     await page.waitForTimeout(1_000);
     if (patchBody) {
-      expect(patchBody).toHaveProperty("status", "confirmed");
+      expect(patchBody).toHaveProperty("status", CaseStatus.confirmed);
       expect(patchBody).toHaveProperty("claims");
       expect(patchBody).toHaveProperty("parties");
       expect(patchBody).toHaveProperty("defined_terms");

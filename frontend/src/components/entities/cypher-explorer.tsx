@@ -19,6 +19,7 @@ import {
   TableCell,
 } from "@/components/ui/table";
 
+// NOTE: no generated equivalent — backend endpoint not in OpenAPI spec
 interface ExploreResponse {
   results: Record<string, unknown>[];
 }

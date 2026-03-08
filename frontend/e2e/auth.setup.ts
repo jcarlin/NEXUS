@@ -10,11 +10,9 @@ setup("authenticate", async ({ page }) => {
   await page.locator("#password").fill("password123");
   await page.getByRole("button", { name: /sign in/i }).click();
 
-  // Wait for redirect to dashboard
+  // Wait for redirect to dashboard and page to stabilize
   await expect(page).toHaveURL("/", { timeout: 15_000 });
-
-  // Wait for matter to be selected (app needs matter context)
-  await page.waitForTimeout(2_000);
+  await page.waitForLoadState("networkidle");
 
   // Inject demo matter into the persisted Zustand store
   await page.evaluate(() => {

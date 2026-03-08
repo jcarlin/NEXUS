@@ -1,4 +1,4 @@
-.PHONY: help install up down dev api worker frontend test migrate logs demo seed-demo
+.PHONY: help install up down dev stop api worker frontend test migrate logs demo seed-demo
 
 VENV := .venv/bin
 SERVICES ?=
@@ -21,6 +21,15 @@ down: ## Stop infrastructure services
 
 dev: up migrate ## Start everything (infra + API + worker + frontend)
 	$(VENV)/honcho start -f Procfile.dev
+
+stop: ## Stop all dev processes (API, worker, frontend, flower)
+	@echo "Stopping dev processes..."
+	-@pkill -f 'uvicorn app.main:app' 2>/dev/null
+	-@pkill -f 'celery -A workers.celery_app worker' 2>/dev/null
+	-@pkill -f 'celery -A workers.celery_app flower' 2>/dev/null
+	-@pkill -f 'node.*frontend.*vite' 2>/dev/null
+	-@pkill -f 'honcho start -f Procfile.dev' 2>/dev/null
+	@echo "Done."
 
 api: ## Start API server with auto-reload
 	$(VENV)/uvicorn app.main:app --reload --port 8000
