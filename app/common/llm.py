@@ -188,6 +188,17 @@ class LLMClient:
             input_tokens=input_tokens,
             output_tokens=output_tokens,
         )
+
+        # --- Prometheus metrics ---
+        from app.common.metrics import LLM_CALLS_TOTAL, LLM_DURATION, LLM_TOKENS_TOTAL
+
+        LLM_CALLS_TOTAL.labels(provider=self.provider, model=self.model).inc()
+        LLM_DURATION.labels(provider=self.provider, model=self.model).observe(latency_ms / 1000)
+        if input_tokens is not None:
+            LLM_TOKENS_TOTAL.labels(provider=self.provider, model=self.model, type="input").inc(input_tokens)
+        if output_tokens is not None:
+            LLM_TOKENS_TOTAL.labels(provider=self.provider, model=self.model, type="output").inc(output_tokens)
+
         await self._log_ai_interaction(
             messages,
             latency_ms=latency_ms,
@@ -290,6 +301,13 @@ class LLMClient:
 
         latency_ms = round((time.perf_counter() - start) * 1000, 2)
         logger.info("llm.stream", node=node_name, latency_ms=latency_ms)
+
+        # --- Prometheus metrics ---
+        from app.common.metrics import LLM_CALLS_TOTAL, LLM_DURATION
+
+        LLM_CALLS_TOTAL.labels(provider=self.provider, model=self.model).inc()
+        LLM_DURATION.labels(provider=self.provider, model=self.model).observe(latency_ms / 1000)
+
         await self._log_ai_interaction(
             messages,
             call_type="stream",

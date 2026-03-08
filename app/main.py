@@ -228,12 +228,28 @@ def create_app() -> FastAPI:
     application.include_router(redaction_router, prefix="/api/v1")
     application.include_router(evaluation_router, prefix="/api/v1")
 
-    # --- Feature-flagged routers ---
+    # --- Feature-flagged middleware ---
     settings = get_settings()
+    if settings.enable_prometheus_metrics:
+        from prometheus_fastapi_instrumentator import Instrumentator
+
+        Instrumentator().instrument(application).expose(application, endpoint="/metrics")
+
+    # --- Feature-flagged routers ---
     if settings.enable_google_drive:
         from app.gdrive.router import router as gdrive_router
 
         application.include_router(gdrive_router, prefix="/api/v1")
+
+    if settings.enable_sso:
+        from app.auth.oidc_router import router as oidc_router
+
+        application.include_router(oidc_router, prefix="/api/v1")
+
+    if settings.enable_memo_drafting:
+        from app.memos.router import router as memos_router
+
+        application.include_router(memos_router, prefix="/api/v1")
 
     # --- Health endpoint ---
     @application.get("/api/v1/health", tags=["system"])

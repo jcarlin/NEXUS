@@ -2,8 +2,8 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useState } from "react";
-import { Eye, EyeOff } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Eye, EyeOff, ExternalLink } from "lucide-react";
 import { useAuthStore } from "@/stores/auth-store";
 import { apiClient } from "@/api/client";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Separator } from "@/components/ui/separator";
 import type { TokenResponse, User } from "@/types";
+
+interface OIDCProviderInfo {
+  enabled: boolean;
+  provider_name: string;
+  authorize_url: string;
+}
 
 export const Route = createFileRoute("/login")({
   component: LoginPage,
@@ -29,6 +36,7 @@ function LoginPage() {
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [ssoInfo, setSsoInfo] = useState<OIDCProviderInfo | null>(null);
 
   const {
     register,
@@ -37,6 +45,17 @@ function LoginPage() {
   } = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
   });
+
+  useEffect(() => {
+    fetch("/api/v1/auth/oidc/info")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: OIDCProviderInfo | null) => {
+        if (data?.enabled) setSsoInfo(data);
+      })
+      .catch(() => {
+        /* SSO not available */
+      });
+  }, []);
 
   async function onSubmit(data: LoginForm) {
     setError(null);
@@ -126,6 +145,27 @@ function LoginPage() {
               {isSubmitting ? "Signing in..." : "Sign in"}
             </Button>
           </form>
+
+          {ssoInfo && (
+            <>
+              <div className="relative my-6">
+                <Separator />
+                <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-card px-2 text-xs text-muted-foreground">
+                  or
+                </span>
+              </div>
+              <Button
+                variant="outline"
+                className="w-full"
+                asChild
+              >
+                <a href={ssoInfo.authorize_url}>
+                  <ExternalLink className="mr-2 h-4 w-4" />
+                  Sign in with {ssoInfo.provider_name}
+                </a>
+              </Button>
+            </>
+          )}
         </CardContent>
       </Card>
     </div>

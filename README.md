@@ -102,6 +102,27 @@ make test
 
 Tests mock all external services — no running infrastructure required.
 
+## Load Testing
+
+Locust-based load tests simulate concurrent attorney workflows against the NEXUS API.
+
+```bash
+pip install -r load_tests/requirements.txt
+
+# Set required env vars
+export NEXUS_TEST_MATTER_ID=<your-matter-uuid>
+export NEXUS_TEST_EMAIL=admin@nexus.local
+export NEXUS_TEST_PASSWORD=changeme
+
+# Web UI (interactive dashboard at http://localhost:8089)
+locust -f load_tests/locustfile.py --host http://localhost:8000
+
+# Headless (10 users, 60s)
+locust -f load_tests/locustfile.py --headless -u 10 -r 2 --run-time 60s
+```
+
+See [load_tests/README.md](load_tests/README.md) for full configuration, task weights, and CI integration.
+
 ## Project Structure
 
 ```
@@ -188,6 +209,9 @@ Optional capabilities controlled via environment variables. See [docs/feature-fl
 | `ENABLE_GRAPH_CENTRALITY` | `false` | Neo4j GDS centrality metrics |
 | `ENABLE_BATCH_EMBEDDINGS` | `false` | Async batch embedding API (stub) |
 | `ENABLE_REDACTION` | `false` | PII detection and document redaction |
+| `ENABLE_PROMETHEUS_METRICS` | `false` | Prometheus `/metrics` endpoint + custom business metrics |
+| `ENABLE_SSO` | `false` | OIDC/OAuth2 SSO authentication |
+| `ENABLE_MEMO_DRAFTING` | `false` | LLM-powered legal memo generation from investigation results |
 
 ## See Also
 

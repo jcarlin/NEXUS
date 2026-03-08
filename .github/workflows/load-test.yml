@@ -1,0 +1,52 @@
+name: Load Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      users:
+        description: "Number of concurrent users"
+        required: false
+        default: "5"
+      duration:
+        description: "Test duration (e.g. 30s, 2m)"
+        required: false
+        default: "30s"
+
+jobs:
+  load-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Locust
+        run: pip install -r load_tests/requirements.txt
+
+      - name: Run headless load test
+        env:
+          NEXUS_TARGET_HOST: ${{ secrets.NEXUS_TARGET_HOST }}
+          NEXUS_TEST_EMAIL: ${{ secrets.NEXUS_TEST_EMAIL }}
+          NEXUS_TEST_PASSWORD: ${{ secrets.NEXUS_TEST_PASSWORD }}
+          NEXUS_TEST_MATTER_ID: ${{ secrets.NEXUS_TEST_MATTER_ID }}
+        run: |
+          locust -f load_tests/locustfile.py \
+            --headless \
+            --host "$NEXUS_TARGET_HOST" \
+            -u ${{ github.event.inputs.users }} \
+            -r 1 \
+            --run-time ${{ github.event.inputs.duration }} \
+            --csv results/load_test \
+            --exit-code-on-error 0
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: load-test-results
+          path: results/
+          retention-days: 30

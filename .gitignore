@@ -90,3 +90,6 @@ scripts/generate_test_docs/output/
 
 # Dev-only scripts with hardcoded credentials
 scripts/fix_admin_password.py
+
+qa-sweep
+.playwright-mcp

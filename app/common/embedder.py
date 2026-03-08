@@ -92,21 +92,25 @@ class OpenAIEmbeddingProvider:
         if not texts:
             raise ValueError("Cannot embed an empty list of texts.")
 
+        from app.common.metrics import EMBEDDING_CALLS_TOTAL, EMBEDDING_DURATION, track_duration
+
         all_embeddings: list[list[float]] = []
 
-        for batch_start in range(0, len(texts), self.batch_size):
-            batch = texts[batch_start : batch_start + self.batch_size]
-            batch_embeddings = await self._embed_batch(batch)
-            all_embeddings.extend(batch_embeddings)
+        with track_duration(EMBEDDING_DURATION, provider="openai"):
+            for batch_start in range(0, len(texts), self.batch_size):
+                batch = texts[batch_start : batch_start + self.batch_size]
+                batch_embeddings = await self._embed_batch(batch)
+                all_embeddings.extend(batch_embeddings)
 
-            logger.info(
-                "embedder.batch_complete",
-                batch_start=batch_start,
-                batch_size=len(batch),
-                total_embedded=len(all_embeddings),
-                total_requested=len(texts),
-            )
+                logger.info(
+                    "embedder.batch_complete",
+                    batch_start=batch_start,
+                    batch_size=len(batch),
+                    total_embedded=len(all_embeddings),
+                    total_requested=len(texts),
+                )
 
+        EMBEDDING_CALLS_TOTAL.labels(provider="openai").inc()
         return all_embeddings
 
     async def embed_query(self, text: str) -> list[float]:
@@ -196,8 +200,12 @@ class LocalEmbeddingProvider:
         if not texts:
             raise ValueError("Cannot embed an empty list of texts.")
 
-        result = await asyncio.to_thread(self._encode_sync, texts)
+        from app.common.metrics import EMBEDDING_CALLS_TOTAL, EMBEDDING_DURATION, track_duration
 
+        with track_duration(EMBEDDING_DURATION, provider="local"):
+            result = await asyncio.to_thread(self._encode_sync, texts)
+
+        EMBEDDING_CALLS_TOTAL.labels(provider="local").inc()
         logger.info(
             "embedder.batch_complete",
             provider="local",
@@ -247,21 +255,25 @@ class GeminiEmbeddingProvider:
         if not texts:
             raise ValueError("Cannot embed an empty list of texts.")
 
+        from app.common.metrics import EMBEDDING_CALLS_TOTAL, EMBEDDING_DURATION, track_duration
+
         all_embeddings: list[list[float]] = []
 
-        for batch_start in range(0, len(texts), self.batch_size):
-            batch = texts[batch_start : batch_start + self.batch_size]
-            batch_embeddings = await self._embed_batch(batch)
-            all_embeddings.extend(batch_embeddings)
+        with track_duration(EMBEDDING_DURATION, provider="gemini"):
+            for batch_start in range(0, len(texts), self.batch_size):
+                batch = texts[batch_start : batch_start + self.batch_size]
+                batch_embeddings = await self._embed_batch(batch)
+                all_embeddings.extend(batch_embeddings)
 
-            logger.info(
-                "embedder.batch_complete",
-                batch_start=batch_start,
-                batch_size=len(batch),
-                total_embedded=len(all_embeddings),
-                total_requested=len(texts),
-            )
+                logger.info(
+                    "embedder.batch_complete",
+                    batch_start=batch_start,
+                    batch_size=len(batch),
+                    total_embedded=len(all_embeddings),
+                    total_requested=len(texts),
+                )
 
+        EMBEDDING_CALLS_TOTAL.labels(provider="gemini").inc()
         return all_embeddings
 
     async def embed_query(self, text: str) -> list[float]:
@@ -345,8 +357,12 @@ class TEIEmbeddingProvider:
         if not texts:
             raise ValueError("Cannot embed an empty list of texts.")
 
-        result = await self._embed_batch(texts)
+        from app.common.metrics import EMBEDDING_CALLS_TOTAL, EMBEDDING_DURATION, track_duration
 
+        with track_duration(EMBEDDING_DURATION, provider="tei"):
+            result = await self._embed_batch(texts)
+
+        EMBEDDING_CALLS_TOTAL.labels(provider="tei").inc()
         logger.info(
             "embedder.batch_complete",
             provider="tei",
@@ -413,8 +429,12 @@ class OllamaEmbeddingProvider:
         if not texts:
             raise ValueError("Cannot embed an empty list of texts.")
 
-        result = await self._embed_batch(texts)
+        from app.common.metrics import EMBEDDING_CALLS_TOTAL, EMBEDDING_DURATION, track_duration
 
+        with track_duration(EMBEDDING_DURATION, provider="ollama"):
+            result = await self._embed_batch(texts)
+
+        EMBEDDING_CALLS_TOTAL.labels(provider="ollama").inc()
         logger.info(
             "embedder.batch_complete",
             provider="ollama",

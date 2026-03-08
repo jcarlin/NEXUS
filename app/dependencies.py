@@ -307,6 +307,22 @@ def get_gdrive_service():
 
 
 # ---------------------------------------------------------------------------
+# OIDC Provider (feature-flagged)
+# ---------------------------------------------------------------------------
+
+
+@functools.cache
+def get_oidc_provider():
+    """Return the ``OIDCProvider`` singleton, or ``None`` when disabled."""
+    settings = get_settings()
+    if not settings.enable_sso:
+        return None
+    from app.auth.oidc import OIDCProvider
+
+    return OIDCProvider(settings)
+
+
+# ---------------------------------------------------------------------------
 # Hybrid Retriever
 # ---------------------------------------------------------------------------
 
@@ -421,6 +437,7 @@ _ALL_CACHED_FACTORIES = [
     get_coref_resolver,
     get_retriever,
     get_gdrive_service,
+    get_oidc_provider,
     _get_checkpointer_conn,
     get_checkpointer,
     get_query_graph,

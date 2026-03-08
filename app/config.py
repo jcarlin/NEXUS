@@ -100,6 +100,9 @@ class FeatureFlags(BaseModel):
     citation_verification: bool
     redaction: bool
     google_drive: bool
+    prometheus_metrics: bool
+    sso: bool
+    memo_drafting: bool
 
 
 class Settings(BaseSettings):
@@ -235,6 +238,22 @@ class Settings(BaseSettings):
 
     # --- Redaction ---
     enable_redaction: bool = False
+
+    # --- Prometheus Metrics ---
+    enable_prometheus_metrics: bool = False
+
+    # --- Memo Drafting ---
+    enable_memo_drafting: bool = False
+
+    # --- SSO / OIDC ---
+    enable_sso: bool = False
+    oidc_provider_name: str = "SSO"  # Display name for UI button
+    oidc_client_id: str = ""
+    oidc_client_secret: str = ""
+    oidc_issuer_url: str = ""  # e.g. https://accounts.google.com
+    oidc_redirect_uri: str = "http://localhost:5173/auth/oidc/callback"
+    oidc_role_mapping: str = ""  # JSON: {"admin_group": "admin", "attorney_group": "attorney"}
+    oidc_default_role: str = "reviewer"  # Role for users with no group mapping
 
     # --- Export ---
     export_max_documents: int = 10000
@@ -378,5 +397,8 @@ class Settings(BaseSettings):
                 citation_verification=self.enable_citation_verification,
                 redaction=self.enable_redaction,
                 google_drive=self.enable_google_drive,
+                prometheus_metrics=self.enable_prometheus_metrics,
+                sso=self.enable_sso,
+                memo_drafting=self.enable_memo_drafting,
             )
         return self
