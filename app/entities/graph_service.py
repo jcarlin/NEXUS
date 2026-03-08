@@ -845,7 +845,9 @@ class GraphService:
         matter_filter = " AND em.matter_id = $matter_id" if matter_id else ""
 
         query = f"""
-        MATCH (a:Entity {{name: $person_a}})-[:SENT|SENT_TO|CC|BCC]-(em:Email)-[:SENT|SENT_TO|CC|BCC]-(b:Entity {{name: $person_b}})
+        MATCH (a:Entity {{name: $person_a}})-[:SENT|SENT_TO|CC|BCC]->(em:Email)
+        WITH a, em
+        MATCH (b:Entity {{name: $person_b}})-[:SENT|SENT_TO|CC|BCC]->(em)
         WHERE a <> b{date_filter}{matter_filter}
         RETURN DISTINCT em.id AS email_id,
                em.subject AS subject,

@@ -283,7 +283,7 @@ async def kg_status(
     if doc_ids:
         try:
             neo4j_result = await gs._run_query(
-                "MATCH (d:Document) WHERE d.doc_id IN $ids RETURN d.doc_id AS did",
+                "MATCH (d:Document) WHERE d.id IN $ids RETURN d.id AS did",
                 {"ids": doc_ids},
             )
             indexed_ids = {r["did"] for r in neo4j_result}
@@ -331,7 +331,7 @@ async def kg_reprocess(
         if all_ids:
             try:
                 neo4j_result = await gs._run_query(
-                    "MATCH (d:Document) WHERE d.doc_id IN $ids RETURN d.doc_id AS did",
+                    "MATCH (d:Document) WHERE d.id IN $ids RETURN d.id AS did",
                     {"ids": all_ids},
                 )
                 indexed_ids = {r["did"] for r in neo4j_result}
