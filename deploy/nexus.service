@@ -1,0 +1,16 @@
+[Unit]
+Description=NEXUS Docker Compose Stack
+Documentation=https://github.com/your-org/nexus/blob/main/docs/CLOUD-DEPLOY.md
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/home/%i/nexus
+ExecStart=/usr/bin/docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.cloud.yml up -d
+ExecStop=/usr/bin/docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.cloud.yml down
+TimeoutStartSec=120
+
+[Install]
+WantedBy=multi-user.target

@@ -265,22 +265,22 @@ The redeploy instructions (`git pull` → `docker compose up --build`) have no r
 
 ## Summary
 
-| # | Issue | Severity | Effort |
+| # | Issue | Severity | Status |
 |---|-------|----------|--------|
-| 1 | Caddyfile SSE route unreachable | **Critical** | 5 min |
-| 2 | Missing `.env.cloud.example` | High | 15 min |
-| 3 | Flower exposed without auth | High | 5 min |
-| 4 | No container resource limits | High | 15 min |
-| 5 | Internal ports bound to host | Medium | 10 min |
-| 6 | SSH firewall uses ephemeral IP | Medium | Docs only |
-| 7 | MinIO presigned URL TLS gap | Medium | Docs only |
-| 8 | No backup strategy | High | 30 min |
-| 9 | No monitoring/alerting | Medium | 30 min |
-| 10 | No systemd auto-start | Medium | 10 min |
-| 11 | VM sizing may be tight | Low | Docs only |
-| 12 | No log rotation | Medium | 5 min |
-| 13 | Docs reference missing file | High | See #2 |
-| 14 | No rollback procedure | Medium | Docs only |
-| 15 | Missing DOMAIN in .env.example | Low | 2 min |
+| 1 | Caddyfile SSE route unreachable | **Critical** | **Already correct** — `handle_path` ordering is fine |
+| 2 | Missing `.env.cloud.example` | High | **Already resolved** — file exists |
+| 3 | Flower exposed without auth | High | **Fixed** — port removed in cloud overlay |
+| 4 | No container resource limits | High | **Fixed** — `deploy.resources.limits` in cloud overlay |
+| 5 | Internal ports bound to host | Medium | **Fixed** — `!override []` in cloud overlay |
+| 6 | SSH firewall uses ephemeral IP | Medium | **Documented** — IAP tunnel guidance added |
+| 7 | MinIO presigned URL TLS gap | Medium | **Already resolved** — `MINIO_PUBLIC_ENDPOINT` configured correctly |
+| 8 | No backup strategy | High | **Documented** — pg_dump cron + GCE snapshots |
+| 9 | No monitoring/alerting | Medium | **Documented** — GCP uptime checks + alert thresholds |
+| 10 | No systemd auto-start | Medium | **Fixed** — `deploy/nexus.service` + install instructions |
+| 11 | VM sizing may be tight | Low | **Documented** — sizing table with recommendations |
+| 12 | No log rotation | Medium | **Fixed** — `x-logging` anchor with 10m/3-file rotation |
+| 13 | Docs reference missing file | High | **Already resolved** — see #2 |
+| 14 | No rollback procedure | Medium | **Documented** — git checkout + downgrade instructions |
+| 15 | Missing DOMAIN in .env.example | Low | **Fixed** — added to Cloud Deployment section |
 
-**Recommended priority:** Fix #1 (Caddyfile bug) immediately — it breaks the core streaming UX. Then address #2-4 before any cloud deployment.
+All items addressed as of 2026-03-08.

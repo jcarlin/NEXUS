@@ -197,3 +197,105 @@ docker compose exec api alembic upgrade head
 # Redeploy frontend
 cd frontend/ && vercel --prod
 ```
+
+---
+
+## Operations & Maintenance
+
+### Auto-Start (systemd)
+
+Install the systemd unit so services start automatically after VM reboot:
+
+```bash
+# Copy the unit file (replace $USER with your VM username)
+sudo cp deploy/nexus.service /etc/systemd/system/nexus@.service
+sudo systemctl daemon-reload
+sudo systemctl enable nexus@$USER
+
+# Manual control
+sudo systemctl start nexus@$USER
+sudo systemctl stop nexus@$USER
+sudo systemctl status nexus@$USER
+```
+
+### SSH Access
+
+The SSH firewall rule uses your current public IP (`$(curl -s ifconfig.me)/32`). If your IP changes (residential ISP, VPN, mobile), you lose SSH access.
+
+**Options:**
+- **IAP tunnel (recommended):** `gcloud compute ssh nexus-demo --zone=us-central1-a --tunnel-through-iap` — no IP-based firewall rule needed
+- **CIDR range:** Use a `/24` or `/16` range instead of `/32` if your IP is relatively stable
+- **Update the rule:** `gcloud compute firewall-rules update nexus-allow-ssh --source-ranges=$(curl -s ifconfig.me)/32`
+
+### Backups
+
+No automated backups are configured by default. A `docker compose down -v` or disk failure destroys all data.
+
+**PostgreSQL (scheduled dump):**
+```bash
+# Add to crontab: daily at 2 AM, keep 7 days
+0 2 * * * docker compose -f ~/nexus/docker-compose.yml -f ~/nexus/docker-compose.prod.yml exec -T postgres pg_dump -U nexus nexus | gzip > ~/backups/nexus-pg-$(date +\%Y\%m\%d).sql.gz
+0 3 * * * find ~/backups -name "nexus-pg-*.sql.gz" -mtime +7 -delete
+```
+
+**GCE disk snapshots (covers all Docker volumes):**
+```bash
+# Create a snapshot schedule (daily, keep 7)
+gcloud compute resource-policies create snapshot-schedule nexus-daily \
+  --region=us-central1 --max-retention-days=7 --daily-schedule
+gcloud compute disks add-resource-policies nexus-demo \
+  --resource-policies=nexus-daily --zone=us-central1-a
+```
+
+**Restore from snapshot:** Create a new disk from the snapshot, attach to a new VM, and `docker compose up`.
+
+### Monitoring & Alerting
+
+**GCP uptime check:**
+```bash
+# Create an HTTPS uptime check on the health endpoint
+gcloud monitoring uptime create nexus-health \
+  --display-name="NEXUS API Health" \
+  --resource-type=uptime-url \
+  --hostname=YOUR_DOMAIN \
+  --path=/api/v1/health \
+  --protocol=https \
+  --period=300
+```
+
+**Recommended alert thresholds:**
+- CPU sustained > 80% for 5 min
+- Memory usage > 90%
+- Disk usage > 85%
+- Uptime check failure (2 consecutive)
+
+Configure alerts in GCP Console → Monitoring → Alerting, or via `gcloud alpha monitoring policies create`.
+
+### VM Sizing
+
+The default **e2-standard-2** (2 vCPU / 8GB) is adequate for demos with a small corpus (< 5k pages). For the full 50k+ page corpus:
+
+| Machine Type | Specs | Monthly Cost | Use Case |
+|---|---|---|---|
+| e2-standard-2 | 2 vCPU / 8GB | ~$49 | Demo, small corpus |
+| e2-highmem-2 | 2 vCPU / 16GB | ~$68 | Full corpus, light usage |
+| e2-standard-4 | 4 vCPU / 16GB | ~$98 | Full corpus, concurrent users |
+
+Neo4j and Qdrant are the main memory consumers at scale. Resource limits in `docker-compose.cloud.yml` prevent any single service from OOM-killing the VM.
+
+### Rollback
+
+If a deploy breaks the API:
+
+```bash
+# Revert to a known-good commit
+cd ~/nexus
+git log --oneline -10  # Find the last working commit
+git checkout <sha>
+docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.cloud.yml up -d --build api worker
+
+# If migrations need reverting
+docker compose exec api alembic downgrade -1
+```
+
+For safer rollbacks, consider tagging releases: `git tag v1.0.0` before each deploy.
