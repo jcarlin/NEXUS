@@ -9,11 +9,20 @@ interface ContextSummaryProps {
     parties?: Array<{ name: string; role: string }>;
     defined_terms?: Array<{ term: string; definition: string }>;
     key_dates?: Array<{ date: string; description: string }>;
+    timeline?: Array<{ date: string; event_text: string; source_page?: number }>;
   };
   onRerun: () => void;
 }
 
 export function ContextSummary({ context, onRerun }: ContextSummaryProps) {
+  // Deduplicate parties by name+role and terms by term
+  const uniqueParties = context.parties
+    ? [...new Map(context.parties.map((p) => [`${p.name}|${p.role}`, p])).values()]
+    : [];
+  const uniqueTerms = context.defined_terms
+    ? [...new Map(context.defined_terms.map((t) => [t.term, t])).values()]
+    : [];
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -34,8 +43,8 @@ export function ContextSummary({ context, onRerun }: ContextSummaryProps) {
             <CardTitle className="text-base">Claims ({context.claims.length})</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {context.claims.map((claim) => (
-              <div key={claim.claim_number} className="space-y-1">
+            {context.claims.map((claim, i) => (
+              <div key={i} className="space-y-1">
                 <div className="flex items-center gap-2">
                   <Badge variant="secondary">#{claim.claim_number}</Badge>
                   {claim.claim_label && (
@@ -49,15 +58,15 @@ export function ContextSummary({ context, onRerun }: ContextSummaryProps) {
         </Card>
       )}
 
-      {context.parties && context.parties.length > 0 && (
+      {uniqueParties.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Parties ({context.parties.length})</CardTitle>
+            <CardTitle className="text-base">Parties ({uniqueParties.length})</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-2">
-              {context.parties.map((party) => (
-                <Badge key={party.name} variant="outline">
+              {uniqueParties.map((party, i) => (
+                <Badge key={i} variant="outline">
                   {party.name} ({party.role})
                 </Badge>
               ))}
@@ -66,14 +75,14 @@ export function ContextSummary({ context, onRerun }: ContextSummaryProps) {
         </Card>
       )}
 
-      {context.defined_terms && context.defined_terms.length > 0 && (
+      {uniqueTerms.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Defined Terms ({context.defined_terms.length})</CardTitle>
+            <CardTitle className="text-base">Defined Terms ({uniqueTerms.length})</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            {context.defined_terms.map((dt) => (
-              <div key={dt.term}>
+            {uniqueTerms.map((dt, i) => (
+              <div key={i}>
                 <span className="font-medium text-sm">{dt.term}:</span>{" "}
                 <span className="text-sm text-muted-foreground">{dt.definition}</span>
               </div>
@@ -82,21 +91,25 @@ export function ContextSummary({ context, onRerun }: ContextSummaryProps) {
         </Card>
       )}
 
-      {context.key_dates && context.key_dates.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Key Dates ({context.key_dates.length})</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {context.key_dates.map((kd, i) => (
-              <div key={i} className="flex gap-2 text-sm">
-                <span className="font-mono text-muted-foreground whitespace-nowrap">{kd.date}</span>
-                <span>{kd.description}</span>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
+      {(() => {
+        const dates = context.key_dates ?? context.timeline?.map((t) => ({ date: t.date, description: t.event_text }));
+        if (!dates || dates.length === 0) return null;
+        return (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Timeline ({dates.length})</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {dates.map((kd, i) => (
+                <div key={i} className="flex gap-2 text-sm">
+                  <span className="font-mono text-muted-foreground whitespace-nowrap">{kd.date}</span>
+                  <span>{kd.description}</span>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        );
+      })()}
     </div>
   );
 }

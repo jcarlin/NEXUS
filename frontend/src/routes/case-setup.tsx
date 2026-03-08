@@ -72,6 +72,7 @@ function CaseSetupPage() {
         parties?: Array<{ name: string; role: string }>;
         defined_terms?: Array<{ term: string; definition: string }>;
         key_dates?: Array<{ date: string; description: string }>;
+        timeline?: Array<{ date: string; event_text: string; source_page?: number }>;
       }>({
         url: `/api/v1/cases/${matterId}/context`,
         method: "GET",
@@ -145,7 +146,7 @@ function CaseSetupPage() {
     );
   }
 
-  if (existingContext?.status === "confirmed" && !forceWizard) {
+  if ((existingContext?.status === "confirmed" || existingContext?.status === "draft") && !forceWizard) {
     return (
       <div className="space-y-6 animate-page-in">
         <div>
