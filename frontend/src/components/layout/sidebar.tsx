@@ -60,6 +60,7 @@ const adminNav: NavItem[] = [
   { to: "/admin/audit-log", label: "Audit Log", icon: ScrollText, roles: ["admin"] },
   { to: "/admin/evaluation", label: "Evaluation", icon: FlaskConical, roles: ["admin"] },
   { to: "/admin/knowledge-graph", label: "Knowledge Graph", icon: Network, roles: ["admin"] },
+  { to: "/admin/llm-settings", label: "LLM Settings", icon: Settings, roles: ["admin"] },
 ];
 
 export function Sidebar() {

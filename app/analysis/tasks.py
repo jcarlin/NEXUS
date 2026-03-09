@@ -88,12 +88,13 @@ def scan_document_sentiment(self, doc_id: str, matter_id: str = "") -> dict:
         # 2. Sentiment scoring via LLM
         # -----------------------------------------------------------------
         from app.analysis.sentiment import SentimentScorer
+        from app.llm_config.resolver import resolve_llm_config_sync
 
-        api_key = settings.anthropic_api_key if settings.llm_provider == "anthropic" else settings.openai_api_key
+        config = resolve_llm_config_sync("analysis", engine)
         scorer = SentimentScorer(
-            api_key=api_key,
-            model=settings.llm_model,
-            provider=settings.llm_provider,
+            api_key=config.api_key,
+            model=config.model,
+            provider=config.provider,
         )
         result = asyncio.run(scorer.score_document(truncated_text))
 
@@ -158,9 +159,9 @@ def scan_document_sentiment(self, doc_id: str, matter_id: str = "") -> dict:
                 thread_context = "\n---\n".join(sibling_texts)[:4000]
 
             analyzer = CompletenessAnalyzer(
-                api_key=api_key,
-                model=settings.llm_model,
-                provider=settings.llm_provider,
+                api_key=config.api_key,
+                model=config.model,
+                provider=config.provider,
             )
             completeness_result = asyncio.run(analyzer.analyze(truncated_text, thread_context))
 

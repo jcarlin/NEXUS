@@ -251,6 +251,11 @@ def create_app() -> FastAPI:
 
         application.include_router(memos_router, prefix="/api/v1")
 
+    # LLM runtime configuration (always enabled — admin-only access enforced in router)
+    from app.llm_config.router import router as llm_config_router
+
+    application.include_router(llm_config_router, prefix="/api/v1")
+
     # --- Health endpoint ---
     @application.get("/api/v1/health", tags=["system"])
     async def health(request: Request) -> JSONResponse:

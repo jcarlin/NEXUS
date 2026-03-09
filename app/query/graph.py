@@ -205,6 +205,27 @@ build_graph = build_graph_v1
 # ---------------------------------------------------------------------------
 
 
+def _build_chat_model(provider: str, model: str, api_key: str, base_url: str | None, **kwargs: Any) -> Any:
+    """Build a LangChain chat model based on provider type."""
+    if provider == "anthropic":
+        from langchain_anthropic import ChatAnthropic
+
+        return ChatAnthropic(model=model, api_key=api_key, **kwargs)
+    elif provider == "gemini":
+        from langchain_google_genai import ChatGoogleGenerativeAI
+
+        return ChatGoogleGenerativeAI(model=model, google_api_key=api_key, **kwargs)
+    elif provider in ("openai", "vllm", "ollama"):
+        from langchain_openai import ChatOpenAI
+
+        kw = {**kwargs}
+        if base_url:
+            kw["base_url"] = base_url
+        return ChatOpenAI(model=model, api_key=api_key or "not-needed", **kw)
+    else:
+        raise ValueError(f"Unsupported provider for chat model: {provider}")
+
+
 def build_agentic_graph(settings: Settings, checkpointer: Any) -> Any:
     """Build and compile the agentic investigation graph.
 
@@ -219,9 +240,10 @@ def build_agentic_graph(settings: Settings, checkpointer: Any) -> Any:
     ``investigation_agent`` node is a ``create_react_agent`` subgraph that
     handles the entire tool-calling loop.
     """
-    from langchain_anthropic import ChatAnthropic
     from langgraph.prebuilt import create_react_agent
 
+    # 1. Resolve query-tier LLM config (sync — runs once at graph build time)
+    from app.llm_config.resolver import _resolve_from_env
     from app.query.nodes import (
         audit_log_hook,
         build_system_prompt,
@@ -232,10 +254,22 @@ def build_agentic_graph(settings: Settings, checkpointer: Any) -> Any:
     )
     from app.query.tools import INVESTIGATION_TOOLS
 
-    # 1. Create ChatAnthropic model (library handles tool binding)
-    model = ChatAnthropic(
-        model=settings.query_llm_model or settings.llm_model,
-        api_key=settings.anthropic_api_key,
+    try:
+        from sqlalchemy import create_engine
+
+        from app.llm_config.resolver import resolve_llm_config_sync
+
+        engine = create_engine(settings.postgres_url_sync, pool_pre_ping=True)
+        config = resolve_llm_config_sync("query", engine)
+        engine.dispose()
+    except Exception:
+        config = _resolve_from_env("query")
+
+    model = _build_chat_model(
+        provider=config.provider,
+        model=config.model,
+        api_key=config.api_key,
+        base_url=config.base_url,
         max_tokens=4096,
         temperature=0.1,
     )

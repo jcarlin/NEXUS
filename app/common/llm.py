@@ -16,9 +16,11 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 
 if TYPE_CHECKING:
     from anthropic import AsyncAnthropic
+    from google.genai import Client as GenAIClient
     from openai import AsyncOpenAI
 
     from app.config import Settings
+    from app.llm_config.schemas import ResolvedLLMConfig
 
 logger = structlog.get_logger(__name__)
 
@@ -30,11 +32,16 @@ class LLMClient:
         self.provider = settings.llm_provider
         self.model = settings.llm_model
         self._client: AsyncAnthropic | AsyncOpenAI
+        self._genai_client: GenAIClient
 
         if self.provider == "anthropic":
             from anthropic import AsyncAnthropic
 
             self._client = AsyncAnthropic(api_key=settings.anthropic_api_key)
+        elif self.provider == "gemini":
+            from google import genai
+
+            self._genai_client = genai.Client(api_key=settings.gemini_api_key)
         elif self.provider in ("openai", "vllm", "ollama"):
             from openai import AsyncOpenAI
 
@@ -52,6 +59,34 @@ class LLMClient:
             raise ValueError(f"Unsupported LLM provider: {self.provider}")
 
         logger.info("llm.init", provider=self.provider, model=self.model)
+
+    @classmethod
+    def from_resolved_config(cls, config: ResolvedLLMConfig) -> LLMClient:
+        """Create an LLMClient from a ResolvedLLMConfig (runtime DB config)."""
+        instance = cls.__new__(cls)
+        instance.provider = config.provider
+        instance.model = config.model
+
+        if config.provider == "anthropic":
+            from anthropic import AsyncAnthropic
+
+            instance._client = AsyncAnthropic(api_key=config.api_key)
+        elif config.provider == "gemini":
+            from google import genai
+
+            instance._genai_client = genai.Client(api_key=config.api_key)
+        elif config.provider in ("openai", "vllm", "ollama"):
+            from openai import AsyncOpenAI
+
+            instance._client = AsyncOpenAI(
+                api_key=config.api_key or "not-needed",
+                base_url=config.base_url or None,
+            )
+        else:
+            raise ValueError(f"Unsupported LLM provider: {config.provider}")
+
+        logger.info("llm.init.from_config", provider=config.provider, model=config.model)
+        return instance
 
     # ------------------------------------------------------------------
     # AI audit logging (fire-and-forget)
@@ -157,6 +192,13 @@ class LLMClient:
         try:
             if self.provider == "anthropic":
                 result, input_tokens, output_tokens = await self._complete_anthropic(
+                    messages,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    **kwargs,
+                )
+            elif self.provider == "gemini":
+                result, input_tokens, output_tokens = await self._complete_gemini(
                     messages,
                     max_tokens=max_tokens,
                     temperature=temperature,
@@ -282,6 +324,11 @@ class LLMClient:
                     messages, max_tokens=max_tokens, temperature=temperature, **kwargs
                 ):
                     yield token
+            elif self.provider == "gemini":
+                async for token in self._stream_gemini(
+                    messages, max_tokens=max_tokens, temperature=temperature, **kwargs
+                ):
+                    yield token
             else:
                 async for token in self._stream_openai(
                     messages, max_tokens=max_tokens, temperature=temperature, **kwargs
@@ -314,6 +361,66 @@ class LLMClient:
             latency_ms=latency_ms,
             node_name=node_name,
         )
+
+    async def _complete_gemini(
+        self,
+        messages: list[dict[str, str]],
+        **kwargs: Any,
+    ) -> tuple[str, int | None, int | None]:
+        """Gemini completion via google.genai async API."""
+        system_text = ""
+        contents = []
+        for msg in messages:
+            if msg["role"] == "system":
+                system_text = msg["content"]
+            else:
+                role = "model" if msg["role"] == "assistant" else "user"
+                contents.append({"role": role, "parts": [{"text": msg["content"]}]})
+
+        from google.genai import types
+
+        config = types.GenerateContentConfig(
+            system_instruction=system_text or None,
+            max_output_tokens=kwargs.get("max_tokens", 4096),
+            temperature=kwargs.get("temperature", 0.1),
+        )
+
+        response = await self._genai_client.aio.models.generate_content(
+            model=self.model,
+            contents=contents,
+            config=config,
+        )
+
+        input_tokens = getattr(response.usage_metadata, "prompt_token_count", None)
+        output_tokens = getattr(response.usage_metadata, "candidates_token_count", None)
+        return response.text, input_tokens, output_tokens
+
+    async def _stream_gemini(self, messages: list[dict[str, str]], **kwargs: Any) -> AsyncIterator[str]:
+        """Gemini streaming via google.genai async API."""
+        system_text = ""
+        contents = []
+        for msg in messages:
+            if msg["role"] == "system":
+                system_text = msg["content"]
+            else:
+                role = "model" if msg["role"] == "assistant" else "user"
+                contents.append({"role": role, "parts": [{"text": msg["content"]}]})
+
+        from google.genai import types
+
+        config = types.GenerateContentConfig(
+            system_instruction=system_text or None,
+            max_output_tokens=kwargs.get("max_tokens", 4096),
+            temperature=kwargs.get("temperature", 0.1),
+        )
+
+        async for chunk in await self._genai_client.aio.models.generate_content_stream(
+            model=self.model,
+            contents=contents,
+            config=config,
+        ):
+            if chunk.text:
+                yield chunk.text
 
     async def _stream_anthropic(self, messages: list[dict[str, str]], **kwargs: Any) -> AsyncIterator[str]:
         client: AsyncAnthropic = self._client  # type: ignore[assignment]

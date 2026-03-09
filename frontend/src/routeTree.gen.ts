@@ -27,6 +27,7 @@ import { Route as ChatThreadIdRouteImport } from './routes/chat/$threadId'
 import { Route as AnalyticsTimelineRouteImport } from './routes/analytics/timeline'
 import { Route as AnalyticsCommsRouteImport } from './routes/analytics/comms'
 import { Route as AdminUsersRouteImport } from './routes/admin/users'
+import { Route as AdminLlmSettingsRouteImport } from './routes/admin/llm-settings'
 import { Route as AdminKnowledgeGraphRouteImport } from './routes/admin/knowledge-graph'
 import { Route as AdminEvaluationRouteImport } from './routes/admin/evaluation'
 import { Route as AdminAuditLogRouteImport } from './routes/admin/audit-log'
@@ -122,6 +123,11 @@ const AdminUsersRoute = AdminUsersRouteImport.update({
   path: '/admin/users',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminLlmSettingsRoute = AdminLlmSettingsRouteImport.update({
+  id: '/admin/llm-settings',
+  path: '/admin/llm-settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminKnowledgeGraphRoute = AdminKnowledgeGraphRouteImport.update({
   id: '/admin/knowledge-graph',
   path: '/admin/knowledge-graph',
@@ -150,6 +156,7 @@ export interface FileRoutesByFullPath {
   '/admin/audit-log': typeof AdminAuditLogRoute
   '/admin/evaluation': typeof AdminEvaluationRoute
   '/admin/knowledge-graph': typeof AdminKnowledgeGraphRoute
+  '/admin/llm-settings': typeof AdminLlmSettingsRoute
   '/admin/users': typeof AdminUsersRoute
   '/analytics/comms': typeof AnalyticsCommsRoute
   '/analytics/timeline': typeof AnalyticsTimelineRoute
@@ -174,6 +181,7 @@ export interface FileRoutesByTo {
   '/admin/audit-log': typeof AdminAuditLogRoute
   '/admin/evaluation': typeof AdminEvaluationRoute
   '/admin/knowledge-graph': typeof AdminKnowledgeGraphRoute
+  '/admin/llm-settings': typeof AdminLlmSettingsRoute
   '/admin/users': typeof AdminUsersRoute
   '/analytics/comms': typeof AnalyticsCommsRoute
   '/analytics/timeline': typeof AnalyticsTimelineRoute
@@ -199,6 +207,7 @@ export interface FileRoutesById {
   '/admin/audit-log': typeof AdminAuditLogRoute
   '/admin/evaluation': typeof AdminEvaluationRoute
   '/admin/knowledge-graph': typeof AdminKnowledgeGraphRoute
+  '/admin/llm-settings': typeof AdminLlmSettingsRoute
   '/admin/users': typeof AdminUsersRoute
   '/analytics/comms': typeof AnalyticsCommsRoute
   '/analytics/timeline': typeof AnalyticsTimelineRoute
@@ -225,6 +234,7 @@ export interface FileRouteTypes {
     | '/admin/audit-log'
     | '/admin/evaluation'
     | '/admin/knowledge-graph'
+    | '/admin/llm-settings'
     | '/admin/users'
     | '/analytics/comms'
     | '/analytics/timeline'
@@ -249,6 +259,7 @@ export interface FileRouteTypes {
     | '/admin/audit-log'
     | '/admin/evaluation'
     | '/admin/knowledge-graph'
+    | '/admin/llm-settings'
     | '/admin/users'
     | '/analytics/comms'
     | '/analytics/timeline'
@@ -273,6 +284,7 @@ export interface FileRouteTypes {
     | '/admin/audit-log'
     | '/admin/evaluation'
     | '/admin/knowledge-graph'
+    | '/admin/llm-settings'
     | '/admin/users'
     | '/analytics/comms'
     | '/analytics/timeline'
@@ -298,6 +310,7 @@ export interface RootRouteChildren {
   AdminAuditLogRoute: typeof AdminAuditLogRoute
   AdminEvaluationRoute: typeof AdminEvaluationRoute
   AdminKnowledgeGraphRoute: typeof AdminKnowledgeGraphRoute
+  AdminLlmSettingsRoute: typeof AdminLlmSettingsRoute
   AdminUsersRoute: typeof AdminUsersRoute
   AnalyticsCommsRoute: typeof AnalyticsCommsRoute
   AnalyticsTimelineRoute: typeof AnalyticsTimelineRoute
@@ -444,6 +457,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminUsersRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/llm-settings': {
+      id: '/admin/llm-settings'
+      path: '/admin/llm-settings'
+      fullPath: '/admin/llm-settings'
+      preLoaderRoute: typeof AdminLlmSettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/knowledge-graph': {
       id: '/admin/knowledge-graph'
       path: '/admin/knowledge-graph'
@@ -482,6 +502,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminAuditLogRoute: AdminAuditLogRoute,
   AdminEvaluationRoute: AdminEvaluationRoute,
   AdminKnowledgeGraphRoute: AdminKnowledgeGraphRoute,
+  AdminLlmSettingsRoute: AdminLlmSettingsRoute,
   AdminUsersRoute: AdminUsersRoute,
   AnalyticsCommsRoute: AnalyticsCommsRoute,
   AnalyticsTimelineRoute: AnalyticsTimelineRoute,

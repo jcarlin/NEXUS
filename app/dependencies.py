@@ -145,6 +145,25 @@ def get_llm() -> LLMClient:
     return LLMClient(get_settings())
 
 
+# Module-level pool for tier-resolved LLM clients (keyed by provider/model/base_url)
+_llm_pool: dict[tuple[str, str, str | None], LLMClient] = {}
+
+
+async def get_llm_for_tier(tier: str, db: AsyncSession) -> LLMClient:
+    """Resolve LLM config for a tier and return an LLMClient.
+
+    Uses a pool keyed by (provider, model, base_url) to reuse HTTP clients.
+    """
+    from app.llm_config.resolver import resolve_llm_config
+
+    config = await resolve_llm_config(tier, db)
+
+    cache_key = (config.provider, config.model, config.base_url)
+    if cache_key not in _llm_pool:
+        _llm_pool[cache_key] = LLMClient.from_resolved_config(config)
+    return _llm_pool[cache_key]
+
+
 # ---------------------------------------------------------------------------
 # Text Embedder
 # ---------------------------------------------------------------------------
@@ -494,5 +513,8 @@ async def close_all() -> None:
     # Clear all caches
     for fn in _ALL_CACHED_FACTORIES:
         fn.cache_clear()
+
+    # Clear tier-resolved LLM pool
+    _llm_pool.clear()
 
     logger.info("shutdown.complete")

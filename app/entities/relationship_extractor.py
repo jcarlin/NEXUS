@@ -67,6 +67,13 @@ class RelationshipExtractor:
                 import anthropic
 
                 self._client = instructor.from_anthropic(anthropic.Anthropic(api_key=self._api_key))
+            elif self._provider == "gemini":
+                import google.genai
+
+                self._client = instructor.from_gemini(
+                    google.genai.Client(api_key=self._api_key),
+                    mode=instructor.Mode.GEMINI_JSON,
+                )
             else:
                 import openai
 

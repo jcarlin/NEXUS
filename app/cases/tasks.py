@@ -189,11 +189,13 @@ def run_case_setup(
 
         # Build the LangGraph graph and invoke
         from app.cases.agent import build_case_setup_graph
+        from app.llm_config.resolver import resolve_llm_config_sync
 
+        config = resolve_llm_config_sync("analysis", engine)
         llm_settings = {
-            "api_key": settings.anthropic_api_key if settings.llm_provider == "anthropic" else settings.openai_api_key,
-            "model": settings.llm_model,
-            "provider": settings.llm_provider,
+            "api_key": config.api_key,
+            "model": config.model,
+            "provider": config.provider,
             "minio_endpoint": settings.minio_endpoint,
             "minio_access_key": settings.minio_access_key,
             "minio_secret_key": settings.minio_secret_key,
