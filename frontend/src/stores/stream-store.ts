@@ -152,6 +152,14 @@ export const useStreamStore = create<StreamStore>()((set, get) => ({
                 stage: "generating",
               });
               break;
+            case "clear":
+              // Agent made a tool call after emitting "thinking" tokens —
+              // discard the partial text so only the final answer is shown.
+              get()._updateStreamState(currentKey, {
+                streamingText: "",
+                stage: "investigating",
+              });
+              break;
             case "error":
               get()._updateStreamState(currentKey, {
                 isStreaming: false,

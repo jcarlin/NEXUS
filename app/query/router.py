@@ -316,6 +316,12 @@ async def _agentic_event_generator(graph, initial_state, config, db, thread_id, 
     sources_emitted = False
     client_disconnected = False
     graph_error = False
+    # Track current message ID to detect when a "thinking" message turns into
+    # a tool call.  When that happens we emit a ``clear`` SSE event so the
+    # frontend discards the tokens that were prematurely streamed.
+    _cur_msg_id: str | None = None
+    _cur_msg_had_tool_calls = False
+    _emitted_tokens_for_cur_msg = False
 
     try:
         async for ns, stream_mode, chunk in graph.astream(
@@ -343,23 +349,42 @@ async def _agentic_event_generator(graph, initial_state, config, db, thread_id, 
             elif stream_mode == "messages":
                 # Messages channel: (message_chunk, metadata) tuples
                 msg_chunk, metadata = chunk
-                # Only emit content tokens from AIMessageChunks
-                # (not ToolMessageChunks or tool call chunks)
-                if isinstance(msg_chunk, AIMessageChunk) and msg_chunk.content:
-                    if not msg_chunk.tool_call_chunks:
-                        content = msg_chunk.content
-                        if isinstance(content, list):
-                            # Extract text from content block list
-                            for block in content:
-                                text_val = ""
-                                if isinstance(block, dict) and block.get("type") == "text":
-                                    text_val = block.get("text", "")
-                                elif isinstance(block, str):
-                                    text_val = block
-                                if text_val:
-                                    yield {"event": "token", "data": json.dumps({"text": text_val})}
-                        elif isinstance(content, str) and content:
-                            yield {"event": "token", "data": json.dumps({"text": content})}
+                if not isinstance(msg_chunk, AIMessageChunk):
+                    continue
+
+                # Detect message boundary — reset tracking when a new message starts.
+                # Real LLM streams always set chunk ids; None ids (e.g. in tests)
+                # are treated as distinct messages each time.
+                chunk_id = msg_chunk.id
+                if chunk_id != _cur_msg_id or chunk_id is None:
+                    _cur_msg_id = chunk_id
+                    _cur_msg_had_tool_calls = False
+                    _emitted_tokens_for_cur_msg = False
+
+                # If this chunk carries tool call data, mark the message and
+                # tell the frontend to discard any tokens we already sent for it.
+                if msg_chunk.tool_call_chunks:
+                    if not _cur_msg_had_tool_calls and _emitted_tokens_for_cur_msg:
+                        yield {"event": "clear", "data": "{}"}
+                    _cur_msg_had_tool_calls = True
+
+                # Only emit content tokens from messages that haven't produced
+                # tool calls (i.e. the final answer, not intermediate "thinking").
+                if msg_chunk.content and not _cur_msg_had_tool_calls:
+                    content = msg_chunk.content
+                    if isinstance(content, list):
+                        for block in content:
+                            text_val = ""
+                            if isinstance(block, dict) and block.get("type") == "text":
+                                text_val = block.get("text", "")
+                            elif isinstance(block, str):
+                                text_val = block
+                            if text_val:
+                                yield {"event": "token", "data": json.dumps({"text": text_val})}
+                                _emitted_tokens_for_cur_msg = True
+                    elif isinstance(content, str) and content:
+                        yield {"event": "token", "data": json.dumps({"text": content})}
+                        _emitted_tokens_for_cur_msg = True
 
             elif stream_mode == "custom":
                 if isinstance(chunk, dict) and chunk.get("type") == "token":

@@ -115,9 +115,14 @@ Use these tools to gather evidence before answering:
 
 ## Tool Usage Rules
 
+- **ALWAYS start with vector_search.** It is your primary evidence-gathering tool. \
+The knowledge graph may not contain all entities — the document corpus is the \
+authoritative source. Only skip vector_search if the user explicitly asks about \
+graph structure or entity relationships.
 - **Tool budget: maximum 5 tool calls per query.** After 5 calls, you MUST stop \
 and synthesize your answer from the evidence already gathered.
-- For simple factual lookups (who, what, when), 1-2 tool calls is sufficient.
+- For simple factual lookups (who, what, when), 1-2 tool calls is sufficient \
+(but one of them MUST be vector_search).
 - For complex analytical queries, use 3-5 tool calls across different tools \
 (vector_search, graph_query, entity_lookup) — do NOT call the same tool \
 repeatedly with similar queries.

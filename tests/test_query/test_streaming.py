@@ -409,17 +409,19 @@ async def test_agentic_stream_filters_tool_messages(stream_client):
             ("agent:investigation_agent",),
             "messages",
             (
-                AIMessageChunk(content="Based on the evidence"),
+                AIMessageChunk(content="Based on the evidence", id="msg_final"),
                 {"langgraph_node": "agent"},
             ),
         ),
-        # AIMessageChunk with tool_call_chunks (should be filtered)
+        # AIMessageChunk with tool_call_chunks from a *different* message (should be filtered)
         (
             ("agent:investigation_agent",),
             "messages",
             (
                 AIMessageChunk(
-                    content="", tool_call_chunks=[{"name": "search", "args": "{}", "id": "call_456", "index": 0}]
+                    content="",
+                    tool_call_chunks=[{"name": "search", "args": "{}", "id": "call_456", "index": 0}],
+                    id="msg_toolcall",
                 ),
                 {"langgraph_node": "agent"},
             ),
@@ -462,3 +464,111 @@ async def test_agentic_stream_filters_tool_messages(stream_client):
                     assert "results" not in data["text"]
                     break
             break
+
+
+@pytest.mark.asyncio
+async def test_agentic_stream_clears_thinking_tokens(stream_client):
+    """When the agent emits 'thinking' text before tool calls, a clear event
+    must be sent so the frontend discards the intermediate text.  Only the
+    final answer tokens should remain after the clear."""
+    from langchain_core.messages import AIMessageChunk, ToolMessageChunk
+
+    client, mock_db, mock_graph = stream_client
+
+    events = [
+        (
+            (),
+            "updates",
+            {
+                "case_context_resolve": {
+                    "_case_context": "ctx",
+                    "_term_map": {},
+                    "_tier": "standard",
+                    "_skip_verification": False,
+                }
+            },
+        ),
+        # Agent's first LLM call: thinking text, then tool call (same message)
+        (
+            ("agent:investigation_agent",),
+            "messages",
+            (
+                AIMessageChunk(content="Let me search for that", id="msg_think"),
+                {"langgraph_node": "agent"},
+            ),
+        ),
+        (
+            ("agent:investigation_agent",),
+            "messages",
+            (
+                AIMessageChunk(
+                    content="",
+                    tool_call_chunks=[
+                        {"name": "search_documents", "args": '{"query": "test"}', "id": "call_1", "index": 0}
+                    ],
+                    id="msg_think",
+                ),
+                {"langgraph_node": "agent"},
+            ),
+        ),
+        # Tool result
+        (
+            ("agent:investigation_agent",),
+            "messages",
+            (
+                ToolMessageChunk(
+                    content='[{"id": "d1", "filename": "doc.pdf", "text": "evidence"}]', tool_call_id="call_1"
+                ),
+                {"langgraph_node": "tools"},
+            ),
+        ),
+        # Agent's second (final) LLM call: the real answer
+        (
+            ("agent:investigation_agent",),
+            "messages",
+            (
+                AIMessageChunk(content="The final answer", id="msg_final"),
+                {"langgraph_node": "agent"},
+            ),
+        ),
+        (
+            (),
+            "updates",
+            {
+                "post_agent_extract": {
+                    "response": "The final answer",
+                    "source_documents": [],
+                    "entities_mentioned": [],
+                }
+            },
+        ),
+        ((), "updates", {"generate_follow_ups": {"follow_up_questions": []}}),
+    ]
+    mock_graph.astream = _make_astream(events)
+
+    with patch("app.dependencies.get_settings", return_value=_mock_settings(enable_agentic_pipeline=True)):
+        response = await client.post(
+            "/api/v1/query/stream",
+            json={"query": "test question"},
+        )
+    assert response.status_code == 200
+
+    lines = response.text.strip().split("\n")
+    event_types = [line.split(": ", 1)[1].strip() for line in lines if line.startswith("event: ")]
+
+    # The thinking text must trigger a clear event before the final tokens
+    assert "clear" in event_types, f"Expected a 'clear' event in {event_types}"
+
+    # Extract token texts in order
+    token_texts = []
+    for i, line in enumerate(lines):
+        if line.strip().startswith("event: token"):
+            for j in range(i + 1, len(lines)):
+                if lines[j].strip().startswith("data: "):
+                    data = json.loads(lines[j].strip()[6:])
+                    token_texts.append(data["text"])
+                    break
+
+    # Both thinking and final tokens are emitted (frontend handles clear)
+    assert "Let me search for that" in token_texts
+    assert "The final answer" in token_texts

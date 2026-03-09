@@ -77,6 +77,13 @@ function ChatThreadPage() {
   const messages = data?.messages ?? [];
   const streamDone = !isStreaming && !!streamingText;
 
+  // After streaming finishes and the query refetches, messages already
+  // includes the persisted assistant reply.  Avoid rendering it twice by
+  // suppressing the streaming overlay when the DB data has caught up.
+  const lastMsg = messages[messages.length - 1];
+  const dbHasCaughtUp =
+    streamDone && lastMsg?.role === "assistant" && !!lastMsg.content;
+
   if (isLoading) {
     return (
       <ChatLayout>
@@ -93,7 +100,7 @@ function ChatThreadPage() {
         <MessageList
           messages={messages}
           streaming={
-            streamingText || isStreaming
+            (streamingText || isStreaming) && !dbHasCaughtUp
               ? { text: streamingText, sources, entities, citedClaims }
               : null
           }
