@@ -513,7 +513,7 @@ class _PipelineContext:
 
 def _stage_parse(ctx: _PipelineContext) -> None:
     """Stage 1: Download from MinIO, parse, handle email attachments, render pages."""
-    _update_stage(ctx.engine, ctx.job_id, "parsing", "uploading")
+    _update_stage(ctx.engine, ctx.job_id, "parsing", "processing")
 
     file_bytes = _download_from_minio(ctx.settings, ctx.minio_path)
     ctx.content_hash = hashlib.sha256(file_bytes).hexdigest()[:16]
@@ -601,7 +601,7 @@ def _stage_parse(ctx: _PipelineContext) -> None:
                     _upload_to_minio(ctx.settings, page_key, img_bytes)
 
     ctx.progress["pages_parsed"] = ctx.parse_result.page_count
-    _update_stage(ctx.engine, ctx.job_id, "chunking", "uploading", progress=ctx.progress)
+    _update_stage(ctx.engine, ctx.job_id, "chunking", "processing", progress=ctx.progress)
 
 
 def _stage_chunk(ctx: _PipelineContext) -> None:
@@ -626,7 +626,7 @@ def _stage_chunk(ctx: _PipelineContext) -> None:
     logger.info("task.chunked", chunk_count=len(ctx.chunks))
 
     ctx.progress["chunks_created"] = len(ctx.chunks)
-    _update_stage(ctx.engine, ctx.job_id, "embedding", "uploading", progress=ctx.progress)
+    _update_stage(ctx.engine, ctx.job_id, "embedding", "processing", progress=ctx.progress)
 
 
 def _stage_embed(ctx: _PipelineContext) -> None:
@@ -718,7 +718,7 @@ def _stage_embed(ctx: _PipelineContext) -> None:
     logger.info("task.embedded", embedding_count=len(ctx.embeddings))
 
     ctx.progress["embeddings_generated"] = len(ctx.embeddings)
-    _update_stage(ctx.engine, ctx.job_id, "extracting", "uploading", progress=ctx.progress)
+    _update_stage(ctx.engine, ctx.job_id, "extracting", "processing", progress=ctx.progress)
 
 
 def _stage_extract(ctx: _PipelineContext) -> None:
@@ -770,7 +770,7 @@ def _stage_extract(ctx: _PipelineContext) -> None:
             )
 
     ctx.progress["entities_extracted"] = len(ctx.all_entities)
-    _update_stage(ctx.engine, ctx.job_id, "indexing", "uploading", progress=ctx.progress)
+    _update_stage(ctx.engine, ctx.job_id, "indexing", "processing", progress=ctx.progress)
 
 
 def _stage_index(ctx: _PipelineContext) -> None:
@@ -1152,7 +1152,7 @@ def process_zip(self, job_id: str, minio_path: str) -> dict:
     structlog.contextvars.bind_contextvars(matter_id=zip_matter_id)
 
     try:
-        _update_stage(engine, job_id, "parsing", "uploading")
+        _update_stage(engine, job_id, "parsing", "processing")
 
         file_bytes = _download_from_minio(settings, minio_path)
 
@@ -1395,7 +1395,7 @@ def import_text_document(
         # ---------------------------------------------------------------
         # Stage 2: CHUNKING
         # ---------------------------------------------------------------
-        _update_stage(engine, job_id, "chunking", "uploading")
+        _update_stage(engine, job_id, "chunking", "processing")
 
         from app.ingestion.chunker import TextChunker
 
@@ -1413,7 +1413,7 @@ def import_text_document(
         logger.info("task.import_text.chunked", chunk_count=len(chunks))
 
         progress: dict[str, Any] = {"chunks_created": len(chunks)}
-        _update_stage(engine, job_id, "embedding", "uploading", progress=progress)
+        _update_stage(engine, job_id, "embedding", "processing", progress=progress)
 
         # ---------------------------------------------------------------
         # Stage 3: EMBEDDING — dense + optional sparse
@@ -1435,7 +1435,7 @@ def import_text_document(
         logger.info("task.import_text.embedded", count=len(embeddings))
 
         progress["embeddings_generated"] = len(embeddings)
-        _update_stage(engine, job_id, "extracting", "uploading", progress=progress)
+        _update_stage(engine, job_id, "extracting", "processing", progress=progress)
 
         # ---------------------------------------------------------------
         # Stage 4: EXTRACTING — use pre_entities or run GLiNER
@@ -1470,7 +1470,7 @@ def import_text_document(
         )
 
         progress["entities_extracted"] = len(all_entities)
-        _update_stage(engine, job_id, "indexing", "uploading", progress=progress)
+        _update_stage(engine, job_id, "indexing", "processing", progress=progress)
 
         # ---------------------------------------------------------------
         # Stage 5: INDEXING — Qdrant + Neo4j

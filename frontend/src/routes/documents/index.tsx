@@ -1,13 +1,15 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Upload, AlertTriangle, ChevronDown, ChevronRight, RefreshCw } from "lucide-react";
+import { Upload, AlertTriangle, ChevronDown, ChevronRight, RefreshCw, Loader2 } from "lucide-react";
 import { apiClient } from "@/api/client";
 import { useAppStore } from "@/stores/app-store";
 import { useDebounce } from "@/hooks/use-debounce";
 import { Button } from "@/components/ui/button";
 import { Pagination } from "@/components/ui/pagination";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { DocumentTable } from "@/components/documents/document-table";
 import { DocumentFilters } from "@/components/documents/document-filters";
 import type { DocumentResponse, PaginatedResponse } from "@/types";
@@ -128,6 +130,80 @@ function HealthBanner() {
   );
 }
 
+const STAGE_LABELS: Record<string, string> = {
+  uploading: "Uploading",
+  parsing: "Parsing document",
+  chunking: "Chunking text",
+  embedding: "Generating embeddings",
+  extracting: "Extracting entities",
+  indexing: "Indexing vectors",
+};
+
+interface JobStatus {
+  job_id: string;
+  status: string;
+  stage: string;
+  filename: string;
+  progress: {
+    pages_parsed: number;
+    chunks_created: number;
+    entities_extracted: number;
+    embeddings_generated: number;
+  };
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+function ActiveJobs() {
+  const matterId = useAppStore((s) => s.matterId);
+
+  const { data: jobs } = useQuery({
+    queryKey: ["ingest-jobs-active", matterId],
+    queryFn: () =>
+      apiClient<PaginatedResponse<JobStatus>>({
+        url: "/api/v1/ingest/jobs",
+        method: "GET",
+        params: { status: "processing", limit: 20 },
+      }),
+    enabled: !!matterId,
+    refetchInterval: 3000,
+  });
+
+  const activeJobs = jobs?.items ?? [];
+  if (activeJobs.length === 0) return null;
+
+  return (
+    <div className="rounded-lg border bg-card p-3 space-y-2">
+      <div className="flex items-center gap-2 text-sm font-medium">
+        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+        Processing {activeJobs.length} document{activeJobs.length !== 1 ? "s" : ""}
+      </div>
+      <div className="space-y-1.5">
+        {activeJobs.map((job) => {
+          const stageSteps = ["parsing", "chunking", "embedding", "extracting", "indexing"];
+          const stepIdx = stageSteps.indexOf(job.stage);
+          const percent = stepIdx >= 0 ? Math.round(((stepIdx + 1) / stageSteps.length) * 100) : 0;
+
+          return (
+            <div key={job.job_id} className="space-y-1">
+              <div className="flex items-center justify-between text-xs">
+                <span className="truncate max-w-[60%] text-muted-foreground" title={job.filename}>
+                  {job.filename}
+                </span>
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                  {STAGE_LABELS[job.stage] ?? job.stage}
+                </Badge>
+              </div>
+              <Progress value={percent} className="h-1" />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function DocumentsPage() {
   const navigate = useNavigate();
   const matterId = useAppStore((s) => s.matterId);
@@ -158,6 +234,7 @@ function DocumentsPage() {
   return (
     <div className="space-y-4 animate-page-in">
       <HealthBanner />
+      <ActiveJobs />
 
       <div className="flex items-center justify-between">
         <div>
