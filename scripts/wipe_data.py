@@ -88,20 +88,30 @@ def wipe_postgres(settings: Settings) -> None:
 
 
 def wipe_qdrant(settings: Settings) -> None:
-    """Delete and recreate the Qdrant collection."""
+    """Delete all points from Qdrant collections (preserves collection structure)."""
     print("=== Wiping Qdrant ===")
     try:
         from qdrant_client import QdrantClient
+        from qdrant_client.models import FilterSelector, models
 
         client = QdrantClient(url=settings.qdrant_url)
-        collection_name = "nexus_text"
 
-        if client.collection_exists(collection_name):
-            client.delete_collection(collection_name)
-            print(f"  Deleted collection: {collection_name}")
-        else:
-            print(f"  Collection {collection_name} doesn't exist")
-        print("  Qdrant wiped (collection will auto-recreate on next ingest)\n")
+        for collection_name in ["nexus_text", "nexus_visual"]:
+            if client.collection_exists(collection_name):
+                info = client.get_collection(collection_name)
+                point_count = info.points_count
+                if point_count and point_count > 0:
+                    # Delete all points by scrolling through IDs
+                    client.delete(
+                        collection_name=collection_name,
+                        points_selector=FilterSelector(filter=models.Filter(must=[])),
+                    )
+                    print(f"  {collection_name}: deleted {point_count} points")
+                else:
+                    print(f"  {collection_name}: already empty")
+            else:
+                print(f"  {collection_name}: doesn't exist (will be created on API start)")
+        print("  Qdrant wiped\n")
     except Exception as exc:
         print(f"  Qdrant wipe failed: {exc}\n")
 
