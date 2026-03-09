@@ -172,8 +172,9 @@ export const useStreamStore = create<StreamStore>()((set, get) => ({
                 entities: parsed.entities ?? [],
                 citedClaims: parsed.cited_claims ?? [],
                 pendingUserMessage: null,
-                streamingText: "",
-                sources: [],
+                // Keep streamingText and sources intact — thread page reads
+                // them after navigation. The cleanup timer will evict after
+                // COMPLETED_STREAM_TTL.
               });
 
               // Re-key temp → real threadId
