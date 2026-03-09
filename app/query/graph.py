@@ -234,7 +234,7 @@ def build_agentic_graph(settings: Settings, checkpointer: Any) -> Any:
 
     # 1. Create ChatAnthropic model (library handles tool binding)
     model = ChatAnthropic(
-        model=settings.llm_model,
+        model=settings.query_llm_model or settings.llm_model,
         api_key=settings.anthropic_api_key,
         max_tokens=4096,
         temperature=0.1,

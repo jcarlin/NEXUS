@@ -117,4 +117,48 @@ test.describe("Admin", () => {
       ).toBeVisible({ timeout: 10_000 });
     }
   });
+
+  test("audit log table has rows with timestamps", async ({ page }) => {
+    await page.goto("/admin/audit-log", { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(3_000);
+
+    // Audit entries should have actual table rows
+    const rows = page.locator("table tbody tr, [role='row']");
+    await expect(rows.first()).toBeVisible({ timeout: 10_000 });
+
+    const count = await rows.count();
+    expect(count).toBeGreaterThanOrEqual(1);
+  });
+
+  test("create user dialog has form fields", async ({ page }) => {
+    await page.goto("/admin/users", { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2_000);
+
+    const createBtn = page.getByRole("button", { name: /Create User/i });
+    await expect(createBtn).toBeVisible({ timeout: 10_000 });
+    await createBtn.click();
+
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible({ timeout: 5_000 });
+
+    // Form should have Email, Name/Full Name, and Role fields
+    await expect(dialog.getByLabel(/email/i)).toBeVisible({ timeout: 5_000 });
+    await expect(dialog.getByLabel(/name/i).first()).toBeVisible();
+
+    // Close dialog
+    await page.keyboard.press("Escape");
+  });
+
+  test("evaluation quality gates show metric values", async ({ page }) => {
+    await page.goto("/admin/evaluation", { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(3_000);
+
+    // Quality Gates section should have cards with metric values or N/A
+    const qualityGates = page.getByRole("heading", { name: "Quality Gates" });
+    await expect(qualityGates).toBeVisible({ timeout: 10_000 });
+
+    // Cards under quality gates should show some metric text
+    const metricCards = page.locator("[class*='card']").filter({ hasText: /\d+|N\/A|—/ });
+    await expect(metricCards.first()).toBeVisible({ timeout: 10_000 });
+  });
 });

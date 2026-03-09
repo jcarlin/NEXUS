@@ -58,7 +58,7 @@ class CommunicationBaseline:
         query = text(
             f"""
             SELECT
-                avg(length(chunk_text)) AS avg_len,
+                avg(file_size_bytes) AS avg_len,
                 count(*) AS msg_count,
                 {col_avgs}
             FROM documents

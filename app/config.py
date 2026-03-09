@@ -116,6 +116,7 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     llm_provider: str = "anthropic"  # anthropic | openai | vllm | ollama
     llm_model: str = "claude-sonnet-4-5-20250929"
+    query_llm_model: str = ""  # Query pipeline model; falls back to llm_model if empty
     vllm_base_url: str = "http://localhost:8080/v1"
     ollama_base_url: str = "http://localhost:11434/v1"
 

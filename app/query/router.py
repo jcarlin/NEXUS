@@ -239,6 +239,7 @@ async def _v1_event_generator(graph, initial_state, config, db, thread_id, query
     """SSE event generator for the v1 graph."""
     final_state: dict[str, Any] = {}
     client_disconnected = False
+    graph_error = False
 
     try:
         async for stream_mode, chunk in graph.astream(initial_state, config, stream_mode=["updates", "custom"]):
@@ -259,27 +260,36 @@ async def _v1_event_generator(graph, initial_state, config, db, thread_id, query
         client_disconnected = True
     except Exception:
         logger.error("query_stream.graph_error", thread_id=thread_id, exc_info=True)
+        graph_error = True
 
-    # Always persist — even on client disconnect the LLM work is valuable.
-    # Partial results are better than nothing.
+    # Persist user message (always) and assistant message (only if we got content).
     try:
         await ChatService.save_message(db, thread_id, "user", query_text, matter_id=matter_id)
-        await ChatService.save_message(
-            db,
-            thread_id,
-            "assistant",
-            final_state.get("response", ""),
-            source_documents=final_state.get("source_documents", []),
-            entities_mentioned=final_state.get("entities_mentioned", []),
-            follow_up_questions=final_state.get("follow_up_questions", []),
-            matter_id=matter_id,
-            cited_claims=final_state.get("cited_claims", []),
-        )
+        response_text = final_state.get("response", "")
+        if response_text:
+            await ChatService.save_message(
+                db,
+                thread_id,
+                "assistant",
+                response_text,
+                source_documents=final_state.get("source_documents", []),
+                entities_mentioned=final_state.get("entities_mentioned", []),
+                follow_up_questions=final_state.get("follow_up_questions", []),
+                matter_id=matter_id,
+                cited_claims=final_state.get("cited_claims", []),
+            )
         await db.commit()
     except Exception:
         logger.error("query_stream.save_failed", thread_id=thread_id, exc_info=True)
 
     if client_disconnected:
+        return
+
+    if graph_error:
+        yield {
+            "event": "error",
+            "data": json.dumps({"message": "An error occurred while processing your query. Please try again."}),
+        }
         return
 
     yield {
@@ -305,6 +315,7 @@ async def _agentic_event_generator(graph, initial_state, config, db, thread_id, 
     final_state: dict[str, Any] = {}
     sources_emitted = False
     client_disconnected = False
+    graph_error = False
 
     try:
         async for ns, stream_mode, chunk in graph.astream(
@@ -358,6 +369,7 @@ async def _agentic_event_generator(graph, initial_state, config, db, thread_id, 
         client_disconnected = True
     except Exception:
         logger.error("query_stream.graph_error", thread_id=thread_id, exc_info=True)
+        graph_error = True
 
     # Extract response
     try:
@@ -369,26 +381,33 @@ async def _agentic_event_generator(graph, initial_state, config, db, thread_id, 
         logger.error("query_stream.extract_failed", thread_id=thread_id, exc_info=True)
         response_text = ""
 
-    # Always persist — even on client disconnect the LLM work is valuable.
-    # Partial results are better than nothing.
+    # Persist user message (always) and assistant message (only if we got content).
     try:
         await ChatService.save_message(db, thread_id, "user", query_text, matter_id=matter_id)
-        await ChatService.save_message(
-            db,
-            thread_id,
-            "assistant",
-            response_text,
-            source_documents=final_state.get("source_documents", []),
-            entities_mentioned=final_state.get("entities_mentioned", []),
-            follow_up_questions=final_state.get("follow_up_questions", []),
-            matter_id=matter_id,
-            cited_claims=final_state.get("cited_claims", []),
-        )
+        if response_text:
+            await ChatService.save_message(
+                db,
+                thread_id,
+                "assistant",
+                response_text,
+                source_documents=final_state.get("source_documents", []),
+                entities_mentioned=final_state.get("entities_mentioned", []),
+                follow_up_questions=final_state.get("follow_up_questions", []),
+                matter_id=matter_id,
+                cited_claims=final_state.get("cited_claims", []),
+            )
         await db.commit()
     except Exception:
         logger.error("query_stream.save_failed", thread_id=thread_id, exc_info=True)
 
     if client_disconnected:
+        return
+
+    if graph_error:
+        yield {
+            "event": "error",
+            "data": json.dumps({"message": "An error occurred while processing your query. Please try again."}),
+        }
         return
 
     yield {

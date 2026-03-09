@@ -148,4 +148,41 @@ test.describe("Documents", () => {
     await backBtn.click();
     await expect(page).toHaveURL("/documents", { timeout: 10_000 });
   });
+
+  test("search input filters documents", async ({ page }) => {
+    await page.goto("/documents", { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2_000);
+
+    const searchInput = page.getByPlaceholder(/search|filter/i);
+    if (await searchInput.isVisible().catch(() => false)) {
+      await searchInput.fill("xyz_nonexistent_query");
+      await page.waitForTimeout(1_000);
+
+      // Should show filtered results or "no results"
+      const rows = page.locator("table tbody tr");
+      const noResults = page.getByText(/no results|no documents|nothing found/i);
+      const hasRows = await rows.first().isVisible().catch(() => false);
+      const hasNoResults = await noResults.isVisible().catch(() => false);
+      expect(hasRows || hasNoResults).toBe(true);
+    }
+  });
+
+  test("document detail shows chunk content", async ({ page }) => {
+    await page.goto("/documents", { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2_000);
+
+    const firstLink = page.locator("table tbody tr a").first();
+    if (await firstLink.isVisible().catch(() => false)) {
+      await firstLink.click();
+      await expect(page).toHaveURL(/\/documents\//, { timeout: 10_000 });
+      await page.waitForTimeout(3_000);
+
+      // Should show chunks with text content
+      const chunks = page.locator("[class*='chunk'], [data-testid*='chunk']");
+      if (await chunks.first().isVisible().catch(() => false)) {
+        const chunkText = await chunks.first().textContent();
+        expect(chunkText?.trim().length).toBeGreaterThan(10);
+      }
+    }
+  });
 });

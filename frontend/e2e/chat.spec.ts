@@ -100,4 +100,27 @@ test.describe("Chat", () => {
     const sendButton = page.getByRole("button", { name: /send|submit|ask/i });
     await expect(sendButton).toBeVisible({ timeout: 10_000 });
   });
+
+  test("no API errors during query submission", async ({ page }) => {
+    const apiErrors: string[] = [];
+    page.on("response", (res) => {
+      if (res.url().includes("/api/") && res.status() >= 500) {
+        apiErrors.push(`${res.status()} ${res.url()}`);
+      }
+    });
+
+    await page.goto("/chat", { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2_000);
+
+    const input = page.getByPlaceholder(/ask|question|query|message/i);
+    if (await input.isVisible().catch(() => false)) {
+      await input.fill("What documents are in this matter?");
+      const sendButton = page.getByRole("button", { name: /send|submit|ask/i });
+      if (await sendButton.isVisible().catch(() => false)) {
+        await sendButton.click();
+        await page.waitForTimeout(10_000);
+        expect(apiErrors.length, `API 5xx errors: ${apiErrors.join(", ")}`).toBe(0);
+      }
+    }
+  });
 });

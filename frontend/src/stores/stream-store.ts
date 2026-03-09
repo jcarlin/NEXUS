@@ -152,6 +152,15 @@ export const useStreamStore = create<StreamStore>()((set, get) => ({
                 stage: "generating",
               });
               break;
+            case "error":
+              get()._updateStreamState(currentKey, {
+                isStreaming: false,
+                stage: null,
+                error: parsed.message || "Something went wrong",
+                pendingUserMessage: null,
+              });
+              get()._scheduleCleanup(currentKey);
+              break;
             case "done": {
               const realThreadId = parsed.thread_id;
 

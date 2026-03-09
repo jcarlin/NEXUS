@@ -253,8 +253,8 @@ async def test_v1_generator_persists_on_client_disconnect():
     done_events = [e for e in events if e.get("event") == "done"]
     assert len(done_events) == 0
 
-    # But messages should still be persisted (2 execute calls for save_message)
-    assert mock_db.execute.call_count >= 2
+    # User message persisted (assistant skipped — no response content on disconnect)
+    assert mock_db.execute.call_count >= 1
     assert mock_db.commit.call_count >= 1
 
 

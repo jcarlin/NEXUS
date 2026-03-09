@@ -80,4 +80,23 @@ test.describe("Exports", () => {
     await expect(productionTab).toHaveAttribute("data-state", "active");
     await expect(exportTab).toHaveAttribute("data-state", "inactive");
   });
+
+  test("create production set dialog has form fields", async ({ page }) => {
+    await page.goto("/review/exports", { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2_000);
+
+    const createBtn = page.getByRole("button", { name: /create|new|add/i });
+    if (await createBtn.first().isVisible().catch(() => false)) {
+      await createBtn.first().click();
+
+      const dialog = page.getByRole("dialog");
+      await expect(dialog).toBeVisible({ timeout: 5_000 });
+
+      // Form should have name and description fields
+      await expect(dialog.getByLabel(/name/i)).toBeVisible({ timeout: 5_000 });
+
+      // Close dialog
+      await page.keyboard.press("Escape");
+    }
+  });
 });

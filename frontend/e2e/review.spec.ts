@@ -55,6 +55,28 @@ test.describe("Review", () => {
       .catch(() => {});
   });
 
+  test("hot docs table shows score values", async ({ page }) => {
+    await page.goto("/review/hot-docs", { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(3_000);
+
+    // Score column should show numeric values (0-1 range like 0.85)
+    const scores = page.locator("table td, [role='cell']")
+      .filter({ hasText: /^0\.\d+$/ });
+    await expect(scores.first()).toBeVisible({ timeout: 10_000 });
+  });
+
+  test("result set has document rows with filenames", async ({ page }) => {
+    await page.goto("/review/result-set", { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(3_000);
+
+    // Document table should have at least 1 row with a filename
+    const rows = page.locator("table tbody tr");
+    if (await rows.first().isVisible().catch(() => false)) {
+      const rowText = await rows.first().textContent();
+      expect(rowText?.trim().length).toBeGreaterThan(0);
+    }
+  });
+
   test("result set shows document description", async ({ page }) => {
     await page.goto("/review/result-set", { waitUntil: "domcontentloaded" });
     await page.waitForTimeout(2_000);

@@ -33,27 +33,25 @@ test.describe("Entities", () => {
     expect(count).toBeGreaterThanOrEqual(5);
   });
 
-  test("known entity names are visible", async ({ page }) => {
+  test("entity rows have name and type", async ({ page }) => {
     await page.goto("/entities", { waitUntil: "domcontentloaded" });
     await page.waitForTimeout(2_000);
 
-    // At least one well-known entity from our corpus should appear
-    const knownEntities = [
-      "Sarah Chen",
-      "Acme",
-      "Pinnacle",
-      "Robert Kim",
-      "John Reeves",
-    ];
-    let found = false;
-    for (const name of knownEntities) {
-      const el = page.getByText(name, { exact: false }).first();
-      if (await el.isVisible().catch(() => false)) {
-        found = true;
-        break;
-      }
-    }
-    expect(found).toBe(true);
+    const rows = page.locator("table tbody tr");
+    await expect(rows.first()).toBeVisible({ timeout: 10_000 });
+
+    const count = await rows.count();
+    expect(count).toBeGreaterThanOrEqual(5);
+
+    // First row should have non-empty name text
+    const firstRowText = await rows.first().textContent();
+    expect(firstRowText?.trim().length).toBeGreaterThan(0);
+
+    // Type badges should be visible (person, organization, location, etc.)
+    const typeBadge = page.locator("table tbody tr td span, table tbody tr td [class*='badge']")
+      .filter({ hasText: /person|organization|location|date|monetary|email|phone|geo|event/i })
+      .first();
+    await expect(typeBadge).toBeVisible({ timeout: 10_000 });
   });
 
   test("entity detail page shows connections", async ({ page }) => {

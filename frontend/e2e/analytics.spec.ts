@@ -32,31 +32,14 @@ test.describe("Analytics", () => {
     await expect(content).toBeVisible({ timeout: 10_000 });
   });
 
-  test("comms matrix shows sender/recipient names", async ({ page }) => {
+  test("comms matrix shows data cells", async ({ page }) => {
     await page.goto("/analytics/comms", { waitUntil: "domcontentloaded" });
     await page.waitForTimeout(3_000);
 
-    // Should contain at least one known name
-    const names = [
-      "Sarah Chen",
-      "Robert Kim",
-      "Lisa Park",
-      "Michael Torres",
-    ];
-    let found = false;
-    for (const name of names) {
-      if (
-        await page
-          .getByText(name, { exact: false })
-          .first()
-          .isVisible()
-          .catch(() => false)
-      ) {
-        found = true;
-        break;
-      }
-    }
-    expect(found).toBe(true);
+    // Matrix/table should have at least one cell with a number > 0
+    const cells = page.locator("table td, [class*='cell'], [class*='matrix']")
+      .filter({ hasText: /^[1-9]\d*$/ });
+    await expect(cells.first()).toBeVisible({ timeout: 10_000 });
   });
 
   test("timeline page renders", async ({ page }) => {

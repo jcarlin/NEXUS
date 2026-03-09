@@ -6,8 +6,8 @@ import { test, expect, type Page } from "@playwright/test";
  */
 
 const CREDENTIALS = {
-  email: "admin@example.com",
-  password: "password123",
+  email: process.env.E2E_EMAIL || "admin@example.com",
+  password: process.env.E2E_PASSWORD || "password123",
 };
 
 // Every authenticated route we expect to reach
@@ -153,13 +153,13 @@ test.describe("Smoke test: all pages", () => {
       console.log("\nAll pages loaded cleanly with no errors.\n");
     }
 
-    // Fail the test if there are render errors (page crashes / missing headings)
-    const renderErrors = errors.filter((e) => e.type === "render");
-    if (renderErrors.length > 0) {
-      const msg = renderErrors
-        .map((e) => `${e.page}: ${e.message}`)
+    // Fail the test if there are render or network errors
+    const criticalErrors = errors.filter((e) => e.type === "render" || e.type === "network");
+    if (criticalErrors.length > 0) {
+      const msg = criticalErrors
+        .map((e) => `[${e.type.toUpperCase()}] ${e.page}: ${e.message}`)
         .join("\n");
-      expect.soft(renderErrors.length, `Render errors found:\n${msg}`).toBe(0);
+      expect.soft(criticalErrors.length, `Critical errors found:\n${msg}`).toBe(0);
     }
   });
 });

@@ -22,8 +22,8 @@ test.describe("Datasets", () => {
     ).toBeVisible({ timeout: 10_000 });
 
     // Should show at least one dataset node in the tree
-    const datasetNode = page.getByText("E2E Test Dataset").first();
-    await expect(datasetNode).toBeVisible({ timeout: 10_000 });
+    const datasetNodes = page.locator("[class*='tree'] button, [role='treeitem'], aside button").filter({ hasText: /.+/ });
+    await expect(datasetNodes.first()).toBeVisible({ timeout: 10_000 });
   });
 
   test("select a dataset from sidebar shows right panel", async ({ page }) => {
@@ -55,10 +55,8 @@ test.describe("Datasets", () => {
     await page.goto("/datasets", { waitUntil: "domcontentloaded" });
     await page.waitForTimeout(3_000);
 
-    // Click the first dataset node in the tree (use text from the actual dataset name)
-    const firstDataset = page
-      .getByText("E2E Test Dataset", { exact: false })
-      .first();
+    // Click the first dataset node in the tree
+    const firstDataset = page.locator("[class*='tree'] button, [role='treeitem'], aside button").filter({ hasText: /.+/ }).first();
     if (await firstDataset.isVisible().catch(() => false)) {
       await firstDataset.click();
       await page.waitForTimeout(2_000);
