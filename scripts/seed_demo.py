@@ -960,7 +960,7 @@ def phase5_summary(settings: Settings, thread_id: str | None) -> None:
                 or 0
             )
         except Exception:
-            pass  # entities table may not exist yet
+            conn.rollback()  # Reset transaction after query on missing table
 
         user_count = conn.execute(text("SELECT COUNT(*) FROM users")).scalar() or 0
 
@@ -974,6 +974,7 @@ def phase5_summary(settings: Settings, thread_id: str | None) -> None:
                 or 0
             )
         except Exception:
+            conn.rollback()
             # Try LangGraph checkpointer table
             try:
                 thread_count = (
@@ -983,6 +984,7 @@ def phase5_summary(settings: Settings, thread_id: str | None) -> None:
                     or 0
                 )
             except Exception:
+                conn.rollback()
                 thread_count = 1 if thread_id else 0
 
     print(f"  Documents:  {doc_count}")
