@@ -58,17 +58,23 @@ def wipe_postgres(settings: Settings) -> None:
     ]
 
     with engine.connect() as conn:
-        for table in tables_to_clear:
-            try:
-                result = conn.execute(text(f"DELETE FROM {table}"))  # noqa: S608
-                print(f"  {table}: {result.rowcount} rows deleted")
-            except Exception as exc:
-                print(f"  {table}: skipped ({exc.__class__.__name__})")
+        # Use TRUNCATE CASCADE for tables with FK dependencies
+        try:
+            conn.execute(text("TRUNCATE TABLE " + ", ".join(tables_to_clear) + " CASCADE"))
+            print(f"  Truncated {len(tables_to_clear)} tables (CASCADE)")
+        except Exception as exc:
+            print(f"  TRUNCATE failed ({exc}), falling back to DELETE...")
+            for table in tables_to_clear:
+                try:
+                    result = conn.execute(text(f"DELETE FROM {table}"))  # noqa: S608
+                    print(f"  {table}: {result.rowcount} rows deleted")
+                except Exception as exc2:
+                    print(f"  {table}: skipped ({exc2.__class__.__name__})")
         # Also clear LangGraph checkpointer tables if they exist
         for table in ["checkpoint_blobs", "checkpoint_writes", "checkpoints"]:
             try:
-                result = conn.execute(text(f"DELETE FROM {table}"))  # noqa: S608
-                print(f"  {table}: {result.rowcount} rows deleted")
+                result = conn.execute(text(f"TRUNCATE TABLE {table} CASCADE"))  # noqa: S608
+                print(f"  {table}: truncated")
             except Exception:
                 pass
         conn.commit()
@@ -81,8 +87,8 @@ def wipe_qdrant(settings: Settings) -> None:
     try:
         from qdrant_client import QdrantClient
 
-        client = QdrantClient(url=settings.QDRANT_URL)
-        collection_name = settings.QDRANT_COLLECTION
+        client = QdrantClient(url=settings.qdrant_url)
+        collection_name = "nexus_text"
 
         if client.collection_exists(collection_name):
             client.delete_collection(collection_name)
@@ -101,8 +107,8 @@ def wipe_neo4j(settings: Settings) -> None:
         from neo4j import GraphDatabase
 
         driver = GraphDatabase.driver(
-            settings.NEO4J_URI,
-            auth=(settings.NEO4J_USER, settings.NEO4J_PASSWORD),
+            settings.neo4j_uri,
+            auth=(settings.neo4j_user, settings.neo4j_password),
         )
         with driver.session() as session:
             result = session.run("MATCH (n) DETACH DELETE n")
@@ -123,12 +129,12 @@ def wipe_minio(settings: Settings) -> None:
         from minio import Minio
 
         client = Minio(
-            settings.MINIO_ENDPOINT,
-            access_key=settings.MINIO_ACCESS_KEY,
-            secret_key=settings.MINIO_SECRET_KEY,
-            secure=False,
+            settings.minio_endpoint,
+            access_key=settings.minio_access_key,
+            secret_key=settings.minio_secret_key,
+            secure=settings.minio_use_ssl,
         )
-        bucket = settings.MINIO_BUCKET
+        bucket = settings.minio_bucket
         if client.bucket_exists(bucket):
             objects = list(client.list_objects(bucket, recursive=True))
             for obj in objects:
