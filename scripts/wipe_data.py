@@ -52,7 +52,10 @@ def wipe_postgres(settings: Settings) -> None:
         "export_jobs",
         "redactions",
         "edrm_import_log",
-        "chunks",
+        "bulk_import_jobs",
+        "memos",
+        "google_drive_sync_state",
+        "google_drive_connections",
         "jobs",
         "documents",
     ]
@@ -63,12 +66,15 @@ def wipe_postgres(settings: Settings) -> None:
             conn.execute(text("TRUNCATE TABLE " + ", ".join(tables_to_clear) + " CASCADE"))
             print(f"  Truncated {len(tables_to_clear)} tables (CASCADE)")
         except Exception as exc:
+            conn.rollback()
             print(f"  TRUNCATE failed ({exc}), falling back to DELETE...")
             for table in tables_to_clear:
                 try:
                     result = conn.execute(text(f"DELETE FROM {table}"))  # noqa: S608
+                    conn.commit()
                     print(f"  {table}: {result.rowcount} rows deleted")
                 except Exception as exc2:
+                    conn.rollback()
                     print(f"  {table}: skipped ({exc2.__class__.__name__})")
         # Also clear LangGraph checkpointer tables if they exist
         for table in ["checkpoint_blobs", "checkpoint_writes", "checkpoints"]:
@@ -126,22 +132,28 @@ def wipe_minio(settings: Settings) -> None:
     """Clear all objects from the documents bucket in MinIO."""
     print("=== Wiping MinIO ===")
     try:
-        from minio import Minio
+        import boto3
+        from botocore.client import Config
 
-        client = Minio(
-            settings.minio_endpoint,
-            access_key=settings.minio_access_key,
-            secret_key=settings.minio_secret_key,
-            secure=settings.minio_use_ssl,
+        s3 = boto3.client(
+            "s3",
+            endpoint_url=f"http://{settings.minio_endpoint}",
+            aws_access_key_id=settings.minio_access_key,
+            aws_secret_access_key=settings.minio_secret_key,
+            config=Config(signature_version="s3v4"),
         )
         bucket = settings.minio_bucket
-        if client.bucket_exists(bucket):
-            objects = list(client.list_objects(bucket, recursive=True))
-            for obj in objects:
-                client.remove_object(bucket, obj.object_name)
-            print(f"  Deleted {len(objects)} objects from bucket '{bucket}'")
-        else:
-            print(f"  Bucket '{bucket}' doesn't exist")
+        paginator = s3.get_paginator("list_objects_v2")
+        count = 0
+        for page in paginator.paginate(Bucket=bucket):
+            objects = page.get("Contents", [])
+            if objects:
+                s3.delete_objects(
+                    Bucket=bucket,
+                    Delete={"Objects": [{"Key": o["Key"]} for o in objects]},
+                )
+                count += len(objects)
+        print(f"  Deleted {count} objects from bucket '{bucket}'")
         print("  MinIO wiped\n")
     except Exception as exc:
         print(f"  MinIO wipe failed: {exc}\n")
