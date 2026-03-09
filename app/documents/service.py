@@ -44,6 +44,68 @@ class DocumentService:
     expect a caller-managed ``AsyncSession``."""
 
     # ------------------------------------------------------------------
+    # HEALTH CHECK — compare PG chunk_count vs Qdrant point count
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    async def check_ingestion_health(
+        db: AsyncSession,
+        qdrant: VectorStoreClient,
+        matter_id: UUID,
+    ) -> list[dict]:
+        """Compare expected chunk counts (PG) vs indexed points (Qdrant).
+
+        Returns a list of dicts with doc_id, filename, expected_chunks,
+        indexed_chunks, and status (healthy / missing / partial).
+        """
+        result = await db.execute(
+            text(
+                "SELECT id, job_id, filename, chunk_count "
+                "FROM documents "
+                "WHERE matter_id = :matter_id AND chunk_count > 0"
+            ),
+            {"matter_id": matter_id},
+        )
+        rows = result.all()
+        if not rows:
+            return []
+
+        # Qdrant stores job_id as doc_id in point payloads
+        job_id_map: dict[str, dict] = {}
+        for r in rows:
+            mapping = r._mapping
+            job_id = str(mapping["job_id"]) if mapping.get("job_id") else str(mapping["id"])
+            job_id_map[job_id] = {
+                "doc_id": mapping["id"],
+                "filename": mapping["filename"],
+                "expected_chunks": mapping["chunk_count"],
+            }
+
+        qdrant_counts = qdrant.count_points_by_doc_ids(list(job_id_map.keys()))
+
+        items = []
+        for job_id, info in job_id_map.items():
+            indexed = qdrant_counts.get(job_id, 0)
+            expected = info["expected_chunks"]
+            if indexed == 0:
+                status = "missing"
+            elif indexed < expected:
+                status = "partial"
+            else:
+                status = "healthy"
+            items.append(
+                {
+                    "doc_id": info["doc_id"],
+                    "filename": info["filename"],
+                    "expected_chunks": expected,
+                    "indexed_chunks": indexed,
+                    "status": status,
+                }
+            )
+
+        return items
+
+    # ------------------------------------------------------------------
     # LIST (paginated, with optional filters)
     # ------------------------------------------------------------------
 

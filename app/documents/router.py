@@ -22,6 +22,8 @@ from app.common.vector_store import VectorStoreClient
 from app.dependencies import get_db, get_graph_service, get_minio, get_qdrant
 from app.documents.schemas import (
     DocumentDetail,
+    DocumentHealthItem,
+    DocumentHealthResponse,
     DocumentListResponse,
     DocumentResponse,
     PrivilegeUpdateRequest,
@@ -100,6 +102,37 @@ def _row_to_detail(row: dict) -> DocumentDetail:
         anomaly_score=row.get("anomaly_score"),
         bates_begin=row.get("bates_begin"),
         bates_end=row.get("bates_end"),
+    )
+
+
+# -----------------------------------------------------------------------
+# GET /documents/health — check vector index health
+# -----------------------------------------------------------------------
+
+
+@router.get("/documents/health", response_model=DocumentHealthResponse)
+async def check_document_health(
+    db: AsyncSession = Depends(get_db),
+    current_user: UserRecord = Depends(require_role("admin", "attorney")),
+    matter_id: UUID = Depends(get_matter_id),
+    qdrant: VectorStoreClient = Depends(get_qdrant),
+):
+    """Compare expected chunk counts (PG) vs indexed points (Qdrant)."""
+    items = await DocumentService.check_ingestion_health(
+        db=db,
+        qdrant=qdrant,
+        matter_id=matter_id,
+    )
+    health_items = [DocumentHealthItem(**item) for item in items]
+    healthy = sum(1 for i in health_items if i.status == "healthy")
+    missing = sum(1 for i in health_items if i.status == "missing")
+    partial = sum(1 for i in health_items if i.status == "partial")
+    return DocumentHealthResponse(
+        total=len(health_items),
+        healthy=healthy,
+        missing=missing,
+        partial=partial,
+        documents=health_items,
     )
 
 

@@ -61,6 +61,26 @@ class DocumentListResponse(PaginatedResponse[DocumentResponse]):
     """Paginated list of ingested documents."""
 
 
+class DocumentHealthItem(BaseModel):
+    """Health status for a single document's vector index."""
+
+    doc_id: UUID
+    filename: str
+    expected_chunks: int
+    indexed_chunks: int
+    status: str  # "healthy" | "missing" | "partial"
+
+
+class DocumentHealthResponse(BaseModel):
+    """Aggregated health check results for document vector indexes."""
+
+    total: int
+    healthy: int
+    missing: int
+    partial: int
+    documents: list[DocumentHealthItem]
+
+
 class PrivilegeUpdateRequest(BaseModel):
     """Request body for updating a document's privilege status."""
 

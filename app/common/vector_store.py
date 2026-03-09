@@ -315,6 +315,39 @@ class VectorStoreClient:
             for point in results.points
         ]
 
+    def count_points_by_doc_ids(self, doc_ids: list[str]) -> dict[str, int]:
+        """Count Qdrant points per doc_id.
+
+        Returns a dict mapping each doc_id to its point count.
+        Uses scroll with payload filter to avoid loading vectors.
+        """
+        if not doc_ids:
+            return {}
+
+        counts: dict[str, int] = {did: 0 for did in doc_ids}
+        qdrant_filter = Filter(must=[FieldCondition(key="doc_id", match=MatchAny(any=doc_ids))])
+
+        offset = None
+        while True:
+            results, next_offset = self.client.scroll(
+                collection_name=TEXT_COLLECTION,
+                scroll_filter=qdrant_filter,
+                limit=1000,
+                offset=offset,
+                with_payload=["doc_id"],
+                with_vectors=False,
+            )
+            for point in results:
+                did = (point.payload or {}).get("doc_id")
+                if did and did in counts:
+                    counts[did] += 1
+
+            if next_offset is None:
+                break
+            offset = next_offset
+
+        return counts
+
     async def get_collection_info(self, name: str) -> dict[str, Any]:
         """Return basic stats about the named collection."""
         info = self.client.get_collection(collection_name=name)
