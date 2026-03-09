@@ -175,6 +175,33 @@ export function MarkdownMessage({ content, sources, onCitationClick }: MarkdownM
             {inject(children)}
           </a>
         ),
+        linkReference: ({ children }) => {
+          // react-markdown parses [N] as linkReference nodes.
+          // Match numeric labels against our sources array.
+          const label = String(
+            Array.isArray(children) ? children[0] : children ?? "",
+          );
+          const match = label.match(/^(\d+)$/);
+          if (match) {
+            const idx = parseInt(match[1]!, 10) - 1;
+            const source = sources[idx];
+            if (source) {
+              return (
+                <CitationMarker
+                  index={idx}
+                  source={source}
+                  onQuickView={
+                    onCitationClick
+                      ? () => onCitationClick(source, idx)
+                      : undefined
+                  }
+                />
+              );
+            }
+          }
+          // Fallback: render as literal text with brackets
+          return <>[{children}]</>;
+        },
         hr: () => <hr className="my-4 border-border" />,
       }}
     >
