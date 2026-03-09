@@ -13,6 +13,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "e2e": "playwright test",
+    "e2e:cloud": "E2E_EMAIL=admin@nexus-demo.com E2E_PASSWORD=nexus-demo-2026 npx playwright test --config playwright.cloud.config.ts",
+    "e2e:cloud:headed": "E2E_EMAIL=admin@nexus-demo.com E2E_PASSWORD=nexus-demo-2026 npx playwright test --config playwright.cloud.config.ts --headed",
     "generate-api": "orval"
   },
   "dependencies": {
@@ -44,6 +46,7 @@
     "@uppy/screen-capture": "^4.4.2",
     "@uppy/status-bar": "^4.2.3",
     "@uppy/webcam": "^4.3.2",
+    "@uppy/xhr-upload": "^4.4.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.4",

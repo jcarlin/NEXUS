@@ -61,14 +61,6 @@ class DocumentListResponse(PaginatedResponse[DocumentResponse]):
     """Paginated list of ingested documents."""
 
 
-class DocumentPreview(BaseModel):
-    """Thumbnail / page-image reference for document preview."""
-
-    doc_id: UUID
-    page: int = Field(default=1, ge=1)
-    image_url: str
-
-
 class PrivilegeUpdateRequest(BaseModel):
     """Request body for updating a document's privilege status."""
 

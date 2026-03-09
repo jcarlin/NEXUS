@@ -198,13 +198,13 @@ async def test_get_document_not_found(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_document_preview_returns_url(client: AsyncClient) -> None:
-    """GET /documents/{id}/preview should return a presigned URL."""
+async def test_document_preview_returns_png(client: AsyncClient) -> None:
+    """GET /documents/{id}/preview should return PNG bytes."""
     doc_id = uuid4()
     row = _fake_doc_row(doc_id=doc_id)
 
     mock_storage = MagicMock()
-    mock_storage.get_presigned_url = AsyncMock(return_value="http://minio:9000/documents/pages/preview.png?sig=abc")
+    mock_storage.download_bytes = AsyncMock(return_value=b"\x89PNG\r\n\x1a\nfakedata")
 
     app = client._transport.app
     app.dependency_overrides[get_minio] = lambda: mock_storage
@@ -219,11 +219,8 @@ async def test_document_preview_returns_url(client: AsyncClient) -> None:
         app.dependency_overrides.pop(get_minio, None)
 
     assert response.status_code == 200
-    body = response.json()
-    assert body["doc_id"] == str(doc_id)
-    assert body["page"] == 2
-    assert "image_url" in body
-    assert body["image_url"].startswith("http")
+    assert response.headers["content-type"] == "image/png"
+    assert response.content == b"\x89PNG\r\n\x1a\nfakedata"
 
 
 @pytest.mark.asyncio
@@ -252,13 +249,13 @@ async def test_document_preview_not_found(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_document_download_returns_url(client: AsyncClient) -> None:
-    """GET /documents/{id}/download should return a presigned URL."""
+async def test_document_download_returns_bytes(client: AsyncClient) -> None:
+    """GET /documents/{id}/download should return file bytes with Content-Disposition."""
     doc_id = uuid4()
     row = _fake_doc_row(doc_id=doc_id)
 
     mock_storage = MagicMock()
-    mock_storage.get_presigned_url = AsyncMock(return_value="http://minio:9000/documents/raw/abc/report.pdf?sig=xyz")
+    mock_storage.download_bytes = AsyncMock(return_value=b"%PDF-1.4 fake pdf content")
 
     app = client._transport.app
     app.dependency_overrides[get_minio] = lambda: mock_storage
@@ -273,11 +270,9 @@ async def test_document_download_returns_url(client: AsyncClient) -> None:
         app.dependency_overrides.pop(get_minio, None)
 
     assert response.status_code == 200
-    body = response.json()
-    assert body["doc_id"] == str(doc_id)
-    assert body["filename"] == "report.pdf"
-    assert "download_url" in body
-    assert body["download_url"].startswith("http")
+    assert response.content == b"%PDF-1.4 fake pdf content"
+    assert "attachment" in response.headers.get("content-disposition", "")
+    assert "report.pdf" in response.headers.get("content-disposition", "")
 
 
 @pytest.mark.asyncio
@@ -313,7 +308,7 @@ async def test_download_fallback_to_job_id(client: AsyncClient) -> None:
     row = _fake_doc_row(doc_id=doc_id, job_id=job_id)
 
     mock_storage = MagicMock()
-    mock_storage.get_presigned_url = AsyncMock(return_value="http://minio:9000/raw/abc/report.pdf?sig=xyz")
+    mock_storage.download_bytes = AsyncMock(return_value=b"file content")
 
     app = client._transport.app
     app.dependency_overrides[get_minio] = lambda: mock_storage
@@ -335,11 +330,8 @@ async def test_download_fallback_to_job_id(client: AsyncClient) -> None:
         app.dependency_overrides.pop(get_minio, None)
 
     assert response.status_code == 200
-    body = response.json()
-    # Should return the real document id, not the job_id used in the URL
-    assert body["doc_id"] == str(doc_id)
-    assert body["filename"] == "report.pdf"
-    assert "download_url" in body
+    assert response.content == b"file content"
+    assert "report.pdf" in response.headers.get("content-disposition", "")
     mock_by_job.assert_called_once()
 
 
@@ -351,7 +343,7 @@ async def test_preview_fallback_to_job_id(client: AsyncClient) -> None:
     row = _fake_doc_row(doc_id=doc_id, job_id=job_id)
 
     mock_storage = MagicMock()
-    mock_storage.get_presigned_url = AsyncMock(return_value="http://minio:9000/pages/preview.png?sig=abc")
+    mock_storage.download_bytes = AsyncMock(return_value=b"\x89PNGfake")
 
     app = client._transport.app
     app.dependency_overrides[get_minio] = lambda: mock_storage
@@ -373,16 +365,12 @@ async def test_preview_fallback_to_job_id(client: AsyncClient) -> None:
         app.dependency_overrides.pop(get_minio, None)
 
     assert response.status_code == 200
-    body = response.json()
-    # Should return the real document id
-    assert body["doc_id"] == str(doc_id)
-    assert body["page"] == 3
-    assert "image_url" in body
+    assert response.headers["content-type"] == "image/png"
     mock_by_job.assert_called_once()
 
     # Verify the preview key uses job_id (page images stored under job_id)
-    presigned_call = mock_storage.get_presigned_url.call_args[0][0]
-    assert presigned_call == f"pages/{job_id}/page_003.png"
+    download_call = mock_storage.download_bytes.call_args[0][0]
+    assert download_call == f"pages/{job_id}/page_003.png"
 
 
 @pytest.mark.asyncio
@@ -393,7 +381,7 @@ async def test_preview_uses_job_id_for_page_key(client: AsyncClient) -> None:
     row = _fake_doc_row(doc_id=doc_id, job_id=job_id)
 
     mock_storage = MagicMock()
-    mock_storage.get_presigned_url = AsyncMock(return_value="http://minio:9000/pages/preview.png?sig=abc")
+    mock_storage.download_bytes = AsyncMock(return_value=b"\x89PNGfake")
 
     app = client._transport.app
     app.dependency_overrides[get_minio] = lambda: mock_storage
@@ -409,5 +397,5 @@ async def test_preview_uses_job_id_for_page_key(client: AsyncClient) -> None:
 
     assert response.status_code == 200
     # Page images are stored under job_id, not doc_id
-    presigned_call = mock_storage.get_presigned_url.call_args[0][0]
-    assert presigned_call == f"pages/{job_id}/page_001.png"
+    download_call = mock_storage.download_bytes.call_args[0][0]
+    assert download_call == f"pages/{job_id}/page_001.png"

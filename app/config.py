@@ -46,7 +46,6 @@ class DatabaseConfig(BaseModel):
 
 class StorageConfig(BaseModel):
     endpoint: str
-    public_endpoint: str
     access_key: str
     secret_key: str
     bucket: str
@@ -154,7 +153,6 @@ class Settings(BaseSettings):
 
     # --- MinIO (S3-compatible) ---
     minio_endpoint: str = "localhost:9000"
-    minio_public_endpoint: str = ""  # Public-facing endpoint for presigned URLs (cloud deploy)
     minio_access_key: str = "nexus-admin"
     minio_secret_key: str = "changeme"
     minio_bucket: str = "documents"
@@ -343,7 +341,6 @@ class Settings(BaseSettings):
         if self.storage is None:
             self.storage = StorageConfig(
                 endpoint=self.minio_endpoint,
-                public_endpoint=self.minio_public_endpoint,
                 access_key=self.minio_access_key,
                 secret_key=self.minio_secret_key,
                 bucket=self.minio_bucket,

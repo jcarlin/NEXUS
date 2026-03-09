@@ -20,6 +20,7 @@ from app.auth.middleware import get_current_user, get_matter_id
 from app.auth.schemas import UserRecord
 from app.common.models import JobStatus
 from app.common.rate_limit import rate_limit_ingests
+from app.common.storage import StorageClient
 from app.dependencies import get_db, get_minio
 from app.ingestion.schemas import (
     BatchIngestResponse,
@@ -230,6 +231,25 @@ async def ingest_batch(
         filenames=filenames,
         total_files=len(job_ids),
     )
+
+
+# -----------------------------------------------------------------------
+# POST /ingest/upload — multipart file upload (API-proxied)
+# -----------------------------------------------------------------------
+
+
+@router.post("/ingest/upload")
+async def upload_file(
+    file: UploadFile = File(...),
+    current_user: UserRecord = Depends(get_current_user),
+    storage: StorageClient = Depends(get_minio),
+):
+    """Upload a file directly through the API."""
+    job_id = uuid4()
+    object_key = f"raw/{job_id}/{file.filename}"
+    data = await file.read()
+    await storage.upload_bytes(key=object_key, data=data, content_type=file.content_type or "application/octet-stream")
+    return {"object_key": object_key, "filename": file.filename}
 
 
 # -----------------------------------------------------------------------

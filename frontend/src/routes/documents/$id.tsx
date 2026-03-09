@@ -38,8 +38,7 @@ function DocumentDetailPage() {
       }),
   });
 
-  const { downloadUrl: downloadUrlFromHook } = useDocumentDownload(doc ? id : null);
-  const downloadData = downloadUrlFromHook ? { download_url: downloadUrlFromHook } : undefined;
+  const { downloadUrl, filename: downloadFilename } = useDocumentDownload(doc ? id : null);
 
   const redactionEnabled = useFeatureFlag("redaction");
   const { data: annotationsData } = useAnnotations(id);
@@ -91,9 +90,9 @@ function DocumentDetailPage() {
             </p>
           </div>
         </div>
-        {downloadData?.download_url && (
+        {downloadUrl && (
           <Button variant="outline" size="sm" asChild>
-            <a href={downloadData.download_url} target="_blank" rel="noreferrer">
+            <a href={downloadUrl} download={downloadFilename ?? undefined}>
               <Download className="mr-2 h-3.5 w-3.5" />
               Download
             </a>
@@ -103,9 +102,9 @@ function DocumentDetailPage() {
 
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="flex min-h-0 flex-col lg:col-span-2">
-          {downloadData?.download_url ? (
+          {downloadUrl ? (
             <DocumentViewer
-              url={downloadData.download_url}
+              url={downloadUrl}
               filename={doc.filename}
               type={doc.type}
               annotations={annotations}

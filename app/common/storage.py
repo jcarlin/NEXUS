@@ -29,13 +29,6 @@ class StorageClient:
         self._endpoint_url = f"{scheme}://{settings.minio_endpoint}"
         self._bucket = settings.minio_bucket
 
-        # Public endpoint for presigned URLs (browser-reachable).
-        # Falls back to internal endpoint when not configured.
-        if settings.minio_public_endpoint:
-            self._public_endpoint_url = f"{scheme}://{settings.minio_public_endpoint}"
-        else:
-            self._public_endpoint_url = self._endpoint_url
-
         self._client = boto3.client(
             "s3",
             endpoint_url=self._endpoint_url,
@@ -90,37 +83,19 @@ class StorageClient:
 
         return await asyncio.to_thread(_download)
 
-    def _rewrite_presigned_url(self, url: str) -> str:
-        """Replace internal MinIO endpoint with public endpoint in presigned URLs."""
-        if self._public_endpoint_url != self._endpoint_url:
-            return url.replace(self._endpoint_url, self._public_endpoint_url, 1)
-        return url
-
-    async def get_presigned_url(self, key: str, expires: int = 3600) -> str:
-        """Generate a presigned GET URL for the given object."""
-
-        def _presign() -> str:
-            url = self._client.generate_presigned_url(
-                "get_object",
-                Params={"Bucket": self._bucket, "Key": key},
-                ExpiresIn=expires,
-            )
-            return self._rewrite_presigned_url(str(url))
-
-        return await asyncio.to_thread(_presign)
-
     async def get_presigned_put_url(
         self, key: str, content_type: str = "application/octet-stream", expires: int = 3600
     ) -> str:
         """Generate a presigned PUT URL for direct upload."""
 
         def _presign() -> str:
-            url = self._client.generate_presigned_url(
-                "put_object",
-                Params={"Bucket": self._bucket, "Key": key, "ContentType": content_type},
-                ExpiresIn=expires,
+            return str(
+                self._client.generate_presigned_url(
+                    "put_object",
+                    Params={"Bucket": self._bucket, "Key": key, "ContentType": content_type},
+                    ExpiresIn=expires,
+                )
             )
-            return self._rewrite_presigned_url(str(url))
 
         return await asyncio.to_thread(_presign)
 

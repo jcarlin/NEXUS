@@ -91,6 +91,22 @@ export async function apiClient<T>(config: RequestConfig): Promise<T> {
   return res.json();
 }
 
+export async function apiFetchRaw(url: string, signal?: AbortSignal): Promise<Response> {
+  const token = await getValidToken();
+  const matterId = useAppStore.getState().matterId;
+  const headers: Record<string, string> = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  if (matterId) headers["X-Matter-ID"] = matterId;
+  const res = await fetch(`${API_BASE}${url}`, { headers, signal });
+  if (res.status === 401) {
+    useAuthStore.getState().logout();
+    window.location.href = "/login";
+    throw new Error("Unauthorized");
+  }
+  if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+  return res;
+}
+
 // --- Annotation API ---
 
 export function fetchAnnotations(

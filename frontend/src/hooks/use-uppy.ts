@@ -1,13 +1,9 @@
 import { useEffect, useMemo } from "react";
 import Uppy, { type Meta, type Body, type UploadResult } from "@uppy/core";
-import AwsS3 from "@uppy/aws-s3";
+import XHRUpload from "@uppy/xhr-upload";
 import { apiClient } from "@/api/client";
-
-interface PresignedUploadResponse {
-  upload_url: string;
-  object_key: string;
-  expires_in: number;
-}
+import { useAuthStore } from "@/stores/auth-store";
+import { useAppStore } from "@/stores/app-store";
 
 interface UseUppyOptions {
   matterId: string | null;
@@ -29,24 +25,18 @@ export function useUppy({ matterId, datasetId, onUploadComplete }: UseUppyOption
       autoProceed: false,
     });
 
-    instance.use(AwsS3, {
-      shouldUseMultipart: false,
-      async getUploadParameters(file) {
-        const res = await apiClient<PresignedUploadResponse>({
-          url: "/api/v1/ingest/presigned-upload",
-          method: "POST",
-          data: {
-            filename: file.name ?? "unnamed",
-            content_type: file.type || "application/octet-stream",
-            matter_id: matterId,
-          },
-        });
-        instance.setFileMeta(file.id, { objectKey: res.object_key });
-        return {
-          method: "PUT",
-          url: res.upload_url,
-          headers: { "Content-Type": file.type || "application/octet-stream" },
-        };
+    const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
+
+    instance.use(XHRUpload, {
+      endpoint: `${API_BASE}/api/v1/ingest/upload`,
+      fieldName: "file",
+      headers: () => {
+        const headers: Record<string, string> = {};
+        const token = useAuthStore.getState().accessToken;
+        const matterId = useAppStore.getState().matterId;
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+        if (matterId) headers["X-Matter-ID"] = matterId;
+        return headers;
       },
     });
 
@@ -57,10 +47,13 @@ export function useUppy({ matterId, datasetId, onUploadComplete }: UseUppyOption
     const handler = async (result: UploadResult<Meta, Body>) => {
       if (!result.successful?.length) return;
 
-      const files = result.successful.map((f) => ({
-        object_key: (f.meta?.["objectKey"] as string) ?? "",
-        filename: f.name ?? "unknown",
-      })).filter((f) => f.object_key);
+      const files = result.successful.map((f) => {
+        const body = (f.response?.body ?? {}) as Record<string, string>;
+        return {
+          object_key: body.object_key ?? "",
+          filename: body.filename ?? f.name ?? "unknown",
+        };
+      }).filter((f) => f.object_key);
 
       if (files.length > 0) {
         const params: Record<string, string> = {};
@@ -75,10 +68,13 @@ export function useUppy({ matterId, datasetId, onUploadComplete }: UseUppyOption
       }
 
       onUploadComplete?.(
-        result.successful.map((f) => ({
-          objectKey: (f.meta?.["objectKey"] as string) ?? f.name ?? "unknown",
-          filename: f.name ?? "unknown",
-        })),
+        result.successful.map((f) => {
+          const body = (f.response?.body ?? {}) as Record<string, string>;
+          return {
+            objectKey: body.object_key ?? f.name ?? "unknown",
+            filename: body.filename ?? f.name ?? "unknown",
+          };
+        }),
       );
     };
 

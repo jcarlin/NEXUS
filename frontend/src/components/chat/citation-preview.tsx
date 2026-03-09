@@ -1,11 +1,9 @@
 import { useState, useEffect, useMemo } from "react";
 import { Expand, FileText } from "lucide-react";
-import { useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDocumentPreview } from "@/hooks/use-document-preview";
 import { detectDocumentType } from "@/lib/utils";
 import type { SourceDocument } from "@/types";
-import { apiClient } from "@/api/client";
 
 interface CitationPreviewProps {
   source: SourceDocument;
@@ -79,10 +77,9 @@ function TextExcerptPreview({
 
 export function CitationPreview({
   source,
-  allSources,
+  allSources: _allSources,
   onExpandClick,
 }: CitationPreviewProps) {
-  const queryClient = useQueryClient();
   const viewType = detectDocumentType(null, source.filename);
   const isPdfOrImage = viewType === "pdf" || viewType === "image";
 
@@ -91,32 +88,6 @@ export function CitationPreview({
     isPdfOrImage ? docId : null,
     source.page,
   );
-
-  // Prefetch adjacent source thumbnails
-  useEffect(() => {
-    if (!isPdfOrImage) return;
-    const currentIdx = allSources.findIndex((s) => s.id === source.id);
-    const adjacent = [currentIdx - 1, currentIdx + 1]
-      .filter((i) => i >= 0 && i < allSources.length)
-      .map((i) => allSources[i]!);
-
-    for (const adj of adjacent) {
-      const adjDocId = adj.doc_id ?? adj.id;
-      const adjType = detectDocumentType(null, adj.filename);
-      if (adjType === "pdf" || adjType === "image") {
-        queryClient.prefetchQuery({
-          queryKey: ["document-preview", adjDocId, adj.page],
-          queryFn: () =>
-            apiClient<{ preview_url: string }>({
-              url: `/api/v1/documents/${adjDocId}/preview`,
-              method: "GET",
-              params: { page: adj.page ?? 1 },
-            }),
-          staleTime: 5 * 60 * 1000,
-        });
-      }
-    }
-  }, [source.id, allSources, isPdfOrImage, queryClient]);
 
   // PDF/Image: page thumbnail
   if (isPdfOrImage) {

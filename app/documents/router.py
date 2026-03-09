@@ -2,16 +2,17 @@
 
 GET   /documents                    -- list ingested documents (filterable)
 GET   /documents/{doc_id}           -- document metadata
-GET   /documents/{doc_id}/preview   -- page thumbnail (presigned URL)
-GET   /documents/{doc_id}/download  -- original file from MinIO (presigned URL)
+GET   /documents/{doc_id}/preview   -- page thumbnail PNG (streamed bytes)
+GET   /documents/{doc_id}/download  -- original file from MinIO (streamed bytes)
 PATCH /documents/{doc_id}/privilege -- update privilege status (admin/attorney/paralegal)
 """
 
 from __future__ import annotations
 
+import mimetypes
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.middleware import get_current_user, get_matter_id, require_role
@@ -22,7 +23,6 @@ from app.dependencies import get_db, get_graph_service, get_minio, get_qdrant
 from app.documents.schemas import (
     DocumentDetail,
     DocumentListResponse,
-    DocumentPreview,
     DocumentResponse,
     PrivilegeUpdateRequest,
     PrivilegeUpdateResponse,
@@ -175,7 +175,7 @@ async def get_document(
 # -----------------------------------------------------------------------
 
 
-@router.get("/documents/{doc_id}/preview", response_model=DocumentPreview)
+@router.get("/documents/{doc_id}/preview")
 async def document_preview(
     doc_id: UUID,
     page: int = Query(1, ge=1, description="Page number to preview"),
@@ -184,7 +184,7 @@ async def document_preview(
     matter_id: UUID = Depends(get_matter_id),
     storage: StorageClient = Depends(get_minio),
 ):
-    """Return a presigned URL to a page thumbnail for the document."""
+    """Return a page thumbnail PNG for the document."""
     row = await DocumentService.get_document(
         db=db,
         doc_id=doc_id,
@@ -205,9 +205,11 @@ async def document_preview(
     # Page images are always stored under job_id in MinIO
     page_key_id = str(row["job_id"]) if row.get("job_id") else str(doc_id)
     preview_key = f"pages/{page_key_id}/page_{page:03d}.png"
-    url = await storage.get_presigned_url(preview_key)
-
-    return DocumentPreview(doc_id=row["id"], page=page, image_url=url)
+    try:
+        data = await storage.download_bytes(preview_key)
+    except Exception:
+        raise HTTPException(status_code=404, detail="Preview not available")
+    return Response(content=data, media_type="image/png")
 
 
 # -----------------------------------------------------------------------
@@ -223,7 +225,7 @@ async def document_download(
     matter_id: UUID = Depends(get_matter_id),
     storage: StorageClient = Depends(get_minio),
 ):
-    """Return a presigned URL to download the original uploaded file."""
+    """Download the original uploaded file."""
     row = await DocumentService.get_document(
         db=db,
         doc_id=doc_id,
@@ -241,8 +243,13 @@ async def document_download(
     if row is None:
         raise HTTPException(status_code=404, detail=f"Document {doc_id} not found")
 
-    url = await storage.get_presigned_url(row["minio_path"])
-    return {"doc_id": str(row["id"]), "filename": row["filename"], "download_url": url}
+    data = await storage.download_bytes(row["minio_path"])
+    content_type, _ = mimetypes.guess_type(row["filename"])
+    return Response(
+        content=data,
+        media_type=content_type or "application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{row["filename"]}"'},
+    )
 
 
 # -----------------------------------------------------------------------

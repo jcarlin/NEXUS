@@ -11,7 +11,7 @@ POST   /exports/production-sets/{ps_id}/assign-bates      -- assign Bates number
 POST   /exports                      -- create export job (kicks Celery task)
 GET    /exports/jobs                  -- list export jobs
 GET    /exports/jobs/{job_id}         -- get export job status
-GET    /exports/jobs/{job_id}/download -- presigned download URL
+GET    /exports/jobs/{job_id}/download -- download export file (streamed bytes)
 GET    /exports/privilege-log/preview -- privilege log JSON preview
 """
 
@@ -302,8 +302,13 @@ async def download_export(
     if not row.get("output_path"):
         raise HTTPException(status_code=404, detail="Export output not available")
 
-    url = await storage.get_presigned_url(row["output_path"])
-    return {"job_id": str(job_id), "download_url": url}
+    data = await storage.download_bytes(row["output_path"])
+    filename = row["output_path"].rsplit("/", 1)[-1]
+    return Response(
+        content=data,
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 # -----------------------------------------------------------------------

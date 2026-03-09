@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import {
   useReactTable,
   getCoreRowModel,
@@ -10,7 +9,7 @@ import {
   type SortingState,
 } from "@tanstack/react-table";
 import { Download } from "lucide-react";
-import { apiClient } from "@/api/client";
+import { apiFetchRaw } from "@/api/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -44,23 +43,25 @@ const statusColors: Record<string, string> = {
 };
 
 function DownloadButton({ jobId }: { jobId: string }) {
-  const { data } = useQuery({
-    queryKey: ["export-download", jobId],
-    queryFn: () =>
-      apiClient<{ download_url: string }>({
-        url: `/api/v1/exports/jobs/${jobId}/download`,
-        method: "GET",
-      }),
-  });
-
-  if (!data?.download_url) return null;
+  const handleDownload = async () => {
+    const res = await apiFetchRaw(`/api/v1/exports/jobs/${jobId}/download`);
+    const blob = await res.blob();
+    const filename =
+      res.headers.get("content-disposition")?.match(/filename="(.+)"/)?.[1] ?? "export";
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
 
   return (
-    <Button variant="outline" size="sm" asChild>
-      <a href={data.download_url} target="_blank" rel="noreferrer">
-        <Download className="mr-1.5 h-3.5 w-3.5" />
-        Download
-      </a>
+    <Button variant="outline" size="sm" onClick={handleDownload}>
+      <Download className="mr-1.5 h-3.5 w-3.5" />
+      Download
     </Button>
   );
 }
