@@ -275,6 +275,146 @@ class TestDiscoverOllamaModels:
             assert models == []
 
 
+class TestDiscoverModels:
+    @pytest.mark.asyncio
+    async def test_discover_models_anthropic(self) -> None:
+        """Anthropic returns curated list with no external calls."""
+        db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.mappings.return_value.first.return_value = _make_provider_row(
+            provider="anthropic", api_key="sk-ant-test"
+        )
+        db.execute.return_value = mock_result
+
+        models = await LLMConfigService.discover_models(db, _PROVIDER_ID)
+        assert len(models) >= 3
+        assert models[0].id == "claude-opus-4-20250514"
+        assert models[0].context_window == 200_000
+
+    @pytest.mark.asyncio
+    async def test_discover_models_openai_filters_chat(self) -> None:
+        """OpenAI discovery filters to only chat-capable models."""
+        db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.mappings.return_value.first.return_value = _make_provider_row(
+            provider="openai", api_key="sk-openai-test"
+        )
+        db.execute.return_value = mock_result
+
+        # Mock OpenAI models.list() response
+        mock_model_gpt = MagicMock()
+        mock_model_gpt.id = "gpt-4o"
+        mock_model_gpt.created = 1700000000
+
+        mock_model_embed = MagicMock()
+        mock_model_embed.id = "text-embedding-3-small"
+        mock_model_embed.created = 1700000001
+
+        mock_model_o3 = MagicMock()
+        mock_model_o3.id = "o3-mini"
+        mock_model_o3.created = 1700000002
+
+        mock_response = MagicMock()
+        mock_response.data = [mock_model_gpt, mock_model_embed, mock_model_o3]
+
+        with patch("openai.AsyncOpenAI") as mock_openai_cls:
+            mock_client = MagicMock()
+            mock_client.models.list = AsyncMock(return_value=mock_response)
+            mock_openai_cls.return_value = mock_client
+
+            models = await LLMConfigService.discover_models(db, _PROVIDER_ID)
+
+        model_ids = [m.id for m in models]
+        assert "gpt-4o" in model_ids
+        assert "o3-mini" in model_ids
+        assert "text-embedding-3-small" not in model_ids
+
+    @pytest.mark.asyncio
+    async def test_discover_models_gemini_filters_generative(self) -> None:
+        """Gemini discovery strips models/ prefix and filters to gemini-*."""
+        db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.mappings.return_value.first.return_value = _make_provider_row(
+            provider="gemini", api_key="gemini-test"
+        )
+        db.execute.return_value = mock_result
+
+        mock_gemini = MagicMock()
+        mock_gemini.name = "models/gemini-2.0-flash"
+        mock_gemini.display_name = "Gemini 2.0 Flash"
+        mock_gemini.input_token_limit = 1_000_000
+
+        mock_non_gemini = MagicMock()
+        mock_non_gemini.name = "models/embedding-001"
+        mock_non_gemini.display_name = "Embedding"
+        mock_non_gemini.input_token_limit = 2048
+
+        with patch("google.genai.Client") as mock_genai_cls:
+            mock_client = MagicMock()
+
+            # Mock client.aio.models.list() returning an async iterator
+            async def _async_iter():
+                for item in [mock_gemini, mock_non_gemini]:
+                    yield item
+
+            mock_client.aio.models.list = AsyncMock(return_value=_async_iter())
+            mock_genai_cls.return_value = mock_client
+
+            models = await LLMConfigService.discover_models(db, _PROVIDER_ID)
+
+        model_ids = [m.id for m in models]
+        assert "gemini-2.0-flash" in model_ids
+        assert "embedding-001" not in model_ids
+        assert models[0].context_window == 1_000_000
+
+    @pytest.mark.asyncio
+    async def test_discover_models_ollama_delegates(self) -> None:
+        """Ollama discovery delegates to existing discover_ollama_models."""
+        db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.mappings.return_value.first.return_value = _make_provider_row(
+            provider="ollama", api_key="", base_url="http://localhost:11434"
+        )
+        db.execute.return_value = mock_result
+
+        from app.llm_config.schemas import OllamaModel
+
+        with patch.object(
+            LLMConfigService,
+            "discover_ollama_models",
+            new_callable=AsyncMock,
+            return_value=[
+                OllamaModel(name="llama3:latest", size=4_000_000_000),
+                OllamaModel(name="mistral:latest", size=7_000_000_000),
+            ],
+        ):
+            models = await LLMConfigService.discover_models(db, _PROVIDER_ID)
+
+        assert len(models) == 2
+        assert models[0].id == "llama3:latest"
+        assert models[1].id == "mistral:latest"
+
+    @pytest.mark.asyncio
+    async def test_discover_models_provider_not_found(self) -> None:
+        db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.mappings.return_value.first.return_value = None
+        db.execute.return_value = mock_result
+
+        with pytest.raises(ValueError, match="Provider not found"):
+            await LLMConfigService.discover_models(db, uuid4())
+
+    @pytest.mark.asyncio
+    async def test_discover_models_inactive_provider(self) -> None:
+        db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.mappings.return_value.first.return_value = _make_provider_row(is_active=False)
+        db.execute.return_value = mock_result
+
+        with pytest.raises(ValueError, match="Provider is inactive"):
+            await LLMConfigService.discover_models(db, _PROVIDER_ID)
+
+
 class TestEstimateCosts:
     @pytest.mark.asyncio
     @patch("app.llm_config.pricing.get_model_pricing")

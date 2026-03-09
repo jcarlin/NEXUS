@@ -11,6 +11,7 @@ from httpx import AsyncClient
 
 from app.auth.schemas import UserRecord
 from app.llm_config.schemas import (
+    AvailableModel,
     CostEstimateResponse,
     LLMConfigOverview,
     LLMProviderResponse,
@@ -357,6 +358,100 @@ async def test_apply_config_204(client: AsyncClient) -> None:
     assert resp.status_code == 204
 
 
+# ---------------------------------------------------------------------------
+# GET /admin/llm-config/providers/{id}/models
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_discover_models_200(client: AsyncClient) -> None:
+    _mock_db_override(client._transport.app)
+    models = [
+        AvailableModel(id="claude-opus-4-20250514", display_name="Claude Opus 4", context_window=200_000),
+        AvailableModel(id="claude-sonnet-4-5-20250929", display_name="Claude Sonnet 4.5", context_window=200_000),
+    ]
+
+    with (
+        patch(
+            "app.llm_config.router.LLMConfigService.get_provider_with_key",
+            new_callable=AsyncMock,
+            return_value={
+                "id": _PROVIDER_ID,
+                "provider": "anthropic",
+                "is_active": True,
+                "api_key": "sk-x",
+                "base_url": "",
+            },
+        ),
+        patch(
+            "app.llm_config.router.LLMConfigService.discover_models",
+            new_callable=AsyncMock,
+            return_value=models,
+        ),
+    ):
+        resp = await client.get(f"/api/v1/admin/llm-config/providers/{_PROVIDER_ID}/models")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["provider_type"] == "anthropic"
+    assert len(body["items"]) == 2
+    assert body["items"][0]["id"] == "claude-opus-4-20250514"
+    assert body["items"][0]["context_window"] == 200_000
+
+
+@pytest.mark.asyncio
+async def test_discover_models_404(client: AsyncClient) -> None:
+    _mock_db_override(client._transport.app)
+
+    with patch(
+        "app.llm_config.router.LLMConfigService.get_provider_with_key",
+        new_callable=AsyncMock,
+        return_value=None,
+    ):
+        resp = await client.get(f"/api/v1/admin/llm-config/providers/{uuid4()}/models")
+
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_discover_models_502(client: AsyncClient) -> None:
+    _mock_db_override(client._transport.app)
+
+    with (
+        patch(
+            "app.llm_config.router.LLMConfigService.get_provider_with_key",
+            new_callable=AsyncMock,
+            return_value={
+                "id": _PROVIDER_ID,
+                "provider": "openai",
+                "is_active": True,
+                "api_key": "sk-x",
+                "base_url": "",
+            },
+        ),
+        patch(
+            "app.llm_config.router.LLMConfigService.discover_models",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("Connection refused"),
+        ),
+    ):
+        resp = await client.get(f"/api/v1/admin/llm-config/providers/{_PROVIDER_ID}/models")
+
+    assert resp.status_code == 502
+    assert "Connection refused" in resp.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_discover_models_non_admin_403(client: AsyncClient) -> None:
+    app = client._transport.app
+    _set_reviewer(app)
+    try:
+        resp = await client.get(f"/api/v1/admin/llm-config/providers/{_PROVIDER_ID}/models")
+    finally:
+        _restore_admin(app)
+    assert resp.status_code == 403
+
+
 @pytest.mark.asyncio
 async def test_apply_non_admin_403(client: AsyncClient) -> None:
     app = client._transport.app
@@ -366,3 +461,83 @@ async def test_apply_non_admin_403(client: AsyncClient) -> None:
     finally:
         _restore_admin(app)
     assert resp.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# GET /llm-config/active-model (public endpoint)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_active_model_200(client: AsyncClient) -> None:
+    """Any authenticated user can fetch the active query model."""
+    _mock_db_override(client._transport.app)
+    tier_configs = [
+        LLMTierConfigResponse(
+            tier=LLMTier.QUERY,
+            model="gemini-2.0-flash",
+            provider_type=LLMProviderType.GEMINI,
+            is_env_default=False,
+        ),
+        LLMTierConfigResponse(tier=LLMTier.ANALYSIS, model="claude-sonnet-4-5-20250929", is_env_default=True),
+        LLMTierConfigResponse(tier=LLMTier.INGESTION, model="claude-sonnet-4-5-20250929", is_env_default=True),
+    ]
+
+    with patch(
+        "app.llm_config.public_router.LLMConfigService.list_tier_configs",
+        new_callable=AsyncMock,
+        return_value=tier_configs,
+    ):
+        resp = await client.get("/api/v1/llm-config/active-model")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["tier"] == "query"
+    assert body["model"] == "gemini-2.0-flash"
+    assert body["provider_type"] == "gemini"
+
+
+@pytest.mark.asyncio
+async def test_active_model_reviewer_200(client: AsyncClient) -> None:
+    """Non-admin users (reviewers) can also access the active model endpoint."""
+    app = client._transport.app
+    _mock_db_override(app)
+    _set_reviewer(app)
+
+    tier_configs = [
+        LLMTierConfigResponse(tier=LLMTier.QUERY, model="gpt-4o", is_env_default=True),
+    ]
+
+    try:
+        with patch(
+            "app.llm_config.public_router.LLMConfigService.list_tier_configs",
+            new_callable=AsyncMock,
+            return_value=tier_configs,
+        ):
+            resp = await client.get("/api/v1/llm-config/active-model")
+    finally:
+        _restore_admin(app)
+
+    assert resp.status_code == 200
+    assert resp.json()["model"] == "gpt-4o"
+
+
+@pytest.mark.asyncio
+async def test_active_model_unauthenticated_401(client: AsyncClient) -> None:
+    """Unauthenticated requests should be rejected."""
+    from app.auth.middleware import get_current_user
+
+    app = client._transport.app
+
+    async def mock_no_user():
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    app.dependency_overrides[get_current_user] = mock_no_user
+    try:
+        resp = await client.get("/api/v1/llm-config/active-model")
+    finally:
+        _restore_admin(app)
+
+    assert resp.status_code == 401

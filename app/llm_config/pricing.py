@@ -26,6 +26,14 @@ MODEL_PRICING: dict[str, tuple[float, float]] = {
 }
 
 
+CURATED_ANTHROPIC_MODELS = [
+    {"id": "claude-opus-4-20250514", "display_name": "Claude Opus 4", "context_window": 200_000},
+    {"id": "claude-sonnet-4-6-20260320", "display_name": "Claude Sonnet 4.6", "context_window": 200_000},
+    {"id": "claude-sonnet-4-5-20250929", "display_name": "Claude Sonnet 4.5", "context_window": 200_000},
+    {"id": "claude-haiku-3-5-20241022", "display_name": "Claude Haiku 3.5", "context_window": 200_000},
+]
+
+
 def get_model_pricing(model: str) -> tuple[float, float]:
     """Return (input_price, output_price) per 1M tokens for a model.
 

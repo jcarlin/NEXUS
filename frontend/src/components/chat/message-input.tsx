@@ -1,6 +1,9 @@
 import { useState, useRef, useCallback } from "react";
 import { Send, Square } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { apiClient } from "@/api/client";
 
 interface MessageInputProps {
   onSend: (text: string) => void;
@@ -9,9 +12,26 @@ interface MessageInputProps {
   disabled?: boolean;
 }
 
+type ActiveModelResponse = {
+  tier: string;
+  model: string;
+  provider_type: string | null;
+};
+
 export function MessageInput({ onSend, onStop, isStreaming, disabled }: MessageInputProps) {
   const [text, setText] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const { data: activeModel } = useQuery({
+    queryKey: ["active-model"],
+    queryFn: () =>
+      apiClient<ActiveModelResponse>({
+        url: "/api/v1/llm-config/active-model",
+        method: "GET",
+      }),
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
 
   const handleSubmit = useCallback(() => {
     const trimmed = text.trim();
@@ -40,6 +60,11 @@ export function MessageInput({ onSend, onStop, isStreaming, disabled }: MessageI
 
   return (
     <div className="border-t bg-background px-4 pt-4 pb-3">
+    {activeModel?.model && (
+      <Badge variant="outline" className="mb-2 text-[11px] font-normal text-muted-foreground">
+        {activeModel.model}
+      </Badge>
+    )}
     <div className="flex items-end gap-2">
       <textarea
         ref={textareaRef}

@@ -10,6 +10,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.llm_config.schemas import (
+    AvailableModel,
     CostEstimateResponse,
     LLMConfigOverview,
     LLMProviderCreate,
@@ -286,8 +287,13 @@ class LLMConfigService:
                 if prov_type == "openai":
                     pass  # base_url handled in LLMClient
 
-            # Use a simple test model
-            test_model = "claude-sonnet-4-5-20250929" if prov_type == "anthropic" else "gpt-4o-mini"
+            # Use a simple test model appropriate for each provider
+            if prov_type == "anthropic":
+                test_model = "claude-sonnet-4-5-20250929"
+            elif prov_type == "gemini":
+                test_model = "gemini-2.0-flash"
+            else:
+                test_model = "gpt-4o-mini"
             settings.llm_model = test_model
 
             client = LLMClient(settings)
@@ -303,6 +309,112 @@ class LLMConfigService:
             return TestConnectionResponse(success=False, error=str(exc))
 
     # ------------------------------------------------------------------
+    # Model discovery (all providers)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    async def discover_models(db: AsyncSession, provider_id: UUID) -> list[AvailableModel]:
+        """Discover available models for a given provider."""
+        provider = await LLMConfigService.get_provider_with_key(db, provider_id)
+        if not provider:
+            raise ValueError("Provider not found")
+        if not provider["is_active"]:
+            raise ValueError("Provider is inactive")
+
+        prov_type = provider["provider"]
+
+        if prov_type == "anthropic":
+            return LLMConfigService._discover_anthropic_models()
+        elif prov_type == "openai":
+            return await LLMConfigService._discover_openai_models(
+                api_key=provider["api_key"],
+                base_url=provider["base_url"] or None,
+            )
+        elif prov_type == "gemini":
+            return await LLMConfigService._discover_gemini_models(
+                api_key=provider["api_key"],
+            )
+        elif prov_type == "ollama":
+            return await LLMConfigService._discover_ollama_models_as_available(
+                base_url=provider["base_url"],
+            )
+        else:
+            raise ValueError(f"Unknown provider type: {prov_type}")
+
+    @staticmethod
+    def _discover_anthropic_models() -> list[AvailableModel]:
+        from app.llm_config.pricing import CURATED_ANTHROPIC_MODELS
+
+        return [AvailableModel(**m) for m in CURATED_ANTHROPIC_MODELS]
+
+    @staticmethod
+    async def _discover_openai_models(api_key: str, base_url: str | None = None) -> list[AvailableModel]:
+        from openai import AsyncOpenAI
+
+        client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+        response = await client.models.list()
+        models = []
+        for m in response.data:
+            mid = m.id
+            if not any(mid.startswith(p) for p in ("gpt-", "o1-", "o3-", "o4-")):
+                continue
+            models.append(
+                AvailableModel(
+                    id=mid,
+                    display_name=mid,
+                    context_window=None,
+                )
+            )
+        models.sort(key=lambda x: getattr(x, "id", ""))
+        return models
+
+    @staticmethod
+    async def _discover_gemini_models(api_key: str) -> list[AvailableModel]:
+        from google import genai
+
+        client = genai.Client(api_key=api_key)
+        response = await client.aio.models.list()
+        # AsyncPager — collect into list
+        models_list: list = []
+        async for m in response:
+            models_list.append(m)
+        models = []
+        for m in models_list:
+            name = m.name or ""
+            if not name.startswith("models/gemini-"):
+                continue
+            model_id = name.removeprefix("models/")
+            display = m.display_name or model_id
+            models.append(
+                AvailableModel(
+                    id=model_id,
+                    display_name=display,
+                    context_window=getattr(m, "input_token_limit", None),
+                )
+            )
+
+        # Sort: pro first, then flash, then rest
+        def _sort_key(m: AvailableModel) -> tuple[int, str]:
+            if "pro" in m.id:
+                return (0, m.id)
+            if "flash" in m.id:
+                return (1, m.id)
+            return (2, m.id)
+
+        models.sort(key=_sort_key)
+        return models
+
+    @staticmethod
+    async def _discover_ollama_models_as_available(
+        base_url: str = "",
+    ) -> list[AvailableModel]:
+        ollama_models = await LLMConfigService.discover_ollama_models(base_url)
+        return sorted(
+            [AvailableModel(id=m.name, display_name=m.name, context_window=None) for m in ollama_models],
+            key=lambda x: x.id,
+        )
+
+    # ------------------------------------------------------------------
     # Ollama discovery
     # ------------------------------------------------------------------
 
@@ -314,7 +426,8 @@ class LLMConfigService:
         from app.dependencies import get_settings
 
         settings = get_settings()
-        url = base_url or settings.ollama_base_url.removesuffix("/v1")
+        raw = base_url or settings.ollama_base_url
+        url = raw.removesuffix("/v1").removesuffix("/")
 
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:

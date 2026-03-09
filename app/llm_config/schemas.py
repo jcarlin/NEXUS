@@ -133,3 +133,26 @@ class TestConnectionResponse(BaseModel):
     success: bool
     latency_ms: int | None = None
     error: str | None = None
+
+
+# --- Model discovery ---
+
+
+class AvailableModel(BaseModel):
+    id: str
+    display_name: str
+    context_window: int | None = None
+
+
+class AvailableModelListResponse(BaseModel):
+    items: list[AvailableModel]
+    provider_type: LLMProviderType
+
+
+# --- Active model (public) ---
+
+
+class ActiveModelResponse(BaseModel):
+    tier: LLMTier
+    model: str
+    provider_type: LLMProviderType | None = None

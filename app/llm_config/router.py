@@ -11,6 +11,7 @@ from app.auth.middleware import require_role
 from app.auth.schemas import UserRecord
 from app.dependencies import get_db
 from app.llm_config.schemas import (
+    AvailableModelListResponse,
     CostEstimateResponse,
     LLMConfigOverview,
     LLMProviderCreate,
@@ -74,6 +75,23 @@ async def deactivate_provider(
     """Deactivate a provider (soft delete)."""
     if not await LLMConfigService.deactivate_provider(db, provider_id):
         raise HTTPException(status_code=404, detail="Provider not found")
+
+
+@router.get("/providers/{provider_id}/models", response_model=AvailableModelListResponse)
+async def discover_models(
+    provider_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _current_user: UserRecord = Depends(require_role("admin")),
+) -> AvailableModelListResponse:
+    """Discover available models from a provider's API."""
+    provider = await LLMConfigService.get_provider_with_key(db, provider_id)
+    if not provider or not provider["is_active"]:
+        raise HTTPException(status_code=404, detail="Provider not found or inactive")
+    try:
+        models = await LLMConfigService.discover_models(db, provider_id)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Failed to fetch models: {exc}")
+    return AvailableModelListResponse(items=models, provider_type=provider["provider"])
 
 
 @router.post("/providers/{provider_id}/test", response_model=TestConnectionResponse)

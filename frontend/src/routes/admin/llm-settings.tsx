@@ -6,7 +6,6 @@ import { apiClient } from "@/api/client";
 import { useNotifications } from "@/hooks/use-notifications";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -24,6 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { LLMProviderDialog } from "@/components/admin/llm-provider-dialog";
+import { ModelCombobox } from "@/components/admin/model-combobox";
 
 export const Route = createFileRoute("/admin/llm-settings")({
   component: LLMSettingsPage,
@@ -424,11 +424,10 @@ function LLMSettingsPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Input
-                          className="w-[200px]"
-                          placeholder="e.g. claude-sonnet-4-20250514"
+                        <ModelCombobox
+                          providerId={getTierValue(t, "provider_id") || null}
                           value={getTierValue(t, "model")}
-                          onChange={(e) => setTierField(t.tier, "model", e.target.value)}
+                          onChange={(v) => setTierField(t.tier, "model", v)}
                         />
                       </TableCell>
                       <TableCell className="text-right">
