@@ -141,8 +141,25 @@ def get_redis() -> aioredis.Redis:
 
 @functools.cache
 def get_llm() -> LLMClient:
-    """Return the ``LLMClient`` singleton."""
-    return LLMClient(get_settings())
+    """Return the ``LLMClient`` singleton.
+
+    Checks the DB for admin-configured LLM provider/model overrides first
+    (set via /admin/llm-settings).  Falls back to env-var Settings if no
+    DB override exists.  The ``/apply`` endpoint calls
+    ``get_llm.cache_clear()`` so changes take effect on next request.
+    """
+    settings = get_settings()
+    try:
+        from sqlalchemy import create_engine
+
+        from app.llm_config.resolver import resolve_llm_config_sync
+
+        engine = create_engine(settings.postgres_url_sync, pool_pre_ping=True)
+        config = resolve_llm_config_sync("query", engine)
+        engine.dispose()
+        return LLMClient.from_resolved_config(config)
+    except Exception:
+        return LLMClient(settings)
 
 
 # Module-level pool for tier-resolved LLM clients (keyed by provider/model/base_url)

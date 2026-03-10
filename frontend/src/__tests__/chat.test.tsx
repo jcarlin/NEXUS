@@ -167,9 +167,9 @@ describe("SSE streaming hook", () => {
       });
     });
 
-    // After "done", the stream store re-keys from the temp key to the real
-    // thread ID, so the hook (called without a threadId arg) returns initial
-    // state. Verify the store directly for completed stream data.
+    // After "done", the stream store re-keys the temp key → real thread ID
+    // but keeps the old _new_ key as an alias so the new-chat hook can still
+    // find the stream for auto-navigation.
     const storeState = useStreamStore.getState();
     const completedStream = storeState.streams.get("t-123");
     expect(completedStream).toBeDefined();
@@ -178,6 +178,12 @@ describe("SSE streaming hook", () => {
     expect(completedStream!.state.entities).toHaveLength(1);
     expect(completedStream!.state.isStreaming).toBe(false);
     expect(completedStream!.state.pendingUserMessage).toBeNull();
+
+    // The hook (called without threadId) should still see the completed
+    // stream via the _new_ alias — this is what enables auto-navigation.
+    expect(result.current.threadId).toBe("t-123");
+    expect(result.current.isStreaming).toBe(false);
+    expect(result.current.streamingText).toBe("The answer is here.");
   });
 
   it("clears pendingUserMessage on cancel", async () => {

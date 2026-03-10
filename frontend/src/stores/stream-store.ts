@@ -202,11 +202,13 @@ export const useStreamStore = create<StreamStore>()((set, get) => ({
                 queryKey: ["chat-threads"],
               });
 
-              // Schedule eviction
-              const finalKey = get().streams.has(realThreadId)
-                ? realThreadId
-                : currentKey;
-              get()._scheduleCleanup(finalKey);
+              // Schedule eviction for both the real key and the _new_ alias
+              if (realThreadId) {
+                get()._scheduleCleanup(realThreadId);
+              }
+              if (currentKey !== realThreadId) {
+                get()._scheduleCleanup(currentKey);
+              }
               break;
             }
           }
@@ -287,7 +289,8 @@ export const useStreamStore = create<StreamStore>()((set, get) => ({
       const entry = prev.streams.get(oldKey);
       if (!entry) return prev;
       const next = new Map(prev.streams);
-      next.delete(oldKey);
+      // Keep old key as alias so the new-chat page can still find the
+      // stream for auto-navigation.  Both keys are cleaned up by the TTL.
       next.set(newKey, entry);
       return { streams: next };
     });
