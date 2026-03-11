@@ -32,8 +32,8 @@ async def _tool_db_session() -> AsyncIterator[AsyncSession]:
     finally:
         try:
             await db_gen.aclose()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("tool.db_session_cleanup_failed", error=str(e))
 
 
 # ---------------------------------------------------------------------------
@@ -95,10 +95,13 @@ async def graph_query(
 
     try:
         gs = get_graph_service()
+        filters = state.get("_filters", {})
+        matter_id = filters.get("matter_id", "")
         connections = await gs.get_entity_connections(
             entity_name,
             limit=limit,
             exclude_privilege_statuses=state.get("_exclude_privilege") or None,
+            matter_id=matter_id,
         )
     except Exception as exc:
         logger.warning("tool.error", tool="graph_query", error=str(exc))
@@ -173,6 +176,9 @@ async def entity_lookup(
         term_map: dict[str, str] = state.get("_term_map", {})
         resolved_name = term_map.get(name.lower(), name)
 
+        filters = state.get("_filters", {})
+        matter_id = filters.get("matter_id", "")
+
         entity = await gs.get_entity_by_name(resolved_name)
         if entity is None and resolved_name != name:
             # Fallback to original name
@@ -186,6 +192,7 @@ async def entity_lookup(
             entity["name"],
             limit=10,
             exclude_privilege_statuses=state.get("_exclude_privilege") or None,
+            matter_id=matter_id,
         )
         entity["connections"] = connections
     except Exception as exc:

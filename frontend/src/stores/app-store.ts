@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { queryClient } from "@/main";
 import type { CitedClaim } from "@/types";
 
 interface AppState {
@@ -33,7 +34,12 @@ export const useAppStore = create<AppState>()(
       threadSidebarCollapsed: false,
       definedTermsOpen: false,
 
-      setMatter: (matterId) => set({ matterId, datasetId: null }),
+      setMatter: (matterId) => {
+        set({ matterId, datasetId: null });
+        // Invalidate all cached queries so stale data from the previous matter
+        // is not shown after switching.
+        void queryClient.invalidateQueries();
+      },
       setDataset: (datasetId) => set({ datasetId }),
 
       addFinding: (claim) =>

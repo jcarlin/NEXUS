@@ -200,7 +200,7 @@ def create_resolution_nodes(settings: dict[str, Any]) -> dict[str, Any]:
             for group in groups:
                 for alias in group.aliases:
                     try:
-                        await gs.merge_entities(group.canonical, alias, group.entity_type)
+                        await gs.merge_entities(group.canonical, alias, group.entity_type, matter_id=state["matter_id"])
                         total_merges += 1
                         logger.info(
                             "resolution.merged",

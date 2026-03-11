@@ -212,8 +212,8 @@ export const useStreamStore = create<StreamStore>()((set, get) => ({
               break;
             }
           }
-        } catch {
-          // Skip malformed events
+        } catch (err) {
+          console.error("Stream: malformed SSE event", event.event, err);
         }
       },
 
@@ -238,8 +238,12 @@ export const useStreamStore = create<StreamStore>()((set, get) => ({
       },
 
       openWhenHidden: true,
-    }).catch(() => {
-      // fetchEventSource throws on abort or after onerror re-throw; safe to ignore
+    }).catch((err) => {
+      // fetchEventSource throws on abort — that's expected and safe to ignore.
+      // Log anything else so connection failures are visible in dev tools.
+      if (!ctrl.signal.aborted) {
+        console.error("Stream connection error:", err);
+      }
     });
 
     return streamKey;

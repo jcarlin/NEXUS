@@ -99,3 +99,15 @@ async def rate_limit_ingests(
         max_requests=settings.rate_limit_ingests_per_minute,
         window_seconds=60,
     )
+
+
+async def rate_limit_login(
+    request: Request,
+) -> None:
+    """Rate limiter dependency for the login endpoint (10 req/min per IP)."""
+    await _check_rate_limit(
+        request,
+        key_prefix="login",
+        max_requests=10,
+        window_seconds=60,
+    )

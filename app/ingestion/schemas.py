@@ -71,6 +71,7 @@ class S3EventNotification(BaseModel):
     """Payload sent by MinIO for bucket event notifications."""
 
     Records: list[S3EventRecord] = Field(default_factory=list)
+    matter_id: UUID = Field(..., description="Matter ID to scope ingested documents")
 
 
 class WebhookResponse(BaseModel):

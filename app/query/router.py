@@ -239,6 +239,7 @@ async def _v1_event_generator(graph, initial_state, config, db, thread_id, query
     final_state: dict[str, Any] = {}
     client_disconnected = False
     graph_error = False
+    stream_completed = False
 
     try:
         async for stream_mode, chunk in graph.astream(initial_state, config, stream_mode=["updates", "custom"]):
@@ -254,6 +255,7 @@ async def _v1_event_generator(graph, initial_state, config, db, thread_id, query
             elif stream_mode == "custom":
                 if isinstance(chunk, dict) and chunk.get("type") == "token":
                     yield {"event": "token", "data": json.dumps({"text": chunk["text"]})}
+        stream_completed = True
     except GeneratorExit:
         logger.info("query_stream.client_disconnected", thread_id=thread_id)
         client_disconnected = True
@@ -261,11 +263,11 @@ async def _v1_event_generator(graph, initial_state, config, db, thread_id, query
         logger.error("query_stream.graph_error", thread_id=thread_id, exc_info=True)
         graph_error = True
 
-    # Persist user message (always) and assistant message (only if we got content).
+    # Persist user message (always) and assistant message (only if stream completed fully).
     try:
         await ChatService.save_message(db, thread_id, "user", query_text, matter_id=matter_id)
         response_text = final_state.get("response", "")
-        if response_text:
+        if response_text and stream_completed:
             await ChatService.save_message(
                 db,
                 thread_id,
@@ -315,6 +317,7 @@ async def _agentic_event_generator(graph, initial_state, config, db, thread_id, 
     sources_emitted = False
     client_disconnected = False
     graph_error = False
+    stream_completed = False
     # Track current message ID to detect when a "thinking" message turns into
     # a tool call.  When that happens we emit a ``clear`` SSE event so the
     # frontend discards the tokens that were prematurely streamed.
@@ -388,6 +391,7 @@ async def _agentic_event_generator(graph, initial_state, config, db, thread_id, 
             elif stream_mode == "custom":
                 if isinstance(chunk, dict) and chunk.get("type") == "token":
                     yield {"event": "token", "data": json.dumps({"text": chunk["text"]})}
+        stream_completed = True
     except GeneratorExit:
         logger.info("query_stream.client_disconnected", thread_id=thread_id)
         client_disconnected = True
@@ -405,10 +409,10 @@ async def _agentic_event_generator(graph, initial_state, config, db, thread_id, 
         logger.error("query_stream.extract_failed", thread_id=thread_id, exc_info=True)
         response_text = ""
 
-    # Persist user message (always) and assistant message (only if we got content).
+    # Persist user message (always) and assistant message (only if stream completed fully).
     try:
         await ChatService.save_message(db, thread_id, "user", query_text, matter_id=matter_id)
-        if response_text:
+        if response_text and stream_completed:
             await ChatService.save_message(
                 db,
                 thread_id,
@@ -500,12 +504,14 @@ async def list_chats(
 @router.get("/chats/{thread_id}")
 async def get_chat(
     thread_id: str,
+    limit: int = 50,
+    offset: int = 0,
     db: AsyncSession = Depends(get_db),
     current_user: UserRecord = Depends(get_current_user),
     matter_id: UUID = Depends(get_matter_id),
 ):
-    """Return the full message history for a chat thread."""
-    rows = await ChatService.load_thread_messages(db, thread_id, matter_id=matter_id)
+    """Return the message history for a chat thread with pagination."""
+    rows = await ChatService.load_thread_messages(db, thread_id, matter_id=matter_id, limit=limit, offset=offset)
 
     if not rows:
         raise HTTPException(status_code=404, detail="Thread not found")

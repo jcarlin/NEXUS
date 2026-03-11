@@ -444,7 +444,7 @@ class GraphService:
         canonical_name: str,
         alias_name: str,
         entity_type: str,
-        matter_id: str | None = None,
+        matter_id: str,
     ) -> None:
         """Merge two entity nodes, keeping the canonical name.
 
@@ -452,10 +452,9 @@ class GraphService:
         adds the alias to the canonical's aliases list, sums mention counts,
         and deletes the alias node.
         """
-        matter_filter = ", matter_id: $matter_id" if matter_id else ""
-        query = f"""
-        MATCH (canonical:Entity {{name: $canonical_name, type: $entity_type{matter_filter}}})
-        MATCH (alias:Entity {{name: $alias_name, type: $entity_type{matter_filter}}})
+        query = """
+        MATCH (canonical:Entity {name: $canonical_name, type: $entity_type, matter_id: $matter_id})
+        MATCH (alias:Entity {name: $alias_name, type: $entity_type, matter_id: $matter_id})
         WHERE canonical <> alias
 
         // Transfer MENTIONED_IN relationships

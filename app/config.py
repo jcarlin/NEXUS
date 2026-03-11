@@ -158,6 +158,7 @@ class Settings(BaseSettings):
     minio_secret_key: str = "changeme"
     minio_bucket: str = "documents"
     minio_use_ssl: bool = False
+    minio_webhook_secret: str = ""  # Shared secret for MinIO webhook signature verification
 
     # --- Processing ---
     celery_concurrency: int = 1

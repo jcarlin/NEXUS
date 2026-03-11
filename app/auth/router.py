@@ -26,6 +26,7 @@ from app.auth.schemas import (
     UserResponse,
 )
 from app.auth.service import AuthService
+from app.common.rate_limit import rate_limit_login
 from app.dependencies import get_db, get_settings
 
 logger = structlog.get_logger(__name__)
@@ -37,6 +38,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 async def login(
     body: LoginRequest,
     db: AsyncSession = Depends(get_db),
+    _rate_limit=Depends(rate_limit_login),
 ):
     """Authenticate with email/password and receive JWT tokens."""
     settings = get_settings()

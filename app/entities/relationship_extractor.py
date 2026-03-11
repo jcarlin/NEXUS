@@ -50,11 +50,14 @@ class RelationshipExtractor:
     def __init__(
         self,
         api_key: str,
-        model: str = "claude-sonnet-4-5-20250929",
+        model: str = "",
         provider: str = "anthropic",
     ) -> None:
+        from app.config import Settings
+
+        settings = Settings()
         self._api_key = api_key
-        self._model = model
+        self._model = model or settings.llm_model
         self._provider = provider
         self._client = None  # Lazy-loaded
 
@@ -70,9 +73,9 @@ class RelationshipExtractor:
             elif self._provider == "gemini":
                 import google.genai
 
-                self._client = instructor.from_gemini(
+                self._client = instructor.from_genai(
                     google.genai.Client(api_key=self._api_key),
-                    mode=instructor.Mode.GEMINI_JSON,
+                    mode=instructor.Mode.GENAI_STRUCTURED_OUTPUTS,
                 )
             else:
                 import openai

@@ -324,21 +324,25 @@ async def test_redact_endpoint_returns_501_when_disabled(client: AsyncClient) ->
     """All redaction endpoints return 501 when ENABLE_REDACTION=false."""
     doc_id = uuid4()
 
-    # POST /documents/{id}/redact
-    r1 = await client.post(
-        f"/api/v1/documents/{doc_id}/redact",
-        json={"redactions": []},
-    )
-    assert r1.status_code == 501
-    assert "not enabled" in r1.json()["detail"].lower()
+    mock_settings = MagicMock()
+    mock_settings.enable_redaction = False
 
-    # GET /documents/{id}/redaction-log
-    r2 = await client.get(f"/api/v1/documents/{doc_id}/redaction-log")
-    assert r2.status_code == 501
+    with patch("app.config.Settings", return_value=mock_settings):
+        # POST /documents/{id}/redact
+        r1 = await client.post(
+            f"/api/v1/documents/{doc_id}/redact",
+            json={"redactions": [{"start": 0, "end": 10, "reason": "test"}]},
+        )
+        assert r1.status_code == 501
+        assert "not enabled" in r1.json()["detail"].lower()
 
-    # GET /documents/{id}/pii-detections
-    r3 = await client.get(f"/api/v1/documents/{doc_id}/pii-detections")
-    assert r3.status_code == 501
+        # GET /documents/{id}/redaction-log
+        r2 = await client.get(f"/api/v1/documents/{doc_id}/redaction-log")
+        assert r2.status_code == 501
+
+        # GET /documents/{id}/pii-detections
+        r3 = await client.get(f"/api/v1/documents/{doc_id}/pii-detections")
+        assert r3.status_code == 501
 
 
 def test_integration_pii_detect_redact_verify() -> None:

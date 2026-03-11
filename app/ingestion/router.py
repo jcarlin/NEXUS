@@ -13,7 +13,7 @@ from __future__ import annotations
 from uuid import UUID, uuid4
 
 import structlog
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.middleware import get_current_user, get_matter_id
@@ -21,7 +21,7 @@ from app.auth.schemas import UserRecord
 from app.common.models import JobStatus
 from app.common.rate_limit import rate_limit_ingests
 from app.common.storage import StorageClient
-from app.dependencies import get_db, get_minio
+from app.dependencies import get_db, get_minio, get_settings
 from app.ingestion.schemas import (
     BatchIngestResponse,
     BulkImportListResponse,
@@ -482,14 +482,29 @@ async def import_dry_run(
 async def ingest_webhook(
     payload: S3EventNotification,
     db: AsyncSession = Depends(get_db),
+    x_webhook_secret: str | None = Header(None),
 ):
     """Receive MinIO bucket event notifications and trigger ingestion.
 
     Parses S3-style event records, filters for ``s3:ObjectCreated:*`` events,
     creates a job per object, and dispatches Celery tasks.
+
+    Requires ``matter_id`` in the payload to scope ingested documents.
+    Verifies the ``X-Webhook-Secret`` header against the configured
+    ``MINIO_WEBHOOK_SECRET`` when the secret is set.
     """
+    # --- Webhook secret verification ---
+    settings = get_settings()
+    if settings.minio_webhook_secret:
+        if x_webhook_secret != settings.minio_webhook_secret:
+            raise HTTPException(status_code=403, detail="Invalid webhook secret")
+    else:
+        logger.warning("webhook.no_secret_configured", hint="Set MINIO_WEBHOOK_SECRET for production")
+
     if not payload.Records:
         raise HTTPException(status_code=400, detail="No event records in payload")
+
+    matter_id = payload.matter_id
 
     job_ids: list[str] = []
     object_keys: list[str] = []
@@ -516,6 +531,7 @@ async def ingest_webhook(
             db=db,
             filename=filename,
             minio_path=object_key,
+            matter_id=matter_id,
         )
 
         job_ids.append(str(job_row["id"]))
@@ -538,6 +554,7 @@ async def ingest_webhook(
             job_id=jid,
             object_key=okey,
             event_name=ename,
+            matter_id=str(matter_id),
         )
 
     return WebhookResponse(

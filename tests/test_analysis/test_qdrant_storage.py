@@ -9,6 +9,7 @@ from app.analysis.schemas import (
     HotDocSignals,
     SentimentDimensions,
 )
+from app.llm_config.schemas import ResolvedLLMConfig
 
 
 def test_set_payload_called_with_correct_args():
@@ -57,12 +58,18 @@ def test_set_payload_called_with_correct_args():
     mock_settings.llm_model = "test-model"
     mock_settings.llm_provider = "anthropic"
 
+    mock_llm_config = ResolvedLLMConfig(provider="anthropic", model="test-model", api_key="test", base_url="")
+
     with (
         patch("app.analysis.tasks._get_sync_engine", return_value=mock_engine),
         patch("qdrant_client.QdrantClient", return_value=mock_qdrant),
         patch("app.config.Settings", return_value=mock_settings),
         patch("app.analysis.sentiment.SentimentScorer"),
         patch("app.analysis.tasks.asyncio") as mock_asyncio,
+        patch(
+            "app.llm_config.resolver.resolve_llm_config_sync",
+            return_value=mock_llm_config,
+        ),
     ):
         mock_asyncio.run.return_value = sentiment_result
 

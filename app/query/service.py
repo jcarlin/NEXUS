@@ -215,10 +215,12 @@ class ChatService:
         db: AsyncSession,
         thread_id: str,
         matter_id: UUID | None = None,
+        limit: int = 50,
+        offset: int = 0,
     ) -> list[dict[str, Any]]:
-        """Load all messages for a thread, ordered by creation time."""
+        """Load messages for a thread, ordered by creation time, with pagination."""
         where = "WHERE thread_id = :thread_id"
-        params: dict[str, Any] = {"thread_id": thread_id}
+        params: dict[str, Any] = {"thread_id": thread_id, "limit": limit, "offset": offset}
         if matter_id is not None:
             where += " AND matter_id = :matter_id"
             params["matter_id"] = matter_id
@@ -230,6 +232,7 @@ class ChatService:
                 FROM chat_messages
                 {where}
                 ORDER BY created_at ASC
+                LIMIT :limit OFFSET :offset
             """),
             params,
         )

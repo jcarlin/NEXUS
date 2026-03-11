@@ -41,6 +41,8 @@ class AnalyticsService:
     async def compute_communication_pairs(
         db: AsyncSession,
         matter_id: str,
+        limit: int = 1000,
+        offset: int = 0,
     ) -> int:
         """Extract sender/recipient pairs from email document metadata and UPSERT.
 
@@ -60,9 +62,11 @@ class AnalyticsService:
                   AND document_type = 'email'
                   AND metadata_ IS NOT NULL
                   AND metadata_ != '{}'
+                ORDER BY id
+                LIMIT :limit OFFSET :offset
                 """
             ),
-            {"matter_id": matter_id},
+            {"matter_id": matter_id, "limit": limit, "offset": offset},
         )
         rows = result.fetchall()
 

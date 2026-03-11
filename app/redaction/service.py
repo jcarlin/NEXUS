@@ -154,14 +154,14 @@ class RedactionService:
         """
         # 1. Validate document
         doc_result = await db.execute(
-            text("SELECT id, file_path FROM documents WHERE id = :doc_id AND matter_id = :matter_id"),
+            text("SELECT id, minio_path FROM documents WHERE id = :doc_id AND matter_id = :matter_id"),
             {"doc_id": document_id, "matter_id": matter_id},
         )
         doc_row = doc_result.first()
         if doc_row is None:
             raise ValueError(f"Document {document_id} not found in matter {matter_id}")
 
-        file_path = doc_row._mapping["file_path"]
+        file_path = doc_row._mapping["minio_path"]
 
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
