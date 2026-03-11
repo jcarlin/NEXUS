@@ -1,7 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
-import { Upload, AlertTriangle, ChevronDown, ChevronRight, RefreshCw, Loader2 } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { Upload, AlertTriangle, ChevronDown, ChevronRight, RefreshCw, Loader2, FileUp, CheckCircle2, XCircle, Clock } from "lucide-react";
+import { toast } from "sonner";
 import { apiClient } from "@/api/client";
 import { useAppStore } from "@/stores/app-store";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -39,6 +40,7 @@ function HealthBanner() {
   const queryClient = useQueryClient();
   const [expanded, setExpanded] = useState(false);
   const [reindexing, setReindexing] = useState<Set<string>>(new Set());
+  const [reindexingAll, setReindexingAll] = useState(false);
 
   const { data: health } = useQuery({
     queryKey: ["document-health", matterId],
@@ -61,17 +63,37 @@ function HealthBanner() {
     setReindexing((prev) => new Set(prev).add(doc.doc_id));
     try {
       await apiClient({
-        url: "/api/v1/ingest/process-uploaded",
+        url: "/api/v1/ingest/reindex",
         method: "POST",
-        data: { files: [{ object_key: `reindex/${doc.doc_id}`, filename: doc.filename }] },
+        data: { doc_ids: [doc.doc_id] },
       });
       void queryClient.invalidateQueries({ queryKey: ["document-health"] });
+      void queryClient.invalidateQueries({ queryKey: ["ingest-jobs"] });
     } finally {
       setReindexing((prev) => {
         const next = new Set(prev);
         next.delete(doc.doc_id);
         return next;
       });
+    }
+  };
+
+  const handleReindexAll = async () => {
+    const ids = unhealthy.map((d) => d.doc_id);
+    setReindexingAll(true);
+    try {
+      // Send in batches of 500 (server max)
+      for (let i = 0; i < ids.length; i += 500) {
+        await apiClient({
+          url: "/api/v1/ingest/reindex",
+          method: "POST",
+          data: { doc_ids: ids.slice(i, i + 500) },
+        });
+      }
+      void queryClient.invalidateQueries({ queryKey: ["document-health"] });
+      void queryClient.invalidateQueries({ queryKey: ["ingest-jobs"] });
+    } finally {
+      setReindexingAll(false);
     }
   };
 
@@ -88,6 +110,25 @@ function HealthBanner() {
           {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
           {expanded ? "Hide" : "Show"}
         </button>
+        <Button
+          size="sm"
+          variant="outline"
+          className="ml-auto h-6 px-2 text-xs"
+          disabled={reindexingAll}
+          onClick={handleReindexAll}
+        >
+          {reindexingAll ? (
+            <>
+              <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+              Re-indexing...
+            </>
+          ) : (
+            <>
+              <RefreshCw className="mr-1 h-3 w-3" />
+              Re-index All ({unhealthyCount})
+            </>
+          )}
+        </Button>
       </AlertTitle>
       {expanded && (
         <AlertDescription>
@@ -155,32 +196,140 @@ interface JobStatus {
   updated_at: string;
 }
 
-function ActiveJobs() {
+const TERMINAL_STATUSES = new Set(["complete", "completed", "failed", "error"]);
+
+function isTerminal(status: string): boolean {
+  return TERMINAL_STATUSES.has(status);
+}
+
+function StatusBadge({ status }: { status: string }) {
+  switch (status) {
+    case "pending":
+    case "queued":
+      return (
+        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 gap-1">
+          <Clock className="h-3 w-3" />
+          Queued
+        </Badge>
+      );
+    case "processing":
+      return (
+        <Badge variant="outline" className="text-[10px] px-1.5 py-0 gap-1 border-blue-500/50 text-blue-600 dark:text-blue-400">
+          <Loader2 className="h-3 w-3 animate-spin" />
+          Processing
+        </Badge>
+      );
+    case "complete":
+    case "completed":
+      return (
+        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 gap-1 bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400">
+          <CheckCircle2 className="h-3 w-3" />
+          Complete
+        </Badge>
+      );
+    case "failed":
+    case "error":
+      return (
+        <Badge variant="destructive" className="text-[10px] px-1.5 py-0 gap-1">
+          <XCircle className="h-3 w-3" />
+          Failed
+        </Badge>
+      );
+    default:
+      return (
+        <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+          {status}
+        </Badge>
+      );
+  }
+}
+
+function IngestionStatus() {
   const matterId = useAppStore((s) => s.matterId);
+  const queryClient = useQueryClient();
+  const prevJobsRef = useRef<Map<string, string>>(new Map());
 
   const { data: jobs } = useQuery({
-    queryKey: ["ingest-jobs-active", matterId],
+    queryKey: ["ingest-jobs", matterId],
     queryFn: () =>
       apiClient<PaginatedResponse<JobStatus>>({
-        url: "/api/v1/ingest/jobs",
+        url: "/api/v1/jobs",
         method: "GET",
-        params: { status: "processing", limit: 20 },
+        params: { limit: 10 },
       }),
     enabled: !!matterId,
-    refetchInterval: 3000,
+    refetchInterval: (query) => {
+      const items = query.state.data?.items ?? [];
+      const hasActive = items.some((j) => !isTerminal(j.status));
+      return hasActive ? 3000 : false;
+    },
   });
 
-  const activeJobs = jobs?.items ?? [];
-  if (activeJobs.length === 0) return null;
+  const allJobs = jobs?.items ?? [];
+
+  // Detect job completions/failures and show toasts + invalidate docs
+  useEffect(() => {
+    if (allJobs.length === 0) return;
+
+    const prevMap = prevJobsRef.current;
+    let shouldInvalidateDocs = false;
+
+    for (const job of allJobs) {
+      const prevStatus = prevMap.get(job.job_id);
+      if (prevStatus && !isTerminal(prevStatus) && isTerminal(job.status)) {
+        if (job.status === "complete" || job.status === "completed") {
+          toast.success(`${job.filename} ingested successfully`);
+          shouldInvalidateDocs = true;
+        } else {
+          toast.error(`${job.filename} failed${job.error ? `: ${job.error}` : ""}`);
+        }
+      }
+    }
+
+    if (shouldInvalidateDocs) {
+      void queryClient.invalidateQueries({ queryKey: ["documents"] });
+      void queryClient.invalidateQueries({ queryKey: ["document-health"] });
+    }
+
+    // Update ref
+    const nextMap = new Map<string, string>();
+    for (const job of allJobs) {
+      nextMap.set(job.job_id, job.status);
+    }
+    prevJobsRef.current = nextMap;
+  }, [allJobs, queryClient]);
+
+  if (allJobs.length === 0) return null;
+
+  const processingCount = allJobs.filter((j) => j.status === "processing").length;
+  const completeCount = allJobs.filter((j) => j.status === "complete" || j.status === "completed").length;
+  const failedCount = allJobs.filter((j) => j.status === "failed" || j.status === "error").length;
+  const queuedCount = allJobs.filter((j) => j.status === "pending" || j.status === "queued").length;
+
+  const summaryParts: string[] = [];
+  if (processingCount > 0) summaryParts.push(`${processingCount} processing`);
+  if (queuedCount > 0) summaryParts.push(`${queuedCount} queued`);
+  if (completeCount > 0) summaryParts.push(`${completeCount} complete`);
+  if (failedCount > 0) summaryParts.push(`${failedCount} failed`);
 
   return (
     <div className="rounded-lg border bg-card p-3 space-y-2">
       <div className="flex items-center gap-2 text-sm font-medium">
-        <Loader2 className="h-4 w-4 animate-spin text-primary" />
-        Processing {activeJobs.length} document{activeJobs.length !== 1 ? "s" : ""}
+        {processingCount > 0 ? (
+          <Loader2 className="h-4 w-4 animate-spin text-primary" />
+        ) : (
+          <FileUp className="h-4 w-4 text-muted-foreground" />
+        )}
+        <span>Ingestion Jobs</span>
+        {summaryParts.length > 0 && (
+          <span className="text-xs font-normal text-muted-foreground">
+            — {summaryParts.join(", ")}
+          </span>
+        )}
       </div>
       <div className="space-y-1.5">
-        {activeJobs.map((job) => {
+        {allJobs.map((job) => {
+          const isProcessing = job.status === "processing";
           const stageSteps = ["parsing", "chunking", "embedding", "extracting", "indexing"];
           const stepIdx = stageSteps.indexOf(job.stage);
           const percent = stepIdx >= 0 ? Math.round(((stepIdx + 1) / stageSteps.length) * 100) : 0;
@@ -191,11 +340,16 @@ function ActiveJobs() {
                 <span className="truncate max-w-[60%] text-muted-foreground" title={job.filename}>
                   {job.filename}
                 </span>
-                <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                  {STAGE_LABELS[job.stage] ?? job.stage}
-                </Badge>
+                <div className="flex items-center gap-1.5">
+                  {isProcessing && (
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                      {STAGE_LABELS[job.stage] ?? job.stage}
+                    </Badge>
+                  )}
+                  <StatusBadge status={job.status} />
+                </div>
               </div>
-              <Progress value={percent} className="h-1" />
+              {isProcessing && <Progress value={percent} className="h-1" />}
             </div>
           );
         })}
@@ -234,7 +388,7 @@ function DocumentsPage() {
   return (
     <div className="space-y-4 animate-page-in">
       <HealthBanner />
-      <ActiveJobs />
+      <IngestionStatus />
 
       <div className="flex items-center justify-between">
         <div>
