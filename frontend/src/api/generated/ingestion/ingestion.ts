@@ -952,6 +952,201 @@ export function useListJobsApiV1JobsGet<TData = Awaited<ReturnType<typeof listJo
 
 
 /**
+ * Retry a failed job by resetting it to pending and re-dispatching.
+
+Only jobs in ``failed`` status can be retried. The original task
+parameters are read from the job's metadata.
+ * @summary Retry Job
+ */
+export const retryJobApiV1JobsJobIdRetryPost = (
+    jobId: string,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiClient<unknown>(
+      {url: `/api/v1/jobs/${jobId}/retry`, method: 'POST', signal
+    },
+      );
+    }
+  
+
+
+export const getRetryJobApiV1JobsJobIdRetryPostMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryJobApiV1JobsJobIdRetryPost>>, TError,{jobId: string}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof retryJobApiV1JobsJobIdRetryPost>>, TError,{jobId: string}, TContext> => {
+
+const mutationKey = ['retryJobApiV1JobsJobIdRetryPost'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof retryJobApiV1JobsJobIdRetryPost>>, {jobId: string}> = (props) => {
+          const {jobId} = props ?? {};
+
+          return  retryJobApiV1JobsJobIdRetryPost(jobId,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RetryJobApiV1JobsJobIdRetryPostMutationResult = NonNullable<Awaited<ReturnType<typeof retryJobApiV1JobsJobIdRetryPost>>>
+    
+    export type RetryJobApiV1JobsJobIdRetryPostMutationError = HTTPValidationError
+
+    /**
+ * @summary Retry Job
+ */
+export const useRetryJobApiV1JobsJobIdRetryPost = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryJobApiV1JobsJobIdRetryPost>>, TError,{jobId: string}, TContext>, }
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof retryJobApiV1JobsJobIdRetryPost>>,
+        TError,
+        {jobId: string},
+        TContext
+      > => {
+
+      const mutationOptions = getRetryJobApiV1JobsJobIdRetryPostMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * Pause consumption of a Celery queue.
+
+Workers stop pulling new tasks from the specified queue.
+Already-running tasks are not affected.
+ * @summary Pause Queue
+ */
+export const pauseQueueApiV1AdminQueuesQueueNamePausePost = (
+    queueName: string,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiClient<unknown>(
+      {url: `/api/v1/admin/queues/${queueName}/pause`, method: 'POST', signal
+    },
+      );
+    }
+  
+
+
+export const getPauseQueueApiV1AdminQueuesQueueNamePausePostMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof pauseQueueApiV1AdminQueuesQueueNamePausePost>>, TError,{queueName: string}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof pauseQueueApiV1AdminQueuesQueueNamePausePost>>, TError,{queueName: string}, TContext> => {
+
+const mutationKey = ['pauseQueueApiV1AdminQueuesQueueNamePausePost'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof pauseQueueApiV1AdminQueuesQueueNamePausePost>>, {queueName: string}> = (props) => {
+          const {queueName} = props ?? {};
+
+          return  pauseQueueApiV1AdminQueuesQueueNamePausePost(queueName,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PauseQueueApiV1AdminQueuesQueueNamePausePostMutationResult = NonNullable<Awaited<ReturnType<typeof pauseQueueApiV1AdminQueuesQueueNamePausePost>>>
+    
+    export type PauseQueueApiV1AdminQueuesQueueNamePausePostMutationError = HTTPValidationError
+
+    /**
+ * @summary Pause Queue
+ */
+export const usePauseQueueApiV1AdminQueuesQueueNamePausePost = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof pauseQueueApiV1AdminQueuesQueueNamePausePost>>, TError,{queueName: string}, TContext>, }
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof pauseQueueApiV1AdminQueuesQueueNamePausePost>>,
+        TError,
+        {queueName: string},
+        TContext
+      > => {
+
+      const mutationOptions = getPauseQueueApiV1AdminQueuesQueueNamePausePostMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * Resume consumption of a previously paused Celery queue.
+ * @summary Resume Queue
+ */
+export const resumeQueueApiV1AdminQueuesQueueNameResumePost = (
+    queueName: string,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiClient<unknown>(
+      {url: `/api/v1/admin/queues/${queueName}/resume`, method: 'POST', signal
+    },
+      );
+    }
+  
+
+
+export const getResumeQueueApiV1AdminQueuesQueueNameResumePostMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resumeQueueApiV1AdminQueuesQueueNameResumePost>>, TError,{queueName: string}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof resumeQueueApiV1AdminQueuesQueueNameResumePost>>, TError,{queueName: string}, TContext> => {
+
+const mutationKey = ['resumeQueueApiV1AdminQueuesQueueNameResumePost'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof resumeQueueApiV1AdminQueuesQueueNameResumePost>>, {queueName: string}> = (props) => {
+          const {queueName} = props ?? {};
+
+          return  resumeQueueApiV1AdminQueuesQueueNameResumePost(queueName,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ResumeQueueApiV1AdminQueuesQueueNameResumePostMutationResult = NonNullable<Awaited<ReturnType<typeof resumeQueueApiV1AdminQueuesQueueNameResumePost>>>
+    
+    export type ResumeQueueApiV1AdminQueuesQueueNameResumePostMutationError = HTTPValidationError
+
+    /**
+ * @summary Resume Queue
+ */
+export const useResumeQueueApiV1AdminQueuesQueueNameResumePost = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resumeQueueApiV1AdminQueuesQueueNameResumePost>>, TError,{queueName: string}, TContext>, }
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof resumeQueueApiV1AdminQueuesQueueNameResumePost>>,
+        TError,
+        {queueName: string},
+        TContext
+      > => {
+
+      const mutationOptions = getResumeQueueApiV1AdminQueuesQueueNameResumePostMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
  * Return status and progress for a bulk import job.
  * @summary Get Bulk Import Status
  */
