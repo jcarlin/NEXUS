@@ -101,7 +101,7 @@ def upgrade() -> None:
     )
 
     op.execute(
-        sa.text("INSERT INTO case_matters (id, name, description) " "VALUES (:id, :name, :description)").bindparams(
+        sa.text("INSERT INTO case_matters (id, name, description) VALUES (:id, :name, :description)").bindparams(
             id=_DEFAULT_MATTER_ID,
             name="Default Matter",
             description="Default case matter for development and testing",
@@ -109,7 +109,7 @@ def upgrade() -> None:
     )
 
     op.execute(
-        sa.text("INSERT INTO user_case_matters (user_id, matter_id) " "VALUES (:user_id, :matter_id)").bindparams(
+        sa.text("INSERT INTO user_case_matters (user_id, matter_id) VALUES (:user_id, :matter_id)").bindparams(
             user_id=_ADMIN_ID,
             matter_id=_DEFAULT_MATTER_ID,
         )

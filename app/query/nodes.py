@@ -1067,10 +1067,12 @@ async def audit_log_hook(state: dict) -> dict:
     tool_calls_to_log: list[dict[str, str | int | None]] = []
     if isinstance(last_msg, AIMessage) and last_msg.tool_calls:
         for call in last_msg.tool_calls:
-            tool_calls_to_log.append({
-                "tool_name": call.get("name", "unknown"),
-                "iteration": tool_call_count,
-            })
+            tool_calls_to_log.append(
+                {
+                    "tool_name": call.get("name", "unknown"),
+                    "iteration": tool_call_count,
+                }
+            )
 
     # Detect completed tool results (ToolMessages at end of message list)
     completed_tools: list[dict[str, str | int | None]] = []
@@ -1078,11 +1080,13 @@ async def audit_log_hook(state: dict) -> dict:
         if not isinstance(msg, LCToolMessage):
             break
         content_preview = str(msg.content)[:200] if msg.content else ""
-        completed_tools.append({
-            "tool_call_id": msg.tool_call_id,
-            "output_length": len(str(msg.content)) if msg.content else 0,
-            "output_preview": content_preview,
-        })
+        completed_tools.append(
+            {
+                "tool_call_id": msg.tool_call_id,
+                "output_length": len(str(msg.content)) if msg.content else 0,
+                "output_preview": content_preview,
+            }
+        )
 
     async def _write() -> None:
         try:

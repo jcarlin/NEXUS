@@ -786,7 +786,7 @@ class GraphService:
         """
         if rel_type not in TEMPORAL_RELATIONSHIP_TYPES:
             raise ValueError(
-                f"Invalid temporal relationship type: {rel_type}. " f"Allowed: {sorted(TEMPORAL_RELATIONSHIP_TYPES)}"
+                f"Invalid temporal relationship type: {rel_type}. Allowed: {sorted(TEMPORAL_RELATIONSHIP_TYPES)}"
             )
 
         query = f"""
@@ -896,7 +896,7 @@ class GraphService:
         """
         date_filter = ""
         if date:
-            date_filter = " AND (r.since IS NULL OR r.since <= $date)" " AND (r.until IS NULL OR r.until >= $date)"
+            date_filter = " AND (r.since IS NULL OR r.since <= $date) AND (r.until IS NULL OR r.until >= $date)"
 
         matter_filter = " AND p.matter_id = $matter_id" if matter_id else ""
 
@@ -1271,7 +1271,7 @@ class GraphService:
         """
         allowed_metrics = {"degree", "pagerank", "betweenness"}
         if metric not in allowed_metrics:
-            raise ValueError(f"Invalid centrality metric: {metric}. " f"Allowed: {sorted(allowed_metrics)}")
+            raise ValueError(f"Invalid centrality metric: {metric}. Allowed: {sorted(allowed_metrics)}")
 
         graph_name = f"centrality_{matter_id}_{metric}"
 

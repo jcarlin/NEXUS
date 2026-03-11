@@ -109,7 +109,7 @@ class LLMConfigService:
         result = await db.execute(
             text(f"""
                 UPDATE llm_providers
-                SET {', '.join(set_clauses)}
+                SET {", ".join(set_clauses)}
                 WHERE id = :provider_id
                 RETURNING id, provider, label, api_key, base_url, is_active, created_at, updated_at
             """),

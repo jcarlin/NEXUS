@@ -167,7 +167,7 @@ class DatasetService:
         result = await db.execute(
             text(f"""
                 UPDATE datasets
-                SET {', '.join(set_clauses)}
+                SET {", ".join(set_clauses)}
                 WHERE id = :dataset_id AND matter_id = :matter_id
                 RETURNING id, matter_id, name, description, parent_id, created_by, created_at, updated_at
             """),

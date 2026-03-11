@@ -88,7 +88,7 @@ class HuggingFaceCSVAdapter:
             df = pd.read_csv(self._file_path)
 
         if "filename" not in df.columns or "text" not in df.columns:
-            raise ValueError(f"Dataset must have 'filename' and 'text' columns, " f"got: {list(df.columns)}")
+            raise ValueError(f"Dataset must have 'filename' and 'text' columns, got: {list(df.columns)}")
 
         count = 0
         skipped_images = 0

@@ -102,7 +102,7 @@ def check_resume(engine, content_hash: str, matter_id: str) -> bool:
 
     with engine.connect() as conn:
         result = conn.execute(
-            text("SELECT id FROM documents WHERE content_hash = :hash" " AND matter_id = :matter_id LIMIT 1"),
+            text("SELECT id FROM documents WHERE content_hash = :hash AND matter_id = :matter_id LIMIT 1"),
             {"hash": content_hash, "matter_id": matter_id},
         )
         return result.first() is not None
@@ -273,7 +273,7 @@ def build_adapter(adapter_type: str, source_config: dict) -> DatasetAdapter:
     from app.ingestion.adapters import ADAPTER_REGISTRY
 
     if adapter_type not in ADAPTER_REGISTRY:
-        raise ValueError(f"Unknown adapter type: '{adapter_type}'. " f"Valid: {list(ADAPTER_REGISTRY.keys())}")
+        raise ValueError(f"Unknown adapter type: '{adapter_type}'. Valid: {list(ADAPTER_REGISTRY.keys())}")
 
     adapter_cls = ADAPTER_REGISTRY[adapter_type]
 
