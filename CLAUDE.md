@@ -4,7 +4,7 @@ Multimodal RAG investigation platform for legal document intelligence. Ingests, 
 
 *See `ARCHITECTURE.md` for full system design, tech stack, and data flow diagrams.*
 
-**Status**: All 17 milestones complete (M0–M17). 512 backend + 35 frontend tests passing.
+**Status**: All 17 milestones complete (M0–M17). 905 backend + 35 frontend tests passing.
 16 domain modules, 20 DI factories, 16 feature flags, 6 autonomous LangGraph agents.
 Full local deployment with zero cloud API dependency.
 
@@ -80,14 +80,18 @@ Full local deployment with zero cloud API dependency.
 
 33. **Use `structlog` for all logging.** Bind context (`request_id`, `task_id`, `job_id`) via contextvars. Log at appropriate levels: `info` for operations, `warning` for degraded behavior, `error` for failures with stack traces.
 34. **Retry with backoff on external calls.** All LLM API calls, embedding calls, and external service calls get `tenacity` retry with exponential backoff (3 attempts). Don't silently swallow failures.
-35. **Raise `HTTPException` with clear detail messages.** Status codes must be accurate (400 for bad input, 401/403 for auth, 404 for not found, 422 for validation, 500 for server errors).
+35. **Raise `HTTPException` with clear detail messages.** Status codes must be accurate (400 for bad input, 401/403 for auth, 404 for not found, 422 for validation, 500 for server errors). Always use `raise HTTPException(...)` instead of `return JSONResponse(status_code=4xx/5xx)` — JSONResponse bypasses OpenAPI spec and response model validation.
+36. **No bare `except: pass`.** Shutdown handlers and cleanup code must log failures at `warning` level. Silent exception swallowing masks resource leaks and makes debugging impossible.
+37. **Redaction failures must raise.** Never silently skip pages that fail to parse during redaction. A privileged document silently skipping redaction is a legal liability. Fail loudly.
+38. **Health endpoints: 503 for unhealthy.** Return HTTP 503 when any required service is down. Load balancers rely on status codes, not response body parsing.
+39. **Run ruff before considering work done.** After writing Python code, run `ruff check --fix` and `ruff format` on changed files. The PostToolUse hook handles this automatically, but the rule documents the expectation.
 
 ### Testing
 
-36. **Every new feature or bug fix needs tests.** Tests mirror the module structure: `tests/test_{domain}/`. Use the existing `conftest.py` fixtures (mock services, AsyncClient, patched lifespan).
-37. **Mock external services, test your logic.** Tests should not require running infrastructure. Mock Qdrant, Neo4j, MinIO, Redis, LLM APIs. Test that your code calls them correctly with the right parameters.
-38. **Celery task `.delay()` is sync.** Mock it with `MagicMock`, not `AsyncMock`.
-39. **Parallel test execution.** When running the full test suite, use the Agent tool to split across 4 parallel agents by module group. Each agent runs in a worktree for isolation. This cuts wall-clock time from ~2min to ~30s. Use this grouping (balanced by test count):
+40. **Every new feature or bug fix needs tests.** Tests mirror the module structure: `tests/test_{domain}/`. Use the existing `conftest.py` fixtures (mock services, AsyncClient, patched lifespan).
+41. **Mock external services, test your logic.** Tests should not require running infrastructure. Mock Qdrant, Neo4j, MinIO, Redis, LLM APIs. Test that your code calls them correctly with the right parameters.
+42. **Celery task `.delay()` is sync.** Mock it with `MagicMock`, not `AsyncMock`.
+43. **Parallel test execution.** When running the full test suite, use the Agent tool to split across 4 parallel agents by module group. Each agent runs in a worktree for isolation. This cuts wall-clock time from ~2min to ~30s. Use this grouping (balanced by test count):
     - **Agent 1** (~177 tests): `tests/test_query/`
     - **Agent 2** (~183 tests): `tests/test_ingestion/ tests/test_entities/`
     - **Agent 3** (~166 tests): `tests/test_common/ tests/test_documents/ tests/test_datasets/`
@@ -99,19 +103,19 @@ Full local deployment with zero cloud API dependency.
 
 ### Enterprise & Security
 
-39. **No secrets in code.** API keys, passwords, JWT secrets — all from environment variables. Never commit `.env`. Update `.env.example` with placeholder values for any new secrets.
-40. **Audit trail for every API call.** The audit logging middleware captures user, action, resource, matter, IP. Don't bypass it.
-41. **CORS restricted.** Only configured origins. Never `allow_origins=["*"]` in production.
-42. **Rate limiting on public endpoints.** Use the existing Redis sliding-window limiter via `Depends()`.
+44. **No secrets in code.** API keys, passwords, JWT secrets — all from environment variables. Never commit `.env`. Update `.env.example` with placeholder values for any new secrets.
+45. **Audit trail for every API call.** The audit logging middleware captures user, action, resource, matter, IP. Don't bypass it.
+46. **CORS restricted.** Only configured origins. Never `allow_origins=["*"]` in production.
+47. **Rate limiting on public endpoints.** Use the existing Redis sliding-window limiter via `Depends()`.
 
 ### Legal Domain Sensitivity
 
-43. **Never leak document content in errors or logs.** This platform handles privileged legal documents. Error messages, tracebacks, and log entries must never contain raw document text, PII, or privileged material. Log document IDs and chunk IDs — not content. API error responses get clean detail messages, not `repr()` of internal state.
-44. **All prompt templates in `prompts.py`.** Each domain module that uses LLM calls should centralize its prompt templates (see `app/query/prompts.py`). No prompt strings scattered across nodes, services, or extractors. This is critical for auditability, tuning, and legal review.
+48. **Never leak document content in errors or logs.** This platform handles privileged legal documents. Error messages, tracebacks, and log entries must never contain raw document text, PII, or privileged material. Log document IDs and chunk IDs — not content. API error responses get clean detail messages, not `repr()` of internal state.
+49. **All prompt templates in `prompts.py`.** Each domain module that uses LLM calls should centralize its prompt templates (see `app/query/prompts.py`). No prompt strings scattered across nodes, services, or extractors. This is critical for auditability, tuning, and legal review.
 
 ### Scale Awareness
 
-45. **This is a 50k+ page corpus.** Always paginate DB queries, batch operations (embeddings, indexing, NER), and stream large results. Never load an entire collection or table into memory. A query that works with 100 docs will OOM or timeout at production scale.
+50. **This is a 50k+ page corpus.** Always paginate DB queries, batch operations (embeddings, indexing, NER), and stream large results. Never load an entire collection or table into memory. A query that works with 100 docs will OOM or timeout at production scale.
 
 ### Technology-Specific Rules
 

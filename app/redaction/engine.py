@@ -51,7 +51,10 @@ def redact_pdf(
             try:
                 content_stream = pikepdf.parse_content_stream(page)
             except Exception:
-                continue
+                raise ValueError(
+                    f"Failed to parse content stream for page {page_idx + 1}. "
+                    "Redaction cannot be guaranteed — aborting to prevent privileged content leakage."
+                )
 
             new_operations = []
             for operands, operator in content_stream:
@@ -117,11 +120,14 @@ def verify_redaction(pdf_path: Path, redacted_texts: list[str]) -> bool:
     pdf = pikepdf.open(pdf_path)
     all_text = []
 
-    for page in pdf.pages:
+    for page_idx, page in enumerate(pdf.pages):
         try:
             content_stream = pikepdf.parse_content_stream(page)
         except Exception:
-            continue
+            raise ValueError(
+                f"Failed to parse content stream for page {page_idx + 1} during verification. "
+                "Redaction cannot be verified — aborting to prevent privileged content leakage."
+            )
 
         for operands, operator in content_stream:
             if operator in (pikepdf.Operator("Tj"), pikepdf.Operator("'")):

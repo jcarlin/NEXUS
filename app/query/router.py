@@ -15,8 +15,7 @@ from typing import Any
 from uuid import UUID
 
 import structlog
-from fastapi import APIRouter, Depends
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, HTTPException
 from langchain_core.messages import AIMessageChunk
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -509,7 +508,7 @@ async def get_chat(
     rows = await ChatService.load_thread_messages(db, thread_id, matter_id=matter_id)
 
     if not rows:
-        return JSONResponse(status_code=404, content={"detail": "Thread not found"})
+        raise HTTPException(status_code=404, detail="Thread not found")
 
     messages = [
         ChatMessage(
@@ -551,6 +550,6 @@ async def delete_chat(
 
     deleted: int = result.rowcount or 0  # type: ignore[attr-defined]
     if deleted == 0:
-        return JSONResponse(status_code=404, content={"detail": "Thread not found"})
+        raise HTTPException(status_code=404, detail="Thread not found")
 
     return {"detail": "deleted", "thread_id": thread_id, "messages_deleted": deleted}

@@ -492,7 +492,7 @@ async def close_all() -> None:
         try:
             _get_checkpointer_conn().close()
         except Exception:
-            pass
+            logger.warning("shutdown.checkpointer.failed", exc_info=True)
         logger.info("shutdown.checkpointer")
 
     # Dispose async engine
@@ -505,7 +505,7 @@ async def close_all() -> None:
         try:
             await get_neo4j().close()
         except Exception:
-            pass
+            logger.warning("shutdown.neo4j.failed", exc_info=True)
         logger.info("shutdown.neo4j")
 
     # Close Redis
