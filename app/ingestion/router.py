@@ -143,7 +143,7 @@ async def ingest_single(
     await db.commit()
 
     # 5. Dispatch Celery task
-    process_document.delay(str(job_row["id"]), minio_path)
+    process_document.apply_async(args=[str(job_row["id"]), minio_path], queue="default")
 
     logger.info("ingest.task_dispatched", job_id=str(job_row["id"]))
 
@@ -217,9 +217,10 @@ async def ingest_batch(
     await db.commit()
 
     # Dispatch all tasks after commit
+    queue = "bulk" if len(job_ids) > 10 else "default"
     for job_id_val, fname in zip(job_ids, filenames):
         minio_path = f"raw/{job_id_val}/{fname}"
-        process_document.delay(str(job_id_val), minio_path)
+        process_document.apply_async(args=[str(job_id_val), minio_path], queue=queue)
 
         logger.info(
             "ingest.batch.file_dispatched",
@@ -322,8 +323,9 @@ async def process_uploaded(
     # Commit all job rows so they are visible to the Celery worker's sync connection
     await db.commit()
 
+    queue = "bulk" if len(job_ids) > 10 else "default"
     for job_id_val, fname, mpath in zip(job_ids, filenames, minio_paths):
-        process_document.delay(str(job_id_val), mpath)
+        process_document.apply_async(args=[str(job_id_val), mpath], queue=queue)
 
         logger.info(
             "ingest.process_uploaded.dispatched",
@@ -382,7 +384,7 @@ async def reindex_documents(
     await db.commit()
 
     for job_id_val, doc in zip(job_ids, docs):
-        process_document.delay(str(job_id_val), doc["minio_path"])
+        process_document.apply_async(args=[str(job_id_val), doc["minio_path"]], queue="bulk")
         logger.info(
             "ingest.reindex.dispatched",
             batch_id=str(batch_id),
@@ -530,7 +532,7 @@ async def ingest_webhook(
     await db.commit()
 
     for jid, okey, ename in zip(job_ids, object_keys, event_names):
-        process_document.delay(jid, okey)
+        process_document.apply_async(args=[jid, okey], queue="default")
         logger.info(
             "webhook.job_dispatched",
             job_id=jid,
@@ -623,7 +625,107 @@ async def cancel_job(
             detail=f"Job {job_id} is already in a terminal state ({row['status']})",
         )
 
+    # Revoke the Celery task if we have a task ID
+    celery_task_id = await IngestionService.get_celery_task_id(db=db, job_id=job_id)
+    if celery_task_id:
+        from workers.celery_app import celery_app
+
+        celery_app.control.revoke(celery_task_id, terminate=True, signal="SIGTERM")
+        logger.info("job.celery_revoked", job_id=str(job_id), celery_task_id=celery_task_id)
+
     return {"status": "cancelled", "job_id": str(job_id)}
+
+
+# -----------------------------------------------------------------------
+# POST /jobs/{job_id}/retry — retry a failed job
+# -----------------------------------------------------------------------
+
+
+@router.post("/jobs/{job_id}/retry")
+async def retry_job(
+    job_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserRecord = Depends(get_current_user),
+    matter_id: UUID = Depends(get_matter_id),
+):
+    """Retry a failed job by resetting it to pending and re-dispatching.
+
+    Only jobs in ``failed`` status can be retried. The original task
+    parameters are read from the job's metadata.
+    """
+    row = await IngestionService.get_job(db=db, job_id=job_id, matter_id=matter_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+
+    retried = await IngestionService.retry_job(db=db, job_id=job_id)
+    if retried is None:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Job {job_id} cannot be retried (status: {row['status']})",
+        )
+
+    # Re-dispatch based on task_type
+    task_type = retried.get("task_type", "ingestion")
+    metadata = retried.get("metadata_") or {}
+    if isinstance(metadata, str):
+        import json
+
+        metadata = json.loads(metadata)
+    minio_path = metadata.get("minio_path", "")
+
+    if task_type == "ingestion" and minio_path:
+        process_document.apply_async(args=[str(job_id), minio_path], queue="default")
+        logger.info("job.retry.dispatched", job_id=str(job_id), task_type=task_type)
+    else:
+        logger.info("job.retry.reset_only", job_id=str(job_id), task_type=task_type)
+
+    return {"status": "retried", "job_id": str(job_id)}
+
+
+# -----------------------------------------------------------------------
+# POST /admin/queues/{queue_name}/pause — pause a Celery queue
+# -----------------------------------------------------------------------
+
+
+@router.post("/admin/queues/{queue_name}/pause")
+async def pause_queue(
+    queue_name: str,
+    current_user: UserRecord = Depends(get_current_user),
+):
+    """Pause consumption of a Celery queue.
+
+    Workers stop pulling new tasks from the specified queue.
+    Already-running tasks are not affected.
+    """
+    if queue_name not in ("default", "bulk", "background"):
+        raise HTTPException(status_code=400, detail=f"Unknown queue: {queue_name}")
+
+    from workers.celery_app import celery_app
+
+    celery_app.control.cancel_consumer(queue_name)
+    logger.info("queue.paused", queue_name=queue_name)
+    return {"status": "paused", "queue": queue_name}
+
+
+# -----------------------------------------------------------------------
+# POST /admin/queues/{queue_name}/resume — resume a Celery queue
+# -----------------------------------------------------------------------
+
+
+@router.post("/admin/queues/{queue_name}/resume")
+async def resume_queue(
+    queue_name: str,
+    current_user: UserRecord = Depends(get_current_user),
+):
+    """Resume consumption of a previously paused Celery queue."""
+    if queue_name not in ("default", "bulk", "background"):
+        raise HTTPException(status_code=400, detail=f"Unknown queue: {queue_name}")
+
+    from workers.celery_app import celery_app
+
+    celery_app.control.add_consumer(queue_name)
+    logger.info("queue.resumed", queue_name=queue_name)
+    return {"status": "resumed", "queue": queue_name}
 
 
 # -----------------------------------------------------------------------

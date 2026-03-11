@@ -1,4 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { X } from "lucide-react";
 import { apiClient } from "@/api/client";
 import { useAppStore } from "@/stores/app-store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,6 +31,19 @@ function jobProgress(job: JobStatusResponse): number {
 
 export function PipelineStatus() {
   const matterId = useAppStore((s) => s.matterId);
+  const queryClient = useQueryClient();
+  const cancelMutation = useMutation({
+    mutationFn: (jobId: string) =>
+      apiClient({ url: `/api/v1/jobs/${jobId}`, method: "DELETE" }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["pipeline-jobs"] });
+      toast.success("Job cancelled");
+    },
+    onError: () => {
+      toast.error("Failed to cancel job");
+    },
+  });
+
   const { data, isLoading } = useQuery({
     queryKey: ["pipeline-jobs", matterId],
     queryFn: () =>
@@ -60,9 +75,22 @@ export function PipelineStatus() {
                 <div key={job.job_id} className="space-y-1 rounded-md border p-3">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium truncate max-w-[200px]">{job.filename ?? job.job_id.slice(0, 8)}</span>
-                    <Badge variant={statusColor(job.status)} className="text-[10px]">
-                      {job.status}
-                    </Badge>
+                    <div className="flex items-center gap-1.5">
+                      <Badge variant={statusColor(job.status)} className="text-[10px]">
+                        {job.status}
+                      </Badge>
+                      {job.status === "processing" && (
+                        <button
+                          type="button"
+                          onClick={() => cancelMutation.mutate(job.job_id)}
+                          disabled={cancelMutation.isPending}
+                          className="rounded p-0.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                          title="Cancel job"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                   {job.status === "processing" && (
                     <div className="space-y-1">

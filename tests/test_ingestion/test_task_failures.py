@@ -60,6 +60,7 @@ def test_process_document_updates_failed_stage_on_error():
     with (
         patch("app.config.Settings", return_value=_make_mock_settings()),
         patch("app.ingestion.tasks._get_sync_engine", return_value=mock_engine),
+        patch("app.ingestion.tasks._store_celery_task_id"),
         patch("app.ingestion.tasks._get_job_matter_id", return_value="matter-1"),
         patch("app.ingestion.tasks._is_job_cancelled", return_value=False),
         patch("app.ingestion.tasks._stage_parse", side_effect=RuntimeError("parse boom")),
@@ -85,6 +86,7 @@ def test_process_document_disposes_engine_on_failure():
     with (
         patch("app.config.Settings", return_value=_make_mock_settings()),
         patch("app.ingestion.tasks._get_sync_engine", return_value=mock_engine),
+        patch("app.ingestion.tasks._store_celery_task_id"),
         patch("app.ingestion.tasks._get_job_matter_id", return_value=None),
         patch("app.ingestion.tasks._is_job_cancelled", return_value=False),
         patch("app.ingestion.tasks._stage_parse", side_effect=RuntimeError("boom")),
@@ -103,6 +105,7 @@ def test_process_document_disposes_engine_on_success():
     with (
         patch("app.config.Settings", return_value=_make_mock_settings()),
         patch("app.ingestion.tasks._get_sync_engine", return_value=mock_engine),
+        patch("app.ingestion.tasks._store_celery_task_id"),
         patch("app.ingestion.tasks._get_job_matter_id", return_value=None),
         patch("app.ingestion.tasks._is_job_cancelled", return_value=False),
         patch("app.ingestion.tasks._stage_parse"),
@@ -133,6 +136,7 @@ def test_stage_function_error_propagates_to_task():
     with (
         patch("app.config.Settings", return_value=_make_mock_settings()),
         patch("app.ingestion.tasks._get_sync_engine", return_value=mock_engine),
+        patch("app.ingestion.tasks._store_celery_task_id"),
         patch("app.ingestion.tasks._get_job_matter_id", return_value=None),
         patch("app.ingestion.tasks._is_job_cancelled", return_value=False),
         patch("app.ingestion.tasks._stage_parse"),  # succeeds
@@ -166,6 +170,7 @@ def test_cancelled_job_returns_early():
     with (
         patch("app.config.Settings", return_value=_make_mock_settings()),
         patch("app.ingestion.tasks._get_sync_engine", return_value=mock_engine),
+        patch("app.ingestion.tasks._store_celery_task_id"),
         patch("app.ingestion.tasks._get_job_matter_id", return_value=None),
         patch("app.ingestion.tasks._is_job_cancelled", return_value=True),
         patch("app.ingestion.tasks._stage_parse") as mock_parse,

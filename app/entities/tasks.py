@@ -116,6 +116,23 @@ def _update_stage(
         conn.commit()
 
 
+def _store_celery_task_id(engine, job_id: str, celery_task_id: str) -> None:
+    """Store the Celery task ID in the job row for revocation support."""
+    with engine.connect() as conn:
+        conn.execute(
+            text(
+                """
+                UPDATE jobs
+                SET celery_task_id = :celery_task_id,
+                    updated_at = now()
+                WHERE id = :job_id
+                """
+            ),
+            {"job_id": job_id, "celery_task_id": celery_task_id},
+        )
+        conn.commit()
+
+
 async def _run_resolution(entity_type: str | None = None, matter_id: str | None = None) -> dict:
     """Async implementation of entity resolution."""
     from neo4j import AsyncGraphDatabase
@@ -194,6 +211,7 @@ async def _run_resolution(entity_type: str | None = None, matter_id: str | None 
     max_retries=1,
     default_retry_delay=60,
     acks_late=True,
+    soft_time_limit=3600,
 )
 def resolve_entities(self, entity_type: str | None = None, matter_id: str | None = None) -> dict:
     """Run cross-document entity resolution.
@@ -217,6 +235,7 @@ def resolve_entities(self, entity_type: str | None = None, matter_id: str | None
     engine = _get_sync_engine()
     label = f"Entity resolution: {entity_type or 'all'}"
     job_id = _create_job_sync(engine, matter_id, "entity_resolution", label)
+    _store_celery_task_id(engine, job_id, self.request.id)
 
     try:
         _update_stage(engine, job_id, "loading_entities", "processing")
@@ -252,6 +271,7 @@ def resolve_entities(self, entity_type: str | None = None, matter_id: str | None
     max_retries=1,
     default_retry_delay=60,
     acks_late=True,
+    soft_time_limit=3600,
 )
 def entity_resolution_agent(self, matter_id: str) -> dict:
     """Run the LangGraph entity resolution pipeline.
@@ -272,6 +292,7 @@ def entity_resolution_agent(self, matter_id: str) -> dict:
 
     engine = _get_sync_engine()
     job_id = _create_job_sync(engine, matter_id, "entity_resolution", "Entity resolution agent")
+    _store_celery_task_id(engine, job_id, self.request.id)
 
     try:
         _update_stage(engine, job_id, "loading_entities", "processing")
@@ -318,6 +339,7 @@ def reprocess_entities_to_neo4j(self, document_ids: list[str]) -> dict:
 
     engine = _get_sync_engine()
     job_id = _create_job_sync(engine, None, "reprocess_neo4j", f"Neo4j reindex: {len(document_ids)} docs")
+    _store_celery_task_id(engine, job_id, self.request.id)
 
     async def _run() -> dict:
         from neo4j import AsyncGraphDatabase

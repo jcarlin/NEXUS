@@ -1,6 +1,7 @@
 """Celery application configuration and task autodiscovery."""
 
 from celery import Celery
+from kombu import Queue
 
 from app.config import Settings
 
@@ -23,6 +24,30 @@ celery_app.conf.update(
     task_track_started=True,
     task_acks_late=True,
     worker_prefetch_multiplier=1,
+    # --- Queue definitions ---
+    task_queues=[
+        Queue("default"),  # user-initiated ingestion (high priority)
+        Queue("bulk"),  # batch reindex, matter scans
+        Queue("background"),  # entity resolution, analysis, case setup, exports
+    ],
+    task_default_queue="default",
+    # --- Task routing ---
+    task_routes={
+        "app.entities.tasks.*": {"queue": "background"},
+        "app.analysis.tasks.*": {"queue": "background"},
+        "app.cases.tasks.*": {"queue": "background"},
+        "app.exports.tasks.*": {"queue": "background"},
+    },
+    # --- Time limits (global defaults) ---
+    task_soft_time_limit=1800,  # 30 min
+    task_hard_time_limit=2100,  # 35 min
+    # --- Rate limits ---
+    task_annotations={
+        "app.analysis.tasks.scan_document_sentiment": {"rate_limit": "10/m"},
+        "app.cases.tasks.run_case_setup": {"rate_limit": "2/m"},
+    },
+    # --- Result expiry ---
+    result_expires=86400,  # 24 hours
 )
 
 # Autodiscover tasks in all domains with Celery tasks.

@@ -35,7 +35,7 @@ api: ## Start API server with auto-reload
 	$(VENV)/uvicorn app.main:app --reload --port 8000
 
 worker: ## Start Celery worker (autoscale: max 4, min 1)
-	$(VENV)/celery -A workers.celery_app worker -l info --autoscale=4,1
+	$(VENV)/celery -A workers.celery_app worker -Q default,bulk,background -l info --autoscale=4,1
 
 frontend: ## Start React frontend dev server
 	cd frontend && npm run dev

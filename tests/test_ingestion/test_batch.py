@@ -50,7 +50,7 @@ async def test_batch_returns_200_with_multiple_files(client: AsyncClient) -> Non
             side_effect=fake_create_job,
         ),
     ):
-        mock_task.delay = MagicMock()
+        mock_task.apply_async = MagicMock()
 
         response = await client.post(
             "/api/v1/ingest/batch",
@@ -66,7 +66,7 @@ async def test_batch_returns_200_with_multiple_files(client: AsyncClient) -> Non
     assert body["total_files"] == 3
     assert len(body["job_ids"]) == 3
     assert len(body["filenames"]) == 3
-    assert mock_task.delay.call_count == 3
+    assert mock_task.apply_async.call_count == 3
 
 
 @pytest.mark.asyncio
@@ -105,7 +105,7 @@ async def test_batch_returns_filenames(client: AsyncClient) -> None:
             return_value=fake_job,
         ),
     ):
-        mock_task.delay = MagicMock()
+        mock_task.apply_async = MagicMock()
         response = await client.post(
             "/api/v1/ingest/batch",
             files=[("files", ("report.pdf", b"pdf content", "application/pdf"))],
@@ -144,7 +144,7 @@ async def test_batch_with_zip(client: AsyncClient) -> None:
             return_value=fake_job,
         ),
     ):
-        mock_task.delay = MagicMock()
+        mock_task.apply_async = MagicMock()
         response = await client.post(
             "/api/v1/ingest/batch",
             files=[("files", ("archive.zip", b"PK fake zip", "application/zip"))],
@@ -189,7 +189,7 @@ async def test_batch_mixed_formats(client: AsyncClient) -> None:
             side_effect=make_fake_job,
         ),
     ):
-        mock_task.delay = MagicMock()
+        mock_task.apply_async = MagicMock()
         response = await client.post(
             "/api/v1/ingest/batch",
             files=[

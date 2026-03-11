@@ -111,12 +111,30 @@ def _update_stage(
         conn.commit()
 
 
+def _store_celery_task_id(engine, job_id: str, celery_task_id: str) -> None:
+    """Store the Celery task ID in the job row for revocation support."""
+    with engine.connect() as conn:
+        conn.execute(
+            text(
+                """
+                UPDATE jobs
+                SET celery_task_id = :celery_task_id,
+                    updated_at = now()
+                WHERE id = :job_id
+                """
+            ),
+            {"job_id": job_id, "celery_task_id": celery_task_id},
+        )
+        conn.commit()
+
+
 @shared_task(
     bind=True,
     name="analysis.scan_document_sentiment",
     max_retries=2,
     default_retry_delay=60,
     acks_late=True,
+    soft_time_limit=300,
 )
 def scan_document_sentiment(self, doc_id: str, matter_id: str = "") -> dict:
     """Score a single document for sentiment, hot-doc signals, and anomalies.
@@ -146,6 +164,7 @@ def scan_document_sentiment(self, doc_id: str, matter_id: str = "") -> dict:
         "analysis_sentiment",
         f"Sentiment: {doc_id[:8]}...",
     )
+    _store_celery_task_id(engine, job_id, self.request.id)
 
     try:
         # -----------------------------------------------------------------
@@ -399,6 +418,7 @@ def scan_matter_hot_docs(self, matter_id: str) -> dict:
         "analysis_matter_scan",
         f"Hot doc scan: {count} documents",
     )
+    _store_celery_task_id(engine, parent_job_id, self.request.id)
     _update_stage(engine, parent_job_id, "querying_documents", "processing")
 
     dispatched = 0

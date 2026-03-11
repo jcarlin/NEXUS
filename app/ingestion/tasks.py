@@ -24,6 +24,7 @@ from typing import Any
 
 import structlog
 from celery import shared_task
+from celery.exceptions import SoftTimeLimitExceeded
 from sqlalchemy import create_engine, text
 
 from workers.celery_app import celery_app  # noqa: F401 — ensures @shared_task binds to our app
@@ -97,6 +98,23 @@ def _update_stage(
         conn.commit()
 
     logger.info("task.stage_updated", job_id=job_id, stage=stage, status=status)
+
+
+def _store_celery_task_id(engine, job_id: str, celery_task_id: str) -> None:
+    """Store the Celery task ID in the job row for revocation support."""
+    with engine.connect() as conn:
+        conn.execute(
+            text(
+                """
+                UPDATE jobs
+                SET celery_task_id = :celery_task_id,
+                    updated_at = now()
+                WHERE id = :job_id
+                """
+            ),
+            {"job_id": job_id, "celery_task_id": celery_task_id},
+        )
+        conn.commit()
 
 
 def _create_document_record(
@@ -1261,6 +1279,7 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
 
     settings = Settings()
     engine = _get_sync_engine()
+    _store_celery_task_id(engine, job_id, self.request.id)
     filename = minio_path.rsplit("/", 1)[-1]
 
     logger.info("task.start", minio_path=minio_path, filename=filename)
@@ -1309,6 +1328,11 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
             "chunk_count": len(ctx.chunks),
             "entity_count": len(ctx.all_entities),
         }
+
+    except SoftTimeLimitExceeded:
+        logger.error("task.process_document.timeout", job_id=job_id)
+        _update_stage(engine, job_id, "failed", "failed", error="Task timed out (soft time limit exceeded)")
+        return {"job_id": job_id, "status": "failed", "error": "timeout"}
 
     except Exception as exc:
         tb = traceback.format_exc()

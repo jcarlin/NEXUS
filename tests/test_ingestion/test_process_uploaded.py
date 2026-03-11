@@ -53,7 +53,7 @@ async def test_process_uploaded_creates_jobs(client: AsyncClient) -> None:
             new_callable=AsyncMock,
         ) as mock_create,
     ):
-        mock_task.delay = MagicMock()
+        mock_task.apply_async = MagicMock()
         mock_create.return_value = fake_job
 
         response = await client.post(
@@ -70,7 +70,7 @@ async def test_process_uploaded_creates_jobs(client: AsyncClient) -> None:
     assert body["total_files"] == 1
     assert len(body["job_ids"]) == 1
     assert body["filenames"] == ["doc.pdf"]
-    mock_task.delay.assert_called_once()
+    mock_task.apply_async.assert_called_once()
     mock_create.assert_called_once()
 
 
@@ -101,7 +101,7 @@ async def test_process_uploaded_multiple_files(client: AsyncClient) -> None:
             new_callable=AsyncMock,
         ) as mock_create,
     ):
-        mock_task.delay = MagicMock()
+        mock_task.apply_async = MagicMock()
         mock_create.side_effect = [make_job("a.pdf"), make_job("b.pdf")]
 
         response = await client.post(
@@ -117,7 +117,7 @@ async def test_process_uploaded_multiple_files(client: AsyncClient) -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["total_files"] == 2
-    assert mock_task.delay.call_count == 2
+    assert mock_task.apply_async.call_count == 2
 
 
 @pytest.mark.asyncio
@@ -146,7 +146,7 @@ async def test_process_uploaded_with_dataset_id(client: AsyncClient) -> None:
             new_callable=AsyncMock,
         ) as mock_create,
     ):
-        mock_task.delay = MagicMock()
+        mock_task.apply_async = MagicMock()
         mock_create.return_value = fake_job
 
         response = await client.post(

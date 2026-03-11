@@ -57,7 +57,7 @@ async def test_ingest_accepts_file(client: AsyncClient) -> None:
         patch("app.ingestion.router.process_document") as mock_task,
         patch("app.ingestion.service.IngestionService.create_job", new_callable=AsyncMock) as mock_create,
     ):
-        mock_task.delay = MagicMock()
+        mock_task.apply_async = MagicMock()
         mock_create.return_value = fake_job
 
         response = await client.post(
@@ -70,7 +70,7 @@ async def test_ingest_accepts_file(client: AsyncClient) -> None:
     assert "job_id" in body
     assert body["filename"] == "test.txt"
     assert body["status"] == "pending"
-    mock_task.delay.assert_called_once()
+    mock_task.apply_async.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -237,7 +237,7 @@ async def test_reindex_dispatches_jobs(client: AsyncClient) -> None:
             return_value=fake_job,
         ),
     ):
-        mock_task.delay = MagicMock()
+        mock_task.apply_async = MagicMock()
 
         response = await client.post(
             "/api/v1/ingest/reindex",
@@ -248,10 +248,11 @@ async def test_reindex_dispatches_jobs(client: AsyncClient) -> None:
     body = response.json()
     assert body["total_files"] == 1
     assert len(body["job_ids"]) == 1
-    mock_task.delay.assert_called_once()
+    mock_task.apply_async.assert_called_once()
     # Verify the real minio_path was used, not reindex/{doc_id}
-    call_args = mock_task.delay.call_args
-    assert call_args[0][1] == "raw/abc/test.pdf"
+    call_args = mock_task.apply_async.call_args
+    assert call_args[1]["args"][1] == "raw/abc/test.pdf"
+    assert call_args[1]["queue"] == "bulk"
 
 
 @pytest.mark.asyncio

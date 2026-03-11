@@ -81,7 +81,7 @@ async def test_webhook_valid_payload(webhook_client):
             },
         ),
     ):
-        mock_task.delay = MagicMock()
+        mock_task.apply_async = MagicMock()
 
         response = await client.post(
             "/api/v1/ingest/webhook",
@@ -93,7 +93,7 @@ async def test_webhook_valid_payload(webhook_client):
     assert body["status"] == "accepted"
     assert len(body["job_ids"]) == 1
     assert body["total"] == 1
-    mock_task.delay.assert_called_once()
+    mock_task.apply_async.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -184,7 +184,7 @@ async def test_webhook_multiple_records(webhook_client):
             side_effect=mock_create_job,
         ),
     ):
-        mock_task.delay = MagicMock()
+        mock_task.apply_async = MagicMock()
 
         response = await client.post("/api/v1/ingest/webhook", json=payload)
 
@@ -192,4 +192,4 @@ async def test_webhook_multiple_records(webhook_client):
     body = response.json()
     assert body["total"] == 3
     assert len(body["job_ids"]) == 3
-    assert mock_task.delay.call_count == 3
+    assert mock_task.apply_async.call_count == 3

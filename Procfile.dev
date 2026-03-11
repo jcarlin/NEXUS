@@ -1,4 +1,4 @@
 api: .venv/bin/uvicorn app.main:app --reload --port 8000
-worker: .venv/bin/celery -A workers.celery_app worker -l ${LOG_LEVEL:-info} --autoscale=4,1
+worker: .venv/bin/celery -A workers.celery_app worker -Q default,bulk,background -l ${LOG_LEVEL:-info} --autoscale=4,1
 frontend: cd frontend && npm run dev
 flower: .venv/bin/celery -A workers.celery_app flower --port=5555

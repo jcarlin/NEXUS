@@ -56,6 +56,23 @@ def _update_stage(
     logger.info("case_setup.stage_updated", job_id=job_id, stage=stage, status=status)
 
 
+def _store_celery_task_id(engine, job_id: str, celery_task_id: str) -> None:
+    """Store the Celery task ID in the job row for revocation support."""
+    with engine.connect() as conn:
+        conn.execute(
+            text(
+                """
+                UPDATE jobs
+                SET celery_task_id = :celery_task_id,
+                    updated_at = now()
+                WHERE id = :job_id
+                """
+            ),
+            {"job_id": job_id, "celery_task_id": celery_task_id},
+        )
+        conn.commit()
+
+
 def _update_case_context_status(engine, context_id: str, status: str) -> None:
     """Update case_contexts.status synchronously."""
     with engine.connect() as conn:
@@ -157,6 +174,7 @@ def _write_results_to_db(engine, context_id: str, state: dict) -> None:
     name="cases.run_case_setup",
     max_retries=1,
     acks_late=True,
+    soft_time_limit=1800,
 )
 def run_case_setup(
     self,
@@ -181,6 +199,7 @@ def run_case_setup(
 
     settings = Settings()
     engine = _get_sync_engine()
+    _store_celery_task_id(engine, job_id, self.request.id)
 
     logger.info("case_setup.start", minio_path=minio_path)
 

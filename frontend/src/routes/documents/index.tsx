@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useState, useRef, useEffect } from "react";
-import { Upload, AlertTriangle, ChevronDown, ChevronRight, RefreshCw, Loader2, FileUp, CheckCircle2, XCircle, Clock } from "lucide-react";
+import { Upload, AlertTriangle, ChevronDown, ChevronRight, RefreshCw, Loader2, FileUp, CheckCircle2, XCircle, Clock, X, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { apiClient } from "@/api/client";
 import { useAppStore } from "@/stores/app-store";
@@ -313,6 +313,30 @@ function BackgroundTasks() {
     },
   });
 
+  const cancelMutation = useMutation({
+    mutationFn: (jobId: string) =>
+      apiClient({ url: `/api/v1/jobs/${jobId}`, method: "DELETE" }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["ingest-jobs"] });
+      toast.success("Job cancelled");
+    },
+    onError: () => {
+      toast.error("Failed to cancel job");
+    },
+  });
+
+  const retryMutation = useMutation({
+    mutationFn: (jobId: string) =>
+      apiClient({ url: `/api/v1/jobs/${jobId}/retry`, method: "POST" }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["ingest-jobs"] });
+      toast.success("Job retried");
+    },
+    onError: () => {
+      toast.error("Failed to retry job");
+    },
+  });
+
   const allJobs = jobs?.items ?? [];
 
   // Detect job completions/failures and show toasts + invalidate docs
@@ -413,6 +437,28 @@ function BackgroundTasks() {
                       </Badge>
                     )}
                     <StatusBadge status={job.status} />
+                    {!isTerminal(job.status) && (
+                      <button
+                        type="button"
+                        onClick={() => cancelMutation.mutate(job.job_id)}
+                        disabled={cancelMutation.isPending}
+                        className="rounded p-0.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                        title="Cancel job"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    {job.status === "failed" && (
+                      <button
+                        type="button"
+                        onClick={() => retryMutation.mutate(job.job_id)}
+                        disabled={retryMutation.isPending}
+                        className="rounded p-0.5 text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                        title="Retry job"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
                 {isProcessing && <Progress value={percent} className="h-1" />}

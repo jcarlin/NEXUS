@@ -41,7 +41,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: celery -A workers.celery_app worker -l info -c 1 --max-tasks-per-child=100
+    command: celery -A workers.celery_app worker -Q default,bulk,background -l info -c 1 --max-tasks-per-child=100
     env_file: .env
     depends_on:
       redis:
@@ -64,3 +64,28 @@ services:
       MINIO_ENDPOINT: minio:9000
     restart: unless-stopped
 
+  flower:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: >
+      celery -A workers.celery_app flower
+      --port=5555
+      --basic_auth=${FLOWER_USER}:${FLOWER_PASSWORD}
+      --persistent=True
+      --db=/data/flower.db
+      --url_prefix=flower
+    ports:
+      - "5555:5555"
+    env_file: .env
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - flower-data:/data
+    restart: unless-stopped
+
+volumes:
+  flower-data:

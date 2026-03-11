@@ -481,3 +481,47 @@ class IngestionService:
             logger.warning("job.cancel_noop", job_id=str(job_id))
 
         return updated
+
+    @staticmethod
+    async def get_celery_task_id(db: AsyncSession, job_id: UUID) -> str | None:
+        """Read the celery_task_id from a job record for revocation."""
+        result = await db.execute(
+            text("SELECT celery_task_id FROM jobs WHERE id = :job_id"),
+            {"job_id": job_id},
+        )
+        row = result.first()
+        if row is None:
+            return None
+        return row.celery_task_id
+
+    # ------------------------------------------------------------------
+    # RETRY
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    async def retry_job(db: AsyncSession, job_id: UUID) -> dict | None:
+        """Reset a failed job to pending for retry.
+
+        Returns the job dict if successfully reset, None if job not found
+        or not in a retryable state.
+        """
+        result = await db.execute(
+            text(
+                """
+                UPDATE jobs
+                SET status = 'pending',
+                    stage = 'uploading',
+                    error = NULL,
+                    celery_task_id = NULL,
+                    updated_at = now()
+                WHERE id = :job_id
+                  AND status = 'failed'
+                RETURNING id, filename, metadata_, task_type, matter_id
+                """
+            ),
+            {"job_id": job_id},
+        )
+        row = result.first()
+        if row is None:
+            return None
+        return row_to_dict(row)
