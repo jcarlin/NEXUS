@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from uuid import uuid4
 
 import structlog
 from celery import shared_task
@@ -24,6 +25,90 @@ def _get_sync_engine():
 
     settings = Settings()
     return create_engine(settings.postgres_url_sync, pool_pre_ping=True)
+
+
+def _create_job_sync(
+    engine,
+    matter_id: str | None,
+    task_type: str,
+    label: str,
+    parent_job_id: str | None = None,
+) -> str:
+    """Insert a job row synchronously and return the job_id string."""
+    job_id = str(uuid4())
+    with engine.connect() as conn:
+        conn.execute(
+            text(
+                """
+                INSERT INTO jobs (id, status, stage, progress, task_type, label,
+                                  matter_id, parent_job_id, created_at, updated_at)
+                VALUES (:id, 'pending', 'starting', '{}', :task_type, :label,
+                        :matter_id, :parent_job_id, now(), now())
+                """
+            ),
+            {
+                "id": job_id,
+                "task_type": task_type,
+                "label": label,
+                "matter_id": matter_id,
+                "parent_job_id": parent_job_id,
+            },
+        )
+        conn.commit()
+    return job_id
+
+
+def _update_stage(
+    engine,
+    job_id: str,
+    stage: str,
+    status: str,
+    progress: dict | None = None,
+    error: str | None = None,
+) -> None:
+    """Update a job's stage, status, and progress in the ``jobs`` table."""
+    with engine.connect() as conn:
+        if progress is not None:
+            conn.execute(
+                text(
+                    """
+                    UPDATE jobs
+                    SET stage = :stage,
+                        status = :status,
+                        progress = CAST(:progress AS jsonb),
+                        error = :error,
+                        updated_at = now()
+                    WHERE id = :job_id
+                    """
+                ),
+                {
+                    "job_id": job_id,
+                    "stage": stage,
+                    "status": status,
+                    "progress": json.dumps(progress),
+                    "error": error,
+                },
+            )
+        else:
+            conn.execute(
+                text(
+                    """
+                    UPDATE jobs
+                    SET stage = :stage,
+                        status = :status,
+                        error = :error,
+                        updated_at = now()
+                    WHERE id = :job_id
+                    """
+                ),
+                {
+                    "job_id": job_id,
+                    "stage": stage,
+                    "status": status,
+                    "error": error,
+                },
+            )
+        conn.commit()
 
 
 @shared_task(
@@ -55,10 +140,19 @@ def scan_document_sentiment(self, doc_id: str, matter_id: str = "") -> dict:
     )
     logger.info("analysis.sentiment.start")
 
+    job_id = _create_job_sync(
+        engine,
+        matter_id or None,
+        "analysis_sentiment",
+        f"Sentiment: {doc_id[:8]}...",
+    )
+
     try:
         # -----------------------------------------------------------------
         # 1. Fetch chunk texts from Qdrant
         # -----------------------------------------------------------------
+        _update_stage(engine, job_id, "loading_chunks", "processing")
+
         from qdrant_client import QdrantClient
         from qdrant_client.models import FieldCondition, Filter, MatchValue
 
@@ -77,6 +171,7 @@ def scan_document_sentiment(self, doc_id: str, matter_id: str = "") -> dict:
 
         if not points:
             logger.warning("analysis.sentiment.no_chunks")
+            _update_stage(engine, job_id, "complete", "complete", progress={"skipped": True})
             return {"doc_id": doc_id, "status": "skipped", "reason": "no_chunks"}
 
         # Sort by chunk_index and concatenate
@@ -87,6 +182,8 @@ def scan_document_sentiment(self, doc_id: str, matter_id: str = "") -> dict:
         # -----------------------------------------------------------------
         # 2. Sentiment scoring via LLM
         # -----------------------------------------------------------------
+        _update_stage(engine, job_id, "scoring", "processing")
+
         from app.analysis.sentiment import SentimentScorer
         from app.llm_config.resolver import resolve_llm_config_sync
 
@@ -183,6 +280,8 @@ def scan_document_sentiment(self, doc_id: str, matter_id: str = "") -> dict:
         # -----------------------------------------------------------------
         # 5. Persist to PostgreSQL
         # -----------------------------------------------------------------
+        _update_stage(engine, job_id, "persisting", "processing")
+
         sentiment = result.sentiment
         update_params: dict = {
             "doc_id": doc_id,
@@ -238,6 +337,14 @@ def scan_document_sentiment(self, doc_id: str, matter_id: str = "") -> dict:
             points=scroll_filter,
         )
 
+        _update_stage(
+            engine,
+            job_id,
+            "complete",
+            "complete",
+            progress={"hot_doc_score": result.hot_doc_score},
+        )
+
         logger.info(
             "analysis.sentiment.complete",
             hot_doc_score=result.hot_doc_score,
@@ -252,6 +359,7 @@ def scan_document_sentiment(self, doc_id: str, matter_id: str = "") -> dict:
         }
 
     except Exception as exc:
+        _update_stage(engine, job_id, "failed", "failed", error=str(exc))
         logger.error("analysis.sentiment.failed", error=str(exc), exc_info=True)
         raise self.retry(exc=exc)
 
@@ -284,10 +392,27 @@ def scan_matter_hot_docs(self, matter_id: str) -> dict:
             {"mid": matter_id},
         ).all()
 
+    count = len(rows)
+    parent_job_id = _create_job_sync(
+        engine,
+        matter_id,
+        "analysis_matter_scan",
+        f"Hot doc scan: {count} documents",
+    )
+    _update_stage(engine, parent_job_id, "querying_documents", "processing")
+
     dispatched = 0
     for row in rows:
         scan_document_sentiment.delay(str(row.id), matter_id)
         dispatched += 1
+
+    _update_stage(
+        engine,
+        parent_job_id,
+        "complete",
+        "complete",
+        progress={"dispatched": dispatched, "total": count},
+    )
 
     logger.info("analysis.matter_scan.dispatched", count=dispatched)
     return {"matter_id": matter_id, "dispatched": dispatched}

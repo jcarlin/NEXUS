@@ -171,26 +171,70 @@ function HealthBanner() {
   );
 }
 
-const STAGE_LABELS: Record<string, string> = {
-  uploading: "Uploading",
-  parsing: "Parsing document",
-  chunking: "Chunking text",
-  embedding: "Generating embeddings",
-  extracting: "Extracting entities",
-  indexing: "Indexing vectors",
+const STAGE_LABELS: Record<string, Record<string, string>> = {
+  ingestion: {
+    uploading: "Uploading",
+    parsing: "Parsing document",
+    chunking: "Chunking text",
+    embedding: "Generating embeddings",
+    extracting: "Extracting entities",
+    indexing: "Indexing vectors",
+  },
+  entity_resolution: {
+    loading_entities: "Loading entities",
+    matching: "Matching",
+    analyzing: "Analyzing",
+    merging: "Merging duplicates",
+  },
+  reprocess_neo4j: {
+    loading_chunks: "Loading chunks",
+    indexing_entities: "Indexing entities",
+  },
+  analysis_sentiment: {
+    loading_chunks: "Loading chunks",
+    scoring: "Scoring sentiment",
+    persisting: "Persisting results",
+  },
+  analysis_matter_scan: {
+    querying_documents: "Querying documents",
+    dispatching: "Dispatching tasks",
+  },
+  case_setup: {
+    parsing: "Parsing document",
+    extracting_claims: "Extracting claims",
+    extracting_parties: "Extracting parties",
+    extracting_terms: "Extracting terms",
+    extracting_timeline: "Extracting timeline",
+    populating_graph: "Populating graph",
+  },
+};
+
+const STAGE_STEPS: Record<string, string[]> = {
+  ingestion: ["parsing", "chunking", "embedding", "extracting", "indexing"],
+  entity_resolution: ["loading_entities", "matching", "merging"],
+  reprocess_neo4j: ["loading_chunks", "indexing_entities"],
+  analysis_sentiment: ["loading_chunks", "scoring", "persisting"],
+  analysis_matter_scan: ["querying_documents", "dispatching"],
+  case_setup: ["parsing", "extracting_claims", "extracting_parties", "extracting_terms", "extracting_timeline", "populating_graph"],
+};
+
+const TASK_TYPE_LABELS: Record<string, string> = {
+  ingestion: "Ingestion",
+  entity_resolution: "Entity Resolution",
+  reprocess_neo4j: "Neo4j Reindex",
+  analysis_sentiment: "Sentiment Analysis",
+  analysis_matter_scan: "Hot Doc Scan",
+  case_setup: "Case Setup",
 };
 
 interface JobStatus {
   job_id: string;
   status: string;
   stage: string;
-  filename: string;
-  progress: {
-    pages_parsed: number;
-    chunks_created: number;
-    entities_extracted: number;
-    embeddings_generated: number;
-  };
+  filename: string | null;
+  task_type: string;
+  label: string | null;
+  progress: Record<string, number>;
   error: string | null;
   created_at: string;
   updated_at: string;
@@ -200,6 +244,10 @@ const TERMINAL_STATUSES = new Set(["complete", "completed", "failed", "error"]);
 
 function isTerminal(status: string): boolean {
   return TERMINAL_STATUSES.has(status);
+}
+
+function getJobDisplayName(job: JobStatus): string {
+  return job.label ?? job.filename ?? job.task_type;
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -244,7 +292,7 @@ function StatusBadge({ status }: { status: string }) {
   }
 }
 
-function IngestionStatus() {
+function BackgroundTasks() {
   const matterId = useAppStore((s) => s.matterId);
   const queryClient = useQueryClient();
   const prevJobsRef = useRef<Map<string, string>>(new Map());
@@ -255,7 +303,7 @@ function IngestionStatus() {
       apiClient<PaginatedResponse<JobStatus>>({
         url: "/api/v1/jobs",
         method: "GET",
-        params: { limit: 10 },
+        params: { limit: 20 },
       }),
     enabled: !!matterId,
     refetchInterval: (query) => {
@@ -277,11 +325,12 @@ function IngestionStatus() {
     for (const job of allJobs) {
       const prevStatus = prevMap.get(job.job_id);
       if (prevStatus && !isTerminal(prevStatus) && isTerminal(job.status)) {
+        const name = getJobDisplayName(job);
         if (job.status === "complete" || job.status === "completed") {
-          toast.success(`${job.filename} ingested successfully`);
+          toast.success(`${name} completed successfully`);
           shouldInvalidateDocs = true;
         } else {
-          toast.error(`${job.filename} failed${job.error ? `: ${job.error}` : ""}`);
+          toast.error(`${name} failed${job.error ? `: ${job.error}` : ""}`);
         }
       }
     }
@@ -300,6 +349,15 @@ function IngestionStatus() {
   }, [allJobs, queryClient]);
 
   if (allJobs.length === 0) return null;
+
+  // Group jobs by task_type
+  const grouped = new Map<string, JobStatus[]>();
+  for (const job of allJobs) {
+    const key = job.task_type ?? "ingestion";
+    const list = grouped.get(key) ?? [];
+    list.push(job);
+    grouped.set(key, list);
+  }
 
   const processingCount = allJobs.filter((j) => j.status === "processing").length;
   const completeCount = allJobs.filter((j) => j.status === "complete" || j.status === "completed").length;
@@ -320,40 +378,49 @@ function IngestionStatus() {
         ) : (
           <FileUp className="h-4 w-4 text-muted-foreground" />
         )}
-        <span>Ingestion Jobs</span>
+        <span>Background Tasks</span>
         {summaryParts.length > 0 && (
           <span className="text-xs font-normal text-muted-foreground">
             — {summaryParts.join(", ")}
           </span>
         )}
       </div>
-      <div className="space-y-1.5">
-        {allJobs.map((job) => {
-          const isProcessing = job.status === "processing";
-          const stageSteps = ["parsing", "chunking", "embedding", "extracting", "indexing"];
-          const stepIdx = stageSteps.indexOf(job.stage);
-          const percent = stepIdx >= 0 ? Math.round(((stepIdx + 1) / stageSteps.length) * 100) : 0;
-
-          return (
-            <div key={job.job_id} className="space-y-1">
-              <div className="flex items-center justify-between text-xs">
-                <span className="truncate max-w-[60%] text-muted-foreground" title={job.filename}>
-                  {job.filename}
-                </span>
-                <div className="flex items-center gap-1.5">
-                  {isProcessing && (
-                    <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                      {STAGE_LABELS[job.stage] ?? job.stage}
-                    </Badge>
-                  )}
-                  <StatusBadge status={job.status} />
-                </div>
-              </div>
-              {isProcessing && <Progress value={percent} className="h-1" />}
+      {Array.from(grouped.entries()).map(([taskType, taskJobs]) => (
+        <div key={taskType} className="space-y-1.5">
+          {grouped.size > 1 && (
+            <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+              {TASK_TYPE_LABELS[taskType] ?? taskType}
             </div>
-          );
-        })}
-      </div>
+          )}
+          {taskJobs.map((job) => {
+            const isProcessing = job.status === "processing";
+            const steps = STAGE_STEPS[job.task_type] ?? STAGE_STEPS.ingestion!;
+            const stepIdx = steps.indexOf(job.stage);
+            const percent = stepIdx >= 0 ? Math.round(((stepIdx + 1) / steps.length) * 100) : 0;
+            const stageMap = STAGE_LABELS[job.task_type] ?? STAGE_LABELS.ingestion!;
+            const displayName = getJobDisplayName(job);
+
+            return (
+              <div key={job.job_id} className="space-y-1">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="truncate max-w-[60%] text-muted-foreground" title={displayName}>
+                    {displayName}
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    {isProcessing && (
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                        {stageMap[job.stage] ?? job.stage}
+                      </Badge>
+                    )}
+                    <StatusBadge status={job.status} />
+                  </div>
+                </div>
+                {isProcessing && <Progress value={percent} className="h-1" />}
+              </div>
+            );
+          })}
+        </div>
+      ))}
     </div>
   );
 }
@@ -388,7 +455,7 @@ function DocumentsPage() {
   return (
     <div className="space-y-4 animate-page-in">
       <HealthBanner />
-      <IngestionStatus />
+      <BackgroundTasks />
 
       <div className="flex items-center justify-between">
         <div>

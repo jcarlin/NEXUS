@@ -6,17 +6,21 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { JobStatus } from './jobStatus';
+import type { JobStatusResponseFilename } from './jobStatusResponseFilename';
+import type { JobStatusResponseLabel } from './jobStatusResponseLabel';
 import type { JobProgress } from './jobProgress';
 import type { JobStatusResponseError } from './jobStatusResponseError';
 
 /**
- * Full status view of an ingestion job.
+ * Full status view of a background job (ingestion or other task types).
  */
 export interface JobStatusResponse {
   job_id: string;
   status: JobStatus;
   stage?: string;
-  filename: string;
+  filename?: JobStatusResponseFilename;
+  task_type?: string;
+  label?: JobStatusResponseLabel;
   progress?: JobProgress;
   error?: JobStatusResponseError;
   created_at: string;

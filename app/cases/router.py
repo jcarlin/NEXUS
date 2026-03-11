@@ -152,6 +152,8 @@ async def setup_case(
         minio_path=minio_path,
         job_id=UUID(job_id),
         matter_id=matter_id,
+        task_type="case_setup",
+        label=f"Case setup: {filename}",
     )
 
     # Create case context record

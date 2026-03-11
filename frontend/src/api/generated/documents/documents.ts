@@ -26,8 +26,8 @@ import type {
 
 import type {
   DocumentDetail,
+  DocumentHealthResponse,
   DocumentListResponse,
-  DocumentPreview,
   DocumentPreviewApiV1DocumentsDocIdPreviewGetParams,
   HTTPValidationError,
   ListDocumentsApiV1DocumentsGetParams,
@@ -37,6 +37,98 @@ import type {
 
 import { apiClient } from '../../client';
 
+
+
+
+/**
+ * Compare expected chunk counts (PG) vs indexed points (Qdrant).
+ * @summary Check Document Health
+ */
+export const checkDocumentHealthApiV1DocumentsHealthGet = (
+    
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiClient<DocumentHealthResponse>(
+      {url: `/api/v1/documents/health`, method: 'GET', signal
+    },
+      );
+    }
+  
+
+
+
+export const getCheckDocumentHealthApiV1DocumentsHealthGetQueryKey = () => {
+    return [
+    `/api/v1/documents/health`
+    ] as const;
+    }
+
+    
+export const getCheckDocumentHealthApiV1DocumentsHealthGetQueryOptions = <TData = Awaited<ReturnType<typeof checkDocumentHealthApiV1DocumentsHealthGet>>, TError = unknown>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof checkDocumentHealthApiV1DocumentsHealthGet>>, TError, TData>>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getCheckDocumentHealthApiV1DocumentsHealthGetQueryKey();
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof checkDocumentHealthApiV1DocumentsHealthGet>>> = ({ signal }) => checkDocumentHealthApiV1DocumentsHealthGet(signal);
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof checkDocumentHealthApiV1DocumentsHealthGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type CheckDocumentHealthApiV1DocumentsHealthGetQueryResult = NonNullable<Awaited<ReturnType<typeof checkDocumentHealthApiV1DocumentsHealthGet>>>
+export type CheckDocumentHealthApiV1DocumentsHealthGetQueryError = unknown
+
+
+export function useCheckDocumentHealthApiV1DocumentsHealthGet<TData = Awaited<ReturnType<typeof checkDocumentHealthApiV1DocumentsHealthGet>>, TError = unknown>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof checkDocumentHealthApiV1DocumentsHealthGet>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof checkDocumentHealthApiV1DocumentsHealthGet>>,
+          TError,
+          Awaited<ReturnType<typeof checkDocumentHealthApiV1DocumentsHealthGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useCheckDocumentHealthApiV1DocumentsHealthGet<TData = Awaited<ReturnType<typeof checkDocumentHealthApiV1DocumentsHealthGet>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof checkDocumentHealthApiV1DocumentsHealthGet>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof checkDocumentHealthApiV1DocumentsHealthGet>>,
+          TError,
+          Awaited<ReturnType<typeof checkDocumentHealthApiV1DocumentsHealthGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useCheckDocumentHealthApiV1DocumentsHealthGet<TData = Awaited<ReturnType<typeof checkDocumentHealthApiV1DocumentsHealthGet>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof checkDocumentHealthApiV1DocumentsHealthGet>>, TError, TData>>, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Check Document Health
+ */
+
+export function useCheckDocumentHealthApiV1DocumentsHealthGet<TData = Awaited<ReturnType<typeof checkDocumentHealthApiV1DocumentsHealthGet>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof checkDocumentHealthApiV1DocumentsHealthGet>>, TError, TData>>, }
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getCheckDocumentHealthApiV1DocumentsHealthGetQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
 
 
 
@@ -226,7 +318,7 @@ export function useGetDocumentApiV1DocumentsDocIdGet<TData = Awaited<ReturnType<
 
 
 /**
- * Return a presigned URL to a page thumbnail for the document.
+ * Return a page thumbnail PNG for the document.
  * @summary Document Preview
  */
 export const documentPreviewApiV1DocumentsDocIdPreviewGet = (
@@ -236,7 +328,7 @@ export const documentPreviewApiV1DocumentsDocIdPreviewGet = (
 ) => {
       
       
-      return apiClient<DocumentPreview>(
+      return apiClient<unknown>(
       {url: `/api/v1/documents/${docId}/preview`, method: 'GET',
         params, signal
     },
@@ -326,7 +418,7 @@ export function useDocumentPreviewApiV1DocumentsDocIdPreviewGet<TData = Awaited<
 
 
 /**
- * Return a presigned URL to download the original uploaded file.
+ * Download the original uploaded file.
  * @summary Document Download
  */
 export const documentDownloadApiV1DocumentsDocIdDownloadGet = (

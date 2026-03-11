@@ -7,7 +7,7 @@
  */
 
 /**
- * Stages an ingestion job passes through (Section 5.1).
+ * Valid statuses for background jobs in the ``jobs`` table.
  */
 export type JobStatus = typeof JobStatus[keyof typeof JobStatus];
 
@@ -15,6 +15,7 @@ export type JobStatus = typeof JobStatus[keyof typeof JobStatus];
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const JobStatus = {
   pending: 'pending',
+  processing: 'processing',
   uploading: 'uploading',
   parsing: 'parsing',
   chunking: 'chunking',

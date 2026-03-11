@@ -22,4 +22,8 @@ limit?: number;
  * Filter by job status (e.g. processing, complete, failed)
  */
 status?: string | null;
+/**
+ * Filter by task type (e.g. ingestion, entity_resolution)
+ */
+task_type?: string | null;
 };

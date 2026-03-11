@@ -26,19 +26,38 @@ import type {
 
 import type {
   AIAuditLogListResponse,
+  AgentAuditLogListResponse,
+  AgentSummaryResponse,
   ApplyRetentionApiV1AdminAuditRetentionPost200,
   AuditLogListResponse,
+  AvailableModelListResponse,
+  CostEstimateResponse,
+  DiscoverOllamaModelsApiV1AdminLlmConfigOllamaModelsGetParams,
   ExportAuditLogsApiV1AdminAuditExportGetParams,
+  GetAgentSummaryApiV1AdminAuditAgentsSummaryGetParams,
+  GetCostEstimateApiV1AdminLlmConfigCostEstimateGetParams,
+  GetToolDistributionApiV1AdminAuditAgentsToolsGetParams,
   HTTPValidationError,
   KGReprocessRequest,
   KGReprocessResponse,
   KGResolveRequest,
   KGResolveResponse,
   KGStatusResponse,
+  LLMConfigOverview,
+  LLMProviderCreate,
+  LLMProviderResponse,
+  LLMProviderUpdate,
+  LLMTier,
+  LLMTierConfigResponse,
+  LLMTierConfigSet,
+  ListAgentAuditLogsApiV1AdminAuditAgentsGetParams,
   ListAiAuditLogsApiV1AdminAuditAiGetParams,
   ListAuditLogApiV1AdminAuditLogGetParams,
   ListUsersApiV1AdminUsersGetParams,
+  OllamaModelListResponse,
   RetentionConfig,
+  TestConnectionResponse,
+  ToolDistributionResponse,
   UserCreateRequest,
   UserListResponse,
   UserResponse,
@@ -744,6 +763,285 @@ export function useListAiAuditLogsApiV1AdminAuditAiGet<TData = Awaited<ReturnTyp
 
 
 /**
+ * Return a paginated, filterable agent audit log. Admin-only.
+ * @summary List Agent Audit Logs
+ */
+export const listAgentAuditLogsApiV1AdminAuditAgentsGet = (
+    params?: ListAgentAuditLogsApiV1AdminAuditAgentsGetParams,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiClient<AgentAuditLogListResponse>(
+      {url: `/api/v1/admin/audit/agents`, method: 'GET',
+        params, signal
+    },
+      );
+    }
+  
+
+
+
+export const getListAgentAuditLogsApiV1AdminAuditAgentsGetQueryKey = (params?: ListAgentAuditLogsApiV1AdminAuditAgentsGetParams,) => {
+    return [
+    `/api/v1/admin/audit/agents`, ...(params ? [params]: [])
+    ] as const;
+    }
+
+    
+export const getListAgentAuditLogsApiV1AdminAuditAgentsGetQueryOptions = <TData = Awaited<ReturnType<typeof listAgentAuditLogsApiV1AdminAuditAgentsGet>>, TError = HTTPValidationError>(params?: ListAgentAuditLogsApiV1AdminAuditAgentsGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAgentAuditLogsApiV1AdminAuditAgentsGet>>, TError, TData>>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAgentAuditLogsApiV1AdminAuditAgentsGetQueryKey(params);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAgentAuditLogsApiV1AdminAuditAgentsGet>>> = ({ signal }) => listAgentAuditLogsApiV1AdminAuditAgentsGet(params, signal);
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAgentAuditLogsApiV1AdminAuditAgentsGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListAgentAuditLogsApiV1AdminAuditAgentsGetQueryResult = NonNullable<Awaited<ReturnType<typeof listAgentAuditLogsApiV1AdminAuditAgentsGet>>>
+export type ListAgentAuditLogsApiV1AdminAuditAgentsGetQueryError = HTTPValidationError
+
+
+export function useListAgentAuditLogsApiV1AdminAuditAgentsGet<TData = Awaited<ReturnType<typeof listAgentAuditLogsApiV1AdminAuditAgentsGet>>, TError = HTTPValidationError>(
+ params: undefined |  ListAgentAuditLogsApiV1AdminAuditAgentsGetParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAgentAuditLogsApiV1AdminAuditAgentsGet>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listAgentAuditLogsApiV1AdminAuditAgentsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listAgentAuditLogsApiV1AdminAuditAgentsGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListAgentAuditLogsApiV1AdminAuditAgentsGet<TData = Awaited<ReturnType<typeof listAgentAuditLogsApiV1AdminAuditAgentsGet>>, TError = HTTPValidationError>(
+ params?: ListAgentAuditLogsApiV1AdminAuditAgentsGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAgentAuditLogsApiV1AdminAuditAgentsGet>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listAgentAuditLogsApiV1AdminAuditAgentsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listAgentAuditLogsApiV1AdminAuditAgentsGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListAgentAuditLogsApiV1AdminAuditAgentsGet<TData = Awaited<ReturnType<typeof listAgentAuditLogsApiV1AdminAuditAgentsGet>>, TError = HTTPValidationError>(
+ params?: ListAgentAuditLogsApiV1AdminAuditAgentsGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAgentAuditLogsApiV1AdminAuditAgentsGet>>, TError, TData>>, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List Agent Audit Logs
+ */
+
+export function useListAgentAuditLogsApiV1AdminAuditAgentsGet<TData = Awaited<ReturnType<typeof listAgentAuditLogsApiV1AdminAuditAgentsGet>>, TError = HTTPValidationError>(
+ params?: ListAgentAuditLogsApiV1AdminAuditAgentsGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAgentAuditLogsApiV1AdminAuditAgentsGet>>, TError, TData>>, }
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListAgentAuditLogsApiV1AdminAuditAgentsGetQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+/**
+ * Return aggregate performance metrics per agent. Admin-only.
+ * @summary Get Agent Summary
+ */
+export const getAgentSummaryApiV1AdminAuditAgentsSummaryGet = (
+    params?: GetAgentSummaryApiV1AdminAuditAgentsSummaryGetParams,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiClient<AgentSummaryResponse>(
+      {url: `/api/v1/admin/audit/agents/summary`, method: 'GET',
+        params, signal
+    },
+      );
+    }
+  
+
+
+
+export const getGetAgentSummaryApiV1AdminAuditAgentsSummaryGetQueryKey = (params?: GetAgentSummaryApiV1AdminAuditAgentsSummaryGetParams,) => {
+    return [
+    `/api/v1/admin/audit/agents/summary`, ...(params ? [params]: [])
+    ] as const;
+    }
+
+    
+export const getGetAgentSummaryApiV1AdminAuditAgentsSummaryGetQueryOptions = <TData = Awaited<ReturnType<typeof getAgentSummaryApiV1AdminAuditAgentsSummaryGet>>, TError = HTTPValidationError>(params?: GetAgentSummaryApiV1AdminAuditAgentsSummaryGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAgentSummaryApiV1AdminAuditAgentsSummaryGet>>, TError, TData>>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAgentSummaryApiV1AdminAuditAgentsSummaryGetQueryKey(params);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAgentSummaryApiV1AdminAuditAgentsSummaryGet>>> = ({ signal }) => getAgentSummaryApiV1AdminAuditAgentsSummaryGet(params, signal);
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAgentSummaryApiV1AdminAuditAgentsSummaryGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetAgentSummaryApiV1AdminAuditAgentsSummaryGetQueryResult = NonNullable<Awaited<ReturnType<typeof getAgentSummaryApiV1AdminAuditAgentsSummaryGet>>>
+export type GetAgentSummaryApiV1AdminAuditAgentsSummaryGetQueryError = HTTPValidationError
+
+
+export function useGetAgentSummaryApiV1AdminAuditAgentsSummaryGet<TData = Awaited<ReturnType<typeof getAgentSummaryApiV1AdminAuditAgentsSummaryGet>>, TError = HTTPValidationError>(
+ params: undefined |  GetAgentSummaryApiV1AdminAuditAgentsSummaryGetParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAgentSummaryApiV1AdminAuditAgentsSummaryGet>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAgentSummaryApiV1AdminAuditAgentsSummaryGet>>,
+          TError,
+          Awaited<ReturnType<typeof getAgentSummaryApiV1AdminAuditAgentsSummaryGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetAgentSummaryApiV1AdminAuditAgentsSummaryGet<TData = Awaited<ReturnType<typeof getAgentSummaryApiV1AdminAuditAgentsSummaryGet>>, TError = HTTPValidationError>(
+ params?: GetAgentSummaryApiV1AdminAuditAgentsSummaryGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAgentSummaryApiV1AdminAuditAgentsSummaryGet>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAgentSummaryApiV1AdminAuditAgentsSummaryGet>>,
+          TError,
+          Awaited<ReturnType<typeof getAgentSummaryApiV1AdminAuditAgentsSummaryGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetAgentSummaryApiV1AdminAuditAgentsSummaryGet<TData = Awaited<ReturnType<typeof getAgentSummaryApiV1AdminAuditAgentsSummaryGet>>, TError = HTTPValidationError>(
+ params?: GetAgentSummaryApiV1AdminAuditAgentsSummaryGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAgentSummaryApiV1AdminAuditAgentsSummaryGet>>, TError, TData>>, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get Agent Summary
+ */
+
+export function useGetAgentSummaryApiV1AdminAuditAgentsSummaryGet<TData = Awaited<ReturnType<typeof getAgentSummaryApiV1AdminAuditAgentsSummaryGet>>, TError = HTTPValidationError>(
+ params?: GetAgentSummaryApiV1AdminAuditAgentsSummaryGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAgentSummaryApiV1AdminAuditAgentsSummaryGet>>, TError, TData>>, }
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetAgentSummaryApiV1AdminAuditAgentsSummaryGetQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+/**
+ * Return tool usage distribution across agent runs. Admin-only.
+ * @summary Get Tool Distribution
+ */
+export const getToolDistributionApiV1AdminAuditAgentsToolsGet = (
+    params?: GetToolDistributionApiV1AdminAuditAgentsToolsGetParams,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiClient<ToolDistributionResponse>(
+      {url: `/api/v1/admin/audit/agents/tools`, method: 'GET',
+        params, signal
+    },
+      );
+    }
+  
+
+
+
+export const getGetToolDistributionApiV1AdminAuditAgentsToolsGetQueryKey = (params?: GetToolDistributionApiV1AdminAuditAgentsToolsGetParams,) => {
+    return [
+    `/api/v1/admin/audit/agents/tools`, ...(params ? [params]: [])
+    ] as const;
+    }
+
+    
+export const getGetToolDistributionApiV1AdminAuditAgentsToolsGetQueryOptions = <TData = Awaited<ReturnType<typeof getToolDistributionApiV1AdminAuditAgentsToolsGet>>, TError = HTTPValidationError>(params?: GetToolDistributionApiV1AdminAuditAgentsToolsGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getToolDistributionApiV1AdminAuditAgentsToolsGet>>, TError, TData>>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetToolDistributionApiV1AdminAuditAgentsToolsGetQueryKey(params);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getToolDistributionApiV1AdminAuditAgentsToolsGet>>> = ({ signal }) => getToolDistributionApiV1AdminAuditAgentsToolsGet(params, signal);
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getToolDistributionApiV1AdminAuditAgentsToolsGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetToolDistributionApiV1AdminAuditAgentsToolsGetQueryResult = NonNullable<Awaited<ReturnType<typeof getToolDistributionApiV1AdminAuditAgentsToolsGet>>>
+export type GetToolDistributionApiV1AdminAuditAgentsToolsGetQueryError = HTTPValidationError
+
+
+export function useGetToolDistributionApiV1AdminAuditAgentsToolsGet<TData = Awaited<ReturnType<typeof getToolDistributionApiV1AdminAuditAgentsToolsGet>>, TError = HTTPValidationError>(
+ params: undefined |  GetToolDistributionApiV1AdminAuditAgentsToolsGetParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getToolDistributionApiV1AdminAuditAgentsToolsGet>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getToolDistributionApiV1AdminAuditAgentsToolsGet>>,
+          TError,
+          Awaited<ReturnType<typeof getToolDistributionApiV1AdminAuditAgentsToolsGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetToolDistributionApiV1AdminAuditAgentsToolsGet<TData = Awaited<ReturnType<typeof getToolDistributionApiV1AdminAuditAgentsToolsGet>>, TError = HTTPValidationError>(
+ params?: GetToolDistributionApiV1AdminAuditAgentsToolsGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getToolDistributionApiV1AdminAuditAgentsToolsGet>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getToolDistributionApiV1AdminAuditAgentsToolsGet>>,
+          TError,
+          Awaited<ReturnType<typeof getToolDistributionApiV1AdminAuditAgentsToolsGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetToolDistributionApiV1AdminAuditAgentsToolsGet<TData = Awaited<ReturnType<typeof getToolDistributionApiV1AdminAuditAgentsToolsGet>>, TError = HTTPValidationError>(
+ params?: GetToolDistributionApiV1AdminAuditAgentsToolsGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getToolDistributionApiV1AdminAuditAgentsToolsGet>>, TError, TData>>, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get Tool Distribution
+ */
+
+export function useGetToolDistributionApiV1AdminAuditAgentsToolsGet<TData = Awaited<ReturnType<typeof getToolDistributionApiV1AdminAuditAgentsToolsGet>>, TError = HTTPValidationError>(
+ params?: GetToolDistributionApiV1AdminAuditAgentsToolsGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getToolDistributionApiV1AdminAuditAgentsToolsGet>>, TError, TData>>, }
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetToolDistributionApiV1AdminAuditAgentsToolsGetQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+/**
  * Export audit log entries as CSV or JSON. Admin-only.
  * @summary Export Audit Logs
  */
@@ -988,6 +1286,824 @@ export const useApplyRetentionApiV1AdminAuditRetentionPost = <TError = unknown,
       > => {
 
       const mutationOptions = getApplyRetentionApiV1AdminAuditRetentionPostMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * Get full LLM configuration overview: providers + tiers + env defaults.
+ * @summary Get Overview
+ */
+export const getOverviewApiV1AdminLlmConfigGet = (
+    
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiClient<LLMConfigOverview>(
+      {url: `/api/v1/admin/llm-config`, method: 'GET', signal
+    },
+      );
+    }
+  
+
+
+
+export const getGetOverviewApiV1AdminLlmConfigGetQueryKey = () => {
+    return [
+    `/api/v1/admin/llm-config`
+    ] as const;
+    }
+
+    
+export const getGetOverviewApiV1AdminLlmConfigGetQueryOptions = <TData = Awaited<ReturnType<typeof getOverviewApiV1AdminLlmConfigGet>>, TError = unknown>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOverviewApiV1AdminLlmConfigGet>>, TError, TData>>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetOverviewApiV1AdminLlmConfigGetQueryKey();
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getOverviewApiV1AdminLlmConfigGet>>> = ({ signal }) => getOverviewApiV1AdminLlmConfigGet(signal);
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getOverviewApiV1AdminLlmConfigGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetOverviewApiV1AdminLlmConfigGetQueryResult = NonNullable<Awaited<ReturnType<typeof getOverviewApiV1AdminLlmConfigGet>>>
+export type GetOverviewApiV1AdminLlmConfigGetQueryError = unknown
+
+
+export function useGetOverviewApiV1AdminLlmConfigGet<TData = Awaited<ReturnType<typeof getOverviewApiV1AdminLlmConfigGet>>, TError = unknown>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOverviewApiV1AdminLlmConfigGet>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getOverviewApiV1AdminLlmConfigGet>>,
+          TError,
+          Awaited<ReturnType<typeof getOverviewApiV1AdminLlmConfigGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetOverviewApiV1AdminLlmConfigGet<TData = Awaited<ReturnType<typeof getOverviewApiV1AdminLlmConfigGet>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOverviewApiV1AdminLlmConfigGet>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getOverviewApiV1AdminLlmConfigGet>>,
+          TError,
+          Awaited<ReturnType<typeof getOverviewApiV1AdminLlmConfigGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetOverviewApiV1AdminLlmConfigGet<TData = Awaited<ReturnType<typeof getOverviewApiV1AdminLlmConfigGet>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOverviewApiV1AdminLlmConfigGet>>, TError, TData>>, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get Overview
+ */
+
+export function useGetOverviewApiV1AdminLlmConfigGet<TData = Awaited<ReturnType<typeof getOverviewApiV1AdminLlmConfigGet>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOverviewApiV1AdminLlmConfigGet>>, TError, TData>>, }
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetOverviewApiV1AdminLlmConfigGetQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+/**
+ * Add an LLM provider with credentials.
+ * @summary Create Provider
+ */
+export const createProviderApiV1AdminLlmConfigProvidersPost = (
+    lLMProviderCreate: LLMProviderCreate,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiClient<LLMProviderResponse>(
+      {url: `/api/v1/admin/llm-config/providers`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: lLMProviderCreate, signal
+    },
+      );
+    }
+  
+
+
+export const getCreateProviderApiV1AdminLlmConfigProvidersPostMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createProviderApiV1AdminLlmConfigProvidersPost>>, TError,{data: LLMProviderCreate}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof createProviderApiV1AdminLlmConfigProvidersPost>>, TError,{data: LLMProviderCreate}, TContext> => {
+
+const mutationKey = ['createProviderApiV1AdminLlmConfigProvidersPost'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createProviderApiV1AdminLlmConfigProvidersPost>>, {data: LLMProviderCreate}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createProviderApiV1AdminLlmConfigProvidersPost(data,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateProviderApiV1AdminLlmConfigProvidersPostMutationResult = NonNullable<Awaited<ReturnType<typeof createProviderApiV1AdminLlmConfigProvidersPost>>>
+    export type CreateProviderApiV1AdminLlmConfigProvidersPostMutationBody = LLMProviderCreate
+    export type CreateProviderApiV1AdminLlmConfigProvidersPostMutationError = HTTPValidationError
+
+    /**
+ * @summary Create Provider
+ */
+export const useCreateProviderApiV1AdminLlmConfigProvidersPost = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createProviderApiV1AdminLlmConfigProvidersPost>>, TError,{data: LLMProviderCreate}, TContext>, }
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createProviderApiV1AdminLlmConfigProvidersPost>>,
+        TError,
+        {data: LLMProviderCreate},
+        TContext
+      > => {
+
+      const mutationOptions = getCreateProviderApiV1AdminLlmConfigProvidersPostMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * Update an existing provider.
+ * @summary Update Provider
+ */
+export const updateProviderApiV1AdminLlmConfigProvidersProviderIdPatch = (
+    providerId: string,
+    lLMProviderUpdate: LLMProviderUpdate,
+ ) => {
+      
+      
+      return apiClient<LLMProviderResponse>(
+      {url: `/api/v1/admin/llm-config/providers/${providerId}`, method: 'PATCH',
+      headers: {'Content-Type': 'application/json', },
+      data: lLMProviderUpdate
+    },
+      );
+    }
+  
+
+
+export const getUpdateProviderApiV1AdminLlmConfigProvidersProviderIdPatchMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateProviderApiV1AdminLlmConfigProvidersProviderIdPatch>>, TError,{providerId: string;data: LLMProviderUpdate}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof updateProviderApiV1AdminLlmConfigProvidersProviderIdPatch>>, TError,{providerId: string;data: LLMProviderUpdate}, TContext> => {
+
+const mutationKey = ['updateProviderApiV1AdminLlmConfigProvidersProviderIdPatch'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateProviderApiV1AdminLlmConfigProvidersProviderIdPatch>>, {providerId: string;data: LLMProviderUpdate}> = (props) => {
+          const {providerId,data} = props ?? {};
+
+          return  updateProviderApiV1AdminLlmConfigProvidersProviderIdPatch(providerId,data,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateProviderApiV1AdminLlmConfigProvidersProviderIdPatchMutationResult = NonNullable<Awaited<ReturnType<typeof updateProviderApiV1AdminLlmConfigProvidersProviderIdPatch>>>
+    export type UpdateProviderApiV1AdminLlmConfigProvidersProviderIdPatchMutationBody = LLMProviderUpdate
+    export type UpdateProviderApiV1AdminLlmConfigProvidersProviderIdPatchMutationError = HTTPValidationError
+
+    /**
+ * @summary Update Provider
+ */
+export const useUpdateProviderApiV1AdminLlmConfigProvidersProviderIdPatch = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateProviderApiV1AdminLlmConfigProvidersProviderIdPatch>>, TError,{providerId: string;data: LLMProviderUpdate}, TContext>, }
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updateProviderApiV1AdminLlmConfigProvidersProviderIdPatch>>,
+        TError,
+        {providerId: string;data: LLMProviderUpdate},
+        TContext
+      > => {
+
+      const mutationOptions = getUpdateProviderApiV1AdminLlmConfigProvidersProviderIdPatchMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * Deactivate a provider (soft delete).
+ * @summary Deactivate Provider
+ */
+export const deactivateProviderApiV1AdminLlmConfigProvidersProviderIdDelete = (
+    providerId: string,
+ ) => {
+      
+      
+      return apiClient<void>(
+      {url: `/api/v1/admin/llm-config/providers/${providerId}`, method: 'DELETE'
+    },
+      );
+    }
+  
+
+
+export const getDeactivateProviderApiV1AdminLlmConfigProvidersProviderIdDeleteMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deactivateProviderApiV1AdminLlmConfigProvidersProviderIdDelete>>, TError,{providerId: string}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof deactivateProviderApiV1AdminLlmConfigProvidersProviderIdDelete>>, TError,{providerId: string}, TContext> => {
+
+const mutationKey = ['deactivateProviderApiV1AdminLlmConfigProvidersProviderIdDelete'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deactivateProviderApiV1AdminLlmConfigProvidersProviderIdDelete>>, {providerId: string}> = (props) => {
+          const {providerId} = props ?? {};
+
+          return  deactivateProviderApiV1AdminLlmConfigProvidersProviderIdDelete(providerId,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeactivateProviderApiV1AdminLlmConfigProvidersProviderIdDeleteMutationResult = NonNullable<Awaited<ReturnType<typeof deactivateProviderApiV1AdminLlmConfigProvidersProviderIdDelete>>>
+    
+    export type DeactivateProviderApiV1AdminLlmConfigProvidersProviderIdDeleteMutationError = HTTPValidationError
+
+    /**
+ * @summary Deactivate Provider
+ */
+export const useDeactivateProviderApiV1AdminLlmConfigProvidersProviderIdDelete = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deactivateProviderApiV1AdminLlmConfigProvidersProviderIdDelete>>, TError,{providerId: string}, TContext>, }
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deactivateProviderApiV1AdminLlmConfigProvidersProviderIdDelete>>,
+        TError,
+        {providerId: string},
+        TContext
+      > => {
+
+      const mutationOptions = getDeactivateProviderApiV1AdminLlmConfigProvidersProviderIdDeleteMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * Discover available models from a provider's API.
+ * @summary Discover Models
+ */
+export const discoverModelsApiV1AdminLlmConfigProvidersProviderIdModelsGet = (
+    providerId: string,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiClient<AvailableModelListResponse>(
+      {url: `/api/v1/admin/llm-config/providers/${providerId}/models`, method: 'GET', signal
+    },
+      );
+    }
+  
+
+
+
+export const getDiscoverModelsApiV1AdminLlmConfigProvidersProviderIdModelsGetQueryKey = (providerId?: string,) => {
+    return [
+    `/api/v1/admin/llm-config/providers/${providerId}/models`
+    ] as const;
+    }
+
+    
+export const getDiscoverModelsApiV1AdminLlmConfigProvidersProviderIdModelsGetQueryOptions = <TData = Awaited<ReturnType<typeof discoverModelsApiV1AdminLlmConfigProvidersProviderIdModelsGet>>, TError = HTTPValidationError>(providerId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof discoverModelsApiV1AdminLlmConfigProvidersProviderIdModelsGet>>, TError, TData>>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getDiscoverModelsApiV1AdminLlmConfigProvidersProviderIdModelsGetQueryKey(providerId);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof discoverModelsApiV1AdminLlmConfigProvidersProviderIdModelsGet>>> = ({ signal }) => discoverModelsApiV1AdminLlmConfigProvidersProviderIdModelsGet(providerId, signal);
+
+      
+
+      
+
+   return  { queryKey, queryFn, enabled: !!(providerId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof discoverModelsApiV1AdminLlmConfigProvidersProviderIdModelsGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type DiscoverModelsApiV1AdminLlmConfigProvidersProviderIdModelsGetQueryResult = NonNullable<Awaited<ReturnType<typeof discoverModelsApiV1AdminLlmConfigProvidersProviderIdModelsGet>>>
+export type DiscoverModelsApiV1AdminLlmConfigProvidersProviderIdModelsGetQueryError = HTTPValidationError
+
+
+export function useDiscoverModelsApiV1AdminLlmConfigProvidersProviderIdModelsGet<TData = Awaited<ReturnType<typeof discoverModelsApiV1AdminLlmConfigProvidersProviderIdModelsGet>>, TError = HTTPValidationError>(
+ providerId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof discoverModelsApiV1AdminLlmConfigProvidersProviderIdModelsGet>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof discoverModelsApiV1AdminLlmConfigProvidersProviderIdModelsGet>>,
+          TError,
+          Awaited<ReturnType<typeof discoverModelsApiV1AdminLlmConfigProvidersProviderIdModelsGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useDiscoverModelsApiV1AdminLlmConfigProvidersProviderIdModelsGet<TData = Awaited<ReturnType<typeof discoverModelsApiV1AdminLlmConfigProvidersProviderIdModelsGet>>, TError = HTTPValidationError>(
+ providerId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof discoverModelsApiV1AdminLlmConfigProvidersProviderIdModelsGet>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof discoverModelsApiV1AdminLlmConfigProvidersProviderIdModelsGet>>,
+          TError,
+          Awaited<ReturnType<typeof discoverModelsApiV1AdminLlmConfigProvidersProviderIdModelsGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useDiscoverModelsApiV1AdminLlmConfigProvidersProviderIdModelsGet<TData = Awaited<ReturnType<typeof discoverModelsApiV1AdminLlmConfigProvidersProviderIdModelsGet>>, TError = HTTPValidationError>(
+ providerId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof discoverModelsApiV1AdminLlmConfigProvidersProviderIdModelsGet>>, TError, TData>>, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Discover Models
+ */
+
+export function useDiscoverModelsApiV1AdminLlmConfigProvidersProviderIdModelsGet<TData = Awaited<ReturnType<typeof discoverModelsApiV1AdminLlmConfigProvidersProviderIdModelsGet>>, TError = HTTPValidationError>(
+ providerId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof discoverModelsApiV1AdminLlmConfigProvidersProviderIdModelsGet>>, TError, TData>>, }
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getDiscoverModelsApiV1AdminLlmConfigProvidersProviderIdModelsGetQueryOptions(providerId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+/**
+ * Test connectivity by making a trivial LLM call.
+ * @summary Test Connection
+ */
+export const testConnectionApiV1AdminLlmConfigProvidersProviderIdTestPost = (
+    providerId: string,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiClient<TestConnectionResponse>(
+      {url: `/api/v1/admin/llm-config/providers/${providerId}/test`, method: 'POST', signal
+    },
+      );
+    }
+  
+
+
+export const getTestConnectionApiV1AdminLlmConfigProvidersProviderIdTestPostMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testConnectionApiV1AdminLlmConfigProvidersProviderIdTestPost>>, TError,{providerId: string}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof testConnectionApiV1AdminLlmConfigProvidersProviderIdTestPost>>, TError,{providerId: string}, TContext> => {
+
+const mutationKey = ['testConnectionApiV1AdminLlmConfigProvidersProviderIdTestPost'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof testConnectionApiV1AdminLlmConfigProvidersProviderIdTestPost>>, {providerId: string}> = (props) => {
+          const {providerId} = props ?? {};
+
+          return  testConnectionApiV1AdminLlmConfigProvidersProviderIdTestPost(providerId,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type TestConnectionApiV1AdminLlmConfigProvidersProviderIdTestPostMutationResult = NonNullable<Awaited<ReturnType<typeof testConnectionApiV1AdminLlmConfigProvidersProviderIdTestPost>>>
+    
+    export type TestConnectionApiV1AdminLlmConfigProvidersProviderIdTestPostMutationError = HTTPValidationError
+
+    /**
+ * @summary Test Connection
+ */
+export const useTestConnectionApiV1AdminLlmConfigProvidersProviderIdTestPost = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testConnectionApiV1AdminLlmConfigProvidersProviderIdTestPost>>, TError,{providerId: string}, TContext>, }
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof testConnectionApiV1AdminLlmConfigProvidersProviderIdTestPost>>,
+        TError,
+        {providerId: string},
+        TContext
+      > => {
+
+      const mutationOptions = getTestConnectionApiV1AdminLlmConfigProvidersProviderIdTestPostMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * Set provider + model for a tier.
+ * @summary Set Tier Config
+ */
+export const setTierConfigApiV1AdminLlmConfigTiersTierPut = (
+    tier: LLMTier,
+    lLMTierConfigSet: LLMTierConfigSet,
+ ) => {
+      
+      
+      return apiClient<LLMTierConfigResponse>(
+      {url: `/api/v1/admin/llm-config/tiers/${tier}`, method: 'PUT',
+      headers: {'Content-Type': 'application/json', },
+      data: lLMTierConfigSet
+    },
+      );
+    }
+  
+
+
+export const getSetTierConfigApiV1AdminLlmConfigTiersTierPutMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setTierConfigApiV1AdminLlmConfigTiersTierPut>>, TError,{tier: LLMTier;data: LLMTierConfigSet}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof setTierConfigApiV1AdminLlmConfigTiersTierPut>>, TError,{tier: LLMTier;data: LLMTierConfigSet}, TContext> => {
+
+const mutationKey = ['setTierConfigApiV1AdminLlmConfigTiersTierPut'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof setTierConfigApiV1AdminLlmConfigTiersTierPut>>, {tier: LLMTier;data: LLMTierConfigSet}> = (props) => {
+          const {tier,data} = props ?? {};
+
+          return  setTierConfigApiV1AdminLlmConfigTiersTierPut(tier,data,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SetTierConfigApiV1AdminLlmConfigTiersTierPutMutationResult = NonNullable<Awaited<ReturnType<typeof setTierConfigApiV1AdminLlmConfigTiersTierPut>>>
+    export type SetTierConfigApiV1AdminLlmConfigTiersTierPutMutationBody = LLMTierConfigSet
+    export type SetTierConfigApiV1AdminLlmConfigTiersTierPutMutationError = HTTPValidationError
+
+    /**
+ * @summary Set Tier Config
+ */
+export const useSetTierConfigApiV1AdminLlmConfigTiersTierPut = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setTierConfigApiV1AdminLlmConfigTiersTierPut>>, TError,{tier: LLMTier;data: LLMTierConfigSet}, TContext>, }
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof setTierConfigApiV1AdminLlmConfigTiersTierPut>>,
+        TError,
+        {tier: LLMTier;data: LLMTierConfigSet},
+        TContext
+      > => {
+
+      const mutationOptions = getSetTierConfigApiV1AdminLlmConfigTiersTierPutMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * Remove tier override (falls back to env-var default).
+ * @summary Delete Tier Config
+ */
+export const deleteTierConfigApiV1AdminLlmConfigTiersTierDelete = (
+    tier: LLMTier,
+ ) => {
+      
+      
+      return apiClient<void>(
+      {url: `/api/v1/admin/llm-config/tiers/${tier}`, method: 'DELETE'
+    },
+      );
+    }
+  
+
+
+export const getDeleteTierConfigApiV1AdminLlmConfigTiersTierDeleteMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTierConfigApiV1AdminLlmConfigTiersTierDelete>>, TError,{tier: LLMTier}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof deleteTierConfigApiV1AdminLlmConfigTiersTierDelete>>, TError,{tier: LLMTier}, TContext> => {
+
+const mutationKey = ['deleteTierConfigApiV1AdminLlmConfigTiersTierDelete'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteTierConfigApiV1AdminLlmConfigTiersTierDelete>>, {tier: LLMTier}> = (props) => {
+          const {tier} = props ?? {};
+
+          return  deleteTierConfigApiV1AdminLlmConfigTiersTierDelete(tier,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteTierConfigApiV1AdminLlmConfigTiersTierDeleteMutationResult = NonNullable<Awaited<ReturnType<typeof deleteTierConfigApiV1AdminLlmConfigTiersTierDelete>>>
+    
+    export type DeleteTierConfigApiV1AdminLlmConfigTiersTierDeleteMutationError = HTTPValidationError
+
+    /**
+ * @summary Delete Tier Config
+ */
+export const useDeleteTierConfigApiV1AdminLlmConfigTiersTierDelete = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTierConfigApiV1AdminLlmConfigTiersTierDelete>>, TError,{tier: LLMTier}, TContext>, }
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deleteTierConfigApiV1AdminLlmConfigTiersTierDelete>>,
+        TError,
+        {tier: LLMTier},
+        TContext
+      > => {
+
+      const mutationOptions = getDeleteTierConfigApiV1AdminLlmConfigTiersTierDeleteMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * Discover models from local Ollama API.
+ * @summary Discover Ollama Models
+ */
+export const discoverOllamaModelsApiV1AdminLlmConfigOllamaModelsGet = (
+    params?: DiscoverOllamaModelsApiV1AdminLlmConfigOllamaModelsGetParams,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiClient<OllamaModelListResponse>(
+      {url: `/api/v1/admin/llm-config/ollama/models`, method: 'GET',
+        params, signal
+    },
+      );
+    }
+  
+
+
+
+export const getDiscoverOllamaModelsApiV1AdminLlmConfigOllamaModelsGetQueryKey = (params?: DiscoverOllamaModelsApiV1AdminLlmConfigOllamaModelsGetParams,) => {
+    return [
+    `/api/v1/admin/llm-config/ollama/models`, ...(params ? [params]: [])
+    ] as const;
+    }
+
+    
+export const getDiscoverOllamaModelsApiV1AdminLlmConfigOllamaModelsGetQueryOptions = <TData = Awaited<ReturnType<typeof discoverOllamaModelsApiV1AdminLlmConfigOllamaModelsGet>>, TError = HTTPValidationError>(params?: DiscoverOllamaModelsApiV1AdminLlmConfigOllamaModelsGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof discoverOllamaModelsApiV1AdminLlmConfigOllamaModelsGet>>, TError, TData>>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getDiscoverOllamaModelsApiV1AdminLlmConfigOllamaModelsGetQueryKey(params);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof discoverOllamaModelsApiV1AdminLlmConfigOllamaModelsGet>>> = ({ signal }) => discoverOllamaModelsApiV1AdminLlmConfigOllamaModelsGet(params, signal);
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof discoverOllamaModelsApiV1AdminLlmConfigOllamaModelsGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type DiscoverOllamaModelsApiV1AdminLlmConfigOllamaModelsGetQueryResult = NonNullable<Awaited<ReturnType<typeof discoverOllamaModelsApiV1AdminLlmConfigOllamaModelsGet>>>
+export type DiscoverOllamaModelsApiV1AdminLlmConfigOllamaModelsGetQueryError = HTTPValidationError
+
+
+export function useDiscoverOllamaModelsApiV1AdminLlmConfigOllamaModelsGet<TData = Awaited<ReturnType<typeof discoverOllamaModelsApiV1AdminLlmConfigOllamaModelsGet>>, TError = HTTPValidationError>(
+ params: undefined |  DiscoverOllamaModelsApiV1AdminLlmConfigOllamaModelsGetParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof discoverOllamaModelsApiV1AdminLlmConfigOllamaModelsGet>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof discoverOllamaModelsApiV1AdminLlmConfigOllamaModelsGet>>,
+          TError,
+          Awaited<ReturnType<typeof discoverOllamaModelsApiV1AdminLlmConfigOllamaModelsGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useDiscoverOllamaModelsApiV1AdminLlmConfigOllamaModelsGet<TData = Awaited<ReturnType<typeof discoverOllamaModelsApiV1AdminLlmConfigOllamaModelsGet>>, TError = HTTPValidationError>(
+ params?: DiscoverOllamaModelsApiV1AdminLlmConfigOllamaModelsGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof discoverOllamaModelsApiV1AdminLlmConfigOllamaModelsGet>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof discoverOllamaModelsApiV1AdminLlmConfigOllamaModelsGet>>,
+          TError,
+          Awaited<ReturnType<typeof discoverOllamaModelsApiV1AdminLlmConfigOllamaModelsGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useDiscoverOllamaModelsApiV1AdminLlmConfigOllamaModelsGet<TData = Awaited<ReturnType<typeof discoverOllamaModelsApiV1AdminLlmConfigOllamaModelsGet>>, TError = HTTPValidationError>(
+ params?: DiscoverOllamaModelsApiV1AdminLlmConfigOllamaModelsGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof discoverOllamaModelsApiV1AdminLlmConfigOllamaModelsGet>>, TError, TData>>, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Discover Ollama Models
+ */
+
+export function useDiscoverOllamaModelsApiV1AdminLlmConfigOllamaModelsGet<TData = Awaited<ReturnType<typeof discoverOllamaModelsApiV1AdminLlmConfigOllamaModelsGet>>, TError = HTTPValidationError>(
+ params?: DiscoverOllamaModelsApiV1AdminLlmConfigOllamaModelsGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof discoverOllamaModelsApiV1AdminLlmConfigOllamaModelsGet>>, TError, TData>>, }
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getDiscoverOllamaModelsApiV1AdminLlmConfigOllamaModelsGetQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+/**
+ * Estimate costs per tier based on ai_audit_log token usage.
+ * @summary Get Cost Estimate
+ */
+export const getCostEstimateApiV1AdminLlmConfigCostEstimateGet = (
+    params?: GetCostEstimateApiV1AdminLlmConfigCostEstimateGetParams,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiClient<CostEstimateResponse>(
+      {url: `/api/v1/admin/llm-config/cost-estimate`, method: 'GET',
+        params, signal
+    },
+      );
+    }
+  
+
+
+
+export const getGetCostEstimateApiV1AdminLlmConfigCostEstimateGetQueryKey = (params?: GetCostEstimateApiV1AdminLlmConfigCostEstimateGetParams,) => {
+    return [
+    `/api/v1/admin/llm-config/cost-estimate`, ...(params ? [params]: [])
+    ] as const;
+    }
+
+    
+export const getGetCostEstimateApiV1AdminLlmConfigCostEstimateGetQueryOptions = <TData = Awaited<ReturnType<typeof getCostEstimateApiV1AdminLlmConfigCostEstimateGet>>, TError = HTTPValidationError>(params?: GetCostEstimateApiV1AdminLlmConfigCostEstimateGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCostEstimateApiV1AdminLlmConfigCostEstimateGet>>, TError, TData>>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCostEstimateApiV1AdminLlmConfigCostEstimateGetQueryKey(params);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCostEstimateApiV1AdminLlmConfigCostEstimateGet>>> = ({ signal }) => getCostEstimateApiV1AdminLlmConfigCostEstimateGet(params, signal);
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCostEstimateApiV1AdminLlmConfigCostEstimateGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetCostEstimateApiV1AdminLlmConfigCostEstimateGetQueryResult = NonNullable<Awaited<ReturnType<typeof getCostEstimateApiV1AdminLlmConfigCostEstimateGet>>>
+export type GetCostEstimateApiV1AdminLlmConfigCostEstimateGetQueryError = HTTPValidationError
+
+
+export function useGetCostEstimateApiV1AdminLlmConfigCostEstimateGet<TData = Awaited<ReturnType<typeof getCostEstimateApiV1AdminLlmConfigCostEstimateGet>>, TError = HTTPValidationError>(
+ params: undefined |  GetCostEstimateApiV1AdminLlmConfigCostEstimateGetParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCostEstimateApiV1AdminLlmConfigCostEstimateGet>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getCostEstimateApiV1AdminLlmConfigCostEstimateGet>>,
+          TError,
+          Awaited<ReturnType<typeof getCostEstimateApiV1AdminLlmConfigCostEstimateGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetCostEstimateApiV1AdminLlmConfigCostEstimateGet<TData = Awaited<ReturnType<typeof getCostEstimateApiV1AdminLlmConfigCostEstimateGet>>, TError = HTTPValidationError>(
+ params?: GetCostEstimateApiV1AdminLlmConfigCostEstimateGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCostEstimateApiV1AdminLlmConfigCostEstimateGet>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getCostEstimateApiV1AdminLlmConfigCostEstimateGet>>,
+          TError,
+          Awaited<ReturnType<typeof getCostEstimateApiV1AdminLlmConfigCostEstimateGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetCostEstimateApiV1AdminLlmConfigCostEstimateGet<TData = Awaited<ReturnType<typeof getCostEstimateApiV1AdminLlmConfigCostEstimateGet>>, TError = HTTPValidationError>(
+ params?: GetCostEstimateApiV1AdminLlmConfigCostEstimateGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCostEstimateApiV1AdminLlmConfigCostEstimateGet>>, TError, TData>>, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get Cost Estimate
+ */
+
+export function useGetCostEstimateApiV1AdminLlmConfigCostEstimateGet<TData = Awaited<ReturnType<typeof getCostEstimateApiV1AdminLlmConfigCostEstimateGet>>, TError = HTTPValidationError>(
+ params?: GetCostEstimateApiV1AdminLlmConfigCostEstimateGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCostEstimateApiV1AdminLlmConfigCostEstimateGet>>, TError, TData>>, }
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetCostEstimateApiV1AdminLlmConfigCostEstimateGetQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+/**
+ * Clear LLM client caches to force rebuild with new config.
+
+This clears the resolver cache and the DI singletons for the LLM
+client and query graph, so the next request picks up the new config.
+ * @summary Apply Config
+ */
+export const applyConfigApiV1AdminLlmConfigApplyPost = (
+    
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiClient<void>(
+      {url: `/api/v1/admin/llm-config/apply`, method: 'POST', signal
+    },
+      );
+    }
+  
+
+
+export const getApplyConfigApiV1AdminLlmConfigApplyPostMutationOptions = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof applyConfigApiV1AdminLlmConfigApplyPost>>, TError,void, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof applyConfigApiV1AdminLlmConfigApplyPost>>, TError,void, TContext> => {
+
+const mutationKey = ['applyConfigApiV1AdminLlmConfigApplyPost'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof applyConfigApiV1AdminLlmConfigApplyPost>>, void> = () => {
+          
+
+          return  applyConfigApiV1AdminLlmConfigApplyPost()
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ApplyConfigApiV1AdminLlmConfigApplyPostMutationResult = NonNullable<Awaited<ReturnType<typeof applyConfigApiV1AdminLlmConfigApplyPost>>>
+    
+    export type ApplyConfigApiV1AdminLlmConfigApplyPostMutationError = unknown
+
+    /**
+ * @summary Apply Config
+ */
+export const useApplyConfigApiV1AdminLlmConfigApplyPost = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof applyConfigApiV1AdminLlmConfigApplyPost>>, TError,void, TContext>, }
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof applyConfigApiV1AdminLlmConfigApplyPost>>,
+        TError,
+        void,
+        TContext
+      > => {
+
+      const mutationOptions = getApplyConfigApiV1AdminLlmConfigApplyPostMutationOptions(options);
 
       return useMutation(mutationOptions, queryClient);
     }

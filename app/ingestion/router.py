@@ -68,7 +68,9 @@ def _job_row_to_status_response(row: dict) -> JobStatusResponse:
         job_id=row["id"],
         status=row["status"],
         stage=row.get("stage", "uploading"),
-        filename=row["filename"],
+        filename=row.get("filename"),
+        task_type=row.get("task_type", "ingestion"),
+        label=row.get("label"),
         progress=JobProgress(
             stage=row.get("stage", "uploading"),
             pages_parsed=progress_raw.get("pages_parsed", 0),
@@ -572,13 +574,17 @@ async def list_jobs(
     offset: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(50, ge=1, le=200, description="Max records to return"),
     status: str | None = Query(None, description="Filter by job status (e.g. processing, complete, failed)"),
+    task_type: str | None = Query(None, description="Filter by task type (e.g. ingestion, entity_resolution)"),
     db: AsyncSession = Depends(get_db),
     current_user: UserRecord = Depends(get_current_user),
     matter_id: UUID = Depends(get_matter_id),
 ):
-    """List all ingestion jobs (paginated, newest first)."""
+    """List all background jobs (paginated, newest first).
+
+    Without a ``task_type`` filter, returns jobs of all types.
+    """
     items, total = await IngestionService.list_jobs(
-        db=db, offset=offset, limit=limit, matter_id=matter_id, status=status
+        db=db, offset=offset, limit=limit, matter_id=matter_id, status=status, task_type=task_type
     )
     return JobListResponse(
         items=[_job_row_to_status_response(row) for row in items],

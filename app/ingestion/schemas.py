@@ -28,12 +28,14 @@ class JobProgress(BaseModel):
 
 
 class JobStatusResponse(BaseModel):
-    """Full status view of an ingestion job."""
+    """Full status view of a background job (ingestion or other task types)."""
 
     job_id: UUID
     status: JobStatus
     stage: str = "uploading"
-    filename: str
+    filename: str | None = None
+    task_type: str = "ingestion"
+    label: str | None = None
     progress: JobProgress = Field(default_factory=JobProgress)
     error: str | None = None
     created_at: datetime

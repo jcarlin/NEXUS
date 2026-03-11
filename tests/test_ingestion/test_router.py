@@ -133,6 +133,60 @@ async def test_list_jobs(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_list_jobs_with_task_type_filter(client: AsyncClient) -> None:
+    """GET /jobs?task_type=entity_resolution passes task_type to service."""
+    with patch(
+        "app.ingestion.service.IngestionService.list_jobs",
+        new_callable=AsyncMock,
+        return_value=([], 0),
+    ) as mock_list:
+        response = await client.get("/api/v1/jobs?task_type=entity_resolution")
+
+    assert response.status_code == 200
+    # Verify task_type was forwarded
+    call_kwargs = mock_list.call_args
+    assert call_kwargs.kwargs.get("task_type") == "entity_resolution"
+
+
+@pytest.mark.asyncio
+async def test_list_jobs_returns_task_type_fields(client: AsyncClient) -> None:
+    """GET /jobs returns task_type and label fields in response."""
+    now = datetime.now(UTC)
+    fake_jobs = [
+        {
+            "id": uuid4(),
+            "filename": None,
+            "status": "extracting",
+            "stage": "loading_entities",
+            "progress": {},
+            "error": None,
+            "parent_job_id": None,
+            "matter_id": uuid4(),
+            "metadata_": {},
+            "task_type": "entity_resolution",
+            "label": "Entity resolution: person",
+            "created_at": now,
+            "updated_at": now,
+        }
+    ]
+
+    with patch(
+        "app.ingestion.service.IngestionService.list_jobs",
+        new_callable=AsyncMock,
+        return_value=(fake_jobs, 1),
+    ):
+        response = await client.get("/api/v1/jobs")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["items"]) == 1
+    item = body["items"][0]
+    assert item["task_type"] == "entity_resolution"
+    assert item["label"] == "Entity resolution: person"
+    assert item["filename"] is None
+
+
+@pytest.mark.asyncio
 async def test_batch_requires_files(client: AsyncClient) -> None:
     """POST /ingest/batch without files should return 422."""
     response = await client.post("/api/v1/ingest/batch")

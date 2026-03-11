@@ -30,18 +30,23 @@ class IngestionService:
     @staticmethod
     async def create_job(
         db: AsyncSession,
-        filename: str,
-        minio_path: str,
+        filename: str | None = None,
+        minio_path: str = "",
         parent_job_id: UUID | None = None,
         job_id: UUID | None = None,
         matter_id: UUID | None = None,
         dataset_id: UUID | None = None,
+        task_type: str = "ingestion",
+        label: str | None = None,
     ) -> dict:
         """Insert a new job row and return it as a dict.
 
         If *job_id* is provided it will be used as the primary key;
         otherwise a new UUID is generated.  This allows the caller to
         pre-generate an id that matches the MinIO object prefix.
+
+        For non-ingestion tasks, *filename* may be ``None`` and *label*
+        provides the display name shown in the UI.
 
         The caller's session is expected to commit after this call returns
         (e.g. via the ``get_db`` dependency's auto-commit wrapper).
@@ -54,9 +59,11 @@ class IngestionService:
             text(
                 """
                 INSERT INTO jobs (id, filename, status, stage, progress, error,
-                                  parent_job_id, matter_id, dataset_id, metadata_, created_at, updated_at)
+                                  parent_job_id, matter_id, dataset_id, metadata_,
+                                  task_type, label, created_at, updated_at)
                 VALUES (:id, :filename, :status, :stage, :progress, :error,
-                        :parent_job_id, :matter_id, :dataset_id, :metadata_, :created_at, :updated_at)
+                        :parent_job_id, :matter_id, :dataset_id, :metadata_,
+                        :task_type, :label, :created_at, :updated_at)
                 """
             ),
             {
@@ -69,14 +76,16 @@ class IngestionService:
                 "parent_job_id": parent_job_id,
                 "matter_id": matter_id,
                 "dataset_id": dataset_id,
-                "metadata_": f'{{"minio_path": "{minio_path}"}}',
+                "metadata_": f'{{"minio_path": "{minio_path}"}}' if minio_path else "{}",
+                "task_type": task_type,
+                "label": label,
                 "created_at": now,
                 "updated_at": now,
             },
         )
         await db.flush()
 
-        logger.info("job.created", job_id=str(job_id), filename=filename)
+        logger.info("job.created", job_id=str(job_id), filename=filename, task_type=task_type)
 
         return {
             "id": job_id,
@@ -87,7 +96,9 @@ class IngestionService:
             "error": None,
             "parent_job_id": parent_job_id,
             "matter_id": matter_id,
-            "metadata_": {"minio_path": minio_path},
+            "task_type": task_type,
+            "label": label,
+            "metadata_": {"minio_path": minio_path} if minio_path else {},
             "created_at": now,
             "updated_at": now,
         }
@@ -113,7 +124,8 @@ class IngestionService:
             text(
                 f"""
                 SELECT id, filename, status, stage, progress, error,
-                       parent_job_id, matter_id, metadata_, created_at, updated_at
+                       parent_job_id, matter_id, metadata_,
+                       task_type, label, created_at, updated_at
                 FROM jobs
                 {where}
                 """
@@ -136,6 +148,7 @@ class IngestionService:
         limit: int = 50,
         matter_id: UUID | None = None,
         status: str | None = None,
+        task_type: str | None = None,
     ) -> tuple[list[dict], int]:
         """Return ``(items, total_count)`` with offset/limit pagination.
 
@@ -149,6 +162,9 @@ class IngestionService:
         if status is not None:
             clauses.append("status = :status")
             params["status"] = status
+        if task_type is not None:
+            clauses.append("task_type = :task_type")
+            params["task_type"] = task_type
         where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
 
         # Total count
@@ -160,7 +176,8 @@ class IngestionService:
             text(
                 f"""
                 SELECT id, filename, status, stage, progress, error,
-                       parent_job_id, matter_id, metadata_, created_at, updated_at
+                       parent_job_id, matter_id, metadata_,
+                       task_type, label, created_at, updated_at
                 FROM jobs
                 {where}
                 ORDER BY created_at DESC

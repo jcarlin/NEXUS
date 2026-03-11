@@ -7,13 +7,113 @@ Neo4j, runs fuzzy matching, and merges duplicates.
 from __future__ import annotations
 
 import asyncio
+import json
+from uuid import uuid4
 
 import structlog
 from celery import shared_task
+from sqlalchemy import create_engine, text
 
 from workers.celery_app import celery_app  # noqa: F401 — ensures @shared_task binds to our app
 
 logger = structlog.get_logger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Sync DB helpers (Celery tasks use the sync Postgres URL)
+# ---------------------------------------------------------------------------
+
+
+def _get_sync_engine():
+    """Create a disposable sync SQLAlchemy engine for the current task."""
+    from app.config import Settings
+
+    settings = Settings()
+    return create_engine(settings.postgres_url_sync, pool_pre_ping=True)
+
+
+def _create_job_sync(
+    engine,
+    matter_id: str | None,
+    task_type: str,
+    label: str,
+    parent_job_id: str | None = None,
+) -> str:
+    """Insert a job row synchronously and return the job_id string."""
+    job_id = str(uuid4())
+    with engine.connect() as conn:
+        conn.execute(
+            text(
+                """
+                INSERT INTO jobs (id, status, stage, progress, task_type, label,
+                                  matter_id, parent_job_id, created_at, updated_at)
+                VALUES (:id, 'pending', 'starting', '{}', :task_type, :label,
+                        :matter_id, :parent_job_id, now(), now())
+                """
+            ),
+            {
+                "id": job_id,
+                "task_type": task_type,
+                "label": label,
+                "matter_id": matter_id,
+                "parent_job_id": parent_job_id,
+            },
+        )
+        conn.commit()
+    return job_id
+
+
+def _update_stage(
+    engine,
+    job_id: str,
+    stage: str,
+    status: str,
+    progress: dict | None = None,
+    error: str | None = None,
+) -> None:
+    """Update a job's stage, status, and progress in the ``jobs`` table."""
+    with engine.connect() as conn:
+        if progress is not None:
+            conn.execute(
+                text(
+                    """
+                    UPDATE jobs
+                    SET stage = :stage,
+                        status = :status,
+                        progress = CAST(:progress AS jsonb),
+                        error = :error,
+                        updated_at = now()
+                    WHERE id = :job_id
+                    """
+                ),
+                {
+                    "job_id": job_id,
+                    "stage": stage,
+                    "status": status,
+                    "progress": json.dumps(progress),
+                    "error": error,
+                },
+            )
+        else:
+            conn.execute(
+                text(
+                    """
+                    UPDATE jobs
+                    SET stage = :stage,
+                        status = :status,
+                        error = :error,
+                        updated_at = now()
+                    WHERE id = :job_id
+                    """
+                ),
+                {
+                    "job_id": job_id,
+                    "stage": stage,
+                    "status": status,
+                    "error": error,
+                },
+            )
+        conn.commit()
 
 
 async def _run_resolution(entity_type: str | None = None, matter_id: str | None = None) -> dict:
@@ -114,8 +214,24 @@ def resolve_entities(self, entity_type: str | None = None, matter_id: str | None
     """
     logger.info("task.resolve_entities.start", entity_type=entity_type, matter_id=matter_id)
 
+    engine = _get_sync_engine()
+    label = f"Entity resolution: {entity_type or 'all'}"
+    job_id = _create_job_sync(engine, matter_id, "entity_resolution", label)
+
     try:
+        _update_stage(engine, job_id, "loading_entities", "processing")
         result = asyncio.run(_run_resolution(entity_type, matter_id=matter_id))
+
+        _update_stage(
+            engine,
+            job_id,
+            "complete",
+            "complete",
+            progress={
+                "types_processed": result["entity_types_processed"],
+                "merges_performed": result["merges_performed"],
+            },
+        )
         logger.info(
             "task.resolve_entities.complete",
             merges=result["merges_performed"],
@@ -123,6 +239,7 @@ def resolve_entities(self, entity_type: str | None = None, matter_id: str | None
         )
         return result
     except Exception as exc:
+        _update_stage(engine, job_id, "failed", "failed", error=str(exc))
         logger.error("task.resolve_entities.failed", error=str(exc))
         if self.request.retries < self.max_retries:
             raise self.retry(exc=exc)
@@ -153,13 +270,22 @@ def entity_resolution_agent(self, matter_id: str) -> dict:
     """
     logger.info("task.entity_resolution_agent.start", matter_id=matter_id)
 
+    engine = _get_sync_engine()
+    job_id = _create_job_sync(engine, matter_id, "entity_resolution", "Entity resolution agent")
+
     try:
+        _update_stage(engine, job_id, "loading_entities", "processing")
+
         from app.entities.resolution_agent import run_resolution_agent
 
+        _update_stage(engine, job_id, "analyzing", "processing")
         result = asyncio.run(run_resolution_agent(matter_id))
+
+        _update_stage(engine, job_id, "complete", "complete", progress=result)
         logger.info("task.entity_resolution_agent.complete", **result)
         return result
     except Exception as exc:
+        _update_stage(engine, job_id, "failed", "failed", error=str(exc))
         logger.error("task.entity_resolution_agent.failed", error=str(exc))
         if self.request.retries < self.max_retries:
             raise self.retry(exc=exc)
@@ -190,6 +316,9 @@ def reprocess_entities_to_neo4j(self, document_ids: list[str]) -> dict:
     """
     logger.info("task.reprocess_neo4j.start", doc_count=len(document_ids))
 
+    engine = _get_sync_engine()
+    job_id = _create_job_sync(engine, None, "reprocess_neo4j", f"Neo4j reindex: {len(document_ids)} docs")
+
     async def _run() -> dict:
         from neo4j import AsyncGraphDatabase
         from qdrant_client import QdrantClient
@@ -208,6 +337,7 @@ def reprocess_entities_to_neo4j(self, document_ids: list[str]) -> dict:
             gs = GraphService(driver)
             processed = 0
             failed = 0
+            total = len(document_ids)
 
             for doc_id in document_ids:
                 try:
@@ -278,6 +408,13 @@ def reprocess_entities_to_neo4j(self, document_ids: list[str]) -> dict:
                         )
 
                     processed += 1
+                    _update_stage(
+                        engine,
+                        job_id,
+                        "indexing_entities",
+                        "processing",
+                        progress={"processed": processed, "failed": failed, "total": total},
+                    )
                     logger.info(
                         "task.reprocess_neo4j.doc_done",
                         doc_id=doc_id,
@@ -288,16 +425,25 @@ def reprocess_entities_to_neo4j(self, document_ids: list[str]) -> dict:
                     failed += 1
                     logger.error("task.reprocess_neo4j.doc_failed", doc_id=doc_id, exc_info=True)
 
-            return {"processed": processed, "failed": failed}
+            return {"processed": processed, "failed": failed, "total": total}
         finally:
             await driver.close()
             qdrant.close()
 
     try:
+        _update_stage(engine, job_id, "loading_chunks", "processing")
         result = asyncio.run(_run())
+        _update_stage(
+            engine,
+            job_id,
+            "complete",
+            "complete",
+            progress={"processed": result["processed"], "failed": result["failed"], "total": result["total"]},
+        )
         logger.info("task.reprocess_neo4j.complete", **result)
         return result
     except Exception as exc:
+        _update_stage(engine, job_id, "failed", "failed", error=str(exc))
         logger.error("task.reprocess_neo4j.failed", error=str(exc))
         if self.request.retries < self.max_retries:
             raise self.retry(exc=exc)

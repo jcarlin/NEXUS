@@ -29,6 +29,7 @@ import type {
   BatchIngestResponse,
   BodyIngestBatchApiV1IngestBatchPost,
   BodyIngestSingleApiV1IngestPost,
+  BodyUploadFileApiV1IngestUploadPost,
   BulkImportListResponse,
   DryRunRequest,
   DryRunResponse,
@@ -44,6 +45,7 @@ import type {
   PresignedUploadResponse,
   ProcessUploadedApiV1IngestProcessUploadedPostParams,
   ProcessUploadedRequest,
+  ReindexRequest,
   S3EventNotification,
   WebhookResponse
 } from '.././schemas';
@@ -202,6 +204,73 @@ export const useIngestBatchApiV1IngestBatchPost = <TError = HTTPValidationError,
       return useMutation(mutationOptions, queryClient);
     }
     /**
+ * Upload a file directly through the API.
+ * @summary Upload File
+ */
+export const uploadFileApiV1IngestUploadPost = (
+    bodyUploadFileApiV1IngestUploadPost: BodyUploadFileApiV1IngestUploadPost,
+ signal?: AbortSignal
+) => {
+      
+      const formData = new FormData();
+formData.append(`file`, bodyUploadFileApiV1IngestUploadPost.file)
+
+      return apiClient<unknown>(
+      {url: `/api/v1/ingest/upload`, method: 'POST',
+      headers: {'Content-Type': 'multipart/form-data', },
+       data: formData, signal
+    },
+      );
+    }
+  
+
+
+export const getUploadFileApiV1IngestUploadPostMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadFileApiV1IngestUploadPost>>, TError,{data: BodyUploadFileApiV1IngestUploadPost}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof uploadFileApiV1IngestUploadPost>>, TError,{data: BodyUploadFileApiV1IngestUploadPost}, TContext> => {
+
+const mutationKey = ['uploadFileApiV1IngestUploadPost'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof uploadFileApiV1IngestUploadPost>>, {data: BodyUploadFileApiV1IngestUploadPost}> = (props) => {
+          const {data} = props ?? {};
+
+          return  uploadFileApiV1IngestUploadPost(data,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UploadFileApiV1IngestUploadPostMutationResult = NonNullable<Awaited<ReturnType<typeof uploadFileApiV1IngestUploadPost>>>
+    export type UploadFileApiV1IngestUploadPostMutationBody = BodyUploadFileApiV1IngestUploadPost
+    export type UploadFileApiV1IngestUploadPostMutationError = HTTPValidationError
+
+    /**
+ * @summary Upload File
+ */
+export const useUploadFileApiV1IngestUploadPost = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadFileApiV1IngestUploadPost>>, TError,{data: BodyUploadFileApiV1IngestUploadPost}, TContext>, }
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof uploadFileApiV1IngestUploadPost>>,
+        TError,
+        {data: BodyUploadFileApiV1IngestUploadPost},
+        TContext
+      > => {
+
+      const mutationOptions = getUploadFileApiV1IngestUploadPostMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
  * Generate a presigned PUT URL for direct S3 upload from the browser.
  * @summary Get Presigned Upload Url
  */
@@ -333,6 +402,74 @@ export const useProcessUploadedApiV1IngestProcessUploadedPost = <TError = HTTPVa
       > => {
 
       const mutationOptions = getProcessUploadedApiV1IngestProcessUploadedPostMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * Re-ingest existing documents by looking up their real MinIO paths.
+
+Unlike ``process_uploaded`` which requires the caller to supply MinIO
+object keys, this endpoint resolves paths from the documents table.
+ * @summary Reindex Documents
+ */
+export const reindexDocumentsApiV1IngestReindexPost = (
+    reindexRequest: ReindexRequest,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiClient<BatchIngestResponse>(
+      {url: `/api/v1/ingest/reindex`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: reindexRequest, signal
+    },
+      );
+    }
+  
+
+
+export const getReindexDocumentsApiV1IngestReindexPostMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reindexDocumentsApiV1IngestReindexPost>>, TError,{data: ReindexRequest}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof reindexDocumentsApiV1IngestReindexPost>>, TError,{data: ReindexRequest}, TContext> => {
+
+const mutationKey = ['reindexDocumentsApiV1IngestReindexPost'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reindexDocumentsApiV1IngestReindexPost>>, {data: ReindexRequest}> = (props) => {
+          const {data} = props ?? {};
+
+          return  reindexDocumentsApiV1IngestReindexPost(data,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReindexDocumentsApiV1IngestReindexPostMutationResult = NonNullable<Awaited<ReturnType<typeof reindexDocumentsApiV1IngestReindexPost>>>
+    export type ReindexDocumentsApiV1IngestReindexPostMutationBody = ReindexRequest
+    export type ReindexDocumentsApiV1IngestReindexPostMutationError = HTTPValidationError
+
+    /**
+ * @summary Reindex Documents
+ */
+export const useReindexDocumentsApiV1IngestReindexPost = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reindexDocumentsApiV1IngestReindexPost>>, TError,{data: ReindexRequest}, TContext>, }
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof reindexDocumentsApiV1IngestReindexPost>>,
+        TError,
+        {data: ReindexRequest},
+        TContext
+      > => {
+
+      const mutationOptions = getReindexDocumentsApiV1IngestReindexPostMutationOptions(options);
 
       return useMutation(mutationOptions, queryClient);
     }
@@ -720,7 +857,9 @@ export const useCancelJobApiV1JobsJobIdDelete = <TError = HTTPValidationError,
       return useMutation(mutationOptions, queryClient);
     }
     /**
- * List all ingestion jobs (paginated, newest first).
+ * List all background jobs (paginated, newest first).
+
+Without a ``task_type`` filter, returns jobs of all types.
  * @summary List Jobs
  */
 export const listJobsApiV1JobsGet = (

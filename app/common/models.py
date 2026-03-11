@@ -12,9 +12,10 @@ from pydantic import BaseModel, Field
 
 
 class JobStatus(StrEnum):
-    """Stages an ingestion job passes through (Section 5.1)."""
+    """Valid statuses for background jobs in the ``jobs`` table."""
 
     PENDING = "pending"
+    PROCESSING = "processing"
     UPLOADING = "uploading"
     PARSING = "parsing"
     CHUNKING = "chunking"
@@ -23,6 +24,17 @@ class JobStatus(StrEnum):
     INDEXING = "indexing"
     COMPLETE = "complete"
     FAILED = "failed"
+
+
+class TaskType(StrEnum):
+    """Discriminator for background job types tracked in the jobs table."""
+
+    INGESTION = "ingestion"
+    ENTITY_RESOLUTION = "entity_resolution"
+    REPROCESS_NEO4J = "reprocess_neo4j"
+    ANALYSIS_SENTIMENT = "analysis_sentiment"
+    ANALYSIS_MATTER_SCAN = "analysis_matter_scan"
+    CASE_SETUP = "case_setup"
 
 
 class PrivilegeStatus(StrEnum):
