@@ -396,6 +396,9 @@ class DatasetService:
             text("""
                 SELECT doc.id, doc.filename, doc.document_type, doc.page_count,
                        doc.chunk_count, doc.entity_count, doc.created_at,
+                       doc.minio_path, doc.privilege_status, doc.thread_id,
+                       doc.is_inclusive, doc.duplicate_cluster_id,
+                       doc.version_group_id, doc.hot_doc_score,
                        dd.assigned_at
                 FROM documents doc
                 JOIN dataset_documents dd ON dd.document_id = doc.id

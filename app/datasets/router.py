@@ -53,6 +53,8 @@ from app.datasets.schemas import (
 )
 from app.datasets.service import DatasetService
 from app.dependencies import get_db
+from app.documents.router import _row_to_response
+from app.documents.schemas import DocumentListResponse
 
 logger = structlog.get_logger(__name__)
 
@@ -244,7 +246,10 @@ async def move_documents(
     return {"moved": count}
 
 
-@router.get("/datasets/{dataset_id}/documents")
+@router.get(
+    "/datasets/{dataset_id}/documents",
+    response_model=DocumentListResponse,
+)
 async def list_dataset_documents(
     dataset_id: UUID,
     offset: int = Query(0, ge=0),
@@ -264,7 +269,12 @@ async def list_dataset_documents(
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    return {"items": items, "total": total, "offset": offset, "limit": limit}
+    return DocumentListResponse(
+        items=[_row_to_response(row) for row in items],
+        total=total,
+        offset=offset,
+        limit=limit,
+    )
 
 
 # ------------------------------------------------------------------

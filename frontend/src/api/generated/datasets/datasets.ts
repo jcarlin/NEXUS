@@ -36,6 +36,7 @@ import type {
   DatasetResponse,
   DatasetTreeResponse,
   DatasetUpdateRequest,
+  DocumentListResponse,
   DocumentTagsResponse,
   DryRunEstimate,
   HTTPValidationError,
@@ -663,7 +664,7 @@ export const listDatasetDocumentsApiV1DatasetsDatasetIdDocumentsGet = (
 ) => {
       
       
-      return apiClient<unknown>(
+      return apiClient<DocumentListResponse>(
       {url: `/api/v1/datasets/${datasetId}/documents`, method: 'GET',
         params, signal
     },
