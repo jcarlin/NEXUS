@@ -1,15 +1,20 @@
 """Wipe all NEXUS data stores for a clean re-ingest.
 
-Clears: PostgreSQL (data tables), Qdrant (all points), Neo4j (all nodes), MinIO (document objects).
+Clears: PostgreSQL (data tables), Qdrant (all points), Neo4j (all nodes), MinIO (document objects), Redis.
 Preserves: users, case_matters, user_case_matters, audit_log, ai_audit_log, datasets table structure.
 
+With --drop-db: drops and recreates the entire PostgreSQL schema, then runs alembic upgrade head.
+
 Usage:
-    python scripts/wipe_data.py
+    python scripts/wipe_data.py            # truncate data tables only
+    python scripts/wipe_data.py --drop-db  # full PG nuke + re-migrate
 """
 
 from __future__ import annotations
 
+import argparse
 import os
+import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -26,10 +31,33 @@ from sqlalchemy import create_engine, text
 from app.config import Settings
 
 
-def wipe_postgres(settings: Settings) -> None:
+def wipe_postgres(settings: Settings, *, drop_db: bool = False) -> None:
     """Delete data tables in dependency order, preserving users/matters/audit."""
     print("=== Wiping PostgreSQL ===")
     engine = create_engine(settings.postgres_url_sync, pool_pre_ping=True)
+
+    if drop_db:
+        print("  --drop-db: dropping entire public schema...")
+        with engine.connect() as conn:
+            conn.execute(text("DROP SCHEMA public CASCADE"))
+            conn.execute(text("CREATE SCHEMA public"))
+            conn.commit()
+        print("  Schema dropped and recreated")
+        engine.dispose()
+
+        print("  Running alembic upgrade head...")
+        result = subprocess.run(
+            [sys.executable, "-m", "alembic", "upgrade", "head"],
+            cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            print(f"  Alembic failed:\n{result.stderr}")
+            sys.exit(1)
+        print("  Alembic migrations applied")
+        print("  PostgreSQL wiped (full reset)\n")
+        return
 
     # Dependency order: children first
     tables_to_clear = [
@@ -169,13 +197,36 @@ def wipe_minio(settings: Settings) -> None:
         print(f"  MinIO wipe failed: {exc}\n")
 
 
+def wipe_redis(settings: Settings) -> None:
+    """Flush the Redis database (Celery broker, results, cache)."""
+    print("=== Wiping Redis ===")
+    try:
+        import redis
+
+        r = redis.from_url(settings.redis_url)
+        r.flushdb()
+        print("  FLUSHDB complete")
+        print("  Redis wiped\n")
+    except Exception as exc:
+        print(f"  Redis wipe failed: {exc}\n")
+
+
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Wipe all NEXUS data stores")
+    parser.add_argument(
+        "--drop-db",
+        action="store_true",
+        help="Drop and recreate PostgreSQL public schema, then run alembic upgrade head",
+    )
+    args = parser.parse_args()
+
     settings = Settings()
     print("\nWiping all data stores...\n")
-    wipe_postgres(settings)
+    wipe_postgres(settings, drop_db=args.drop_db)
     wipe_qdrant(settings)
     wipe_neo4j(settings)
     wipe_minio(settings)
+    wipe_redis(settings)
     print("=== All stores wiped. Ready for re-ingest. ===\n")
 
 

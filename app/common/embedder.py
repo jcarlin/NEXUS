@@ -125,7 +125,7 @@ class OpenAIEmbeddingProvider:
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=30),
         reraise=True,
-        before_sleep=before_sleep_log(logger, "warning"),  # type: ignore[arg-type]
+        before_sleep=before_sleep_log(logger, 30),  # logging.WARNING
     )
     async def _embed_batch(self, texts: list[str]) -> list[list[float]]:
         """Call the OpenAI embeddings endpoint for a single batch."""
@@ -288,7 +288,7 @@ class GeminiEmbeddingProvider:
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=30),
         reraise=True,
-        before_sleep=before_sleep_log(logger, "warning"),  # type: ignore[arg-type]
+        before_sleep=before_sleep_log(logger, 30),  # logging.WARNING
     )
     async def _embed_batch(self, texts: list[str]) -> list[list[float]]:
         """Call the Google GenAI embeddings endpoint for a single batch."""
@@ -338,7 +338,7 @@ class TEIEmbeddingProvider:
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=30),
         reraise=True,
-        before_sleep=before_sleep_log(logger, "warning"),  # type: ignore[arg-type]
+        before_sleep=before_sleep_log(logger, 30),  # logging.WARNING
     )
     async def _embed_batch(self, texts: list[str]) -> list[list[float]]:
         """Call the TEI /embed endpoint for a batch of texts."""
@@ -409,7 +409,7 @@ class OllamaEmbeddingProvider:
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=30),
         reraise=True,
-        before_sleep=before_sleep_log(logger, "warning"),  # type: ignore[arg-type]
+        before_sleep=before_sleep_log(logger, 30),  # logging.WARNING
     )
     async def _embed_batch(self, texts: list[str]) -> list[list[float]]:
         """Call the Ollama /api/embed endpoint for a batch of texts."""

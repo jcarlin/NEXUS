@@ -309,7 +309,9 @@ async def _embed_chunks(settings, chunk_texts: list[str]) -> list[list[float]]:
     """Embed chunk texts using the configured embedding provider."""
     from app.common.embedder import (
         EmbeddingProvider,
+        GeminiEmbeddingProvider,
         LocalEmbeddingProvider,
+        OllamaEmbeddingProvider,
         OpenAIEmbeddingProvider,
         TEIEmbeddingProvider,
     )
@@ -323,6 +325,18 @@ async def _embed_chunks(settings, chunk_texts: list[str]) -> list[list[float]]:
     elif settings.embedding_provider == "tei":
         provider = TEIEmbeddingProvider(
             base_url=settings.tei_embedding_url,
+            dimensions=settings.embedding_dimensions,
+        )
+    elif settings.embedding_provider == "ollama":
+        provider = OllamaEmbeddingProvider(
+            base_url=settings.ollama_base_url.removesuffix("/v1"),
+            model=settings.ollama_embedding_model,
+            dimensions=settings.embedding_dimensions,
+        )
+    elif settings.embedding_provider == "gemini":
+        provider = GeminiEmbeddingProvider(
+            api_key=settings.gemini_api_key,
+            model=settings.embedding_model,
             dimensions=settings.embedding_dimensions,
         )
     else:

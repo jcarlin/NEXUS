@@ -1,4 +1,4 @@
-.PHONY: help install up down dev stop api worker frontend test migrate logs demo seed-demo
+.PHONY: help install up down dev stop api worker frontend test migrate logs demo seed-demo reset
 
 VENV := .venv/bin
 SERVICES ?=
@@ -58,3 +58,7 @@ demo: install up migrate  ## One-time demo setup: seed all data
 seed-demo:  ## Re-seed demo data (requires running API + worker)
 	$(VENV)/python -m scripts.generate_test_docs
 	$(VENV)/python scripts/seed_demo.py
+
+reset: up ## Full data wipe + re-migrate (then run 'make dev' + 'make seed-demo')
+	$(VENV)/python scripts/wipe_data.py --drop-db
+	@echo "Data wiped and migrations applied. Run 'make dev' then 'make seed-demo' to re-seed."
