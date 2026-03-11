@@ -197,11 +197,9 @@ class TestResolveSyncVariant:
         cfg = resolve_llm_config_sync("analysis", mock_engine)
         assert cfg.model == "fallback"
 
-    @patch("app.llm_config.resolver._resolve_from_env")
-    def test_falls_back_to_env_on_exception(self, mock_env: MagicMock) -> None:
-        mock_env.return_value = ResolvedLLMConfig(provider="anthropic", model="safe", api_key="safe-key", base_url="")
+    def test_raises_on_db_error(self) -> None:
         mock_engine = MagicMock()
         mock_engine.connect.side_effect = Exception("DB down")
 
-        cfg = resolve_llm_config_sync("query", mock_engine)
-        assert cfg.model == "safe"
+        with pytest.raises(Exception, match="DB down"):
+            resolve_llm_config_sync("query", mock_engine)

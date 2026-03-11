@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.llm_config.schemas import (
     AvailableModel,
     CostEstimateResponse,
+    EmbeddingConfigInfo,
     LLMConfigOverview,
     LLMProviderCreate,
     LLMProviderResponse,
@@ -259,6 +260,42 @@ class LLMConfigService:
     # ------------------------------------------------------------------
 
     @staticmethod
+    async def _resolve_test_model(db: AsyncSession, provider_id: UUID, provider_type: str, base_url: str) -> str:
+        """Pick a model for test_connection.
+
+        1. If any tier config uses this provider → use that model.
+        2. For Ollama: discover available models, use the first one.
+        3. Fall back to provider-specific defaults for cloud providers.
+        """
+        # Check if any tier already references this provider
+        result = await db.execute(
+            text("""
+                SELECT model FROM llm_tier_config
+                WHERE provider_id = :pid
+                LIMIT 1
+            """),
+            {"pid": provider_id},
+        )
+        row = result.mappings().first()
+        if row:
+            return row["model"]
+
+        # For Ollama, discover available models
+        if provider_type == "ollama":
+            models = await LLMConfigService.discover_ollama_models(base_url)
+            if not models:
+                raise ValueError("No Ollama models available — pull a model first")
+            return models[0].name
+
+        # Cloud provider defaults
+        defaults: dict[str, str] = {
+            "anthropic": "claude-sonnet-4-5-20250929",
+            "openai": "gpt-4o-mini",
+            "gemini": "gemini-2.0-flash",
+        }
+        return defaults.get(provider_type, "gpt-4o-mini")
+
+    @staticmethod
     async def test_connection(db: AsyncSession, provider_id: UUID) -> TestConnectionResponse:
         """Test connectivity by making a trivial LLM completion call."""
         provider = await LLMConfigService.get_provider_with_key(db, provider_id)
@@ -270,9 +307,7 @@ class LLMConfigService:
             from app.config import Settings
 
             settings = Settings()
-            # Build a temporary LLMClient with the provider's credentials
             prov_type = provider["provider"]
-            # Override settings for temporary client
             settings.llm_provider = prov_type
             if prov_type == "anthropic":
                 settings.anthropic_api_key = provider["api_key"]
@@ -283,17 +318,9 @@ class LLMConfigService:
             elif prov_type == "ollama":
                 settings.ollama_base_url = provider["base_url"] or settings.ollama_base_url
 
-            if provider["base_url"] and prov_type != "ollama":
-                if prov_type == "openai":
-                    pass  # base_url handled in LLMClient
-
-            # Use a simple test model appropriate for each provider
-            if prov_type == "anthropic":
-                test_model = "claude-sonnet-4-5-20250929"
-            elif prov_type == "gemini":
-                test_model = "gemini-2.0-flash"
-            else:
-                test_model = "gpt-4o-mini"
+            test_model = await LLMConfigService._resolve_test_model(
+                db, provider_id, prov_type, provider.get("base_url") or settings.ollama_base_url
+            )
             settings.llm_model = test_model
 
             client = LLMClient(settings)
@@ -528,8 +555,15 @@ class LLMConfigService:
             "ingestion": f"{settings.llm_provider}/{settings.llm_model}",
         }
 
+        embedding = EmbeddingConfigInfo(
+            provider=settings.embedding_provider,
+            model=settings.embedding_model,
+            dimensions=settings.embedding_dimensions,
+        )
+
         return LLMConfigOverview(
             providers=providers,
             tiers=tiers,
             env_defaults=env_defaults,
+            embedding=embedding,
         )

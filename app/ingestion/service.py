@@ -375,6 +375,36 @@ class IngestionService:
         return items, total
 
     # ------------------------------------------------------------------
+    # RE-INDEX (look up real MinIO paths for existing documents)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    async def get_documents_for_reindex(
+        db: AsyncSession,
+        doc_ids: list[UUID],
+        matter_id: UUID,
+    ) -> list[dict]:
+        """Fetch document metadata needed to re-dispatch ingestion.
+
+        Returns list of dicts with id, filename, minio_path for each
+        document that exists and belongs to the given matter.
+        """
+        placeholders = ", ".join(f":id_{i}" for i in range(len(doc_ids)))
+        params: dict = {f"id_{i}": did for i, did in enumerate(doc_ids)}
+        params["matter_id"] = matter_id
+
+        result = await db.execute(
+            text(f"""
+                SELECT id, filename, minio_path
+                FROM documents
+                WHERE id IN ({placeholders})
+                  AND matter_id = :matter_id
+            """),
+            params,
+        )
+        return [row_to_dict(r) for r in result.all()]
+
+    # ------------------------------------------------------------------
     # DRY-RUN ESTIMATE
     # ------------------------------------------------------------------
 

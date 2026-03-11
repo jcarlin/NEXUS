@@ -149,17 +149,16 @@ def get_llm() -> LLMClient:
     ``get_llm.cache_clear()`` so changes take effect on next request.
     """
     settings = get_settings()
+    from sqlalchemy import create_engine
+
+    from app.llm_config.resolver import resolve_llm_config_sync
+
+    engine = create_engine(settings.postgres_url_sync, pool_pre_ping=True)
     try:
-        from sqlalchemy import create_engine
-
-        from app.llm_config.resolver import resolve_llm_config_sync
-
-        engine = create_engine(settings.postgres_url_sync, pool_pre_ping=True)
         config = resolve_llm_config_sync("query", engine)
+    finally:
         engine.dispose()
-        return LLMClient.from_resolved_config(config)
-    except Exception:
-        return LLMClient(settings)
+    return LLMClient.from_resolved_config(config)
 
 
 # Module-level pool for tier-resolved LLM clients (keyed by provider/model/base_url)

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, ChevronDown, ChevronRight, Loader2 } from "lucide-react";
+import { Plus, ChevronDown, ChevronRight, Loader2, AlertTriangle } from "lucide-react";
 import { apiClient } from "@/api/client";
 import { useNotifications } from "@/hooks/use-notifications";
 import { Button } from "@/components/ui/button";
@@ -53,10 +53,17 @@ interface LLMTierConfig {
   is_env_default: boolean;
 }
 
+interface EmbeddingConfigInfo {
+  provider: string;
+  model: string;
+  dimensions: number;
+}
+
 interface LLMConfigOverview {
   providers: LLMProvider[];
   tiers: LLMTierConfig[];
   env_defaults: Record<string, string>;
+  embedding: EmbeddingConfigInfo;
 }
 
 interface OllamaModel {
@@ -114,6 +121,7 @@ function LLMSettingsPage() {
   const [tierOverrides, setTierOverrides] = useState<
     Record<string, { provider_id: string; model: string }>
   >({});
+  const [testingProviderId, setTestingProviderId] = useState<string | null>(null);
 
   const { data: overview, isLoading } = useQuery({
     queryKey: ["llm-config"],
@@ -146,11 +154,13 @@ function LLMSettingsPage() {
   });
 
   const testMutation = useMutation({
-    mutationFn: (providerId: string) =>
-      apiClient<TestConnectionResponse>({
+    mutationFn: (providerId: string) => {
+      setTestingProviderId(providerId);
+      return apiClient<TestConnectionResponse>({
         url: `/api/v1/admin/llm-config/providers/${providerId}/test`,
         method: "POST",
-      }),
+      });
+    },
     onSuccess: (result) => {
       if (result.success) {
         notify.success(`Connection OK (${result.latency_ms}ms)`);
@@ -160,6 +170,9 @@ function LLMSettingsPage() {
     },
     onError: (err) => {
       notify.error(err instanceof Error ? err.message : "Test failed");
+    },
+    onSettled: () => {
+      setTestingProviderId(null);
     },
   });
 
@@ -312,10 +325,16 @@ function LLMSettingsPage() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <span className={`inline-block h-2.5 w-2.5 rounded-full ${p.api_key_set ? "bg-green-500" : "bg-red-500"}`} />
-                      <span className="ml-2 text-xs text-muted-foreground">
-                        {p.api_key_set ? "Set" : "Missing"}
-                      </span>
+                      {p.provider === "ollama" ? (
+                        <span className="text-xs text-muted-foreground">N/A</span>
+                      ) : (
+                        <>
+                          <span className={`inline-block h-2.5 w-2.5 rounded-full ${p.api_key_set ? "bg-green-500" : "bg-red-500"}`} />
+                          <span className="ml-2 text-xs text-muted-foreground">
+                            {p.api_key_set ? "Set" : "Missing"}
+                          </span>
+                        </>
+                      )}
                     </TableCell>
                     <TableCell className="font-mono text-xs max-w-[200px] truncate">
                       {p.base_url || "-"}
@@ -343,7 +362,7 @@ function LLMSettingsPage() {
                           disabled={testMutation.isPending}
                           onClick={() => testMutation.mutate(p.id)}
                         >
-                          {testMutation.isPending ? (
+                          {testingProviderId === p.id ? (
                             <Loader2 className="h-3 w-3 animate-spin" />
                           ) : (
                             "Test"
@@ -600,6 +619,38 @@ function LLMSettingsPage() {
           </CardContent>
         )}
       </Card>
+
+      {/* Card 5: Embedding Configuration (read-only) */}
+      {overview?.embedding && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Embedding Model</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-3 gap-4 text-sm">
+              <div>
+                <p className="text-muted-foreground text-xs mb-1">Provider</p>
+                <p className="font-medium">{overview.embedding.provider}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground text-xs mb-1">Model</p>
+                <p className="font-mono text-xs">{overview.embedding.model}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground text-xs mb-1">Dimensions</p>
+                <p className="tabular-nums">{overview.embedding.dimensions}</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-2 rounded-md border border-yellow-200 bg-yellow-50 p-3 dark:border-yellow-900 dark:bg-yellow-950">
+              <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-500 mt-0.5 shrink-0" />
+              <p className="text-xs text-yellow-800 dark:text-yellow-200">
+                Changing the embedding model after ingestion requires re-ingesting all documents.
+                Configured via environment variables.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Provider Dialog */}
       <LLMProviderDialog

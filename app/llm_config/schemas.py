@@ -117,6 +117,15 @@ class CostEstimateResponse(BaseModel):
     total_cost_usd: float = 0.0
 
 
+# --- Embedding config (read-only) ---
+
+
+class EmbeddingConfigInfo(BaseModel):
+    provider: str
+    model: str
+    dimensions: int
+
+
 # --- Overview ---
 
 
@@ -124,6 +133,7 @@ class LLMConfigOverview(BaseModel):
     providers: list[LLMProviderResponse]
     tiers: list[LLMTierConfigResponse]
     env_defaults: dict[str, str]  # tier -> "provider/model" from env
+    embedding: EmbeddingConfigInfo
 
 
 # --- Test connection ---

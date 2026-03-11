@@ -144,3 +144,83 @@ async def test_webhook_requires_body(client: AsyncClient) -> None:
     """POST /ingest/webhook without a JSON body should return 422."""
     response = await client.post("/api/v1/ingest/webhook")
     assert response.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# POST /ingest/reindex
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_reindex_dispatches_jobs(client: AsyncClient) -> None:
+    """POST /ingest/reindex with valid doc_ids creates jobs and dispatches tasks."""
+    doc_id = uuid4()
+    fake_job_id = uuid4()
+    now = datetime.now(UTC)
+    fake_job = {
+        "id": fake_job_id,
+        "filename": "test.pdf",
+        "status": "pending",
+        "stage": "uploading",
+        "progress": {},
+        "error": None,
+        "parent_job_id": None,
+        "metadata_": {},
+        "created_at": now,
+        "updated_at": now,
+    }
+
+    with (
+        patch("app.ingestion.router.process_document") as mock_task,
+        patch(
+            "app.ingestion.service.IngestionService.get_documents_for_reindex",
+            new_callable=AsyncMock,
+            return_value=[{"id": doc_id, "filename": "test.pdf", "minio_path": "raw/abc/test.pdf"}],
+        ),
+        patch(
+            "app.ingestion.service.IngestionService.create_job",
+            new_callable=AsyncMock,
+            return_value=fake_job,
+        ),
+    ):
+        mock_task.delay = MagicMock()
+
+        response = await client.post(
+            "/api/v1/ingest/reindex",
+            json={"doc_ids": [str(doc_id)]},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total_files"] == 1
+    assert len(body["job_ids"]) == 1
+    mock_task.delay.assert_called_once()
+    # Verify the real minio_path was used, not reindex/{doc_id}
+    call_args = mock_task.delay.call_args
+    assert call_args[0][1] == "raw/abc/test.pdf"
+
+
+@pytest.mark.asyncio
+async def test_reindex_404_when_no_docs(client: AsyncClient) -> None:
+    """POST /ingest/reindex with no matching docs returns 404."""
+    with patch(
+        "app.ingestion.service.IngestionService.get_documents_for_reindex",
+        new_callable=AsyncMock,
+        return_value=[],
+    ):
+        response = await client.post(
+            "/api/v1/ingest/reindex",
+            json={"doc_ids": [str(uuid4())]},
+        )
+
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_reindex_empty_list_422(client: AsyncClient) -> None:
+    """POST /ingest/reindex with empty doc_ids returns 422."""
+    response = await client.post(
+        "/api/v1/ingest/reindex",
+        json={"doc_ids": []},
+    )
+    assert response.status_code == 422

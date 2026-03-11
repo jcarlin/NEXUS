@@ -119,33 +119,29 @@ def resolve_llm_config_sync(tier: str, engine: Any) -> ResolvedLLMConfig:
 
     from sqlalchemy import text as sa_text
 
-    try:
-        with engine.connect() as conn:
-            row = (
-                conn.execute(
-                    sa_text("""
-                    SELECT p.provider, t.model, p.api_key, p.base_url
-                    FROM llm_tier_config t
-                    JOIN llm_providers p ON p.id = t.provider_id
-                    WHERE t.tier = :tier AND p.is_active = true
-                """),
-                    {"tier": tier},
-                )
-                .mappings()
-                .first()
+    with engine.connect() as conn:
+        row = (
+            conn.execute(
+                sa_text("""
+                SELECT p.provider, t.model, p.api_key, p.base_url
+                FROM llm_tier_config t
+                JOIN llm_providers p ON p.id = t.provider_id
+                WHERE t.tier = :tier AND p.is_active = true
+            """),
+                {"tier": tier},
             )
+            .mappings()
+            .first()
+        )
 
-        if row:
-            config = ResolvedLLMConfig(
-                provider=row["provider"],
-                model=row["model"],
-                api_key=row["api_key"],
-                base_url=row["base_url"],
-            )
-        else:
-            config = _resolve_from_env(tier)
-    except Exception:
-        logger.warning("llm_config.resolve_sync.failed", tier=tier, exc_info=True)
+    if row:
+        config = ResolvedLLMConfig(
+            provider=row["provider"],
+            model=row["model"],
+            api_key=row["api_key"],
+            base_url=row["base_url"],
+        )
+    else:
         config = _resolve_from_env(tier)
 
     _cache[tier] = (config, time.monotonic())

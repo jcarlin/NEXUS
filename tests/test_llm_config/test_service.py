@@ -441,3 +441,94 @@ class TestEstimateCosts:
         assert result.period_days == 30
         assert len(result.tiers) == 3
         assert result.total_cost_usd > 0
+
+
+class TestResolveTestModel:
+    @pytest.mark.asyncio
+    async def test_uses_tier_configured_model(self) -> None:
+        """When a tier config references this provider, use that model."""
+        db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.mappings.return_value.first.return_value = {"model": "llama3:8b"}
+        db.execute.return_value = mock_result
+
+        model = await LLMConfigService._resolve_test_model(db, _PROVIDER_ID, "ollama", "http://localhost:11434")
+        assert model == "llama3:8b"
+
+    @pytest.mark.asyncio
+    async def test_ollama_discovers_model(self) -> None:
+        """When no tier config, Ollama discovers available models."""
+        db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.mappings.return_value.first.return_value = None
+        db.execute.return_value = mock_result
+
+        from app.llm_config.schemas import OllamaModel
+
+        with patch.object(
+            LLMConfigService,
+            "discover_ollama_models",
+            new_callable=AsyncMock,
+            return_value=[OllamaModel(name="qwen2:7b"), OllamaModel(name="llama3:8b")],
+        ):
+            model = await LLMConfigService._resolve_test_model(db, _PROVIDER_ID, "ollama", "http://localhost:11434")
+        assert model == "qwen2:7b"
+
+    @pytest.mark.asyncio
+    async def test_ollama_raises_when_no_models(self) -> None:
+        """Ollama with no models available raises ValueError."""
+        db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.mappings.return_value.first.return_value = None
+        db.execute.return_value = mock_result
+
+        with patch.object(
+            LLMConfigService,
+            "discover_ollama_models",
+            new_callable=AsyncMock,
+            return_value=[],
+        ):
+            with pytest.raises(ValueError, match="No Ollama models available"):
+                await LLMConfigService._resolve_test_model(db, _PROVIDER_ID, "ollama", "http://localhost:11434")
+
+    @pytest.mark.asyncio
+    async def test_cloud_provider_defaults(self) -> None:
+        """Cloud providers fall back to sensible defaults."""
+        db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.mappings.return_value.first.return_value = None
+        db.execute.return_value = mock_result
+
+        model = await LLMConfigService._resolve_test_model(db, _PROVIDER_ID, "anthropic", "")
+        assert model == "claude-sonnet-4-5-20250929"
+
+        model = await LLMConfigService._resolve_test_model(db, _PROVIDER_ID, "gemini", "")
+        assert model == "gemini-2.0-flash"
+
+
+class TestGetOverview:
+    @pytest.mark.asyncio
+    @patch("app.dependencies.get_settings")
+    async def test_includes_embedding_config(self, mock_settings: MagicMock) -> None:
+        s = mock_settings.return_value
+        s.llm_provider = "anthropic"
+        s.llm_model = "claude-sonnet-4-5-20250929"
+        s.query_llm_model = ""
+        s.embedding_provider = "local"
+        s.embedding_model = "BAAI/bge-small-en-v1.5"
+        s.embedding_dimensions = 384
+
+        db = AsyncMock()
+        # list_providers
+        mock_providers = MagicMock()
+        mock_providers.mappings.return_value.all.return_value = []
+        # list_tier_configs
+        mock_tiers = MagicMock()
+        mock_tiers.mappings.return_value.all.return_value = []
+
+        db.execute = AsyncMock(side_effect=[mock_providers, mock_tiers])
+
+        overview = await LLMConfigService.get_overview(db)
+        assert overview.embedding.provider == "local"
+        assert overview.embedding.model == "BAAI/bge-small-en-v1.5"
+        assert overview.embedding.dimensions == 384

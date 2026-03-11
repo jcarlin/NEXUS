@@ -13,6 +13,7 @@ from app.auth.schemas import UserRecord
 from app.llm_config.schemas import (
     AvailableModel,
     CostEstimateResponse,
+    EmbeddingConfigInfo,
     LLMConfigOverview,
     LLMProviderResponse,
     LLMProviderType,
@@ -94,6 +95,7 @@ async def test_overview_admin_200(client: AsyncClient) -> None:
             "analysis": "anthropic/claude-sonnet-4-5-20250929",
             "ingestion": "anthropic/claude-sonnet-4-5-20250929",
         },
+        embedding=EmbeddingConfigInfo(provider="openai", model="text-embedding-3-large", dimensions=1024),
     )
     _mock_db_override(client._transport.app)
 

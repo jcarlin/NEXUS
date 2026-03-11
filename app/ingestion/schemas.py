@@ -166,6 +166,17 @@ class ProcessUploadedRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Re-index schemas
+# ---------------------------------------------------------------------------
+
+
+class ReindexRequest(BaseModel):
+    """Request to re-ingest documents by their DB IDs."""
+
+    doc_ids: list[UUID] = Field(..., min_length=1, max_length=500)
+
+
+# ---------------------------------------------------------------------------
 # Bulk import list
 # ---------------------------------------------------------------------------
 

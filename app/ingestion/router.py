@@ -35,6 +35,7 @@ from app.ingestion.schemas import (
     PresignedUploadRequest,
     PresignedUploadResponse,
     ProcessUploadedRequest,
+    ReindexRequest,
     S3EventNotification,
     WebhookResponse,
 )
@@ -328,6 +329,64 @@ async def process_uploaded(
             job_id=str(job_id_val),
             filename=fname,
             object_key=mpath,
+        )
+
+    return BatchIngestResponse(
+        batch_id=batch_id,
+        job_ids=job_ids,
+        filenames=filenames,
+        total_files=len(job_ids),
+    )
+
+
+# -----------------------------------------------------------------------
+# POST /ingest/reindex — re-ingest documents by ID (uses real MinIO paths)
+# -----------------------------------------------------------------------
+
+
+@router.post("/ingest/reindex", response_model=BatchIngestResponse)
+async def reindex_documents(
+    request: ReindexRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserRecord = Depends(get_current_user),
+    matter_id: UUID = Depends(get_matter_id),
+    _rate_limit=Depends(rate_limit_ingests),
+):
+    """Re-ingest existing documents by looking up their real MinIO paths.
+
+    Unlike ``process_uploaded`` which requires the caller to supply MinIO
+    object keys, this endpoint resolves paths from the documents table.
+    """
+    docs = await IngestionService.get_documents_for_reindex(db, request.doc_ids, matter_id)
+    if not docs:
+        raise HTTPException(status_code=404, detail="No matching documents found in this matter")
+
+    batch_id = uuid4()
+    job_ids: list[UUID] = []
+    filenames: list[str] = []
+
+    for doc in docs:
+        job_id = uuid4()
+        await IngestionService.create_job(
+            db=db,
+            filename=doc["filename"],
+            minio_path=doc["minio_path"],
+            job_id=job_id,
+            matter_id=matter_id,
+        )
+        job_ids.append(job_id)
+        filenames.append(doc["filename"])
+
+    await db.commit()
+
+    for job_id_val, doc in zip(job_ids, docs):
+        process_document.delay(str(job_id_val), doc["minio_path"])
+        logger.info(
+            "ingest.reindex.dispatched",
+            batch_id=str(batch_id),
+            job_id=str(job_id_val),
+            doc_id=str(doc["id"]),
+            filename=doc["filename"],
         )
 
     return BatchIngestResponse(
