@@ -20,6 +20,7 @@ import random
 
 from locust import HttpUser, between, task
 
+import load_tests.sla  # noqa: F401 — registers SLA event listeners
 from load_tests.config import (
     QUERY_POOL,
     TEST_EMAIL,
@@ -86,12 +87,15 @@ class NexusUser(HttpUser):
         """Paginated document listing with random offset."""
         offset = random.randint(0, 100)
         limit = random.choice([20, 50])
-        self.client.get(
+        with self.client.get(
             "/api/v1/documents",
             params={"offset": offset, "limit": limit},
             headers=self._headers(),
             name="/api/v1/documents",
-        )
+            catch_response=True,
+        ) as response:
+            if response.status_code != 200:
+                response.failure(f"Status {response.status_code}")
 
     @task(3)
     def search_entities(self) -> None:
@@ -100,12 +104,15 @@ class NexusUser(HttpUser):
         # Randomly apply a type filter ~50% of the time
         if random.random() < 0.5:
             params["entity_type"] = random.choice(["person", "organization", "location", "date"])
-        self.client.get(
+        with self.client.get(
             "/api/v1/entities",
             params=params,
             headers=self._headers(),
             name="/api/v1/entities",
-        )
+            catch_response=True,
+        ) as response:
+            if response.status_code != 200:
+                response.failure(f"Status {response.status_code}")
 
     @task(2)
     def run_query(self) -> None:
@@ -117,31 +124,67 @@ class NexusUser(HttpUser):
         complete request lifecycle.
         """
         query_text = random.choice(QUERY_POOL)
-        self.client.post(
+        with self.client.post(
             "/api/v1/query",
             json={"query": query_text},
             headers=self._headers(),
             name="/api/v1/query",
             # Query pipeline can take 30-60s under load — generous timeout.
             timeout=120,
-        )
+            catch_response=True,
+        ) as response:
+            if response.status_code != 200:
+                response.failure(f"Status {response.status_code}")
+
+    @task(2)
+    def run_query_stream(self) -> None:
+        """SSE streaming investigation query."""
+        query_text = random.choice(QUERY_POOL)
+        with self.client.post(
+            "/api/v1/query/stream",
+            json={"query": query_text},
+            headers=self._headers(),
+            name="/api/v1/query/stream",
+            stream=True,
+            timeout=120,
+            catch_response=True,
+        ) as response:
+            if response.status_code != 200:
+                response.failure(f"Status {response.status_code}")
+                return
+            # Validate SSE format - at minimum we should get a done event
+            got_data = False
+            for line in response.iter_lines():
+                if line:
+                    got_data = True
+                    break
+            if not got_data:
+                response.failure("No SSE data received")
 
     @task(1)
     def health_check(self) -> None:
         """Baseline latency measurement against the health endpoint."""
-        self.client.get(
+        with self.client.get(
             "/api/v1/health",
             name="/api/v1/health",
-        )
+            catch_response=True,
+        ) as response:
+            if response.status_code != 200:
+                response.failure(f"Status {response.status_code}")
 
     @task(1)
     def upload_file(self) -> None:
         """Upload a small test file to exercise ingestion concurrency.
 
-        Creates a tiny in-memory text file on each call to avoid
+        Creates a 1KB in-memory text file on each call to avoid
         needing a fixture file on disk.
         """
-        content = f"Load test document {random.randint(1, 100_000)}.\n"
+        # Generate ~1KB of content
+        doc_id = random.randint(1, 100_000)
+        line = f"Load test document {doc_id}. "
+        # Repeat the line to reach ~1KB
+        repeat_count = max(1, 1024 // len(line))
+        content = (line * repeat_count)[:1024]
         file_obj = io.BytesIO(content.encode())
         self.client.post(
             "/api/v1/ingest",

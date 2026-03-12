@@ -197,8 +197,18 @@ export function AssistantMessage({
                         {claim.page_number != null &&
                           `, p.${claim.page_number}`}
                         {" "}
-                        &middot; Score:{" "}
-                        {(claim.grounding_score * 100).toFixed(0)}%
+                        &middot;{" "}
+                        <span
+                          className={
+                            claim.grounding_score >= 0.8
+                              ? "font-medium text-green-600"
+                              : claim.grounding_score >= 0.5
+                                ? "font-medium text-yellow-600"
+                                : "font-medium text-red-600"
+                          }
+                        >
+                          {(claim.grounding_score * 100).toFixed(0)}%
+                        </span>
                       </p>
                     </div>
                     <Button

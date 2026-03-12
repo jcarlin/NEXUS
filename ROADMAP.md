@@ -43,11 +43,11 @@
 | M20 | Observability & Load Testing | — | Done | 23 | Regression | — | M17 |
 | M21 | RAG Quality Improvements | — | Done | 43 | Regression + eval non-regression | — | M8, M9, M15 |
 
-**Total tests: ~1134 backend + 51 frontend test files** (~1134 backend tests passing; frontend: 51 Vitest unit/component test files + 2 Playwright E2E specs)
+**Total tests: ~1229 backend + 51 frontend test files** (~1229 backend tests passing; frontend: 51 Vitest unit/component test files + 2 Playwright E2E specs)
 
 **6 autonomous LangGraph agents** across the pipeline (Case Setup, Investigation Orchestrator, Citation Verifier, Hot Doc Scanner, Contextual Completeness, Entity Resolution)
 
-**All milestones complete.** M0–M21 — full local deployment with zero cloud API dependency, OIDC/SSO, memo drafting, Prometheus observability, and RAG quality improvements (contextual retrieval, CRAG grading, chunk quality scoring, reranking enabled by default).
+**All milestones complete.** M0–M21 + Tier 1 Maturity Advancement — full local deployment with zero cloud API dependency, OIDC/SSO, memo drafting, Prometheus observability, RAG quality improvements (contextual retrieval, CRAG grading, chunk quality scoring, reranking enabled by default), and 10 maturity items (multi-query expansion, text-to-Cypher, prompt routing, question decomposition, near-duplicate dedup, adversarial tests, load SLAs, citation confidence fix).
 
 **Cloud demo hosting:** GCP + Vercel deployment tested and working. Run `./scripts/cloud-deploy.sh` to deploy, `./scripts/cloud-teardown.sh` to tear down. See `docs/CLOUD-DEPLOY.md` for full guide. Config files: `Caddyfile`, `docker-compose.cloud.yml`, `.env.cloud.example`, `frontend/vercel.json`, `scripts/seed_admin.py`.
 
@@ -1089,6 +1089,45 @@ frontend/
 - Gate: regression + eval non-regression
 
 **Key files:** `app/ingestion/quality_scorer.py`, `app/ingestion/contextualizer.py`, `app/ingestion/prompts.py`, `app/query/grader.py`, `app/query/prompts.py` (GRADING_PROMPT), `docs/RAG-MATURITY-AUDIT.md`, `docs/RAG-RESEARCH-2026.md`
+
+---
+
+### Tier 1 Maturity Advancement
+
+*Post-M21 hardening: 10 items to move RAG Maturity 8.5→9.0, Platform 8.5→9.2, RAG Architecture Coverage 82%→90%.*
+
+**Status: Done** — All 10 items implemented, ~95 new tests.
+
+| # | Item | Status | New Tests |
+|---|------|--------|-----------|
+| T1-1 | Multi-query expansion | Done | 8 (test_multi_query.py) |
+| T1-2 | Text-to-Cypher generation | Done | 15 (test_cypher_generator.py) |
+| T1-3 | Operationalize eval in CI/CD | Done | — (workflow changes) |
+| T1-4 | Load testing at scale | Done | 1 (test_load_config.py) + SLA assertions |
+| T1-5 | Adversarial test suite | Done | 3 (test_adversarial.py) + 27 adversarial items |
+| T1-6 | Semantic prompt routing | Done | 9 (test_prompt_routing.py) |
+| T1-7 | Enable near-duplicate detection | Done | 6 (test_retriever_dedup.py) |
+| T1-8 | Observability stack | Done | 6 new (test_metrics.py additions) |
+| T1-9 | Citation confidence fix | Done | 4 (test_citation_confidence.py) |
+| T1-10 | Explicit question decomposition | Done | 8 (test_question_decomposition.py) |
+
+**New files:**
+- `app/query/multi_query.py` — query expansion with legal vocabulary variants
+- `app/query/cypher_generator.py` — text-to-Cypher with safety validation
+- `app/query/decomposer.py` — question decomposition + parallel sub-question retrieval
+- `load_tests/sla.py` — SLA definitions + Locust event listener
+- `monitoring/alert_rules.yml` — Prometheus alerting rules (query latency, error rate, embedding errors, ingestion failures)
+
+**Feature flags added:** `enable_multi_query_expansion`, `enable_text_to_cypher`, `enable_prompt_routing`, `enable_question_decomposition` (all default off). Changed defaults: `enable_near_duplicate_detection` → `true`, `enable_prometheus_metrics` → `true`.
+
+**Key changes:**
+- Citation verification uses structured JSON extraction with Pydantic `VerificationJudgment` (string heuristic as fallback)
+- Retriever deduplicates by `duplicate_cluster_id`, preferring `is_final_version` within clusters
+- 4 query-type-specific prompt addenda (factual, analytical, exploratory, timeline)
+- Cypher safety validation: rejects write ops, enforces `matter_id` scoping, enforces LIMIT
+- Adversarial dataset expanded from 4 to 27 items across 9 categories
+- Prometheus metrics now recorded for query duration/count, ingestion jobs/duration, citation verification, retrieval chunks
+- Load tests have real SLA assertions (p95 latency, error rate thresholds)
 
 ---
 

@@ -260,7 +260,7 @@ async def test_v1_generator_persists_on_client_disconnect():
 
 async def test_agentic_generator_persists_on_client_disconnect():
     """When a client disconnects mid-stream, the agentic generator should still
-    persist the user and assistant messages to the database."""
+    persist the user message to the database (assistant message only saved on full completion)."""
     from app.query.router import _agentic_event_generator
 
     mock_db = AsyncMock()
@@ -294,6 +294,6 @@ async def test_agentic_generator_persists_on_client_disconnect():
     done_events = [e for e in events if e.get("event") == "done"]
     assert len(done_events) == 0
 
-    # Messages persisted
-    assert mock_db.execute.call_count >= 2
+    # User message persisted (assistant only saved on full stream completion)
+    assert mock_db.execute.call_count >= 1
     assert mock_db.commit.call_count >= 1

@@ -23,6 +23,7 @@ from app.query.prompts import (
     CLASSIFY_PROMPT,
     FOLLOWUP_PROMPT,
     INVESTIGATION_SYSTEM_PROMPT,
+    PROMPT_ROUTING_MAP,
     REWRITE_PROMPT,
     SYNTHESIS_PROMPT,
     VERIFY_CLAIMS_PROMPT,
@@ -527,7 +528,7 @@ create_nodes = create_nodes_v1
 
 
 def build_system_prompt(state: dict) -> list:
-    """Build system prompt with dynamic case context injection.
+    """Build system prompt with dynamic case context + prompt routing injection.
 
     Passed as the ``prompt`` parameter to ``create_react_agent``.
     Returns ``[SystemMessage, ...user/assistant messages]`` so LangGraph's
@@ -539,6 +540,12 @@ def build_system_prompt(state: dict) -> list:
     case_context = state.get("_case_context", "")
     case_context_block = f"\n\n{case_context}" if case_context else ""
     system_text = INVESTIGATION_SYSTEM_PROMPT.format(case_context=case_context_block)
+
+    # Append query-type-specific addendum (T1-6)
+    query_type = state.get("_query_type", "")
+    if query_type and query_type in PROMPT_ROUTING_MAP:
+        system_text += PROMPT_ROUTING_MAP[query_type]
+
     messages = state.get("messages", [])
     return [SystemMessage(content=system_text)] + messages
 
@@ -593,11 +600,32 @@ async def case_context_resolve(state: dict) -> dict:
     settings = get_settings()
     skip_verification = tier == "fast" or not settings.enable_citation_verification
 
+    # Classify query type for prompt routing (T1-6)
+    query_type = "factual"  # default
+    if settings.enable_prompt_routing and original_query:
+        try:
+            from app.dependencies import get_llm
+
+            llm = get_llm()
+            classify_prompt = CLASSIFY_PROMPT.format(query=original_query)
+            raw_type = await llm.complete(
+                [{"role": "user", "content": classify_prompt}],
+                max_tokens=10,
+                temperature=0.0,
+                node_name="classify_query_type",
+            )
+            detected = raw_type.strip().lower().split()[0] if raw_type.strip() else "factual"
+            if detected in PROMPT_ROUTING_MAP:
+                query_type = detected
+        except Exception:
+            logger.warning("node.case_context_resolve.classify_failed", exc_info=True)
+
     logger.info(
         "node.case_context_resolve",
         has_context=bool(case_context_text),
         term_count=len(term_map),
         tier=tier,
+        query_type=query_type,
     )
 
     return {
@@ -605,6 +633,7 @@ async def case_context_resolve(state: dict) -> dict:
         "_term_map": term_map,
         "_tier": tier,
         "_skip_verification": skip_verification,
+        "_query_type": query_type,
     }
 
 
@@ -746,7 +775,7 @@ async def _verify_single_claim(
             for r in verification_results[:3]
         )
 
-        # Judge claim
+        # Judge claim with structured extraction via VerificationJudgment
         judgment_prompt = VERIFY_JUDGMENT_PROMPT.format(
             claim_text=claim_text,
             filename=claim.get("filename", "unknown"),
@@ -761,9 +790,26 @@ async def _verify_single_claim(
             node_name="verify_claims_judge",
         )
 
-        # Parse judgment (simple heuristic)
-        supported = "supported" in judgment_raw.lower() or "true" in judgment_raw.lower()[:50]
-        claim["verification_status"] = "verified" if supported else "flagged"
+        # Parse structured judgment from LLM response
+        try:
+            from app.query.schemas import VerificationJudgment
+
+            judgment_json = json.loads(
+                judgment_raw
+                if judgment_raw.strip().startswith("{")
+                else judgment_raw[judgment_raw.find("{") : judgment_raw.rfind("}") + 1]
+            )
+            judgment = VerificationJudgment(claim_index=claim.get("claim_index", 0), **judgment_json)
+            claim["verification_status"] = "verified" if judgment.supported else "flagged"
+            claim["grounding_score"] = judgment.confidence
+        except Exception:
+            # Fallback to string heuristic if structured parsing fails
+            logger.warning(
+                "node.verify_citations.structured_parse_fallback",
+                claim_index=claim.get("claim_index"),
+            )
+            supported = "supported" in judgment_raw.lower() or "true" in judgment_raw.lower()[:50]
+            claim["verification_status"] = "verified" if supported else "flagged"
 
     except Exception:
         logger.warning(
@@ -830,6 +876,15 @@ async def verify_citations(state: dict) -> dict:
         tasks.append(_verify_single_claim(llm, retriever, claim, filters, exclude_privilege, claim_vector=vector))
 
     verified_claims: list[dict[str, Any]] = list(await asyncio.gather(*tasks))
+
+    # Record citation verification metrics (T1-8)
+    try:
+        from app.common.metrics import CITATION_VERIFICATION_TOTAL
+
+        for c in verified_claims:
+            CITATION_VERIFICATION_TOTAL.labels(status=c.get("verification_status", "unverified")).inc()
+    except Exception:
+        pass  # Metrics are best-effort
 
     logger.info(
         "node.verify_citations",

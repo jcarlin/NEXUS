@@ -32,3 +32,9 @@ QUERY_POOL: list[str] = [
     ).split("|")
     if q.strip()
 ]
+
+# Performance SLA constants (imported by sla.py for reference)
+P95_BROWSE_MS = 500
+P95_QUERY_MS = 30_000
+P95_HEALTH_MS = 200
+ERROR_RATE_MAX = 0.01

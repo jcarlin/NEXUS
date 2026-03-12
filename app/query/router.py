@@ -76,9 +76,12 @@ async def query(
     _rate_limit=Depends(rate_limit_queries),
 ):
     """Execute a single investigation query and return the full response."""
+    import time as _time
+
     from app.dependencies import get_settings
 
     settings = get_settings()
+    _query_start = _time.perf_counter()
     thread_id = str(request.thread_id) if request.thread_id else str(uuid.uuid4())
 
     # Load chat history if continuing a thread
@@ -122,7 +125,22 @@ async def query(
         )
 
     config = QueryService.build_graph_config(thread_id, settings, request.query)
-    final_state = await graph.ainvoke(initial_state, config)
+    tier = "standard"
+    try:
+        final_state = await graph.ainvoke(initial_state, config)
+        tier = final_state.get("_tier", "standard")
+    except Exception:
+        from app.common.metrics import QUERY_DURATION, QUERY_TOTAL
+
+        QUERY_TOTAL.labels(tier=tier, status="error").inc()
+        QUERY_DURATION.labels(tier=tier).observe(_time.perf_counter() - _query_start)
+        raise
+
+    # Record success metrics (T1-8)
+    from app.common.metrics import QUERY_DURATION, QUERY_TOTAL
+
+    QUERY_TOTAL.labels(tier=tier, status="success").inc()
+    QUERY_DURATION.labels(tier=tier).observe(_time.perf_counter() - _query_start)
 
     # Extract response (agentic: from last AI message; v1: from response field)
     response_text = QueryService.extract_response(final_state, settings.enable_agentic_pipeline)

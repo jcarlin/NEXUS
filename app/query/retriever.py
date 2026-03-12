@@ -86,7 +86,58 @@ class HybridRetriever:
             dataset_doc_ids=dataset_doc_ids,
         )
         logger.debug("retriever.text", query_len=len(query), results=len(results), sparse=sparse_vector is not None)
+
+        # Deduplicate by near-duplicate cluster (T1-7)
+        from app.dependencies import get_settings
+
+        if get_settings().enable_near_duplicate_detection:
+            results = self._deduplicate_by_cluster(results)
         return results
+
+    @staticmethod
+    def _deduplicate_by_cluster(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Remove near-duplicate chunks, keeping highest-scored per cluster.
+
+        Chunks with ``duplicate_cluster_id`` in their payload are grouped.
+        Within each cluster, the chunk with ``is_final_version=True`` is
+        preferred; otherwise the highest-scored chunk wins.  Chunks without
+        a cluster ID pass through unchanged.
+        """
+        clusters: dict[str, list[dict[str, Any]]] = {}
+        unclustered: list[dict[str, Any]] = []
+
+        for r in results:
+            cluster_id = r.get("duplicate_cluster_id")
+            if cluster_id:
+                clusters.setdefault(cluster_id, []).append(r)
+            else:
+                unclustered.append(r)
+
+        if not clusters:
+            return results
+
+        deduped: list[dict[str, Any]] = list(unclustered)
+        for cluster_chunks in clusters.values():
+            # Prefer final version, then highest score
+            final = [c for c in cluster_chunks if c.get("is_final_version")]
+            best = max(
+                final or cluster_chunks,
+                key=lambda c: c.get("score", 0),
+            )
+            deduped.append(best)
+
+        # Re-sort by score descending
+        deduped.sort(key=lambda c: c.get("score", 0), reverse=True)
+
+        import structlog as _sl
+
+        _sl.get_logger(__name__).debug(
+            "retriever.dedup",
+            before=len(results),
+            after=len(deduped),
+            clusters_removed=len(results) - len(deduped),
+        )
+        return deduped
 
     # ------------------------------------------------------------------
     # Graph retrieval (Neo4j entity-centric traversal)

@@ -1392,3 +1392,55 @@ class GraphService:
                     "graph.centrality.projection_drop_failed",
                     graph_name=graph_name,
                 )
+
+    # ------------------------------------------------------------------
+    # T1-2: Execute arbitrary read-only Cypher (text-to-Cypher)
+    # ------------------------------------------------------------------
+
+    async def execute_read_only(
+        self,
+        cypher: str,
+        params: dict[str, Any],
+        *,
+        matter_id: str = "",
+        timeout: float = 10.0,
+    ) -> list[dict[str, Any]]:
+        """Execute a read-only Cypher query with safety checks.
+
+        Args:
+            cypher: The Cypher query string (must be read-only).
+            params: Query parameters (matter_id is always injected).
+            matter_id: Matter scope (injected into params if not present).
+            timeout: Max execution time in seconds.
+
+        Returns:
+            List of result records as dicts.
+
+        Raises:
+            ValueError: If the query contains write operations.
+        """
+        import re
+
+        # Final safety check: reject write operations
+        write_ops = re.compile(
+            r"\b(CREATE|SET|MERGE|DELETE|REMOVE|DROP|DETACH|CALL\s+\{)\b",
+            re.IGNORECASE,
+        )
+        if write_ops.search(cypher):
+            raise ValueError("Write operations are not allowed in read-only queries")
+
+        # Ensure matter_id is in params
+        if matter_id:
+            params["matter_id"] = matter_id
+
+        logger.info("graph.execute_read_only", cypher=cypher[:200], params_keys=list(params.keys()))
+
+        async with self._driver.session() as session:
+            result = await session.run(cypher, params, timeout=timeout)
+            records = []
+            async for record in result:
+                row = {}
+                for key in record.keys():
+                    row[key] = self._serialize_value(record[key])
+                records.append(row)
+            return records

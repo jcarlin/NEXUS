@@ -69,7 +69,7 @@ async def test_verify_citations_runs_claims_concurrently():
     active_count = 0
     max_concurrent = 0
 
-    async def mock_verify_single_claim(llm, retriever, claim, filters, exclude_privilege):
+    async def mock_verify_single_claim(llm, retriever, claim, filters, exclude_privilege, claim_vector=None):
         nonlocal active_count, max_concurrent
         active_count += 1
         max_concurrent = max(max_concurrent, active_count)

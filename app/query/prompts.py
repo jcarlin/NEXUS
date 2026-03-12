@@ -159,7 +159,8 @@ Return a list of claims, each with:
 
 
 VERIFY_JUDGMENT_PROMPT = """\
-For the following claim, determine whether the provided evidence supports it.
+You are a legal document verification specialist. Determine whether the \
+evidence supports the following claim.
 
 Claim: {claim_text}
 Cited source: {filename}, page {page_number}
@@ -167,15 +168,64 @@ Cited source: {filename}, page {page_number}
 Evidence found by independent retrieval:
 {evidence}
 
-Determine:
-- Is this claim supported by the evidence? (true/false)
-- How confident are you? (0.0-1.0)
-- Brief rationale for your judgment."""
+Evaluate:
+1. Is this claim directly supported by the evidence? Answer true or false.
+2. Rate your confidence from 0.0 (no support) to 1.0 (verbatim match).
+3. Provide a brief rationale (1-2 sentences).
+
+Respond as JSON with keys: supported (bool), confidence (float), rationale (string)."""
 
 
 # ---------------------------------------------------------------------------
 # M18: CRAG-style retrieval grading
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# T1-6: Semantic prompt routing addenda
+# ---------------------------------------------------------------------------
+
+FACTUAL_ADDENDUM = """
+
+## Query Type: Factual Lookup
+This is a factual question seeking a specific fact, name, date, or number.
+- Prioritize precision over breadth. Cite the single most authoritative source.
+- 1-2 tool calls should suffice (vector_search is usually enough).
+- Give a concise, direct answer. If the fact is not in the evidence, say so clearly."""
+
+ANALYTICAL_ADDENDUM = """
+
+## Query Type: Analytical
+This is an analytical question requiring comparison, evaluation, or relationship analysis.
+- Use 3-5 tool calls across different tools (vector_search, graph_query, entity_lookup).
+- Cross-reference multiple documents and entities.
+- Present multiple perspectives and flag contradictions between sources.
+- Structure your response to support the analytical framing of the question."""
+
+EXPLORATORY_ADDENDUM = """
+
+## Query Type: Exploratory
+This is an open-ended exploratory question seeking to survey or discover information.
+- Use diverse tool types to cast a wide net (vector_search, graph_query, sentiment_search).
+- Look for patterns and connections across different document types.
+- Present findings thematically rather than as a simple list.
+- Suggest avenues for further investigation in your response."""
+
+TIMELINE_ADDENDUM = """
+
+## Query Type: Timeline
+This is a timeline question about chronological events or sequences.
+- Use temporal_search tool with date ranges when available.
+- Present events in strict chronological order with precise dates.
+- Flag gaps in the timeline where evidence is missing.
+- Note date conflicts between sources explicitly."""
+
+PROMPT_ROUTING_MAP: dict[str, str] = {
+    "factual": FACTUAL_ADDENDUM,
+    "analytical": ANALYTICAL_ADDENDUM,
+    "exploratory": EXPLORATORY_ADDENDUM,
+    "timeline": TIMELINE_ADDENDUM,
+}
+
 
 GRADING_PROMPT = """\
 Rate the relevance of each retrieved chunk to the query on a scale of 0-10.

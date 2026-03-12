@@ -7,6 +7,8 @@ import time
 import pytest
 
 from app.common.metrics import (
+    CITATION_VERIFICATION_TOTAL,
+    CONTEXT_WINDOW_USAGE,
     EMBEDDING_CALLS_TOTAL,
     EMBEDDING_DURATION,
     INGESTION_DURATION,
@@ -16,6 +18,7 @@ from app.common.metrics import (
     LLM_TOKENS_TOTAL,
     QUERY_DURATION,
     QUERY_TOTAL,
+    RETRIEVAL_CHUNKS_TOTAL,
     track_duration,
 )
 
@@ -54,6 +57,15 @@ class TestMetricDefinitions:
     def test_embedding_duration_is_histogram(self):
         assert EMBEDDING_DURATION._type == "histogram"
 
+    def test_retrieval_chunks_total_is_counter(self):
+        assert RETRIEVAL_CHUNKS_TOTAL._type == "counter"
+
+    def test_citation_verification_total_is_counter(self):
+        assert CITATION_VERIFICATION_TOTAL._type == "counter"
+
+    def test_context_window_usage_is_histogram(self):
+        assert CONTEXT_WINDOW_USAGE._type == "histogram"
+
 
 # ---------------------------------------------------------------------------
 # Label validation
@@ -87,6 +99,19 @@ class TestMetricLabels:
 
     def test_embedding_duration_accepts_provider(self):
         EMBEDDING_DURATION.labels(provider="openai").observe(0.3)
+
+    def test_retrieval_chunks_total_accepts_source(self):
+        RETRIEVAL_CHUNKS_TOTAL.labels(source="text").inc()
+        RETRIEVAL_CHUNKS_TOTAL.labels(source="graph").inc()
+        RETRIEVAL_CHUNKS_TOTAL.labels(source="visual").inc()
+
+    def test_citation_verification_total_accepts_status(self):
+        CITATION_VERIFICATION_TOTAL.labels(status="verified").inc()
+        CITATION_VERIFICATION_TOTAL.labels(status="flagged").inc()
+        CITATION_VERIFICATION_TOTAL.labels(status="unverified").inc()
+
+    def test_context_window_usage_accepts_no_labels(self):
+        CONTEXT_WINDOW_USAGE.observe(0.75)
 
 
 # ---------------------------------------------------------------------------

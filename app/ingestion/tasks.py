@@ -1373,6 +1373,9 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
     _store_celery_task_id(engine, job_id, self.request.id)
     filename = minio_path.rsplit("/", 1)[-1]
 
+    import time as _time
+
+    _ingest_start = _time.perf_counter()
     logger.info("task.start", minio_path=minio_path, filename=filename)
 
     # Read matter_id and dataset_id from the job record (set by the API router at ingest time)
@@ -1413,6 +1416,15 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
                 return {"job_id": job_id, "status": "cancelled"}
             stage_fn(ctx)
 
+        # Record ingestion success metrics (T1-8)
+        try:
+            from app.common.metrics import INGESTION_DURATION, INGESTION_JOBS_TOTAL
+
+            INGESTION_JOBS_TOTAL.labels(status="completed").inc()
+            INGESTION_DURATION.observe(_time.perf_counter() - _ingest_start)
+        except Exception:
+            pass  # Metrics are best-effort
+
         return {
             "job_id": job_id,
             "status": "complete",
@@ -1424,11 +1436,23 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
     except SoftTimeLimitExceeded:
         logger.error("task.process_document.timeout", job_id=job_id)
         _update_stage(engine, job_id, "failed", "failed", error="Task timed out (soft time limit exceeded)")
+        try:
+            from app.common.metrics import INGESTION_JOBS_TOTAL
+
+            INGESTION_JOBS_TOTAL.labels(status="failed").inc()
+        except Exception:
+            pass
         return {"job_id": job_id, "status": "failed", "error": "timeout"}
 
     except Exception as exc:
         tb = traceback.format_exc()
         logger.error("task.failed", error=str(exc), traceback=tb)
+        try:
+            from app.common.metrics import INGESTION_JOBS_TOTAL
+
+            INGESTION_JOBS_TOTAL.labels(status="failed").inc()
+        except Exception:
+            pass
 
         # Acceptable degradation: if updating the job status itself fails,
         # the original error is still raised/retried below.

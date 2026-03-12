@@ -130,6 +130,9 @@ class AgentState(TypedDict, total=False):
     _skip_verification: bool
     _dataset_doc_ids: list[str] | None
 
+    # Prompt routing (T1-6)
+    _query_type: str
+
     # Response fields (populated after agent runs)
     response: str
     source_documents: Annotated[list[dict[str, Any]], _replace]

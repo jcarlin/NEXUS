@@ -56,13 +56,65 @@ async def vector_search(
 
     try:
         retriever = get_retriever()
-        results = await retriever.retrieve_text(
-            query,
-            limit=limit,
-            filters=state.get("_filters"),
-            exclude_privilege_statuses=state.get("_exclude_privilege") or None,
-            dataset_doc_ids=state.get("_dataset_doc_ids"),
-        )
+
+        # Multi-query expansion (T1-1)
+        from app.config import Settings
+
+        settings = Settings()
+        if settings.enable_multi_query_expansion:
+            from app.dependencies import get_llm
+            from app.query.multi_query import expand_query
+
+            llm = get_llm()
+            variants = await expand_query(
+                query,
+                llm,
+                term_map=state.get("_term_map"),
+                count=settings.multi_query_count,
+            )
+            if variants:
+                import asyncio
+
+                # Run original + variants in parallel
+                all_queries = [query] + variants
+                coros = [
+                    retriever.retrieve_text(
+                        q,
+                        limit=limit,
+                        filters=state.get("_filters"),
+                        exclude_privilege_statuses=state.get("_exclude_privilege") or None,
+                        dataset_doc_ids=state.get("_dataset_doc_ids"),
+                    )
+                    for q in all_queries
+                ]
+                all_results = await asyncio.gather(*coros, return_exceptions=True)
+
+                # Merge and deduplicate by chunk ID, keep highest score
+                seen: dict[str, dict] = {}
+                for batch in all_results:
+                    if isinstance(batch, BaseException):
+                        continue
+                    for r in batch:
+                        rid = r.get("id", "")
+                        if rid not in seen or r.get("score", 0) > seen[rid].get("score", 0):
+                            seen[rid] = r
+                results = sorted(seen.values(), key=lambda r: r.get("score", 0), reverse=True)[:limit]
+            else:
+                results = await retriever.retrieve_text(
+                    query,
+                    limit=limit,
+                    filters=state.get("_filters"),
+                    exclude_privilege_statuses=state.get("_exclude_privilege") or None,
+                    dataset_doc_ids=state.get("_dataset_doc_ids"),
+                )
+        else:
+            results = await retriever.retrieve_text(
+                query,
+                limit=limit,
+                filters=state.get("_filters"),
+                exclude_privilege_statuses=state.get("_exclude_privilege") or None,
+                dataset_doc_ids=state.get("_dataset_doc_ids"),
+            )
     except Exception as exc:
         logger.warning("tool.error", tool="vector_search", error=str(exc))
         return json.dumps({"error": f"Tool failed: {type(exc).__name__}: {exc}"})
@@ -549,6 +601,145 @@ async def network_analysis(
 
 
 # ---------------------------------------------------------------------------
+# T1-10: Question decomposition tool
+# ---------------------------------------------------------------------------
+
+
+@tool
+async def decompose_query(
+    question: str,
+    state: Annotated[dict, InjectedState] = {},  # noqa: B006
+) -> str:
+    """Decompose a complex multi-part question into independent sub-questions.
+
+    Use when the user asks a compound question with multiple distinct aspects
+    (e.g., "Who knew about the deal, when did they learn, and what did they do?").
+    Each sub-question gets independent retrieval for more comprehensive results.
+    """
+    from app.config import Settings
+
+    settings = Settings()
+    if not settings.enable_question_decomposition:
+        return json.dumps({"info": "Question decomposition is not enabled."})
+
+    from app.dependencies import get_llm, get_retriever
+    from app.query.decomposer import decompose_question, retrieve_for_sub_questions
+
+    try:
+        llm = get_llm()
+        result = await decompose_question(question, llm)
+
+        if not result.is_complex or not result.sub_questions:
+            return json.dumps(
+                {
+                    "is_complex": False,
+                    "info": "Question is simple enough to answer directly.",
+                }
+            )
+
+        # Retrieve for each sub-question
+        retriever = get_retriever()
+        merged = await retrieve_for_sub_questions(
+            result.sub_questions,
+            retriever,
+            filters=state.get("_filters"),
+            exclude_privilege=state.get("_exclude_privilege") or None,
+            dataset_doc_ids=state.get("_dataset_doc_ids"),
+        )
+
+        formatted_sqs = [{"question": sq.question, "aspect": sq.aspect} for sq in result.sub_questions]
+        formatted_results = [
+            {
+                "id": r.get("id", ""),
+                "filename": r.get("source_file", "unknown"),
+                "page": r.get("page_number"),
+                "text": r.get("chunk_text", "")[:500],
+                "score": round(r.get("score", 0), 4),
+            }
+            for r in merged[:20]
+        ]
+
+        return json.dumps(
+            {
+                "is_complex": True,
+                "sub_questions": formatted_sqs,
+                "results": formatted_results,
+            },
+            default=str,
+        )
+
+    except Exception as exc:
+        logger.warning("tool.error", tool="decompose_query", error=str(exc))
+        return json.dumps({"error": f"Tool failed: {type(exc).__name__}: {exc}"})
+
+
+# ---------------------------------------------------------------------------
+# T1-2: Text-to-Cypher tool
+# ---------------------------------------------------------------------------
+
+
+@tool
+async def cypher_query(
+    question: str,
+    state: Annotated[dict, InjectedState] = {},  # noqa: B006
+) -> str:
+    """Generate and execute a read-only Cypher query against the knowledge graph.
+
+    Use for complex graph traversal questions like "show me the chain of
+    communication between X and Y through intermediaries" or "find all
+    entities within 3 hops of person Z". Only generates read-only queries.
+    """
+    from app.config import Settings
+
+    settings = Settings()
+    if not settings.enable_text_to_cypher:
+        return json.dumps({"info": "Text-to-Cypher generation is not enabled."})
+
+    from app.dependencies import get_graph_service, get_llm
+    from app.query.cypher_generator import generate_cypher, validate_cypher_safety
+
+    filters = state.get("_filters", {})
+    matter_id = filters.get("matter_id", "")
+
+    try:
+        llm = get_llm()
+        cypher_result = await generate_cypher(question, matter_id, llm)
+
+        # Validate safety before execution
+        is_safe, reason = validate_cypher_safety(cypher_result.cypher)
+        if not is_safe:
+            logger.warning("tool.cypher_query.unsafe", reason=reason, cypher=cypher_result.cypher)
+            return json.dumps({"error": f"Generated Cypher failed safety validation: {reason}"})
+
+        # Execute the query
+        gs = get_graph_service()
+        results = await gs.execute_read_only(
+            cypher_result.cypher,
+            cypher_result.params,
+            matter_id=matter_id,
+        )
+
+        logger.info(
+            "tool.cypher_query.executed",
+            cypher=cypher_result.cypher[:200],
+            result_count=len(results),
+        )
+
+        return json.dumps(
+            {
+                "cypher": cypher_result.cypher,
+                "explanation": cypher_result.explanation,
+                "results": results[:50],
+            },
+            default=str,
+        )
+
+    except Exception as exc:
+        logger.warning("tool.error", tool="cypher_query", error=str(exc))
+        return json.dumps({"error": f"Tool failed: {type(exc).__name__}: {exc}"})
+
+
+# ---------------------------------------------------------------------------
 # Tool lists
 # ---------------------------------------------------------------------------
 
@@ -566,4 +757,7 @@ INVESTIGATION_TOOLS = [
     communication_matrix,
     topic_cluster,
     network_analysis,
+    # Tier 1 maturity tools
+    decompose_query,
+    cypher_query,
 ]

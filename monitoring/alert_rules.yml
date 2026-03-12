@@ -1,0 +1,44 @@
+groups:
+  - name: nexus_alerts
+    rules:
+      - alert: QueryLatencyHigh
+        expr: histogram_quantile(0.95, rate(nexus_query_duration_seconds_bucket[5m])) > 60
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Query p95 latency exceeds 60s"
+          description: "Query pipeline p95 latency is {{ $value }}s over the last 5 minutes."
+
+      - alert: QueryErrorRateHigh
+        expr: >
+          sum(rate(nexus_query_total{status="error"}[5m]))
+          / sum(rate(nexus_query_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Query error rate exceeds 5%"
+          description: "{{ $value | humanizePercentage }} of queries are failing."
+
+      - alert: EmbeddingProviderErrors
+        expr: >
+          sum(rate(nexus_embedding_calls_total{status="error"}[5m]))
+          / sum(rate(nexus_embedding_calls_total[5m])) > 0.10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Embedding provider error rate exceeds 10%"
+          description: "{{ $value | humanizePercentage }} of embedding calls are failing."
+
+      - alert: IngestionFailureRate
+        expr: >
+          sum(rate(nexus_ingestion_jobs_total{status="failed"}[15m]))
+          / sum(rate(nexus_ingestion_jobs_total[15m])) > 0.20
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Ingestion failure rate exceeds 20%"
+          description: "{{ $value | humanizePercentage }} of ingestion jobs are failing."

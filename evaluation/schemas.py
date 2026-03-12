@@ -30,6 +30,11 @@ class AdversarialCategory(StrEnum):
     PRIVILEGE_TRICK = "privilege_trick"
     AMBIGUOUS_ENTITY = "ambiguous_entity"
     OVERTURNED_PRECEDENT = "overturned_precedent"
+    ENTITY_CONFUSION = "entity_confusion"
+    TEMPORAL_CONFUSION = "temporal_confusion"
+    SCOPE_VIOLATION = "scope_violation"
+    PRIVILEGE_BOUNDARY = "privilege_boundary"
+    COMPOUND_TRAP = "compound_trap"
 
 
 class LegalBenchTaskType(StrEnum):

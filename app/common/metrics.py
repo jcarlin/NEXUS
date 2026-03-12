@@ -84,6 +84,28 @@ EMBEDDING_DURATION = Histogram(
 )
 
 # ---------------------------------------------------------------------------
+# RAG-specific metrics (T1-8)
+# ---------------------------------------------------------------------------
+
+RETRIEVAL_CHUNKS_TOTAL = Counter(
+    "nexus_retrieval_chunks_total",
+    "Total chunks retrieved by source type",
+    labelnames=["source"],
+)
+
+CITATION_VERIFICATION_TOTAL = Counter(
+    "nexus_citation_verification_total",
+    "Total citation verification outcomes",
+    labelnames=["status"],
+)
+
+CONTEXT_WINDOW_USAGE = Histogram(
+    "nexus_context_window_usage_ratio",
+    "Ratio of context tokens used vs available",
+    buckets=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+)
+
+# ---------------------------------------------------------------------------
 # Helper
 # ---------------------------------------------------------------------------
 

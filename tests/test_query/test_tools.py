@@ -79,6 +79,7 @@ async def test_graph_query_calls_graph_service():
         "John Doe",
         limit=20,
         exclude_privilege_statuses=["privileged", "work_product"],
+        matter_id=_MATTER_ID,
     )
     parsed = json.loads(raw)
     assert len(parsed) == 1

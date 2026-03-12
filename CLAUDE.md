@@ -4,8 +4,8 @@ Multimodal RAG investigation platform for legal document intelligence. Ingests, 
 
 *See `ARCHITECTURE.md` for full system design, tech stack, and data flow diagrams.*
 
-**Status**: All 22 milestones complete (M0–M21). ~1134 backend + 51 frontend tests passing.
-19 domain modules, 23 DI factories, 25 feature flags, 6 autonomous LangGraph agents.
+**Status**: All 22 milestones complete (M0–M21) + Tier 1 Maturity. ~1229 backend + 51 frontend tests passing.
+19 domain modules, 23 DI factories, 29 feature flags, 6 autonomous LangGraph agents.
 Full local deployment with zero cloud API dependency.
 
 ---
@@ -151,7 +151,7 @@ Full local deployment with zero cloud API dependency.
 - **Audit logging** (`app/common/middleware.py`): Every API call → `audit_log` table (user, action, resource, matter, IP)
 - **AI audit logging** (`app/common/llm.py`): Every LLM call logged with prompt hash, tokens, latency → `ai_audit_log` table
 - **Structured logging**: `structlog` with contextvars (`request_id`, `task_id`, `job_id`)
-- **Feature flags**: 25 `ENABLE_*` flags, 23 runtime-toggleable via admin UI (see `docs/feature-flags.md` for full reference)
+- **Feature flags**: 29 `ENABLE_*` flags, 27 runtime-toggleable via admin UI (see `docs/feature-flags.md` for full reference)
 - **Runtime feature flags** (`app/feature_flags/`): Admin UI toggle, DB override persistence, DI cache clearing, risk-level gating
 - **LLM config management** (`app/llm_config/`): Runtime provider CRUD, tier assignment, auto-registration from env vars, model discovery, cost estimation
 - **RAG quality pipeline**: Chunk quality scoring → contextual enrichment → CRAG grading (heuristic + conditional LLM) → reranking (enabled by default)
@@ -232,7 +232,7 @@ The report has four sections:
 - `docs/agents.md` — 6 LangGraph agents with state schemas, tools, flows
 
 ### System Configuration (read when adding features or debugging)
-- `docs/feature-flags.md` — All 25 `ENABLE_*` flags with defaults and resource impact
+- `docs/feature-flags.md` — All 29 `ENABLE_*` flags with defaults and resource impact
 - `.env.example` — All configuration variables and feature flags
 - `docs/testing-guide.md` — Test infrastructure, fixtures, CI/CD, patterns
 
