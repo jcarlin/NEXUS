@@ -175,13 +175,13 @@ class Settings(BaseSettings):
     embedding_batch_size: int = 32  # Conservative for 16GB Mac
 
     # --- Retrieval Tuning ---
-    retrieval_text_limit: int = 20
+    retrieval_text_limit: int = 40
     retrieval_graph_limit: int = 20
     retrieval_prefetch_multiplier: int = 2
     query_entity_threshold: float = 0.5
 
     # --- Reranker ---
-    enable_reranker: bool = False  # bge-reranker-v2-m3, deferred
+    enable_reranker: bool = True  # bge-reranker-v2-m3
     reranker_model: str = "BAAI/bge-reranker-v2-m3"
     reranker_top_n: int = 10
     reranker_provider: str = "local"  # local | tei

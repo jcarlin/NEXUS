@@ -231,7 +231,6 @@ function ExpandedView() {
             filename={activeSource.filename}
             initialPage={activeSource.page ?? undefined}
             highlightText={activeSource.chunk_text}
-            compact
           />
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">

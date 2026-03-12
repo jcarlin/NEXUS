@@ -1,4 +1,4 @@
-.PHONY: help install up down dev stop api worker frontend test migrate logs demo seed-demo reset
+.PHONY: help install up down dev stop api worker frontend test migrate logs demo seed-demo reset eval eval-tune
 
 VENV := .venv/bin
 SERVICES ?=
@@ -62,3 +62,9 @@ seed-demo:  ## Re-seed demo data (requires running API + worker)
 reset: up ## Full data wipe + re-migrate (then run 'make dev' + 'make seed-demo')
 	$(VENV)/python scripts/wipe_data.py --drop-db
 	@echo "Data wiped and migrations applied. Run 'make dev' then 'make seed-demo' to re-seed."
+
+eval: ## Run evaluation framework (dry-run, no infra needed)
+	$(VENV)/python scripts/evaluate.py --dry-run
+
+eval-tune: ## Run evaluation tuning sweep (dry-run)
+	$(VENV)/python scripts/evaluate.py --dry-run --tune
