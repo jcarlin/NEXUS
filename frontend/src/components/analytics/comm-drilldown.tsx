@@ -17,7 +17,7 @@ interface EmailEntry {
   message_id: string;
 }
 
-// NOTE: no generated equivalent — backend endpoint not in OpenAPI spec
+// TODO: replace with generated CommunicationPairsResponse after `npm run generate-api`
 interface CommPairResponse {
   person_a: string;
   person_b: string;

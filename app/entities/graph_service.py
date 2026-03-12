@@ -608,10 +608,14 @@ class GraphService:
         cypher = f"""
         MATCH (e:Entity {{name: $name}})-[r:MENTIONED_IN]->(d:Document)
         {where_clause}
+        OPTIONAL MATCH (other:Entity)-[:MENTIONED_IN]->(d)
+        WHERE other.name <> $name
+        WITH d, r, collect(DISTINCT other.name)[..5] AS co_entities
         RETURN d.filename AS document,
                d.type AS document_type,
                r.page_number AS page_number,
-               d.created_at AS date
+               d.created_at AS date,
+               co_entities
         ORDER BY d.created_at
         """
         try:
@@ -631,7 +635,7 @@ class GraphService:
                     {
                         "date": r.get("date"),
                         "description": desc,
-                        "entities": [],
+                        "entities": r.get("co_entities", []),
                         "document_source": filename,
                     }
                 )

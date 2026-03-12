@@ -17,6 +17,7 @@ from app.auth.middleware import get_current_user, get_matter_id
 from app.auth.schemas import UserRecord
 from app.dependencies import get_graph_service
 from app.entities.graph_service import GraphService
+from app.entities.schemas import CommunicationPairsResponse
 
 router = APIRouter(tags=["entities"])
 
@@ -163,7 +164,7 @@ async def graph_stats(
     return stats
 
 
-@router.get("/graph/communication-pairs")
+@router.get("/graph/communication-pairs", response_model=CommunicationPairsResponse)
 async def communication_pairs(
     person_a: str = Query(..., description="First person name"),
     person_b: str = Query(..., description="Second person name"),

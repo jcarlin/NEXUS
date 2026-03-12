@@ -48,7 +48,8 @@ class EDRMService:
                 """
                 SELECT thread_id,
                        count(*) as message_count,
-                       min(metadata_->>'subject') as subject,
+                       (array_agg(metadata_->>'subject' ORDER BY thread_position DESC NULLS LAST)
+                        FILTER (WHERE metadata_->>'subject' IS NOT NULL))[1] as subject,
                        min(created_at) as earliest,
                        max(created_at) as latest
                 FROM documents

@@ -113,3 +113,32 @@ async def test_graph_explore_rejects_write_queries(client: AsyncClient) -> None:
 
     assert response.status_code == 400
     assert "Write operations" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_graph_timeline(client: AsyncClient) -> None:
+    """GET /graph/timeline/{entity} should return timeline events with co-mentioned entities."""
+    mock_gs = AsyncMock()
+    mock_gs.get_entity_timeline = AsyncMock(
+        return_value=[
+            {
+                "date": "2024-01-15T00:00:00",
+                "description": "Mentioned in report.pdf (page 3) [pdf]",
+                "entities": ["Bob", "Acme Corp"],
+                "document_source": "report.pdf",
+            }
+        ]
+    )
+
+    app = client._transport.app
+    app.dependency_overrides[get_graph_service] = lambda: mock_gs
+    try:
+        response = await client.get("/api/v1/graph/timeline/Alice")
+    finally:
+        app.dependency_overrides.pop(get_graph_service, None)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["entity"] == "Alice"
+    assert len(body["events"]) == 1
+    assert body["events"][0]["entities"] == ["Bob", "Acme Corp"]
