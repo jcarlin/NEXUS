@@ -259,7 +259,7 @@ test.describe("Agentic RAG pipeline E2E", () => {
       "[data-testid='sources-toggle'], button[aria-label*='source' i], button[aria-label*='citation' i]",
     );
 
-    if (await toggleButton.isVisible({ timeout: 3_000 })) {
+    if (await toggleButton.isVisible({ timeout: 3_000 }).catch(() => false) && await toggleButton.isEnabled().catch(() => false)) {
       await toggleButton.click();
 
       const sidebar = page.locator("[data-testid='citation-sidebar']");

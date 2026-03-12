@@ -22,7 +22,7 @@ test.describe("Datasets", () => {
     ).toBeVisible({ timeout: 10_000 });
 
     // Should show at least one dataset node in the tree
-    const datasetNodes = page.locator("[class*='tree'] button, [role='treeitem'], aside button").filter({ hasText: /.+/ });
+    const datasetNodes = page.locator("[class*='cursor-pointer'][class*='rounded'], [class*='tree'] button, [role='treeitem'], aside button").filter({ hasText: /.+/ });
     await expect(datasetNodes.first()).toBeVisible({ timeout: 10_000 });
   });
 
@@ -56,7 +56,7 @@ test.describe("Datasets", () => {
     await page.waitForTimeout(3_000);
 
     // Click the first dataset node in the tree
-    const firstDataset = page.locator("[class*='tree'] button, [role='treeitem'], aside button").filter({ hasText: /.+/ }).first();
+    const firstDataset = page.locator("[class*='cursor-pointer'][class*='rounded'], [class*='tree'] button, [role='treeitem'], aside button").filter({ hasText: /.+/ }).first();
     if (await firstDataset.isVisible().catch(() => false)) {
       await firstDataset.click();
       await page.waitForTimeout(2_000);

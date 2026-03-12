@@ -102,7 +102,13 @@ test.describe.serial("E2E: Ingest document → RAG query", () => {
     await expect(filenameCell.first()).toBeVisible({ timeout: 10_000 });
 
     // Click into the document row to verify navigation works
-    await filenameCell.first().click();
+    const row = page.locator("table tbody tr").filter({ hasText: "test-contract.txt" }).first();
+    const link = row.locator("a").first();
+    if (await link.isVisible({ timeout: 3_000 }).catch(() => false)) {
+      await link.click();
+    } else {
+      await row.click();
+    }
     await expect(page).toHaveURL(/\/documents\//, { timeout: 10_000 });
   });
 

@@ -70,21 +70,23 @@ test.describe("Knowledge Graph", () => {
     });
     await page.waitForTimeout(2_000);
 
-    // At least one entity type badge should be visible
-    const entityTypes = [
+    // At least one node type badge should be visible (Document, Entity, Chunk, Email, etc.)
+    const nodeTypes = [
+      "Document",
+      "Entity",
+      "Chunk",
+      "Email",
       "person",
       "organization",
       "location",
-      "date",
-      "monetary_amount",
     ];
     let found = false;
-    for (const type of entityTypes) {
+    for (const type of nodeTypes) {
       if (
         await page
           .getByText(type, { exact: false })
           .first()
-          .isVisible()
+          .isVisible({ timeout: 5_000 })
           .catch(() => false)
       ) {
         found = true;

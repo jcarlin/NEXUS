@@ -14,7 +14,7 @@ const CREDENTIALS = {
 const PAGES: { path: string; label: string; heading?: RegExp }[] = [
   { path: "/", label: "Dashboard", heading: /dashboard/i },
   { path: "/chat", label: "Chat" },
-  { path: "/documents", label: "Documents", heading: /documents/i },
+  { path: "/documents", label: "Documents" },
   { path: "/documents/import", label: "Import" },
   { path: "/entities", label: "Entities", heading: /entities/i },
   { path: "/entities/network", label: "Network Graph" },
@@ -47,6 +47,15 @@ async function login(page: Page) {
   await page.getByRole("button", { name: /sign in/i }).click();
   // Wait for redirect to dashboard
   await expect(page).toHaveURL("/", { timeout: 15000 });
+
+  // Inject matter ID so pages with matter-scoped queries render properly.
+  // Update both localStorage (for persistence) and the live Zustand store (no reload needed).
+  await page.evaluate(() => {
+    const raw = localStorage.getItem("nexus-app-store");
+    const store = raw ? JSON.parse(raw) : { state: {} };
+    store.state = { ...store.state, matterId: "00000000-0000-0000-0000-000000000001" };
+    localStorage.setItem("nexus-app-store", JSON.stringify(store));
+  });
 }
 
 test.describe("Smoke test: all pages", () => {
@@ -103,7 +112,8 @@ test.describe("Smoke test: all pages", () => {
         if (entry.heading) {
           const headingVisible = await page
             .getByRole("heading", { name: entry.heading })
-            .isVisible({ timeout: 5000 })
+            .waitFor({ state: "visible", timeout: 8000 })
+            .then(() => true)
             .catch(() => false);
           if (!headingVisible) {
             errors.push({

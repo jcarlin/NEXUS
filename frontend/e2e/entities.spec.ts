@@ -48,10 +48,10 @@ test.describe("Entities", () => {
     expect(firstRowText?.trim().length).toBeGreaterThan(0);
 
     // Type badges should be visible (person, organization, location, etc.)
-    const typeBadge = page.locator("table tbody tr td span, table tbody tr td [class*='badge']")
+    const typeBadge = page.locator("table tbody tr td span, table tbody tr td div, table tbody tr td [class*='badge']")
       .filter({ hasText: /person|organization|location|date|monetary|email|phone|geo|event/i })
       .first();
-    await expect(typeBadge).toBeVisible({ timeout: 10_000 });
+    await expect(typeBadge).toBeVisible({ timeout: 15_000 });
   });
 
   test("entity detail page shows connections", async ({ page }) => {

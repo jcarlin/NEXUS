@@ -86,6 +86,7 @@ class InvestigationState(TypedDict, total=False):
     _reformulated: bool
     _filters: dict[str, Any] | None
     _exclude_privilege: list[str]
+    _dataset_doc_ids: list[str] | None
 
 
 # ---------------------------------------------------------------------------
@@ -123,6 +124,7 @@ class AgentState(TypedDict, total=False):
     # Tier classification
     _tier: str
     _skip_verification: bool
+    _dataset_doc_ids: list[str] | None
 
     # Response fields (populated after agent runs)
     response: str

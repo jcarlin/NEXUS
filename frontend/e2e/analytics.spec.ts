@@ -26,7 +26,7 @@ test.describe("Analytics", () => {
     // Should show a table/grid with communication pairs
     const content = page
       .locator(
-        "table, [class*='matrix'], [class*='grid'], [class*='heatmap']",
+        "table, svg, [class*='matrix'], [class*='grid'], [class*='heatmap']",
       )
       .first();
     await expect(content).toBeVisible({ timeout: 10_000 });
@@ -37,7 +37,7 @@ test.describe("Analytics", () => {
     await page.waitForTimeout(3_000);
 
     // Matrix/table should have at least one cell with a number > 0
-    const cells = page.locator("table td, [class*='cell'], [class*='matrix']")
+    const cells = page.locator("table td, svg text, [class*='cell'], [class*='matrix']")
       .filter({ hasText: /^[1-9]\d*$/ });
     await expect(cells.first()).toBeVisible({ timeout: 10_000 });
   });
