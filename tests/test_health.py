@@ -217,6 +217,21 @@ async def test_feature_flags_endpoint(client: AsyncClient) -> None:
         "near_duplicate_detection",
         "reranker",
         "redaction",
+        "visual_embeddings",
+        "relationship_extraction",
+        "email_threading",
+        "ai_audit_logging",
+        "coreference_resolution",
+        "batch_embeddings",
+        "agentic_pipeline",
+        "citation_verification",
+        "google_drive",
+        "prometheus_metrics",
+        "sso",
+        "memo_drafting",
+        "chunk_quality_scoring",
+        "contextual_chunks",
+        "retrieval_grading",
     }
     assert expected_keys == set(body.keys())
     # All values must be booleans

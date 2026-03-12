@@ -1,6 +1,34 @@
 # Feature Flags Reference
 
-All feature flags are defined in `app/config.py` (Settings class) and read from environment variables. They are aggregated into a `FeatureFlags` nested model at `Settings.features`. All default to `false` unless noted otherwise.
+All 23 feature flags are defined in `app/config.py` (Settings class) and read from environment variables. They are aggregated into a `FeatureFlags` nested model at `Settings.features`. All default to `false` unless noted otherwise.
+
+## Runtime Toggling (Admin UI)
+
+Feature flags can be toggled at runtime via the admin UI at `/admin/feature-flags` or the API endpoints below. DB overrides are stored in the `feature_flag_overrides` table and applied to the Settings singleton at startup and on toggle.
+
+### API Endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/v1/admin/feature-flags` | List all flags with metadata, current state, and override status |
+| `PUT` | `/api/v1/admin/feature-flags/{flag_name}` | Toggle a flag (immediate save + apply) |
+| `DELETE` | `/api/v1/admin/feature-flags/{flag_name}` | Reset to env default |
+
+All endpoints require `admin` role.
+
+### Risk Levels
+
+Each flag has a risk level that determines the toggle behavior:
+
+| Risk Level | Behavior | Count |
+|---|---|---|
+| **Safe** | Takes effect immediately, no side effects | 12 flags |
+| **Cache Clear** | Clears DI singleton caches, may reload models on next request | 6 flags |
+| **Restart Required** | Saved to DB but requires server restart (router/middleware mounts) | 5 flags |
+
+### Celery Caveat
+
+Celery workers run in separate processes with their own Settings singleton. They load DB overrides at worker startup but won't see mid-flight toggle changes until restarted. The admin UI notes this for ingestion-pipeline flags.
 
 ## Summary Table
 
@@ -24,6 +52,11 @@ All feature flags are defined in `app/config.py` (Settings class) and read from 
 | `ENABLE_REDACTION` | `false` | PII detection and document redaction engine |
 | `ENABLE_GOOGLE_DRIVE` | `false` | Google Drive OAuth connector for document ingestion |
 | `ENABLE_CHUNK_QUALITY_SCORING` | `false` | Heuristic chunk quality scoring at ingestion time |
+| `ENABLE_CONTEXTUAL_CHUNKS` | `false` | LLM-generated contextual prefixes for chunks |
+| `ENABLE_RETRIEVAL_GRADING` | `false` | CRAG-style retrieval relevance grading |
+| `ENABLE_PROMETHEUS_METRICS` | `false` | Prometheus metrics endpoint at /metrics |
+| `ENABLE_SSO` | `false` | OpenID Connect SSO authentication |
+| `ENABLE_MEMO_DRAFTING` | `false` | AI-assisted legal memo drafting |
 
 ---
 
