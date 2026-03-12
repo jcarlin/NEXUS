@@ -82,9 +82,10 @@
 
 @layer utilities {
   .citation-highlight {
-    background-color: oklch(0.80 0.11 90 / 0.35);
+    background-color: oklch(0.90 0.18 100 / 0.45);
     border-radius: 0.125rem;
     padding: 0.05em 0.1em;
+    color: inherit;
   }
 
   @keyframes fade-in {
