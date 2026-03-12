@@ -189,22 +189,24 @@ export function LLMProviderDialog({ open, onOpenChange, provider }: LLMProviderD
             )}
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="api_key">
-              API Key
-              {isEdit && (
-                <span className="ml-2 text-xs text-muted-foreground">
-                  (leave blank to keep current)
-                </span>
-              )}
-            </Label>
-            <Input
-              id="api_key"
-              type="password"
-              {...register("api_key")}
-              placeholder={isEdit ? "********" : "sk-..."}
-            />
-          </div>
+          {providerType !== "ollama" && (
+            <div className="space-y-2">
+              <Label htmlFor="api_key">
+                API Key
+                {isEdit && (
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    (leave blank to keep current)
+                  </span>
+                )}
+              </Label>
+              <Input
+                id="api_key"
+                type="password"
+                {...register("api_key")}
+                placeholder={isEdit ? "********" : "sk-..."}
+              />
+            </div>
+          )}
 
           {showBaseUrl && (
             <div className="space-y-2">

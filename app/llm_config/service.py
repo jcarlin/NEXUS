@@ -16,6 +16,7 @@ from app.llm_config.schemas import (
     LLMConfigOverview,
     LLMProviderCreate,
     LLMProviderResponse,
+    LLMProviderType,
     LLMProviderUpdate,
     LLMTier,
     LLMTierConfigResponse,
@@ -537,6 +538,68 @@ class LLMConfigService:
         )
 
     # ------------------------------------------------------------------
+    # Auto-register providers from environment
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    async def _auto_register_providers(
+        db: AsyncSession,
+        existing_providers: list[LLMProviderResponse],
+        settings: object,
+    ) -> list[LLMProviderResponse]:
+        """Auto-register providers from env vars / local detection.
+
+        Returns list of newly created providers (may be empty).
+        """
+        active_types = {p.provider for p in existing_providers if p.is_active}
+        new_providers: list[LLMProviderResponse] = []
+
+        # Cloud providers from env vars
+        env_providers = [
+            ("anthropic", getattr(settings, "anthropic_api_key", ""), "Anthropic (from env)"),
+            ("openai", getattr(settings, "openai_api_key", ""), "OpenAI (from env)"),
+            ("gemini", getattr(settings, "gemini_api_key", ""), "Gemini (from env)"),
+        ]
+
+        for prov_type, api_key, label in env_providers:
+            if prov_type in active_types or not api_key:
+                continue
+            try:
+                created = await LLMConfigService.create_provider(
+                    db,
+                    LLMProviderCreate(
+                        provider=LLMProviderType(prov_type),
+                        label=label,
+                        api_key=api_key,
+                        base_url="",
+                    ),
+                )
+                new_providers.append(created)
+                logger.info("llm_config.auto_registered", provider=prov_type, source="env")
+            except Exception:
+                logger.debug("llm_config.auto_register.skipped", provider=prov_type)
+
+        # Ollama: probe local instance
+        if "ollama" not in active_types:
+            ollama_models = await LLMConfigService.discover_ollama_models()
+            if ollama_models:
+                try:
+                    created = await LLMConfigService.create_provider(
+                        db,
+                        LLMProviderCreate(
+                            provider=LLMProviderType.OLLAMA,
+                            label="Ollama (auto-detected)",
+                            base_url=getattr(settings, "ollama_base_url", "http://localhost:11434/v1"),
+                        ),
+                    )
+                    new_providers.append(created)
+                    logger.info("llm_config.auto_registered", provider="ollama", source="probe")
+                except Exception:
+                    logger.debug("llm_config.auto_register.skipped", provider="ollama")
+
+        return new_providers
+
+    # ------------------------------------------------------------------
     # Overview
     # ------------------------------------------------------------------
 
@@ -547,6 +610,12 @@ class LLMConfigService:
         settings = get_settings()
 
         providers = await LLMConfigService.list_providers(db)
+
+        # Auto-register providers from env vars / local detection
+        new_providers = await LLMConfigService._auto_register_providers(db, providers, settings)
+        if new_providers:
+            providers.extend(new_providers)
+
         tiers = await LLMConfigService.list_tier_configs(db)
 
         env_defaults = {
