@@ -616,12 +616,31 @@ class GraphService:
         """
         try:
             records = await self._run_query(cypher, params)
+            # Map raw Neo4j records to TimelineEvent-compatible dicts
+            events = []
+            for r in records:
+                filename = r.get("document", "Unknown document")
+                page = r.get("page_number")
+                doc_type = r.get("document_type", "")
+                desc = f"Mentioned in {filename}"
+                if page is not None:
+                    desc += f" (page {page})"
+                if doc_type:
+                    desc += f" [{doc_type}]"
+                events.append(
+                    {
+                        "date": r.get("date"),
+                        "description": desc,
+                        "entities": [],
+                        "document_source": filename,
+                    }
+                )
             logger.debug(
                 "graph.entity_timeline.fetched",
                 entity=entity_name,
-                events=len(records),
+                events=len(events),
             )
-            return records
+            return events
         except Exception:
             logger.error("graph.entity_timeline.failed", entity=entity_name)
             raise

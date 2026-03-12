@@ -4,7 +4,6 @@ import {
   useReactTable,
   getCoreRowModel,
   getSortedRowModel,
-  getFilteredRowModel,
   flexRender,
   type ColumnDef,
   type SortingState,
@@ -25,7 +24,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
-import { DataTableToolbar } from "@/components/ui/data-table-toolbar";
 import { formatDate } from "@/lib/utils";
 import type { EntityResponse } from "@/types";
 
@@ -48,7 +46,6 @@ interface EntityTableProps {
 
 export function EntityTable({ data, loading }: EntityTableProps) {
   const [sorting, setSorting] = useState<SortingState>([]);
-  const [globalFilter, setGlobalFilter] = useState("");
 
   const columns = useMemo<ColumnDef<EntityResponse>[]>(
     () => [
@@ -116,20 +113,13 @@ export function EntityTable({ data, loading }: EntityTableProps) {
     [],
   );
 
-  const typeFacetOptions = useMemo(() => {
-    const types = [...new Set(data.map((e) => e.type))].sort();
-    return types.map((t) => ({ label: t, value: t }));
-  }, [data]);
-
   const table = useReactTable({
     data,
     columns,
-    state: { sorting, globalFilter },
+    state: { sorting },
     onSortingChange: setSorting,
-    onGlobalFilterChange: setGlobalFilter,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
   });
 
   if (loading) {
@@ -144,14 +134,6 @@ export function EntityTable({ data, loading }: EntityTableProps) {
 
   return (
     <div className="space-y-4">
-      <DataTableToolbar
-        table={table}
-        searchPlaceholder="Search entities..."
-        facetFilters={[
-          { columnId: "type", title: "All types", options: typeFacetOptions },
-        ]}
-      />
-
       <div className="rounded-md border">
         <Table>
           <TableHeader>
