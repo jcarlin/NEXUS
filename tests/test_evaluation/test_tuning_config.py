@@ -18,7 +18,7 @@ class TestTunedParametersLoadFromConfig:
             openai_api_key="test",
             _env_file=None,
         )
-        assert s.retrieval_text_limit == 20
+        assert s.retrieval_text_limit == 40
         assert s.retrieval_graph_limit == 20
         assert s.retrieval_prefetch_multiplier == 2
         assert s.query_entity_threshold == 0.5

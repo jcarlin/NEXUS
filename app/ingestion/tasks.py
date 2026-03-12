@@ -657,13 +657,86 @@ def _stage_chunk(ctx: _PipelineContext) -> None:
 
     logger.info("task.chunked", chunk_count=len(ctx.chunks))
 
+    # Chunk quality scoring (feature-flagged)
+    if ctx.settings.enable_chunk_quality_scoring and ctx.chunks:
+        from app.ingestion.quality_scorer import score_chunk
+
+        for chunk in ctx.chunks:
+            qs = score_chunk(
+                text=chunk.text,
+                token_count=chunk.token_count,
+            )
+            chunk.metadata["quality_score"] = qs.overall
+
+        logger.info(
+            "task.quality_scored",
+            chunk_count=len(ctx.chunks),
+            avg_score=round(sum(c.metadata.get("quality_score", 0) for c in ctx.chunks) / len(ctx.chunks), 3),
+        )
+
     ctx.progress["chunks_created"] = len(ctx.chunks)
+    _update_stage(ctx.engine, ctx.job_id, "contextualizing", "processing", progress=ctx.progress)
+
+
+def _stage_contextualize(ctx: _PipelineContext) -> None:
+    """Stage 2b: Contextual chunk enrichment (feature-flagged).
+
+    Calls an LLM in batches to generate a concise context prefix for each
+    chunk, improving embedding quality for retrieval.  Skipped when
+    ``ENABLE_CONTEXTUAL_CHUNKS`` is ``false``.
+    """
+    if not ctx.settings.enable_contextual_chunks or not ctx.chunks:
+        _update_stage(ctx.engine, ctx.job_id, "embedding", "processing", progress=ctx.progress)
+        return
+
+    from app.common.llm import LLMClient
+    from app.ingestion.contextualizer import ChunkContextualizer
+    from app.llm_config.resolver import resolve_llm_config_sync
+
+    # Resolve LLM from the "ingestion" tier (admin UI / DB → env fallback)
+    try:
+        config = resolve_llm_config_sync("ingestion", ctx.engine)
+        llm = LLMClient.from_resolved_config(config)
+    except Exception:
+        logger.warning("task.contextualize_resolver_fallback", exc_info=True)
+        llm = LLMClient(ctx.settings)
+    # Allow env-var override for the specific contextualization model
+    if ctx.settings.contextual_chunk_model:
+        llm.model = ctx.settings.contextual_chunk_model
+
+    contextualizer = ChunkContextualizer(
+        llm=llm,
+        batch_size=ctx.settings.contextual_chunk_batch_size,
+        concurrency=ctx.settings.contextual_chunk_concurrency,
+        max_tokens=ctx.settings.contextual_chunk_max_tokens,
+    )
+
+    doc_meta = ctx.parse_result.metadata if ctx.parse_result else {}
+
+    try:
+        asyncio.run(
+            contextualizer.contextualize_batch(
+                chunks=ctx.chunks,
+                doc_title=ctx.filename,
+                doc_type=ctx.document_type or ctx.doc_type,
+                doc_author=doc_meta.get("author"),
+                doc_date=doc_meta.get("date"),
+            )
+        )
+
+        contextualized = sum(1 for c in ctx.chunks if c.context_prefix is not None)
+        ctx.progress["contexts_generated"] = contextualized
+        logger.info("task.contextualized", contextualized=contextualized, total=len(ctx.chunks))
+    except Exception:
+        logger.warning("task.contextualization_failed", exc_info=True)
+
     _update_stage(ctx.engine, ctx.job_id, "embedding", "processing", progress=ctx.progress)
 
 
 def _stage_embed(ctx: _PipelineContext) -> None:
     """Stage 3: Dense + sparse (feature-flagged) + visual (feature-flagged) embeddings."""
-    chunk_texts = [c.text for c in ctx.chunks]
+    # If context_prefix exists, prepend it to chunk text for embedding
+    chunk_texts = [f"{c.context_prefix}\n\n{c.text}" if c.context_prefix else c.text for c in ctx.chunks]
 
     if chunk_texts:
         ctx.embeddings = asyncio.run(_embed_chunks(ctx.settings, chunk_texts))
@@ -829,6 +902,10 @@ def _stage_index(ctx: _PipelineContext) -> None:
         }
         if ctx.matter_id is not None:
             payload["matter_id"] = ctx.matter_id
+        if "quality_score" in chunk.metadata:
+            payload["quality_score"] = chunk.metadata["quality_score"]
+        if chunk.context_prefix:
+            payload["context_prefix"] = chunk.context_prefix
 
         # Build vector: named format when sparse enabled, unnamed otherwise
         vector: dict[str, Any] | list[float]
@@ -1322,6 +1399,7 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
     stages = [
         _stage_parse,
         _stage_chunk,
+        _stage_contextualize,
         _stage_embed,
         _stage_extract,
         _stage_index,

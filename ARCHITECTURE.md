@@ -2,7 +2,7 @@
 
 > Multimodal RAG Investigation Platform for Legal Document Intelligence
 
-**Last updated:** 2026-03-07 | **Status:** All milestones complete (M0–M17)
+**Last updated:** 2026-03-12 | **Status:** All milestones complete (M0–M20)
 
 ---
 
@@ -57,9 +57,9 @@ React SPA ──── HTTPS ──── Nginx/Caddy ──── FastAPI ─�
 
                ┌────────────────── INGESTION PIPELINE ───────────────────┐
                │  MinIO Webhook / API Upload / EDRM Import / Bulk Import│
-               │  Parse → Chunk → Embed(dense+sparse) → NER →           │
-               │  → Resolve Entities → Index(Qdrant+Neo4j+PG)           │
-               │  → Hot Doc Scoring → Near-Duplicate Detection          │
+               │  Parse → Chunk → QualityScore → Contextualize(LLM) →  │
+               │  Embed(dense+sparse) → NER → Resolve Entities →       │
+               │  Index(Qdrant+Neo4j+PG) → Hot Doc → Near-Dupe         │
                └─────────────────────────────────────────────────────────┘
 ```
 
@@ -128,13 +128,15 @@ React SPA ──── HTTPS ──── Nginx/Caddy ──── FastAPI ─�
 
 ## Ingestion Pipeline
 
-6-stage Celery pipeline with retry, progress tracking, job cancellation, and child job dispatch.
+8-stage Celery pipeline with retry, progress tracking, job cancellation, and child job dispatch.
 
 ```
 Upload / MinIO Webhook / EDRM Import / Bulk Import ──> Celery Task Chain
                                                           │
                     ├── 1. Parse (Docling / stdlib by extension)
                     ├── 2. Chunk (semantic, 512 tok, 64 overlap, table-aware)
+                    ├── 2b. Quality Score (heuristic: coherence, density, completeness)
+                    ├── 2c. Contextualize (LLM context prefix per chunk — ENABLE_CONTEXTUAL_CHUNKS)
                     ├── 3. Embed (dense: multi-provider, sparse: FastEmbed BM42)
                     ├── 4. Extract (GLiNER NER, ~50ms/chunk)
                     ├── 5. Resolve (entity resolution: rapidfuzz + embedding + union-find)
@@ -151,6 +153,8 @@ Post-ingestion (fire-and-forget):
 - **Docling over PyMuPDF**: Structural awareness (headings, tables, lists) enables semantic chunking. PyMuPDF gives flat text.
 - **GLiNER over LLM NER**: Zero-shot at 50ms/chunk on CPU. LLM extraction reserved for relationship-rich chunks (feature-flagged).
 - **Semantic chunking**: Respects paragraph/table boundaries. 512 tokens, 64 overlap, markdown table protection, email-aware body/quote splitting.
+- **Chunk quality scoring**: Heuristic scoring (coherence, information density, completeness, length) — low-quality chunks can be skipped during contextualization and filtered at query time.
+- **Contextual chunk enrichment** (feature-flagged): LLM generates a concise context sentence per chunk (Anthropic contextual retrieval pattern). Context prefix is prepended to chunk text before embedding, improving retrieval by disambiguating chunks from their broader document context. Original chunk text preserved for citations.
 - **Dense + sparse embeddings**: Multi-provider dense vectors, FastEmbed BM42 for sparse. Both stored in Qdrant named vectors for native RRF fusion.
 - **Multiple entry paths**: Direct upload, MinIO webhook, EDRM load file import (DAT/OPT/CSV), bulk import for pre-OCR'd datasets.
 
@@ -169,7 +173,7 @@ START -> case_context_resolve -> investigation_agent -> post_agent_extract
                                                      verify_citations -> generate_follow_ups -> END
 ```
 
-Controlled by `ENABLE_AGENTIC_PIPELINE` (default `true`). When disabled, falls back to the v1 9-node linear chain.
+Controlled by `ENABLE_AGENTIC_PIPELINE` (default `true`). When disabled, falls back to the v1 10-node linear chain (classify → rewrite → retrieve → grade_retrieval → rerank → check_relevance → graph_lookup → synthesize → follow_ups).
 
 ### Nodes
 
@@ -266,26 +270,34 @@ results = client.query_points(
 )
 ```
 
-### 2. Cross-Encoder Reranking
+### 2. CRAG-Style Retrieval Grading
+
+`app/query/grader.py` — Two-tier relevance grading (behind `ENABLE_RETRIEVAL_GRADING`):
+- **Tier 1 — Heuristic** (~10ms): keyword overlap + Qdrant semantic score blend
+- **Tier 2 — LLM grading** (conditional): only when Tier 1 median < confidence threshold (default 0.5)
+- Chunks below relevance threshold trigger query reformulation (max 1 retry)
+- Uses the `query` LLM tier — set to Ollama in admin settings for zero-cost testing
+
+### 3. Cross-Encoder Reranking
 
 `app/query/reranker.py` with BGE-reranker-v2-m3 or TEI:
 - Runs on Apple Silicon MPS (~50-100ms for 20 docs)
 - Re-scores top-40 hybrid results → top-10
-- Behind `ENABLE_RERANKER` feature flag
+- `ENABLE_RERANKER` enabled by default
 - TEI provider option for remote inference
 
-### 3. Visual Reranking
+### 4. Visual Reranking
 
 `app/ingestion/visual_embedder.py` with ColQwen2.5:
 - PDF pages rendered at configurable DPI, embedded with vision-language model
 - Visual similarity scores blended with text scores
 - Behind `ENABLE_VISUAL_EMBEDDINGS` feature flag
 
-### 4. Query Expansion
+### 5. Query Expansion
 
 For analytical/exploratory queries: generate 3 alternative formulations, retrieve independently, merge + dedup by chunk ID, then rerank the unified set.
 
-### 5. Graph Retrieval
+### 6. Graph Retrieval
 
 Neo4j traversals augment text retrieval:
 - **Single-hop neighbors**: immediate entity connections
@@ -465,7 +477,7 @@ See `docs/database-schema.md` for full column reference, indexes, and constraint
 | `nexus_text` | dense (1024d, cosine) + sparse (BM42) | Text chunk retrieval with native RRF |
 | `nexus_visual` | multi-vector (128d, binary quantized) | Page-image retrieval (behind `ENABLE_VISUAL_EMBEDDINGS`) |
 
-Payloads include: `document_id`, `matter_id`, `privilege_status`, `file_type`, `date`, `page_number`, `chunk_text`, `hot_doc_score`, `anomaly_score`
+Payloads include: `document_id`, `matter_id`, `privilege_status`, `file_type`, `date`, `page_number`, `chunk_text`, `hot_doc_score`, `anomaly_score`, `quality_score`, `context_prefix`
 
 ### Neo4j Graph
 
@@ -582,7 +594,7 @@ GET    /api/v1/health/deep               # Deep health check (LLM + embedding)
 - **Audit logging** (`app/common/middleware.py`): Every API call → `audit_log` table (user, action, resource, matter, IP)
 - **AI audit logging** (`app/common/llm.py`): Every LLM call logged with prompt hash, tokens, latency → `ai_audit_log` table
 - **Structured logging**: `structlog` with contextvars (`request_id`, `task_id`, `job_id`)
-- **Feature flags**: 16 `ENABLE_*` flags (see `docs/feature-flags.md` for full reference)
+- **Feature flags**: 19 `ENABLE_*` flags (see `docs/feature-flags.md` for full reference)
 - **Privilege at data layer**: Qdrant filter + SQL WHERE + Neo4j Cypher — never API-layer-only
 - **Frontend** (`frontend/`): React 19 + TanStack Router + orval (OpenAPI → TanStack Query hooks) + shadcn/ui + Zustand
 - **Evaluation** (`app/evaluation/`, `scripts/evaluate.py`): Ground-truth Q&A dataset, retrieval metrics, faithfulness scoring, citation accuracy
@@ -646,7 +658,7 @@ GET    /api/v1/health/deep               # Deep health check (LLM + embedding)
 
 All configuration via environment variables. See `.env.example` for the complete list.
 
-### Feature Flags (16)
+### Feature Flags (19)
 
 | Flag | Default | Description |
 |---|---|---|
@@ -655,7 +667,7 @@ All configuration via environment variables. See `.env.example` for the complete
 | `ENABLE_EMAIL_THREADING` | `true` | Email conversation thread reconstruction |
 | `ENABLE_AI_AUDIT_LOGGING` | `true` | Log LLM calls to ai_audit_log table |
 | `ENABLE_SPARSE_EMBEDDINGS` | `false` | BM42 sparse vectors for hybrid retrieval |
-| `ENABLE_RERANKER` | `false` | Cross-encoder reranking of retrieval results |
+| `ENABLE_RERANKER` | `true` | Cross-encoder reranking of retrieval results |
 | `ENABLE_VISUAL_EMBEDDINGS` | `false` | ColQwen2.5 visual embedding and reranking |
 | `ENABLE_RELATIONSHIP_EXTRACTION` | `false` | LLM-based relationship extraction |
 | `ENABLE_NEAR_DUPLICATE_DETECTION` | `false` | MinHash near-duplicate and version detection |
@@ -666,6 +678,9 @@ All configuration via environment variables. See `.env.example` for the complete
 | `ENABLE_GRAPH_CENTRALITY` | `false` | Neo4j GDS centrality metrics |
 | `ENABLE_BATCH_EMBEDDINGS` | `false` | Async batch embedding API (stub) |
 | `ENABLE_REDACTION` | `false` | PII detection and document redaction |
+| `ENABLE_CHUNK_QUALITY_SCORING` | `false` | Heuristic chunk quality scoring at ingestion |
+| `ENABLE_CONTEXTUAL_CHUNKS` | `false` | LLM context prefix enrichment at ingestion |
+| `ENABLE_RETRIEVAL_GRADING` | `false` | CRAG-style two-tier retrieval relevance grading |
 
 See `docs/feature-flags.md` for full details including resource impact and related settings.
 

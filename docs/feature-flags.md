@@ -8,7 +8,7 @@ All feature flags are defined in `app/config.py` (Settings class) and read from 
 |---|---|---|
 | `ENABLE_VISUAL_EMBEDDINGS` | `false` | ColQwen2.5 visual embedding and reranking for PDF pages |
 | `ENABLE_SPARSE_EMBEDDINGS` | `false` | BM42 sparse vectors for hybrid dense+sparse retrieval |
-| `ENABLE_RERANKER` | `false` | Cross-encoder reranking of retrieval results |
+| `ENABLE_RERANKER` | **`true`** | Cross-encoder reranking of retrieval results |
 | `ENABLE_RELATIONSHIP_EXTRACTION` | `false` | LLM-based relationship extraction via Instructor + Claude |
 | `ENABLE_EMAIL_THREADING` | **`true`** | Reconstruct email conversation threads from headers |
 | `ENABLE_NEAR_DUPLICATE_DETECTION` | `false` | MinHash-based near-duplicate and version detection |
@@ -23,6 +23,7 @@ All feature flags are defined in `app/config.py` (Settings class) and read from 
 | `ENABLE_CITATION_VERIFICATION` | **`true`** | Self-RAG citation verification in query synthesis |
 | `ENABLE_REDACTION` | `false` | PII detection and document redaction engine |
 | `ENABLE_GOOGLE_DRIVE` | `false` | Google Drive OAuth connector for document ingestion |
+| `ENABLE_CHUNK_QUALITY_SCORING` | `false` | Heuristic chunk quality scoring at ingestion time |
 
 ---
 
@@ -49,7 +50,7 @@ All feature flags are defined in `app/config.py` (Settings class) and read from 
 - **Related settings**: `SPARSE_EMBEDDING_MODEL`
 
 #### `ENABLE_RERANKER`
-- **Default**: `false`
+- **Default**: **`true`**
 - **Module**: `app/query/`
 - **Config key**: `Settings.enable_reranker`
 - **Description**: Enables cross-encoder reranking of retrieval results before synthesis. Supports local model inference (bge-reranker-v2-m3) or remote TEI endpoint.
@@ -189,3 +190,31 @@ All feature flags are defined in `app/config.py` (Settings class) and read from 
 - **Resources gated**: `GDriveService` DI singleton (`app/dependencies.py:get_gdrive_service`). The `gdrive` router is only mounted in `app/main.py` when this flag is `true`. Database tables `google_drive_connections` and `google_drive_sync_state` are created by migration 014 regardless of the flag.
 - **Runtime impact**: No startup cost. Google API libraries are imported lazily. OAuth tokens are encrypted at rest with Fernet (requires `GDRIVE_ENCRYPTION_KEY`). File downloads run in Celery tasks.
 - **Related settings**: `GDRIVE_CLIENT_ID`, `GDRIVE_CLIENT_SECRET`, `GDRIVE_REDIRECT_URI`, `GDRIVE_ENCRYPTION_KEY`, `GDRIVE_MAX_CONCURRENT_DOWNLOADS`
+
+### Data Quality
+
+#### `ENABLE_CHUNK_QUALITY_SCORING`
+- **Default**: `false`
+- **Module**: `app/ingestion/`
+- **Config key**: `Settings.enable_chunk_quality_scoring`
+- **Description**: Enables heuristic quality scoring for each chunk during ingestion. Scores chunks on coherence (sentence structure), information density (substantive vs boilerplate), completeness (truncation detection), and length. The composite `quality_score` (0.0–1.0) is stored in the Qdrant payload for optional query-time filtering.
+- **Resources gated**: No DI singleton. The `quality_scorer.score_chunk()` function is called inline in `_stage_chunk()`. Pure Python heuristics — no model loading.
+- **Runtime impact**: Negligible (~5ms per chunk). No external calls, no model loading. Adds a `quality_score` field to each Qdrant point payload.
+
+#### `ENABLE_CONTEXTUAL_CHUNKS`
+- **Default**: `false`
+- **Module**: `app/ingestion/`
+- **Config key**: `Settings.enable_contextual_chunks`
+- **Description**: Enables LLM-generated contextual prefixes for each chunk during ingestion. An LLM call generates a concise sentence describing each chunk's content and role in the document. The prefix is prepended to the chunk text before embedding (improving retrieval precision) and stored separately in Qdrant for transparency. Citations always show original chunk text.
+- **Resources gated**: Uses the existing `LLMClient` (no new DI singleton). Batches chunks (default 20/call) with configurable concurrency (default 4 concurrent batches).
+- **Runtime impact**: Adds LLM calls during ingestion (~15-30s per document with Haiku, batched). Cost depends on model: ~$0.00004/chunk with Haiku + batching. Configurable via `CONTEXTUAL_CHUNK_MODEL` (can use local LLM for zero API cost).
+- **Related settings**: `CONTEXTUAL_CHUNK_MODEL`, `CONTEXTUAL_CHUNK_MAX_TOKENS`, `CONTEXTUAL_CHUNK_BATCH_SIZE`, `CONTEXTUAL_CHUNK_CONCURRENCY`
+
+#### `ENABLE_RETRIEVAL_GRADING`
+- **Default**: `false`
+- **Module**: `app/query/`
+- **Config key**: `Settings.enable_retrieval_grading`
+- **Description**: Enables CRAG-style retrieval relevance grading in the V1 query pipeline. Uses a two-tier approach: (1) fast heuristic scoring of keyword/entity overlap + Qdrant similarity score for all chunks, and (2) conditional LLM grading when the median heuristic score falls below a configurable threshold. Adds a `grade_retrieval` node between `retrieve` and `rerank` in the V1 graph.
+- **Resources gated**: No DI singleton. Uses the existing `LLMClient` for Tier 2 grading. Heuristic scoring is pure Python.
+- **Runtime impact**: Tier 1 (heuristic): ~10ms. Tier 2 (LLM): +0.5-2s, only triggered for low-confidence retrievals (median score < threshold). High-confidence queries skip LLM grading entirely.
+- **Related settings**: `GRADING_MODEL`, `GRADING_CONFIDENCE_THRESHOLD`

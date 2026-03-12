@@ -93,9 +93,9 @@ interface TestConnectionResponse {
 }
 
 const TIER_DESCRIPTIONS: Record<string, string> = {
-  query: "Agent loop, citation verification, synthesis, classification, rewriting",
+  query: "Agent loop, citation verification, synthesis, classification, rewriting, retrieval grading",
   analysis: "Follow-ups, sentiment, completeness, case setup, memos",
-  ingestion: "Relationship extraction during document processing",
+  ingestion: "Relationship extraction, contextual chunk enrichment during document processing",
 };
 
 const PROVIDER_COLORS: Record<string, string> = {

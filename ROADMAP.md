@@ -41,12 +41,13 @@
 | M18 | OIDC/SSO Authentication | — | Done | 16 | Regression + migration | — | M6 |
 | M19 | Memo Drafting Pipeline | — | Done | 22 | Regression + migration | — | M10 |
 | M20 | Observability & Load Testing | — | Done | 23 | Regression | — | M17 |
+| M21 | RAG Quality Improvements | — | Done | 43 | Regression + eval non-regression | — | M8, M9, M15 |
 
-**Total tests: 772 backend + 36 frontend test files** (772 backend tests passing; frontend: 36 Vitest unit/component test files + 2 Playwright E2E specs)
+**Total tests: 815 backend + 36 frontend test files** (815 backend tests passing; frontend: 36 Vitest unit/component test files + 2 Playwright E2E specs)
 
 **6 autonomous LangGraph agents** across the pipeline (Case Setup, Investigation Orchestrator, Citation Verifier, Hot Doc Scanner, Contextual Completeness, Entity Resolution)
 
-**All milestones complete.** M0–M20 — full local deployment with zero cloud API dependency, OIDC/SSO, memo drafting, and Prometheus observability.
+**All milestones complete.** M0–M21 — full local deployment with zero cloud API dependency, OIDC/SSO, memo drafting, Prometheus observability, and RAG quality improvements (contextual retrieval, CRAG grading, chunk quality scoring, reranking enabled by default).
 
 **Cloud demo hosting:** GCP + Vercel deployment tested and working. Run `./scripts/cloud-deploy.sh` to deploy, `./scripts/cloud-teardown.sh` to tear down. See `docs/CLOUD-DEPLOY.md` for full guide. Config files: `Caddyfile`, `docker-compose.cloud.yml`, `.env.cloud.example`, `frontend/vercel.json`, `scripts/seed_admin.py`.
 
@@ -1059,6 +1060,35 @@ frontend/
 - Gate: regression
 
 **Key files:** `app/common/metrics.py`, `monitoring/` (docker-compose.monitoring.yml, prometheus.yml, dashboards/, grafana-provisioning/), `load_tests/` (locustfile.py, config.py), `.github/workflows/load-test.yml`
+
+---
+
+### M21: RAG Quality Improvements
+*Chunk quality scoring, contextual retrieval, CRAG grading, reranking enabled by default. Based on RAG maturity audit (docs/RAG-MATURITY-AUDIT.md).*
+
+- [x] `app/ingestion/quality_scorer.py` — Heuristic chunk quality scoring (coherence, information density, completeness, length)
+- [x] `app/ingestion/contextualizer.py` — Batched LLM contextual chunk enrichment (Anthropic contextual retrieval pattern)
+- [x] `app/ingestion/prompts.py` — Prompt templates for contextualization
+- [x] `app/query/grader.py` — CRAG-style two-tier retrieval grading (heuristic + conditional LLM)
+- [x] Enable reranker by default (`ENABLE_RERANKER=true`, `RETRIEVAL_TEXT_LIMIT=40`)
+- [x] Chunk dataclass extended with `context_prefix` field
+- [x] Pipeline stages: quality scoring after chunking, contextualization before embedding
+- [x] Qdrant payloads include `quality_score` and `context_prefix`
+- [x] V1 graph: `grade_retrieval` node between `retrieve` and `rerank`
+- [x] Contextualizer wired to "ingestion" LLM tier (admin UI configurable)
+- [x] Grading uses "query" LLM tier (admin UI configurable)
+- [x] Cost estimation node map updated for new nodes
+- [x] Feature flags: `ENABLE_CHUNK_QUALITY_SCORING`, `ENABLE_CONTEXTUAL_CHUNKS`, `ENABLE_RETRIEVAL_GRADING`
+- [x] Makefile targets: `make eval`, `make eval-tune`
+- [x] Audit docs: `docs/RAG-MATURITY-AUDIT.md`, `docs/RAG-RESEARCH-2026.md`
+
+**Testing (43 tests):**
+- `tests/test_ingestion/test_quality_scorer.py` — 12 tests (scoring heuristics, boilerplate detection, edge cases)
+- `tests/test_ingestion/test_contextualizer.py` — 15 tests (batching, concurrency, LLM failure, parsing, pipeline integration)
+- `tests/test_query/test_grader.py` — 16 tests (heuristic relevance, LLM grading triggers, parsing, tokenization)
+- Gate: regression + eval non-regression
+
+**Key files:** `app/ingestion/quality_scorer.py`, `app/ingestion/contextualizer.py`, `app/ingestion/prompts.py`, `app/query/grader.py`, `app/query/prompts.py` (GRADING_PROMPT), `docs/RAG-MATURITY-AUDIT.md`, `docs/RAG-RESEARCH-2026.md`
 
 ---
 

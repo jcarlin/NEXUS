@@ -88,6 +88,10 @@ class InvestigationState(TypedDict, total=False):
     _exclude_privilege: list[str]
     _dataset_doc_ids: list[str] | None
 
+    # Retrieval grading (CRAG)
+    retrieval_confidence: float
+    _grading_triggered: bool
+
 
 # ---------------------------------------------------------------------------
 # Agentic state schema (M10)
@@ -172,6 +176,7 @@ def build_graph_v1(
     graph.add_node("classify", nodes["classify"])
     graph.add_node("rewrite", nodes["rewrite"])
     graph.add_node("retrieve", nodes["retrieve"])
+    graph.add_node("grade_retrieval", nodes["grade_retrieval"])
     graph.add_node("rerank", nodes["rerank"])
     graph.add_node("check_relevance", nodes["check_relevance"])
     graph.add_node("graph_lookup", nodes["graph_lookup"])
@@ -182,7 +187,8 @@ def build_graph_v1(
     graph.add_edge(START, "classify")
     graph.add_edge("classify", "rewrite")
     graph.add_edge("rewrite", "retrieve")
-    graph.add_edge("retrieve", "rerank")
+    graph.add_edge("retrieve", "grade_retrieval")
+    graph.add_edge("grade_retrieval", "rerank")
     graph.add_edge("rerank", "check_relevance")
 
     graph.add_conditional_edges(

@@ -92,6 +92,7 @@ class _FakeChunk:
     text: str
     token_count: int
     metadata: dict = field(default_factory=dict)
+    context_prefix: str | None = None
 
 
 @dataclass

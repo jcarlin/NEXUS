@@ -28,6 +28,7 @@ class Chunk:
     text: str
     token_count: int
     metadata: dict = field(default_factory=dict)
+    context_prefix: str | None = None
 
 
 class TextChunker:

@@ -149,6 +149,19 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     except Exception as exc:
         logger.error("startup.postgres.failed", error=str(exc))
 
+    # --- Load feature flag DB overrides into Settings singleton ---
+    try:
+        from app.dependencies import get_session_factory
+        from app.feature_flags.service import FeatureFlagService
+
+        factory = get_session_factory()
+        async with factory() as session:
+            await FeatureFlagService.load_overrides_into_settings(session)
+            await session.commit()
+        logger.info("startup.feature_flags.ok")
+    except Exception as exc:
+        logger.error("startup.feature_flags.failed", error=str(exc))
+
     # --- Eager model warmup (eliminates cold-start penalty on first query) ---
     try:
         embedder = get_embedder()
@@ -257,6 +270,11 @@ def create_app() -> FastAPI:
 
     application.include_router(llm_config_router, prefix="/api/v1")
     application.include_router(llm_config_public_router, prefix="/api/v1")
+
+    # Feature flag runtime management (always enabled — admin-only access enforced in router)
+    from app.feature_flags.router import router as feature_flags_router
+
+    application.include_router(feature_flags_router, prefix="/api/v1")
 
     # --- Health endpoint ---
     @application.get("/api/v1/health", tags=["system"])
@@ -390,12 +408,27 @@ def create_app() -> FastAPI:
         near_duplicate_detection: bool
         reranker: bool
         redaction: bool
+        visual_embeddings: bool
+        relationship_extraction: bool
+        email_threading: bool
+        ai_audit_logging: bool
+        coreference_resolution: bool
+        batch_embeddings: bool
+        agentic_pipeline: bool
+        citation_verification: bool
+        google_drive: bool
+        prometheus_metrics: bool
+        sso: bool
+        memo_drafting: bool
+        chunk_quality_scoring: bool
+        contextual_chunks: bool
+        retrieval_grading: bool
 
     @application.get("/api/v1/config/features", response_model=FeatureFlagsResponse, tags=["system"])
     async def get_feature_flags(
         current_user: Any = Depends(get_current_user),
     ) -> FeatureFlagsResponse:
-        """Return user-visible feature flag states."""
+        """Return user-visible feature flag states (reflects DB overrides)."""
         settings = get_settings()
         return FeatureFlagsResponse(
             hot_doc_detection=settings.enable_hot_doc_detection,
@@ -406,6 +439,21 @@ def create_app() -> FastAPI:
             near_duplicate_detection=settings.enable_near_duplicate_detection,
             reranker=settings.enable_reranker,
             redaction=settings.enable_redaction,
+            visual_embeddings=settings.enable_visual_embeddings,
+            relationship_extraction=settings.enable_relationship_extraction,
+            email_threading=settings.enable_email_threading,
+            ai_audit_logging=settings.enable_ai_audit_logging,
+            coreference_resolution=settings.enable_coreference_resolution,
+            batch_embeddings=settings.enable_batch_embeddings,
+            agentic_pipeline=settings.enable_agentic_pipeline,
+            citation_verification=settings.enable_citation_verification,
+            google_drive=settings.enable_google_drive,
+            prometheus_metrics=settings.enable_prometheus_metrics,
+            sso=settings.enable_sso,
+            memo_drafting=settings.enable_memo_drafting,
+            chunk_quality_scoring=settings.enable_chunk_quality_scoring,
+            contextual_chunks=settings.enable_contextual_chunks,
+            retrieval_grading=settings.enable_retrieval_grading,
         )
 
     return application

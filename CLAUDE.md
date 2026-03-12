@@ -5,7 +5,7 @@ Multimodal RAG investigation platform for legal document intelligence. Ingests, 
 *See `ARCHITECTURE.md` for full system design, tech stack, and data flow diagrams.*
 
 **Status**: All 17 milestones complete (M0–M17). 905 backend + 35 frontend tests passing.
-16 domain modules, 20 DI factories, 16 feature flags, 6 autonomous LangGraph agents.
+16 domain modules, 20 DI factories, 19 feature flags, 6 autonomous LangGraph agents.
 Full local deployment with zero cloud API dependency.
 
 ---

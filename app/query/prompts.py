@@ -171,3 +171,22 @@ Determine:
 - Is this claim supported by the evidence? (true/false)
 - How confident are you? (0.0-1.0)
 - Brief rationale for your judgment."""
+
+
+# ---------------------------------------------------------------------------
+# M18: CRAG-style retrieval grading
+# ---------------------------------------------------------------------------
+
+GRADING_PROMPT = """\
+Rate the relevance of each retrieved chunk to the query on a scale of 0-10.
+
+Query: {query}
+
+Chunks:
+{chunks}
+
+For each chunk, respond with exactly one line: the chunk number and score.
+Example:
+1: 8
+2: 3
+3: 9"""

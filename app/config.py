@@ -102,6 +102,9 @@ class FeatureFlags(BaseModel):
     prometheus_metrics: bool
     sso: bool
     memo_drafting: bool
+    chunk_quality_scoring: bool
+    contextual_chunks: bool
+    retrieval_grading: bool
 
 
 class Settings(BaseSettings):
@@ -170,6 +173,16 @@ class Settings(BaseSettings):
     # --- Rate Limiting ---
     rate_limit_queries_per_minute: int = 30
     rate_limit_ingests_per_minute: int = 10
+
+    # --- Chunk Quality Scoring ---
+    enable_chunk_quality_scoring: bool = False
+
+    # --- Contextual Chunk Enrichment ---
+    enable_contextual_chunks: bool = False
+    contextual_chunk_model: str = ""  # Falls back to llm_model if empty
+    contextual_chunk_max_tokens: int = 100
+    contextual_chunk_batch_size: int = 20  # Chunks per LLM call
+    contextual_chunk_concurrency: int = 4  # Concurrent batches
 
     # --- Embedding ---
     embedding_batch_size: int = 32  # Conservative for 16GB Mac
@@ -260,6 +273,11 @@ class Settings(BaseSettings):
 
     # --- Citation Verification ---
     max_claims_to_verify: int = 3
+
+    # --- Retrieval Grading (CRAG) ---
+    enable_retrieval_grading: bool = False
+    grading_model: str = ""  # Falls back to llm_model if empty
+    grading_confidence_threshold: float = 0.5  # Median score below this triggers LLM grading
 
     # --- Agentic Pipeline ---
     enable_agentic_pipeline: bool = True
@@ -399,5 +417,8 @@ class Settings(BaseSettings):
                 prometheus_metrics=self.enable_prometheus_metrics,
                 sso=self.enable_sso,
                 memo_drafting=self.enable_memo_drafting,
+                chunk_quality_scoring=self.enable_chunk_quality_scoring,
+                contextual_chunks=self.enable_contextual_chunks,
+                retrieval_grading=self.enable_retrieval_grading,
             )
         return self

@@ -29,6 +29,7 @@ import { Route as AnalyticsCommsRouteImport } from './routes/analytics/comms'
 import { Route as AdminUsersRouteImport } from './routes/admin/users'
 import { Route as AdminLlmSettingsRouteImport } from './routes/admin/llm-settings'
 import { Route as AdminKnowledgeGraphRouteImport } from './routes/admin/knowledge-graph'
+import { Route as AdminFeatureFlagsRouteImport } from './routes/admin/feature-flags'
 import { Route as AdminEvaluationRouteImport } from './routes/admin/evaluation'
 import { Route as AdminAuditLogRouteImport } from './routes/admin/audit-log'
 import { Route as AuthOidcCallbackRouteImport } from './routes/auth/oidc/callback'
@@ -133,6 +134,11 @@ const AdminKnowledgeGraphRoute = AdminKnowledgeGraphRouteImport.update({
   path: '/admin/knowledge-graph',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminFeatureFlagsRoute = AdminFeatureFlagsRouteImport.update({
+  id: '/admin/feature-flags',
+  path: '/admin/feature-flags',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminEvaluationRoute = AdminEvaluationRouteImport.update({
   id: '/admin/evaluation',
   path: '/admin/evaluation',
@@ -155,6 +161,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/admin/audit-log': typeof AdminAuditLogRoute
   '/admin/evaluation': typeof AdminEvaluationRoute
+  '/admin/feature-flags': typeof AdminFeatureFlagsRoute
   '/admin/knowledge-graph': typeof AdminKnowledgeGraphRoute
   '/admin/llm-settings': typeof AdminLlmSettingsRoute
   '/admin/users': typeof AdminUsersRoute
@@ -180,6 +187,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/admin/audit-log': typeof AdminAuditLogRoute
   '/admin/evaluation': typeof AdminEvaluationRoute
+  '/admin/feature-flags': typeof AdminFeatureFlagsRoute
   '/admin/knowledge-graph': typeof AdminKnowledgeGraphRoute
   '/admin/llm-settings': typeof AdminLlmSettingsRoute
   '/admin/users': typeof AdminUsersRoute
@@ -206,6 +214,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/admin/audit-log': typeof AdminAuditLogRoute
   '/admin/evaluation': typeof AdminEvaluationRoute
+  '/admin/feature-flags': typeof AdminFeatureFlagsRoute
   '/admin/knowledge-graph': typeof AdminKnowledgeGraphRoute
   '/admin/llm-settings': typeof AdminLlmSettingsRoute
   '/admin/users': typeof AdminUsersRoute
@@ -233,6 +242,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/admin/audit-log'
     | '/admin/evaluation'
+    | '/admin/feature-flags'
     | '/admin/knowledge-graph'
     | '/admin/llm-settings'
     | '/admin/users'
@@ -258,6 +268,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/admin/audit-log'
     | '/admin/evaluation'
+    | '/admin/feature-flags'
     | '/admin/knowledge-graph'
     | '/admin/llm-settings'
     | '/admin/users'
@@ -283,6 +294,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/admin/audit-log'
     | '/admin/evaluation'
+    | '/admin/feature-flags'
     | '/admin/knowledge-graph'
     | '/admin/llm-settings'
     | '/admin/users'
@@ -309,6 +321,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   AdminAuditLogRoute: typeof AdminAuditLogRoute
   AdminEvaluationRoute: typeof AdminEvaluationRoute
+  AdminFeatureFlagsRoute: typeof AdminFeatureFlagsRoute
   AdminKnowledgeGraphRoute: typeof AdminKnowledgeGraphRoute
   AdminLlmSettingsRoute: typeof AdminLlmSettingsRoute
   AdminUsersRoute: typeof AdminUsersRoute
@@ -471,6 +484,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminKnowledgeGraphRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/feature-flags': {
+      id: '/admin/feature-flags'
+      path: '/admin/feature-flags'
+      fullPath: '/admin/feature-flags'
+      preLoaderRoute: typeof AdminFeatureFlagsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/evaluation': {
       id: '/admin/evaluation'
       path: '/admin/evaluation'
@@ -501,6 +521,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   AdminAuditLogRoute: AdminAuditLogRoute,
   AdminEvaluationRoute: AdminEvaluationRoute,
+  AdminFeatureFlagsRoute: AdminFeatureFlagsRoute,
   AdminKnowledgeGraphRoute: AdminKnowledgeGraphRoute,
   AdminLlmSettingsRoute: AdminLlmSettingsRoute,
   AdminUsersRoute: AdminUsersRoute,

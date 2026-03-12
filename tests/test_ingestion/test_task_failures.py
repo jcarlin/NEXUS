@@ -110,6 +110,7 @@ def test_process_document_disposes_engine_on_success():
         patch("app.ingestion.tasks._is_job_cancelled", return_value=False),
         patch("app.ingestion.tasks._stage_parse"),
         patch("app.ingestion.tasks._stage_chunk"),
+        patch("app.ingestion.tasks._stage_contextualize"),
         patch("app.ingestion.tasks._stage_embed"),
         patch("app.ingestion.tasks._stage_extract"),
         patch("app.ingestion.tasks._stage_index"),

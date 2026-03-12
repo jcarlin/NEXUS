@@ -468,10 +468,46 @@ def create_nodes_v1(
         logger.debug("node.generate_follow_ups", count=len(follow_ups))
         return {"follow_up_questions": follow_ups}
 
+    # --- grade_retrieval (CRAG) ---
+
+    async def grade_retrieval_node(state: dict) -> dict:
+        """Grade retrieved chunks for relevance (feature-flagged).
+
+        Tier 1: Heuristic scoring (keyword overlap + Qdrant score).
+        Tier 2: LLM grading (conditional, when median heuristic < threshold).
+        """
+        from app.dependencies import get_settings
+
+        settings = get_settings()
+
+        if not settings.enable_retrieval_grading:
+            return {}
+
+        from app.query.grader import grade_retrieval
+
+        query = state.get("rewritten_query") or state["original_query"]
+        text_results = state.get("text_results", [])
+
+        grading_llm = llm if settings.enable_retrieval_grading else None
+
+        results, confidence, triggered = await grade_retrieval(
+            query=query,
+            results=text_results,
+            llm=grading_llm,
+            confidence_threshold=settings.grading_confidence_threshold,
+        )
+
+        return {
+            "text_results": results,
+            "retrieval_confidence": confidence,
+            "_grading_triggered": triggered,
+        }
+
     return {
         "classify": classify,
         "rewrite": rewrite,
         "retrieve": retrieve,
+        "grade_retrieval": grade_retrieval_node,
         "rerank": rerank,
         "check_relevance": check_relevance,
         "graph_lookup": graph_lookup,

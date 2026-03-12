@@ -16,6 +16,7 @@ import {
   Shield,
   ScrollText,
   FlaskConical,
+  ToggleLeft,
   ChevronsLeft,
   ChevronsRight,
 } from "lucide-react";
@@ -61,6 +62,7 @@ const adminNav: NavItem[] = [
   { to: "/admin/evaluation", label: "Evaluation", icon: FlaskConical, roles: ["admin"] },
   { to: "/admin/knowledge-graph", label: "Knowledge Graph", icon: Network, roles: ["admin"] },
   { to: "/admin/llm-settings", label: "LLM Settings", icon: Settings, roles: ["admin"] },
+  { to: "/admin/feature-flags", label: "Feature Flags", icon: ToggleLeft, roles: ["admin"] },
 ];
 
 export function Sidebar() {

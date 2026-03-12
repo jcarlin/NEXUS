@@ -483,9 +483,9 @@ class LLMConfigService:
 
         # Map node_names to tiers
         tier_node_map: dict[str, str] = {
-            "query": "investigation_agent,verify_claims_decompose,verify_claims_judge,classify,rewrite,synthesize",
+            "query": "investigation_agent,verify_claims_decompose,verify_claims_judge,classify,rewrite,synthesize,grade_retrieval",
             "analysis": "generate_follow_ups,sentiment,completeness,case_setup,memo",
-            "ingestion": "relationship_extraction",
+            "ingestion": "relationship_extraction,contextual_chunks",
         }
 
         tiers: list[TierCostEstimate] = []

@@ -76,7 +76,7 @@ class TestNestedConfig:
         monkeypatch.setenv("ENABLE_RERANKER", "false")
         s = Settings(anthropic_api_key="k", openai_api_key="k")
         assert s.retrieval is not None
-        assert s.retrieval.text_limit == 20
+        assert s.retrieval.text_limit == 40
         assert s.retrieval.graph_limit == 20
         assert s.retrieval.enable_reranker is False
         assert s.retrieval.entity_threshold == 0.5

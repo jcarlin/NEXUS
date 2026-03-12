@@ -10,6 +10,21 @@ export interface FeatureFlags {
   near_duplicate_detection: boolean;
   reranker: boolean;
   redaction: boolean;
+  visual_embeddings: boolean;
+  relationship_extraction: boolean;
+  email_threading: boolean;
+  ai_audit_logging: boolean;
+  coreference_resolution: boolean;
+  batch_embeddings: boolean;
+  agentic_pipeline: boolean;
+  citation_verification: boolean;
+  google_drive: boolean;
+  prometheus_metrics: boolean;
+  sso: boolean;
+  memo_drafting: boolean;
+  chunk_quality_scoring: boolean;
+  contextual_chunks: boolean;
+  retrieval_grading: boolean;
 }
 
 export function useFeatureFlags() {
