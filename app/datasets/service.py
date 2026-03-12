@@ -56,22 +56,58 @@ class DatasetService:
             if parent["matter_id"] != matter_id:
                 raise ValueError("Parent dataset belongs to a different matter")
 
-        result = await db.execute(
-            text("""
-                INSERT INTO datasets (name, description, parent_id, matter_id, created_by)
-                VALUES (:name, :description, :parent_id, :matter_id, :created_by)
-                RETURNING id, matter_id, name, description, parent_id, created_by, created_at, updated_at
-            """),
-            {
-                "name": name,
-                "description": description,
-                "parent_id": parent_id,
-                "matter_id": matter_id,
-                "created_by": created_by,
-            },
-        )
+        if parent_id is None:
+            # Root-level: partial unique index uq_datasets_matter_name_root
+            # covers (matter_id, name) WHERE parent_id IS NULL
+            result = await db.execute(
+                text("""
+                    INSERT INTO datasets (name, description, parent_id, matter_id, created_by)
+                    VALUES (:name, :description, NULL, :matter_id, :created_by)
+                    ON CONFLICT (matter_id, name) WHERE parent_id IS NULL
+                    DO UPDATE SET updated_at = now()
+                    RETURNING id, matter_id, name, description, parent_id, created_by, created_at, updated_at
+                """),
+                {
+                    "name": name,
+                    "description": description,
+                    "matter_id": matter_id,
+                    "created_by": created_by,
+                },
+            )
+        else:
+            # Non-root: existing constraint uq_datasets_matter_parent_name
+            # covers (matter_id, parent_id, name)
+            result = await db.execute(
+                text("""
+                    INSERT INTO datasets (name, description, parent_id, matter_id, created_by)
+                    VALUES (:name, :description, :parent_id, :matter_id, :created_by)
+                    ON CONFLICT ON CONSTRAINT uq_datasets_matter_parent_name
+                    DO UPDATE SET updated_at = now()
+                    RETURNING id, matter_id, name, description, parent_id, created_by, created_at, updated_at
+                """),
+                {
+                    "name": name,
+                    "description": description,
+                    "parent_id": parent_id,
+                    "matter_id": matter_id,
+                    "created_by": created_by,
+                },
+            )
         row = result.mappings().one()
-        return DatasetResponse(**dict(row), document_count=0, children_count=0)
+
+        # Get current counts for the returned dataset
+        counts = await db.execute(
+            text("""
+                SELECT
+                    (SELECT count(*) FROM dataset_documents dd WHERE dd.dataset_id = :id) AS document_count,
+                    (SELECT count(*) FROM datasets c WHERE c.parent_id = :id) AS children_count
+            """),
+            {"id": row["id"]},
+        )
+        count_row = counts.mappings().one()
+        return DatasetResponse(
+            **dict(row), document_count=count_row["document_count"], children_count=count_row["children_count"]
+        )
 
     @staticmethod
     async def get_dataset(

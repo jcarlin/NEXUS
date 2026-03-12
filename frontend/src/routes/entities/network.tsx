@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useMemo } from "react";
 import { ArrowLeft } from "lucide-react";
 import { apiClient } from "@/api/client";
 import { useAppStore } from "@/stores/app-store";
@@ -44,7 +44,10 @@ function NetworkGraphPage() {
   });
 
   // Fetch connections for top entities by mention count
-  const entityIds = entitiesData?.items.map((e) => e.id) ?? [];
+  const entityIds = useMemo(
+    () => entitiesData?.items.map((e) => e.id) ?? [],
+    [entitiesData],
+  );
   const { data: connectionsData, isLoading: connectionsLoading } = useQuery({
     queryKey: ["entities-network-connections", entityIds],
     queryFn: async () => {

@@ -212,6 +212,7 @@ async def get_document(
 async def document_preview(
     doc_id: UUID,
     page: int = Query(1, ge=1, description="Page number to preview"),
+    filename: str | None = Query(default=None, description="Filename fallback when doc_id is stale"),
     db: AsyncSession = Depends(get_db),
     current_user: UserRecord = Depends(get_current_user),
     matter_id: UUID = Depends(get_matter_id),
@@ -229,6 +230,13 @@ async def document_preview(
         row = await DocumentService.get_document_by_job(
             db=db,
             job_id=doc_id,
+            matter_id=matter_id,
+            user_role=current_user.role,
+        )
+    if row is None and filename:
+        row = await DocumentService.get_document_by_filename(
+            db=db,
+            filename=filename,
             matter_id=matter_id,
             user_role=current_user.role,
         )
@@ -253,6 +261,7 @@ async def document_preview(
 @router.get("/documents/{doc_id}/download")
 async def document_download(
     doc_id: UUID,
+    filename: str | None = Query(default=None, description="Filename fallback when doc_id is stale"),
     db: AsyncSession = Depends(get_db),
     current_user: UserRecord = Depends(get_current_user),
     matter_id: UUID = Depends(get_matter_id),
@@ -270,6 +279,14 @@ async def document_download(
         row = await DocumentService.get_document_by_job(
             db=db,
             job_id=doc_id,
+            matter_id=matter_id,
+            user_role=current_user.role,
+        )
+    if row is None and filename:
+        # Stale Qdrant doc_id after re-ingestion — resolve by filename
+        row = await DocumentService.get_document_by_filename(
+            db=db,
+            filename=filename,
             matter_id=matter_id,
             user_role=current_user.role,
         )

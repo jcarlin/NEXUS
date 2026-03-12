@@ -2,7 +2,7 @@ import { useState } from "react";
 import { createRootRoute, Outlet, useMatches } from "@tanstack/react-router";
 import { Menu } from "lucide-react";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { Sidebar } from "@/components/layout/sidebar";
@@ -52,6 +52,7 @@ function RootLayout() {
             </SheetTrigger>
             <SheetContent side="left" className="w-56 p-0">
               <SheetTitle className="sr-only">Navigation</SheetTitle>
+              <SheetDescription className="sr-only">Main navigation menu</SheetDescription>
               <Sidebar />
             </SheetContent>
           </Sheet>

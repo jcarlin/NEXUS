@@ -135,6 +135,7 @@ function ExpandedView() {
   const needsFetch = !activeSource?.download_url;
   const { downloadUrl: fetchedUrl, isLoading: fetchLoading } = useDocumentDownload(
     needsFetch ? docId : null,
+    activeSource?.filename,
   );
   const downloadUrl = activeSource?.download_url ?? fetchedUrl;
   const downloadLoading = needsFetch && fetchLoading;

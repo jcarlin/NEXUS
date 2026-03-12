@@ -283,6 +283,37 @@ class DocumentService:
         return row_to_dict(row)
 
     # ------------------------------------------------------------------
+    # GET (single by filename within a matter)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    async def get_document_by_filename(
+        db: AsyncSession,
+        filename: str,
+        matter_id: UUID,
+        user_role: str | None = None,
+    ) -> dict | None:
+        """Fetch a document by filename within a matter.
+
+        Returns the most recently created match when duplicates exist.
+        Supports the same *user_role* privilege filtering as :meth:`get_document`.
+        """
+        where = "WHERE filename = :filename AND matter_id = :matter_id"
+        params: dict = {"filename": filename, "matter_id": matter_id}
+
+        if user_role not in ("admin", "attorney"):
+            where += " AND (privilege_status IS NULL OR privilege_status NOT IN ('privileged', 'work_product'))"
+
+        result = await db.execute(
+            text(f"SELECT {_COLUMNS} FROM documents {where} ORDER BY created_at DESC LIMIT 1"),
+            params,
+        )
+        row = result.first()
+        if row is None:
+            return None
+        return row_to_dict(row)
+
+    # ------------------------------------------------------------------
     # PRIVILEGE UPDATE
     # ------------------------------------------------------------------
 
