@@ -101,10 +101,16 @@ class FeatureFlags(BaseModel):
     google_drive: bool
     prometheus_metrics: bool
     sso: bool
+    saml: bool
     memo_drafting: bool
     chunk_quality_scoring: bool
     contextual_chunks: bool
     retrieval_grading: bool
+    multi_query_expansion: bool
+    text_to_cypher: bool
+    prompt_routing: bool
+    question_decomposition: bool
+    data_retention: bool
 
 
 class Settings(BaseSettings):
@@ -208,7 +214,7 @@ class Settings(BaseSettings):
     enable_email_threading: bool = True
 
     # --- Near-Duplicate Detection ---
-    enable_near_duplicate_detection: bool = False
+    enable_near_duplicate_detection: bool = True
     dedup_jaccard_threshold: float = 0.80
     dedup_num_permutations: int = 128
     dedup_shingle_size: int = 5
@@ -253,7 +259,7 @@ class Settings(BaseSettings):
     enable_redaction: bool = False
 
     # --- Prometheus Metrics ---
-    enable_prometheus_metrics: bool = False
+    enable_prometheus_metrics: bool = True
 
     # --- Memo Drafting ---
     enable_memo_drafting: bool = False
@@ -268,6 +274,17 @@ class Settings(BaseSettings):
     oidc_role_mapping: str = ""  # JSON: {"admin_group": "admin", "attorney_group": "attorney"}
     oidc_default_role: str = "reviewer"  # Role for users with no group mapping
 
+    # --- SSO / SAML ---
+    enable_saml: bool = False
+    saml_entity_id: str = ""  # SP entity ID (e.g. https://nexus.example.com/saml)
+    saml_idp_metadata_url: str = ""  # IdP metadata URL (optional, for auto-config)
+    saml_idp_sso_url: str = ""  # IdP SSO endpoint
+    saml_idp_cert: str = ""  # IdP X.509 certificate (PEM, single line or base64)
+    saml_sp_cert: str = ""  # SP X.509 certificate (optional, for signed requests)
+    saml_sp_key: str = ""  # SP private key (optional, for signed requests)
+    saml_role_mapping: str = "{}"  # JSON: {"admin_group": "admin", "attorney_group": "attorney"}
+    saml_default_role: str = "viewer"  # Role for users with no group mapping
+
     # --- Export ---
     export_max_documents: int = 10000
 
@@ -276,6 +293,22 @@ class Settings(BaseSettings):
 
     # --- Retrieval Grading (CRAG) ---
     enable_retrieval_grading: bool = False
+
+    # --- Multi-Query Expansion (T1-1) ---
+    enable_multi_query_expansion: bool = False
+    multi_query_count: int = 3
+
+    # --- Text-to-Cypher Generation (T1-2) ---
+    enable_text_to_cypher: bool = False
+
+    # --- Semantic Prompt Routing (T1-6) ---
+    enable_prompt_routing: bool = False
+
+    # --- Question Decomposition (T1-10) ---
+    enable_question_decomposition: bool = False
+
+    # --- Data Retention ---
+    enable_data_retention: bool = False
     grading_model: str = ""  # Falls back to llm_model if empty
     grading_confidence_threshold: float = 0.5  # Median score below this triggers LLM grading
 
@@ -416,9 +449,15 @@ class Settings(BaseSettings):
                 google_drive=self.enable_google_drive,
                 prometheus_metrics=self.enable_prometheus_metrics,
                 sso=self.enable_sso,
+                saml=self.enable_saml,
                 memo_drafting=self.enable_memo_drafting,
                 chunk_quality_scoring=self.enable_chunk_quality_scoring,
                 contextual_chunks=self.enable_contextual_chunks,
                 retrieval_grading=self.enable_retrieval_grading,
+                multi_query_expansion=self.enable_multi_query_expansion,
+                text_to_cypher=self.enable_text_to_cypher,
+                prompt_routing=self.enable_prompt_routing,
+                question_decomposition=self.enable_question_decomposition,
+                data_retention=self.enable_data_retention,
             )
         return self

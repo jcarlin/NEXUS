@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING, Any
 import structlog
 from tenacity import retry, stop_after_attempt, wait_exponential
 
+from app.common.redaction_utils import redact_error_message
+
 if TYPE_CHECKING:
     from anthropic import AsyncAnthropic
     from google.genai import Client as GenAIClient
@@ -218,7 +220,7 @@ class LLMClient:
                 latency_ms=latency_ms,
                 node_name=node_name,
                 status="error",
-                error_message=str(exc),
+                error_message=redact_error_message(str(exc)),
             )
             raise
 
@@ -342,7 +344,7 @@ class LLMClient:
                 latency_ms=latency_ms,
                 node_name=node_name,
                 status="error",
-                error_message=str(exc),
+                error_message=redact_error_message(str(exc)),
             )
             raise
 

@@ -259,10 +259,19 @@ def create_app() -> FastAPI:
 
         application.include_router(oidc_router, prefix="/api/v1")
 
+    if settings.enable_saml:
+        from app.auth.saml_router import router as saml_router
+
+        application.include_router(saml_router, prefix="/api/v1")
+
     if settings.enable_memo_drafting:
         from app.memos.router import router as memos_router
 
         application.include_router(memos_router, prefix="/api/v1")
+
+    from app.retention.router import router as retention_router
+
+    application.include_router(retention_router, prefix="/api/v1")
 
     # LLM runtime configuration (always enabled — admin-only access enforced in router)
     from app.llm_config.public_router import router as llm_config_public_router
@@ -419,10 +428,15 @@ def create_app() -> FastAPI:
         google_drive: bool
         prometheus_metrics: bool
         sso: bool
+        saml: bool
         memo_drafting: bool
         chunk_quality_scoring: bool
         contextual_chunks: bool
         retrieval_grading: bool
+        multi_query_expansion: bool
+        text_to_cypher: bool
+        prompt_routing: bool
+        question_decomposition: bool
 
     @application.get("/api/v1/config/features", response_model=FeatureFlagsResponse, tags=["system"])
     async def get_feature_flags(
@@ -450,10 +464,15 @@ def create_app() -> FastAPI:
             google_drive=settings.enable_google_drive,
             prometheus_metrics=settings.enable_prometheus_metrics,
             sso=settings.enable_sso,
+            saml=settings.enable_saml,
             memo_drafting=settings.enable_memo_drafting,
             chunk_quality_scoring=settings.enable_chunk_quality_scoring,
             contextual_chunks=settings.enable_contextual_chunks,
             retrieval_grading=settings.enable_retrieval_grading,
+            multi_query_expansion=settings.enable_multi_query_expansion,
+            text_to_cypher=settings.enable_text_to_cypher,
+            prompt_routing=settings.enable_prompt_routing,
+            question_decomposition=settings.enable_question_decomposition,
         )
 
     return application

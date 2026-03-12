@@ -4,8 +4,8 @@ Multimodal RAG investigation platform for legal document intelligence. Ingests, 
 
 *See `ARCHITECTURE.md` for full system design, tech stack, and data flow diagrams.*
 
-**Status**: All 17 milestones complete (M0–M17). 905 backend + 35 frontend tests passing.
-16 domain modules, 20 DI factories, 19 feature flags, 6 autonomous LangGraph agents.
+**Status**: All 22 milestones complete (M0–M21). ~1134 backend + 51 frontend tests passing.
+19 domain modules, 23 DI factories, 25 feature flags, 6 autonomous LangGraph agents.
 Full local deployment with zero cloud API dependency.
 
 ---
@@ -140,7 +140,7 @@ Full local deployment with zero cloud API dependency.
 
 - **LLM abstraction** (`app/common/llm.py`): Unified client for Anthropic/OpenAI/vLLM/Ollama. Cloud→local migration = change `LLM_PROVIDER` + base URL in `.env`
 - **Multi-provider embeddings** (`app/common/embedder.py`): `EmbeddingProvider` protocol with 5 implementations (OpenAI, Ollama, local, TEI, Gemini). Switch via `EMBEDDING_PROVIDER`
-- **DI singletons** (`app/dependencies.py`): All clients via `@functools.cache` factory functions (20 factories, see `_ALL_CACHED_FACTORIES`)
+- **DI singletons** (`app/dependencies.py`): All clients via `@functools.cache` factory functions (23 factories, see `_ALL_CACHED_FACTORIES`)
 - **Hybrid retrieval** (`app/query/retriever.py`): Qdrant dense+sparse with native RRF fusion + Neo4j multi-hop graph traversal + optional visual rerank
 - **Agentic query** (`app/query/graph.py`): `create_react_agent` with 12 tools → `case_context_resolve` → `investigation_agent` → `verify_citations` → `generate_follow_ups`
 - **Agentic tools** (`app/query/tools.py`): 12 `@tool` functions with `InjectedState` for security-scoped matter_id and privilege filters
@@ -151,7 +151,10 @@ Full local deployment with zero cloud API dependency.
 - **Audit logging** (`app/common/middleware.py`): Every API call → `audit_log` table (user, action, resource, matter, IP)
 - **AI audit logging** (`app/common/llm.py`): Every LLM call logged with prompt hash, tokens, latency → `ai_audit_log` table
 - **Structured logging**: `structlog` with contextvars (`request_id`, `task_id`, `job_id`)
-- **Feature flags**: 16 `ENABLE_*` flags (see `docs/feature-flags.md` for full reference)
+- **Feature flags**: 25 `ENABLE_*` flags, 23 runtime-toggleable via admin UI (see `docs/feature-flags.md` for full reference)
+- **Runtime feature flags** (`app/feature_flags/`): Admin UI toggle, DB override persistence, DI cache clearing, risk-level gating
+- **LLM config management** (`app/llm_config/`): Runtime provider CRUD, tier assignment, auto-registration from env vars, model discovery, cost estimation
+- **RAG quality pipeline**: Chunk quality scoring → contextual enrichment → CRAG grading (heuristic + conditional LLM) → reranking (enabled by default)
 - **Privilege at data layer**: Qdrant filter + SQL WHERE + Neo4j Cypher — never API-layer-only
 - **Frontend** (`frontend/`): React 19 + TanStack Router + orval (OpenAPI → TanStack Query hooks) + shadcn/ui + Zustand. Types generated from FastAPI OpenAPI spec
 - **Evaluation** (`app/evaluation/`, `scripts/evaluate.py`): Ground-truth Q&A dataset, retrieval metrics (MRR/Recall/NDCG), faithfulness scoring, citation accuracy
@@ -221,15 +224,15 @@ The report has four sections:
 
 ### Start Here (read for any task)
 - `ARCHITECTURE.md` — System design, tech stack, security model, data flow
-- `ROADMAP.md` — Milestones M0–M17, build status, test counts
+- `ROADMAP.md` — Milestones M0–M21, build status, test counts
 
 ### Module & API Reference (read when working on specific modules)
-- `docs/modules.md` — All 16 domain modules with files, schemas, endpoints, and full API reference
-- `docs/database-schema.md` — 27 tables, 13 migrations, full column reference
+- `docs/modules.md` — All 19 domain modules with files, schemas, endpoints, and full API reference
+- `docs/database-schema.md` — 36 tables, 24 migrations, full column reference
 - `docs/agents.md` — 6 LangGraph agents with state schemas, tools, flows
 
 ### System Configuration (read when adding features or debugging)
-- `docs/feature-flags.md` — All 16 `ENABLE_*` flags with defaults and resource impact
+- `docs/feature-flags.md` — All 25 `ENABLE_*` flags with defaults and resource impact
 - `.env.example` — All configuration variables and feature flags
 - `docs/testing-guide.md` — Test infrastructure, fixtures, CI/CD, patterns
 

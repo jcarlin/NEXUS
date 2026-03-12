@@ -172,6 +172,31 @@ FLAG_REGISTRY: dict[str, FlagMeta] = {
         category=FlagCategory.INTEGRATIONS,
         risk_level=FlagRiskLevel.RESTART,
     ),
+    # --- Tier 1 Maturity flags ---
+    "enable_multi_query_expansion": FlagMeta(
+        display_name="Multi-Query Expansion",
+        description="Generate 3-5 legal vocabulary reformulations per query for broader retrieval coverage.",
+        category=FlagCategory.QUERY,
+        risk_level=FlagRiskLevel.SAFE,
+    ),
+    "enable_text_to_cypher": FlagMeta(
+        display_name="Text-to-Cypher Generation",
+        description="Generate and execute read-only Cypher queries against the Neo4j knowledge graph from natural language.",
+        category=FlagCategory.QUERY,
+        risk_level=FlagRiskLevel.SAFE,
+    ),
+    "enable_prompt_routing": FlagMeta(
+        display_name="Semantic Prompt Routing",
+        description="Route queries to specialized system prompt addenda based on query type classification.",
+        category=FlagCategory.QUERY,
+        risk_level=FlagRiskLevel.SAFE,
+    ),
+    "enable_question_decomposition": FlagMeta(
+        display_name="Question Decomposition",
+        description="Decompose complex multi-part questions into sub-questions with independent retrieval.",
+        category=FlagCategory.QUERY,
+        risk_level=FlagRiskLevel.SAFE,
+    ),
 }
 
 

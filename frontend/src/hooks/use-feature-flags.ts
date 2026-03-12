@@ -25,6 +25,10 @@ export interface FeatureFlags {
   chunk_quality_scoring: boolean;
   contextual_chunks: boolean;
   retrieval_grading: boolean;
+  multi_query_expansion: boolean;
+  text_to_cypher: boolean;
+  prompt_routing: boolean;
+  question_decomposition: boolean;
 }
 
 export function useFeatureFlags() {

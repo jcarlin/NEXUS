@@ -1,6 +1,7 @@
 """Pydantic schemas for the documents domain."""
 
 from datetime import datetime
+from enum import StrEnum
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -94,3 +95,43 @@ class PrivilegeUpdateResponse(BaseModel):
     privilege_status: str
     privilege_reviewed_by: UUID
     privilege_reviewed_at: datetime
+
+
+# ---------------------------------------------------------------------------
+# Privilege Log schemas
+# ---------------------------------------------------------------------------
+
+
+class PrivilegeLogExportFormat(StrEnum):
+    """Supported export formats for privilege logs."""
+
+    CSV = "csv"
+    XLSX = "xlsx"
+
+
+class PrivilegeLogEntry(BaseModel):
+    """A single entry in a court-formatted privilege log."""
+
+    bates_number: str | None = None
+    doc_date: str | None = None
+    author: str | None = None
+    recipients: str | None = None
+    doc_type: str | None = None
+    subject: str | None = None
+    privilege_claimed: str | None = None
+    basis: str | None = None
+
+
+class PrivilegeLogResponse(BaseModel):
+    """Response for the privilege log endpoint."""
+
+    entries: list[PrivilegeLogEntry]
+    total: int
+    matter_id: UUID
+
+
+class PrivilegeBasisUpdate(BaseModel):
+    """Request body for updating privilege basis and exclusion."""
+
+    privilege_basis: str | None = None
+    privilege_log_excluded: bool = False

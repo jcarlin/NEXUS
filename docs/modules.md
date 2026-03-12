@@ -1,6 +1,6 @@
 # Module Reference Guide
 
-NEXUS has 16 domain modules under `app/`, plus a shared `app/common/` infrastructure module. Each domain follows the standard structure: `router.py` (endpoints), `service.py` (business logic), `schemas.py` (Pydantic models), `tasks.py` (Celery background work). Not every module has all four files -- the actual contents depend on the domain's needs.
+NEXUS has 19 domain modules under `app/`, plus a shared `app/common/` infrastructure module. Each domain follows the standard structure: `router.py` (endpoints), `service.py` (business logic), `schemas.py` (Pydantic models), `tasks.py` (Celery background work). Not every module has all four files -- the actual contents depend on the domain's needs.
 
 ---
 
@@ -808,6 +808,156 @@ NEXUS has 16 domain modules under `app/`, plus a shared `app/common/` infrastruc
 ### Tests
 
 - `tests/test_redaction/` -- 1 test file
+
+---
+
+## app/feature_flags/
+
+**Purpose**: Runtime feature flag management. Admin UI toggle, DB override persistence, DI cache clearing, and risk-level gating. Flags are stored in the `feature_flag_overrides` table (migration 021) and applied to the Settings singleton at startup and on toggle.
+
+### Files
+
+| File | Description |
+|------|-------------|
+| `router.py` | Admin-only endpoints: list, toggle, reset feature flags |
+| `service.py` | `FeatureFlagService` -- CRUD for flag overrides, applies changes to Settings singleton, clears DI caches |
+| `schemas.py` | `FeatureFlagDetail`, `FeatureFlagListResponse`, `FeatureFlagUpdateRequest`, `FeatureFlagUpdateResponse`, `FlagCategory`, `FlagRiskLevel` |
+| `registry.py` | Static metadata for all flags: display name, description, category, risk level |
+
+### Key Schemas
+
+- `FlagCategory` (StrEnum) -- retrieval, ingestion, query, entity_graph, intelligence, audit, integrations
+- `FlagRiskLevel` (StrEnum) -- safe (immediate), cache_clear (clears DI singletons), restart (requires server restart)
+- `FeatureFlagDetail` -- flag_name, display_name, description, category, risk_level, enabled, is_override, env_default
+- `FeatureFlagUpdateResponse` -- extends Detail with caches_cleared list and restart_required flag
+
+### Endpoints
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `GET` | `/api/v1/admin/feature-flags` | admin | List all flags with metadata and current state |
+| `PUT` | `/api/v1/admin/feature-flags/{flag_name}` | admin | Toggle a flag (immediate for safe/cache_clear) |
+| `DELETE` | `/api/v1/admin/feature-flags/{flag_name}` | admin | Reset flag to env default |
+
+### Tests
+
+- `tests/test_feature_flags/` -- service + router tests
+
+---
+
+## app/llm_config/
+
+**Purpose**: Runtime LLM provider configuration. Admin UI for managing providers, tier assignments, model discovery, connection testing, and cost estimation. Auto-registers providers from environment variables on startup.
+
+### Files
+
+| File | Description |
+|------|-------------|
+| `router.py` | Admin-only endpoints: provider CRUD, tier assignment, model discovery, cost estimation, apply config |
+| `public_router.py` | Public endpoint: active model info per tier |
+| `service.py` | `LLMConfigService` -- provider CRUD, tier config, model discovery (Anthropic/OpenAI/Ollama APIs), connection testing, cost estimation from ai_audit_log |
+| `schemas.py` | `LLMProviderCreate/Response`, `LLMTierConfigSet/Response`, `LLMConfigOverview`, `CostEstimateResponse`, `AvailableModel`, `OllamaModel`, `TestConnectionResponse`, `ActiveModelResponse` |
+| `resolver.py` | `TierResolver` -- resolves tier → provider/model/key at runtime, caches resolved configs |
+| `pricing.py` | Per-model token pricing data for cost estimation |
+
+### Key Schemas
+
+- `LLMProviderType` (StrEnum) -- anthropic, openai, gemini, ollama
+- `LLMTier` (StrEnum) -- query, analysis, ingestion
+- `LLMProviderResponse` -- id, provider, label, api_key_set (never exposes key), base_url, is_active
+- `LLMConfigOverview` -- providers, tiers, env_defaults, embedding config
+- `CostEstimateResponse` -- per-tier cost estimates from ai_audit_log token usage
+
+### Endpoints
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `GET` | `/api/v1/admin/llm-config` | admin | Full config overview (providers + tiers + env defaults) |
+| `POST` | `/api/v1/admin/llm-config/providers` | admin | Add LLM provider |
+| `PATCH` | `/api/v1/admin/llm-config/providers/{id}` | admin | Update provider |
+| `DELETE` | `/api/v1/admin/llm-config/providers/{id}` | admin | Deactivate provider |
+| `GET` | `/api/v1/admin/llm-config/providers/{id}/models` | admin | Discover available models |
+| `POST` | `/api/v1/admin/llm-config/providers/{id}/test` | admin | Test provider connectivity |
+| `PUT` | `/api/v1/admin/llm-config/tiers/{tier}` | admin | Set tier provider + model |
+| `DELETE` | `/api/v1/admin/llm-config/tiers/{tier}` | admin | Reset tier to env default |
+| `GET` | `/api/v1/admin/llm-config/ollama/models` | admin | Discover local Ollama models |
+| `GET` | `/api/v1/admin/llm-config/cost-estimate` | admin | Estimate costs by tier |
+| `POST` | `/api/v1/admin/llm-config/apply` | admin | Clear LLM caches to apply new config |
+| `GET` | `/api/v1/llm-config/active-model` | authenticated | Get active model for a tier |
+
+### Tests
+
+- `tests/test_llm_config/` -- service + router tests
+
+---
+
+## app/memos/
+
+**Purpose**: Legal memo drafting pipeline. Generates structured legal memos from chat threads or ad-hoc queries using LLM, with sections, citations, and source indexes. Behind `ENABLE_MEMO_DRAFTING`.
+
+### Files
+
+| File | Description |
+|------|-------------|
+| `router.py` | Endpoints: create memo, list memos, get memo, delete memo |
+| `service.py` | `MemoService` -- memo generation (LLM-based), persistence, listing |
+| `schemas.py` | `MemoRequest`, `MemoResponse`, `MemoListResponse`, `MemoSection`, `MemoFormat` |
+| `prompts.py` | Prompt templates for memo generation |
+
+### Key Schemas
+
+- `MemoFormat` (StrEnum) -- markdown, html
+- `MemoSection` -- heading, content, citations (doc IDs)
+- `MemoRequest` -- thread_id or query, matter_id, title, format, include_source_index
+- `MemoResponse` -- id, matter_id, thread_id, title, sections, format, created_by, created_at
+
+### Endpoints
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `POST` | `/api/v1/memos` | authenticated | Generate memo from thread or query |
+| `GET` | `/api/v1/memos` | authenticated | List memos for matter |
+| `GET` | `/api/v1/memos/{memo_id}` | authenticated | Get specific memo |
+| `DELETE` | `/api/v1/memos/{memo_id}` | authenticated | Delete memo |
+
+### Tests
+
+- `tests/test_memos/` -- service + router tests
+
+---
+
+## app/retention/
+
+**Purpose**: Data retention policy management. Admins set per-matter retention periods, schedule purges, archive-before-purge, and cascading data deletion across PostgreSQL, Qdrant, Neo4j, and MinIO. Behind `ENABLE_DATA_RETENTION`.
+
+### Files
+
+| File | Description |
+|------|-------------|
+| `router.py` | Admin-only endpoints: create/list/get/delete policies, trigger manual purge |
+| `service.py` | `RetentionService` -- policy CRUD, archive, cascading purge across all data stores |
+| `schemas.py` | `RetentionPolicyRequest`, `RetentionPolicyResponse`, `RetentionPolicyListResponse`, `PurgeStatus` |
+| `tasks.py` | Celery tasks for scheduled purge execution |
+
+### Key Schemas
+
+- `PurgeStatus` (StrEnum) -- active, pending_purge, archiving, purging, completed, failed
+- `RetentionPolicyRequest` -- retention_days, matter_id
+- `RetentionPolicyResponse` -- id, matter_id, retention_days, status, purge timestamps, archive_path
+
+### Endpoints
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `POST` | `/api/v1/retention/policies` | admin | Create retention policy for a matter |
+| `GET` | `/api/v1/retention/policies` | admin | List all retention policies |
+| `GET` | `/api/v1/retention/policies/{matter_id}` | admin | Get policy for a matter |
+| `DELETE` | `/api/v1/retention/policies/{matter_id}` | admin | Delete active policy |
+| `POST` | `/api/v1/retention/policies/{matter_id}/purge` | admin | Trigger manual purge |
+
+### Tests
+
+- `tests/test_retention/` -- service + router tests
 
 ---
 

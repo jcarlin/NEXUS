@@ -1,6 +1,6 @@
 # Feature Flags Reference
 
-All 23 feature flags are defined in `app/config.py` (Settings class) and read from environment variables. They are aggregated into a `FeatureFlags` nested model at `Settings.features`. All default to `false` unless noted otherwise.
+All 25 feature flags are defined in `app/config.py` (Settings class) and read from environment variables. They are aggregated into a `FeatureFlags` nested model at `Settings.features`. All default to `false` unless noted otherwise.
 
 ## Runtime Toggling (Admin UI)
 
@@ -57,6 +57,12 @@ Celery workers run in separate processes with their own Settings singleton. They
 | `ENABLE_PROMETHEUS_METRICS` | `false` | Prometheus metrics endpoint at /metrics |
 | `ENABLE_SSO` | `false` | OpenID Connect SSO authentication |
 | `ENABLE_MEMO_DRAFTING` | `false` | AI-assisted legal memo drafting |
+| `ENABLE_SAML` | `false` | SAML 2.0 SSO authentication (restart required) |
+| `ENABLE_MULTI_QUERY_EXPANSION` | `false` | Multi-query reformulation for broader retrieval |
+| `ENABLE_TEXT_TO_CYPHER` | `false` | Natural language to Cypher query generation |
+| `ENABLE_PROMPT_ROUTING` | `false` | Semantic routing to specialized system prompts |
+| `ENABLE_QUESTION_DECOMPOSITION` | `false` | Decompose complex queries into sub-questions |
+| `ENABLE_DATA_RETENTION` | `false` | Data retention policy enforcement |
 
 ---
 
@@ -251,3 +257,38 @@ Celery workers run in separate processes with their own Settings singleton. They
 - **Resources gated**: No DI singleton. Uses the existing `LLMClient` for Tier 2 grading. Heuristic scoring is pure Python.
 - **Runtime impact**: Tier 1 (heuristic): ~10ms. Tier 2 (LLM): +0.5-2s, only triggered for low-confidence retrievals (median score < threshold). High-confidence queries skip LLM grading entirely.
 - **Related settings**: `GRADING_MODEL`, `GRADING_CONFIDENCE_THRESHOLD`
+
+### Tier 1 Maturity
+
+#### `ENABLE_MULTI_QUERY_EXPANSION`
+- **Default**: `false`
+- **Module**: `app/query/`
+- **Config key**: `Settings.enable_multi_query_expansion`
+- **Description**: Generates 3-5 legal vocabulary reformulations per query for broader retrieval coverage. Addresses legal vocabulary mismatch (e.g., "deal" vs. "transaction" vs. "agreement").
+- **Resources gated**: No DI singleton. Checked inline in `vector_search` tool. Uses existing `LLMClient`.
+- **Runtime impact**: Adds one LLM call + N parallel retrieval calls per `vector_search` invocation. Increases retrieval latency but improves recall.
+- **Related settings**: `MULTI_QUERY_COUNT`
+
+#### `ENABLE_TEXT_TO_CYPHER`
+- **Default**: `false`
+- **Module**: `app/query/`
+- **Config key**: `Settings.enable_text_to_cypher`
+- **Description**: Enables a `cypher_query` tool that generates read-only Cypher queries from natural language and executes them against the Neo4j knowledge graph. All queries are validated for safety (read-only, matter-scoped, LIMIT enforced).
+- **Resources gated**: No DI singleton. Registered as an agent tool. Uses existing `LLMClient` and `GraphService`.
+- **Runtime impact**: Adds an LLM call for Cypher generation + Neo4j query execution (max 10s timeout). Only triggered when the agent selects the tool.
+
+#### `ENABLE_PROMPT_ROUTING`
+- **Default**: `false`
+- **Module**: `app/query/`
+- **Config key**: `Settings.enable_prompt_routing`
+- **Description**: Routes queries to specialized system prompt addenda based on query type classification (factual, analytical, exploratory, timeline). Appends type-specific instructions to the base investigation prompt.
+- **Resources gated**: No DI singleton. Checked inline in `case_context_resolve` and `build_system_prompt`. Uses one LLM call for classification.
+- **Runtime impact**: Adds one LLM classification call in `case_context_resolve`. Negligible added latency.
+
+#### `ENABLE_QUESTION_DECOMPOSITION`
+- **Default**: `false`
+- **Module**: `app/query/`
+- **Config key**: `Settings.enable_question_decomposition`
+- **Description**: Provides a `decompose_query` tool that breaks complex multi-part questions into 2-4 independent sub-questions with independent retrieval per sub-question.
+- **Resources gated**: No DI singleton. Registered as an agent tool. Uses existing `LLMClient` and `HybridRetriever`.
+- **Runtime impact**: Adds one Instructor call for decomposition + parallel retrieval per sub-question. Only triggered when the agent selects the tool.

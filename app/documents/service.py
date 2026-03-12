@@ -33,7 +33,8 @@ _COLUMNS = """id, job_id, filename, document_type, page_count, chunk_count,
               sentiment_opportunity, sentiment_rationalization, sentiment_intent,
               sentiment_concealment, hot_doc_score, context_gap_score,
               context_gaps, anomaly_score,
-              bates_begin, bates_end"""
+              bates_begin, bates_end,
+              privilege_basis, privilege_log_excluded"""
 
 # Privilege statuses that non-privileged users (paralegal, reviewer) cannot see
 _RESTRICTED_STATUSES = ("privileged", "work_product")
@@ -445,6 +446,135 @@ class DocumentService:
             params,
         )
         return [row_to_dict(r) for r in result.all()]
+
+    # ------------------------------------------------------------------
+    # PRIVILEGE LOG
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    async def get_privilege_log_entries(
+        db: AsyncSession,
+        matter_id: UUID,
+        include_excluded: bool = False,
+    ) -> list[dict]:
+        """Return privilege log entries for a matter.
+
+        Queries documents with privilege_status IS NOT NULL.
+        By default excludes documents where privilege_log_excluded=TRUE.
+        Extracts author/recipients from metadata_ JSON for the log.
+        """
+        where_clauses = [
+            "d.matter_id = :matter_id",
+            "d.privilege_status IS NOT NULL",
+        ]
+        if not include_excluded:
+            where_clauses.append("(d.privilege_log_excluded IS NULL OR d.privilege_log_excluded = FALSE)")
+
+        where_sql = "WHERE " + " AND ".join(where_clauses)
+
+        result = await db.execute(
+            text(f"""
+                SELECT d.id, d.filename, d.document_type, d.created_at,
+                       d.privilege_status, d.privilege_basis,
+                       d.bates_begin, d.bates_end,
+                       d.metadata_, d.privilege_log_excluded
+                FROM documents d
+                {where_sql}
+                ORDER BY d.bates_begin ASC NULLS LAST, d.created_at ASC
+            """),
+            {"matter_id": matter_id},
+        )
+
+        entries = []
+        for row in result.all():
+            m = row._mapping
+            metadata = m.get("metadata_") or {}
+
+            # Derive privilege claimed text from status
+            status = m["privilege_status"]
+            if status == "privileged":
+                privilege_claimed = "Attorney-Client Privilege"
+            elif status == "work_product":
+                privilege_claimed = "Work Product Doctrine"
+            elif status == "confidential":
+                privilege_claimed = "Confidential"
+            else:
+                privilege_claimed = status
+
+            # Build bates number display
+            bates = m.get("bates_begin")
+            if bates and m.get("bates_end") and m["bates_end"] != bates:
+                bates = f"{bates} - {m['bates_end']}"
+
+            # Extract author/recipients from metadata
+            author = metadata.get("author") or metadata.get("from") or ""
+            recipients = metadata.get("recipients") or metadata.get("to") or ""
+            if isinstance(recipients, list):
+                recipients = "; ".join(recipients)
+
+            subject = metadata.get("subject") or ""
+            doc_date = ""
+            if m.get("created_at"):
+                doc_date = m["created_at"].strftime("%Y-%m-%d")
+
+            entries.append(
+                {
+                    "bates_number": bates,
+                    "doc_date": doc_date,
+                    "author": author,
+                    "recipients": recipients,
+                    "doc_type": m.get("document_type") or "",
+                    "subject": subject,
+                    "privilege_claimed": privilege_claimed,
+                    "basis": m.get("privilege_basis") or "",
+                }
+            )
+
+        return entries
+
+    @staticmethod
+    async def update_privilege_basis(
+        db: AsyncSession,
+        document_id: UUID,
+        matter_id: UUID,
+        basis: str | None,
+        excluded: bool,
+    ) -> dict | None:
+        """Update privilege_basis and privilege_log_excluded for a document.
+
+        Returns the updated row dict or None if not found.
+        """
+        result = await db.execute(
+            text("""
+                UPDATE documents
+                SET privilege_basis = :basis,
+                    privilege_log_excluded = :excluded,
+                    updated_at = now()
+                WHERE id = :document_id AND matter_id = :matter_id
+                RETURNING id, privilege_basis, privilege_log_excluded
+            """),
+            {
+                "document_id": document_id,
+                "matter_id": matter_id,
+                "basis": basis,
+                "excluded": excluded,
+            },
+        )
+        row = result.first()
+        if row is None:
+            return None
+
+        logger.info(
+            "document.privilege_basis_updated",
+            doc_id=str(document_id),
+            privilege_basis=basis,
+            excluded=excluded,
+        )
+        return {
+            "id": row._mapping["id"],
+            "privilege_basis": row._mapping["privilege_basis"],
+            "privilege_log_excluded": row._mapping["privilege_log_excluded"],
+        }
 
     # ------------------------------------------------------------------
     # DELETE

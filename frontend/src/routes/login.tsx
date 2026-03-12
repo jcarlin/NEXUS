@@ -20,6 +20,12 @@ interface OIDCProviderInfo {
   authorize_url: string;
 }
 
+interface SAMLProviderInfo {
+  enabled: boolean;
+  provider_name: string;
+  login_url: string;
+}
+
 export const Route = createFileRoute("/login")({
   component: LoginPage,
 });
@@ -37,6 +43,7 @@ function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [ssoInfo, setSsoInfo] = useState<OIDCProviderInfo | null>(null);
+  const [samlInfo, setSamlInfo] = useState<SAMLProviderInfo | null>(null);
 
   const {
     register,
@@ -54,6 +61,15 @@ function LoginPage() {
       })
       .catch(() => {
         /* SSO not available */
+      });
+
+    fetch("/api/v1/auth/saml/info")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: SAMLProviderInfo | null) => {
+        if (data?.enabled) setSamlInfo(data);
+      })
+      .catch(() => {
+        /* SAML SSO not available */
       });
   }, []);
 
@@ -146,7 +162,7 @@ function LoginPage() {
             </Button>
           </form>
 
-          {ssoInfo && (
+          {(ssoInfo || samlInfo) && (
             <>
               <div className="relative my-6">
                 <Separator />
@@ -154,16 +170,30 @@ function LoginPage() {
                   or
                 </span>
               </div>
-              <Button
-                variant="outline"
-                className="w-full"
-                asChild
-              >
-                <a href={ssoInfo.authorize_url}>
-                  <ExternalLink className="mr-2 h-4 w-4" />
-                  Sign in with {ssoInfo.provider_name}
-                </a>
-              </Button>
+              {ssoInfo && (
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  asChild
+                >
+                  <a href={ssoInfo.authorize_url}>
+                    <ExternalLink className="mr-2 h-4 w-4" />
+                    Sign in with {ssoInfo.provider_name}
+                  </a>
+                </Button>
+              )}
+              {samlInfo && (
+                <Button
+                  variant="outline"
+                  className={ssoInfo ? "mt-2 w-full" : "w-full"}
+                  asChild
+                >
+                  <a href={samlInfo.login_url}>
+                    <ExternalLink className="mr-2 h-4 w-4" />
+                    Sign in with {samlInfo.provider_name}
+                  </a>
+                </Button>
+              )}
             </>
           )}
         </CardContent>

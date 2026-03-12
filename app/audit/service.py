@@ -13,6 +13,8 @@ import structlog
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.common.redaction_utils import redact_error_message
+
 logger = structlog.get_logger(__name__)
 
 
@@ -87,6 +89,7 @@ class AuditService:
         error_message: str | None = None,
     ) -> None:
         """Insert a row into ai_audit_log."""
+        error_message = redact_error_message(error_message)
         await db.execute(
             text("""
                 INSERT INTO ai_audit_log

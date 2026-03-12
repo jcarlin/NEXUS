@@ -13,6 +13,7 @@ import mimetypes
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.middleware import get_current_user, get_matter_id, require_role
@@ -26,6 +27,10 @@ from app.documents.schemas import (
     DocumentHealthResponse,
     DocumentListResponse,
     DocumentResponse,
+    PrivilegeBasisUpdate,
+    PrivilegeLogEntry,
+    PrivilegeLogExportFormat,
+    PrivilegeLogResponse,
     PrivilegeUpdateRequest,
     PrivilegeUpdateResponse,
 )
@@ -337,3 +342,94 @@ async def update_document_privilege(
     await db.commit()
 
     return PrivilegeUpdateResponse(**updated)
+
+
+# -----------------------------------------------------------------------
+# GET /privilege-log — court-formatted privilege log (JSON)
+# -----------------------------------------------------------------------
+
+
+@router.get("/privilege-log", response_model=PrivilegeLogResponse)
+async def get_privilege_log(
+    include_excluded: bool = Query(False, description="Include documents excluded from log"),
+    db: AsyncSession = Depends(get_db),
+    current_user: UserRecord = Depends(require_role("admin", "attorney")),
+    matter_id: UUID = Depends(get_matter_id),
+):
+    """Return the privilege log as JSON for the current matter."""
+    entries = await DocumentService.get_privilege_log_entries(
+        db=db,
+        matter_id=matter_id,
+        include_excluded=include_excluded,
+    )
+    return PrivilegeLogResponse(
+        entries=[PrivilegeLogEntry(**e) for e in entries],
+        total=len(entries),
+        matter_id=matter_id,
+    )
+
+
+# -----------------------------------------------------------------------
+# GET /privilege-log/export — download privilege log as CSV or XLSX
+# -----------------------------------------------------------------------
+
+
+@router.get("/privilege-log/export")
+async def export_privilege_log(
+    format: PrivilegeLogExportFormat = Query(..., description="Export format: csv or xlsx"),
+    include_excluded: bool = Query(False, description="Include documents excluded from log"),
+    db: AsyncSession = Depends(get_db),
+    current_user: UserRecord = Depends(require_role("admin", "attorney")),
+    matter_id: UUID = Depends(get_matter_id),
+):
+    """Download the privilege log as CSV or XLSX."""
+    from app.documents.privilege_export import format_privilege_log_csv, format_privilege_log_xlsx
+
+    entries = await DocumentService.get_privilege_log_entries(
+        db=db,
+        matter_id=matter_id,
+        include_excluded=include_excluded,
+    )
+
+    if format == PrivilegeLogExportFormat.CSV:
+        buf = format_privilege_log_csv(entries)
+        return StreamingResponse(
+            buf,
+            media_type="text/csv",
+            headers={"Content-Disposition": 'attachment; filename="privilege_log.csv"'},
+        )
+    else:
+        buf = format_privilege_log_xlsx(entries)
+        return StreamingResponse(
+            buf,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": 'attachment; filename="privilege_log.xlsx"'},
+        )
+
+
+# -----------------------------------------------------------------------
+# PATCH /documents/{doc_id}/privilege-basis — update privilege basis/exclusion
+# -----------------------------------------------------------------------
+
+
+@router.patch("/documents/{doc_id}/privilege-basis")
+async def update_privilege_basis(
+    doc_id: UUID,
+    body: PrivilegeBasisUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserRecord = Depends(require_role("admin", "attorney", "paralegal")),
+    matter_id: UUID = Depends(get_matter_id),
+):
+    """Update the privilege basis and log exclusion for a document."""
+    updated = await DocumentService.update_privilege_basis(
+        db=db,
+        document_id=doc_id,
+        matter_id=matter_id,
+        basis=body.privilege_basis,
+        excluded=body.privilege_log_excluded,
+    )
+    if updated is None:
+        raise HTTPException(status_code=404, detail=f"Document {doc_id} not found in matter")
+
+    await db.commit()
+    return updated

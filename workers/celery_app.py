@@ -37,6 +37,7 @@ celery_app.conf.update(
         "app.analysis.tasks.*": {"queue": "background"},
         "app.cases.tasks.*": {"queue": "background"},
         "app.exports.tasks.*": {"queue": "background"},
+        "app.retention.tasks.*": {"queue": "background"},
     },
     # --- Time limits (global defaults) ---
     task_soft_time_limit=1800,  # 30 min
@@ -48,7 +49,16 @@ celery_app.conf.update(
     },
     # --- Result expiry ---
     result_expires=86400,  # 24 hours
+    # --- Beat schedule (periodic tasks) ---
+    beat_schedule={
+        "check-retention-expirations": {
+            "task": "app.retention.tasks.check_retention_expirations",
+            "schedule": 86400,  # Daily
+        },
+    },
 )
 
 # Autodiscover tasks in all domains with Celery tasks.
-celery_app.autodiscover_tasks(["app.ingestion", "app.entities", "app.cases", "app.analysis", "app.exports"])
+celery_app.autodiscover_tasks(
+    ["app.ingestion", "app.entities", "app.cases", "app.analysis", "app.exports", "app.retention"]
+)

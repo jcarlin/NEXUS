@@ -358,6 +358,22 @@ def get_oidc_provider():
 
 
 # ---------------------------------------------------------------------------
+# SAML Provider (feature-flagged)
+# ---------------------------------------------------------------------------
+
+
+@functools.cache
+def get_saml_provider():
+    """Return the ``SAMLProvider`` singleton, or ``None`` when disabled."""
+    settings = get_settings()
+    if not settings.enable_saml:
+        return None
+    from app.auth.saml import SAMLProvider
+
+    return SAMLProvider(settings)
+
+
+# ---------------------------------------------------------------------------
 # Hybrid Retriever
 # ---------------------------------------------------------------------------
 
@@ -473,6 +489,7 @@ _ALL_CACHED_FACTORIES = [
     get_retriever,
     get_gdrive_service,
     get_oidc_provider,
+    get_saml_provider,
     _get_checkpointer_conn,
     get_checkpointer,
     get_query_graph,

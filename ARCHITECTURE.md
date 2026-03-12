@@ -2,7 +2,7 @@
 
 > Multimodal RAG Investigation Platform for Legal Document Intelligence
 
-**Last updated:** 2026-03-12 | **Status:** All milestones complete (M0–M20)
+**Last updated:** 2026-03-12 | **Status:** All milestones complete (M0–M21)
 
 ---
 
@@ -450,7 +450,7 @@ User notes, highlights, tags, and issue codes on documents. Stored in PostgreSQL
 
 ## Data Model
 
-### PostgreSQL (27 tables, 13 migrations)
+### PostgreSQL (36 tables, 24 migrations)
 
 ```
 Core:           jobs, documents, chat_messages
@@ -466,6 +466,11 @@ Annotations:    annotations, production_sets,
 Redaction:      redactions
 Evaluation:     evaluation_dataset_items, evaluation_runs
 Datasets:       datasets, dataset_documents, document_tags, dataset_access
+Google Drive:   google_drive_connections, google_drive_sync_state
+Memos:          memos
+LLM Config:     llm_providers, llm_tier_config
+Feature Flags:  feature_flag_overrides
+Retention:      retention_policies
 ```
 
 See `docs/database-schema.md` for full column reference, indexes, and constraints.
@@ -584,7 +589,7 @@ GET    /api/v1/health/deep               # Deep health check (LLM + embedding)
 
 - **LLM abstraction** (`app/common/llm.py`): Unified client for Anthropic/OpenAI/vLLM/Ollama. Cloud→local migration = change `LLM_PROVIDER` + base URL in `.env`
 - **Multi-provider embeddings** (`app/common/embedder.py`): `EmbeddingProvider` protocol with 5 implementations (OpenAI, Ollama, local, TEI, Gemini). Switch via `EMBEDDING_PROVIDER`
-- **DI singletons** (`app/dependencies.py`): All clients via `@functools.cache` factory functions (20 factories, see `_ALL_CACHED_FACTORIES`)
+- **DI singletons** (`app/dependencies.py`): All clients via `@functools.cache` factory functions (23 factories, see `_ALL_CACHED_FACTORIES`)
 - **Hybrid retrieval** (`app/query/retriever.py`): Qdrant dense+sparse with native RRF fusion + Neo4j multi-hop graph traversal + optional visual rerank
 - **Agentic query** (`app/query/graph.py`): `create_react_agent` with 12 tools → `case_context_resolve` → `investigation_agent` → `verify_citations` → `generate_follow_ups`
 - **Agentic tools** (`app/query/tools.py`): 12 `@tool` functions with `InjectedState` for security-scoped matter_id and privilege filters
@@ -594,7 +599,7 @@ GET    /api/v1/health/deep               # Deep health check (LLM + embedding)
 - **Audit logging** (`app/common/middleware.py`): Every API call → `audit_log` table (user, action, resource, matter, IP)
 - **AI audit logging** (`app/common/llm.py`): Every LLM call logged with prompt hash, tokens, latency → `ai_audit_log` table
 - **Structured logging**: `structlog` with contextvars (`request_id`, `task_id`, `job_id`)
-- **Feature flags**: 19 `ENABLE_*` flags (see `docs/feature-flags.md` for full reference)
+- **Feature flags**: 25 `ENABLE_*` flags, 23 runtime-toggleable via admin UI (see `docs/feature-flags.md` for full reference)
 - **Privilege at data layer**: Qdrant filter + SQL WHERE + Neo4j Cypher — never API-layer-only
 - **Frontend** (`frontend/`): React 19 + TanStack Router + orval (OpenAPI → TanStack Query hooks) + shadcn/ui + Zustand
 - **Evaluation** (`app/evaluation/`, `scripts/evaluate.py`): Ground-truth Q&A dataset, retrieval metrics, faithfulness scoring, citation accuracy
@@ -658,7 +663,7 @@ GET    /api/v1/health/deep               # Deep health check (LLM + embedding)
 
 All configuration via environment variables. See `.env.example` for the complete list.
 
-### Feature Flags (19)
+### Feature Flags (25)
 
 | Flag | Default | Description |
 |---|---|---|
@@ -681,6 +686,12 @@ All configuration via environment variables. See `.env.example` for the complete
 | `ENABLE_CHUNK_QUALITY_SCORING` | `false` | Heuristic chunk quality scoring at ingestion |
 | `ENABLE_CONTEXTUAL_CHUNKS` | `false` | LLM context prefix enrichment at ingestion |
 | `ENABLE_RETRIEVAL_GRADING` | `false` | CRAG-style two-tier retrieval relevance grading |
+| `ENABLE_SSO` | `false` | OIDC single sign-on authentication |
+| `ENABLE_SAML` | `false` | SAML 2.0 SSO authentication |
+| `ENABLE_GOOGLE_DRIVE` | `false` | Google Drive OAuth connector |
+| `ENABLE_PROMETHEUS_METRICS` | `false` | Prometheus metrics endpoint |
+| `ENABLE_MEMO_DRAFTING` | `false` | Legal memo drafting pipeline |
+| `ENABLE_DATA_RETENTION` | `false` | Data retention policy enforcement |
 
 See `docs/feature-flags.md` for full details including resource impact and related settings.
 
@@ -725,9 +736,9 @@ make test   # run test suite
 - `ROADMAP.md` — Milestone tracker with status and dependencies
 
 ### Reference Documentation (in `docs/`)
-- `docs/modules.md` — All 16 domain modules with files, schemas, endpoints, and full API reference
-- `docs/database-schema.md` — 27 tables, 13 migrations, full column reference
-- `docs/feature-flags.md` — All 16 `ENABLE_*` flags with defaults and resource impact
+- `docs/modules.md` — All 19 domain modules with files, schemas, endpoints, and full API reference
+- `docs/database-schema.md` — 36 tables, 24 migrations, full column reference
+- `docs/feature-flags.md` — All 25 `ENABLE_*` flags with defaults and resource impact
 - `docs/testing-guide.md` — Test infrastructure, fixtures, CI/CD, patterns
 - `docs/agents.md` — 6 LangGraph agents with state schemas, tools, flows
 

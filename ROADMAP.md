@@ -43,7 +43,7 @@
 | M20 | Observability & Load Testing | — | Done | 23 | Regression | — | M17 |
 | M21 | RAG Quality Improvements | — | Done | 43 | Regression + eval non-regression | — | M8, M9, M15 |
 
-**Total tests: 815 backend + 36 frontend test files** (815 backend tests passing; frontend: 36 Vitest unit/component test files + 2 Playwright E2E specs)
+**Total tests: ~1134 backend + 51 frontend test files** (~1134 backend tests passing; frontend: 51 Vitest unit/component test files + 2 Playwright E2E specs)
 
 **6 autonomous LangGraph agents** across the pipeline (Case Setup, Investigation Orchestrator, Citation Verifier, Hot Doc Scanner, Contextual Completeness, Entity Resolution)
 

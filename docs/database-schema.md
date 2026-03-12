@@ -25,6 +25,17 @@ postgresql://nexus:changeme@localhost:5432/nexus
 | 011 | `011` | Redactions table and redacted_pdf_path column on documents |
 | 012 | `012` | Evaluation pipeline -- evaluation_dataset_items and evaluation_runs tables |
 | 013 | `013` | Dataset/collection management -- datasets, dataset_documents, document_tags, dataset_access; dataset_id on jobs |
+| 014 | `014` | Google Drive integration -- google_drive_connections (encrypted OAuth tokens), google_drive_sync_state |
+| - | `9104d926aca7` | Add cited_claims JSONB column to chat_messages |
+| 015 | `015` | Memo drafting -- memos table |
+| 016 | `016` | SSO columns on users (sso_provider, sso_subject_id) |
+| 017 | `017` | LLM runtime config -- llm_providers, llm_tier_config |
+| 018 | `018` | Add task_type and label columns to jobs for generalized background tasks |
+| 019 | `019` | Add celery_task_id column to jobs |
+| 020 | `020` | Fix datasets unique constraint for null parent_id |
+| 021 | `021` | Feature flag overrides -- feature_flag_overrides table |
+| 022 | `022` | Privilege log fields -- privilege_basis, privilege_log_excluded columns and partial index on documents |
+| 023 | `023` | Data retention -- retention_policies table, is_archived column on case_matters |
 
 ---
 
@@ -760,6 +771,133 @@ Per-dataset permission overrides.
 - `ix_dataset_access_dataset_id` on (`dataset_id`)
 
 **Unique constraint:** `uq_dataset_access_dataset_user` on (`dataset_id`, `user_id`)
+
+---
+
+### Google Drive
+
+#### `google_drive_connections`
+
+OAuth token storage for Google Drive integration (encrypted at rest with Fernet).
+
+| Column | Type | Constraints | Notes |
+|--------|------|-------------|-------|
+| id | UUID | PK, DEFAULT gen_random_uuid() | |
+| user_id | UUID | FK -> users.id ON DELETE CASCADE, NOT NULL | |
+| matter_id | UUID | FK -> case_matters.id ON DELETE CASCADE, NOT NULL | |
+| connection_type | VARCHAR(20) | NOT NULL, DEFAULT `'oauth'` | |
+| encrypted_tokens | TEXT | NOT NULL | Fernet-encrypted OAuth tokens |
+| email | VARCHAR(255) | NOT NULL | Google account email |
+| is_active | BOOLEAN | NOT NULL, DEFAULT true | |
+| scopes | TEXT | NOT NULL, DEFAULT `''` | OAuth scopes granted |
+| created_at | TIMESTAMPTZ | NOT NULL, DEFAULT now() | |
+| updated_at | TIMESTAMPTZ | NOT NULL, DEFAULT now() | |
+
+**Indexes:**
+- `ix_gdrive_connections_matter_id` on (`matter_id`)
+
+**Unique constraint:** `uq_gdrive_conn_user_matter_email` on (`user_id`, `matter_id`, `email`)
+
+---
+
+#### `google_drive_sync_state`
+
+Incremental sync tracking for Google Drive connectors.
+
+---
+
+### Memos
+
+#### `memos`
+
+Persisted legal memos generated from chat threads or ad-hoc queries.
+
+| Column | Type | Constraints | Notes |
+|--------|------|-------------|-------|
+| id | UUID | PK | |
+| matter_id | UUID | FK -> case_matters.id ON DELETE CASCADE, NOT NULL | |
+| thread_id | VARCHAR(255) | NULLABLE | Source chat thread |
+| title | VARCHAR(255) | NOT NULL | |
+| sections | JSONB | NOT NULL, DEFAULT `'[]'` | Array of `MemoSection` objects |
+| format | VARCHAR(20) | NOT NULL, DEFAULT `'markdown'` | `markdown` or `html` |
+| created_by | UUID | FK -> users.id, NOT NULL | |
+| created_at | TIMESTAMPTZ | NOT NULL, DEFAULT now() | |
+
+**Indexes:**
+- `ix_memos_matter_id` on (`matter_id`)
+
+---
+
+### LLM Configuration
+
+#### `llm_providers`
+
+Registered LLM providers with credentials (API keys stored as-is; consider encryption at rest).
+
+| Column | Type | Constraints | Notes |
+|--------|------|-------------|-------|
+| id | UUID | PK, DEFAULT gen_random_uuid() | |
+| provider | VARCHAR(50) | NOT NULL | `anthropic`, `openai`, `gemini`, `ollama` |
+| label | VARCHAR(100) | NOT NULL | Display name |
+| api_key | TEXT | NOT NULL, DEFAULT `''` | |
+| base_url | TEXT | NOT NULL, DEFAULT `''` | |
+| is_active | BOOLEAN | NOT NULL, DEFAULT true | |
+| created_at | TIMESTAMPTZ | NOT NULL, DEFAULT now() | |
+| updated_at | TIMESTAMPTZ | NOT NULL, DEFAULT now() | |
+
+**Unique constraint:** `uq_llm_providers_provider_label` on (`provider`, `label`)
+
+---
+
+#### `llm_tier_config`
+
+Maps usage tiers (query, analysis, ingestion) to specific providers and models.
+
+| Column | Type | Constraints | Notes |
+|--------|------|-------------|-------|
+| id | UUID | PK, DEFAULT gen_random_uuid() | |
+| tier | VARCHAR(50) | NOT NULL, UNIQUE | `query`, `analysis`, `ingestion` |
+| provider_id | UUID | FK -> llm_providers.id, NOT NULL | |
+| model | VARCHAR(100) | NOT NULL | Model identifier |
+| updated_at | TIMESTAMPTZ | NOT NULL, DEFAULT now() | |
+| updated_by | UUID | FK -> users.id, NULLABLE | |
+
+---
+
+### Feature Flags
+
+#### `feature_flag_overrides`
+
+Admin-toggled feature flag values that override env defaults. One row per overridden flag; missing = use env default.
+
+| Column | Type | Constraints | Notes |
+|--------|------|-------------|-------|
+| id | UUID | PK, DEFAULT gen_random_uuid() | |
+| flag_name | VARCHAR(80) | NOT NULL, UNIQUE | e.g., `ENABLE_RERANKER` |
+| enabled | BOOLEAN | NOT NULL | |
+| updated_by | UUID | FK -> users.id, NULLABLE | |
+| updated_at | TIMESTAMPTZ | NOT NULL, DEFAULT now() | |
+
+---
+
+### Retention
+
+#### `retention_policies`
+
+Per-matter data retention policies with purge scheduling and archive tracking.
+
+| Column | Type | Constraints | Notes |
+|--------|------|-------------|-------|
+| id | UUID | PK, DEFAULT gen_random_uuid() | |
+| matter_id | UUID | NOT NULL, UNIQUE, FK -> case_matters.id | One policy per matter |
+| retention_days | INTEGER | NOT NULL | |
+| policy_set_by | UUID | NOT NULL, FK -> users.id | |
+| policy_set_at | TIMESTAMPTZ | NOT NULL, DEFAULT now() | |
+| purge_scheduled_at | TIMESTAMPTZ | NULLABLE | |
+| purge_completed_at | TIMESTAMPTZ | NULLABLE | |
+| purge_error | TEXT | NULLABLE | |
+| archive_path | TEXT | NULLABLE | MinIO path to archive |
+| status | TEXT | NOT NULL, DEFAULT `'active'` | active, pending_purge, archiving, purging, completed, failed |
 
 ---
 
