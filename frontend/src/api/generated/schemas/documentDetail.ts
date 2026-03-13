@@ -80,4 +80,5 @@ export interface DocumentDetail {
   anomaly_score?: DocumentDetailAnomalyScore;
   bates_begin?: DocumentDetailBatesBegin;
   bates_end?: DocumentDetailBatesEnd;
+  summary?: string | null;
 }

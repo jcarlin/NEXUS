@@ -31,4 +31,5 @@ export interface DocumentResponse {
   duplicate_cluster_id?: DocumentResponseDuplicateClusterId;
   version_group_id?: DocumentResponseVersionGroupId;
   hot_doc_score?: DocumentResponseHotDocScore;
+  summary?: string | null;
 }

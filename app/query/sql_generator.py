@@ -16,7 +16,12 @@ from typing import TYPE_CHECKING, Any
 import structlog
 from pydantic import BaseModel, Field
 
-from app.query.prompts import TEXT_TO_SQL_PROMPT, TEXT_TO_SQL_SCHEMA
+from app.query.prompts import TEXT_TO_SQL_PROMPT
+from app.query.sql_schema import ALLOWED_TABLES as ALLOWED_TABLES  # noqa: F401 — re-export
+from app.query.sql_schema import (
+    FORBIDDEN_TABLES,
+    QUERYABLE_SCHEMA_DESCRIPTION,
+)
 
 if TYPE_CHECKING:
     from app.common.llm import LLMClient
@@ -29,33 +34,9 @@ _WRITE_OPERATIONS = re.compile(
     re.IGNORECASE,
 )
 
-# Tables that are safe to query
-ALLOWED_TABLES = frozenset(
-    {
-        "documents",
-        "annotations",
-        "memos",
-        "chat_messages",
-        "jobs",
-        "datasets",
-        "dataset_documents",
-        "case_matters",
-        "case_contexts",
-        "case_claims",
-        "case_parties",
-        "case_defined_terms",
-        "communication_pairs",
-        "evaluation_dataset_items",
-        "evaluation_runs",
-    }
-)
-
-# Tables that must NEVER be queried
+# Build forbidden-table regex from the canonical set
 _FORBIDDEN_TABLES = re.compile(
-    r"\b(users|audit_log|ai_audit_log|agent_audit_log|sessions"
-    r"|feature_flag_overrides|llm_providers|llm_tier_config"
-    r"|user_case_matters|google_drive_connections"
-    r"|google_drive_sync_state)\b",
+    r"\b(" + "|".join(re.escape(t) for t in sorted(FORBIDDEN_TABLES)) + r")\b",
     re.IGNORECASE,
 )
 
@@ -84,7 +65,7 @@ async def generate_sql(
         SQLQuery with the generated query, explanation, and tables used.
     """
     prompt = TEXT_TO_SQL_PROMPT.format(
-        schema=TEXT_TO_SQL_SCHEMA,
+        schema=QUERYABLE_SCHEMA_DESCRIPTION,
         question=question,
     )
 

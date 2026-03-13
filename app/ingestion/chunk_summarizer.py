@@ -1,11 +1,10 @@
-"""Chunk summarization for multi-representation indexing.
+"""Chunk summarization for multi-representation indexing (T2-11).
 
-Generates a one-sentence summary per chunk. The summary embedding is stored
-as a third named vector in Qdrant alongside dense and sparse, enabling
-retrieval on summaries while returning full chunk text.
+Generates a one-sentence summary per chunk.  Summaries are embedded
+separately and stored as a third named vector (``summary``) in Qdrant,
+enabling triple RRF fusion (dense + sparse + summary).
 
 Feature-flagged: ``ENABLE_MULTI_REPRESENTATION`` (default ``false``).
-Follows the batched async worker pattern from ``contextualizer.py``.
 """
 
 from __future__ import annotations
@@ -23,43 +22,51 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger(__name__)
 
+# Truncate chunk text in the prompt to this many characters
+_MAX_CHUNK_TEXT_CHARS = 1000
+
 
 async def summarize_chunks(
     chunks: list[Chunk],
     llm: LLMClient,
     concurrency: int = 4,
 ) -> list[Chunk]:
-    """Add ``chunk_summary`` to each chunk's metadata via concurrent LLM calls.
+    """Add ``chunk_summary`` to each chunk's metadata.
 
     Parameters
     ----------
     chunks:
-        List of Chunk objects to summarize (modified in place).
+        Chunks to summarize (modified in place).
     llm:
-        The LLM client to use for generation.
+        LLM client for generation.
     concurrency:
         Maximum number of concurrent LLM calls.
 
     Returns
     -------
-    The same list of chunks with ``chunk_summary`` added to metadata.
+    The same list of chunks with ``chunk_summary`` populated in metadata.
     """
     if not chunks:
-        return chunks
+        return []
 
     sem = asyncio.Semaphore(concurrency)
 
     async def _summarize_one(chunk: Chunk) -> None:
         async with sem:
-            prompt = CHUNK_SUMMARY_PROMPT.format(chunk_text=chunk.text[:1000])
+            text = chunk.text[:_MAX_CHUNK_TEXT_CHARS]
+            if len(chunk.text) > _MAX_CHUNK_TEXT_CHARS:
+                text += "..."
+
+            prompt = CHUNK_SUMMARY_PROMPT.format(chunk_text=text)
+
             try:
-                summary = await llm.complete(
+                response = await llm.complete(
                     messages=[{"role": "user", "content": prompt}],
-                    max_tokens=80,
+                    max_tokens=100,
                     temperature=0.0,
                     node_name="chunk_summarizer",
                 )
-                chunk.metadata["chunk_summary"] = summary.strip()
+                chunk.metadata["chunk_summary"] = response.strip()
             except Exception:
                 logger.warning(
                     "chunk_summarizer.failed",

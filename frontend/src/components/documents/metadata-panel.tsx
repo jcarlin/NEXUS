@@ -40,6 +40,17 @@ export function MetadataPanel({ doc }: MetadataPanelProps) {
         </CardContent>
       </Card>
 
+      {doc.summary && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm">Summary</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground leading-relaxed">{doc.summary}</p>
+          </CardContent>
+        </Card>
+      )}
+
       {doc.privilege_status && (
         <Card>
           <CardHeader className="pb-3">

@@ -42,13 +42,18 @@ export function DocumentTable({ data, loading }: DocumentTableProps) {
         accessorKey: "filename",
         header: ({ column }) => <DataTableColumnHeader column={column} title="Filename" />,
         cell: ({ row }) => (
-          <Link
-            to="/documents/$id"
-            params={{ id: row.original.id }}
-            className="font-medium text-primary hover:underline truncate block max-w-[300px]"
-          >
-            {row.original.filename}
-          </Link>
+          <div className="max-w-[300px]">
+            <Link
+              to="/documents/$id"
+              params={{ id: row.original.id }}
+              className="font-medium text-primary hover:underline truncate block"
+            >
+              {row.original.filename}
+            </Link>
+            {row.original.summary && (
+              <p className="text-xs text-muted-foreground truncate mt-0.5">{row.original.summary}</p>
+            )}
+          </div>
         ),
       },
       {

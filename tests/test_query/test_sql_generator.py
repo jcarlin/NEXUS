@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.query.sql_generator import (
+    ALLOWED_TABLES,
     SQLQuery,
     _parse_sql_response,
     ensure_limit,
@@ -197,3 +198,114 @@ class TestParseSQLResponse:
         raw = "SELECT * FROM documents WHERE matter_id = :matter_id LIMIT 10"
         result = _parse_sql_response(raw)
         assert "SELECT" in result.sql
+
+
+class TestAllowedTables:
+    def test_documents_is_allowed(self):
+        assert "documents" in ALLOWED_TABLES
+
+    def test_annotations_is_allowed(self):
+        assert "annotations" in ALLOWED_TABLES
+
+    def test_memos_is_allowed(self):
+        assert "memos" in ALLOWED_TABLES
+
+    def test_communication_pairs_is_allowed(self):
+        assert "communication_pairs" in ALLOWED_TABLES
+
+    def test_users_is_not_allowed(self):
+        assert "users" not in ALLOWED_TABLES
+
+    def test_audit_log_is_not_allowed(self):
+        assert "audit_log" not in ALLOWED_TABLES
+
+    def test_ai_audit_log_is_not_allowed(self):
+        assert "ai_audit_log" not in ALLOWED_TABLES
+
+    def test_llm_providers_is_not_allowed(self):
+        assert "llm_providers" not in ALLOWED_TABLES
+
+
+class TestValidateForbiddenTables:
+    def test_rejects_google_drive_connections(self):
+        is_safe, reason = validate_sql_safety(
+            "SELECT * FROM google_drive_connections WHERE matter_id = :matter_id LIMIT 10"
+        )
+        assert not is_safe
+        assert "Forbidden table" in reason
+
+    def test_rejects_agent_audit_log(self):
+        is_safe, reason = validate_sql_safety("SELECT * FROM agent_audit_log WHERE matter_id = :matter_id LIMIT 10")
+        assert not is_safe
+        assert "Forbidden table" in reason
+
+    def test_rejects_feature_flag_overrides(self):
+        is_safe, reason = validate_sql_safety(
+            "SELECT * FROM feature_flag_overrides WHERE matter_id = :matter_id LIMIT 10"
+        )
+        assert not is_safe
+        assert "Forbidden table" in reason
+
+    def test_rejects_retention_policies(self):
+        is_safe, reason = validate_sql_safety("SELECT * FROM retention_policies WHERE matter_id = :matter_id LIMIT 10")
+        assert not is_safe
+        assert "Forbidden table" in reason
+
+
+class TestExecuteSQL:
+    @pytest.mark.asyncio
+    async def test_execute_sql_returns_rows(self):
+        """execute_sql executes query and returns list of dicts."""
+        from unittest.mock import MagicMock, patch
+
+        from app.query.sql_generator import execute_sql
+
+        mock_row = MagicMock()
+        mock_row._mapping = {"filename": "test.pdf", "cnt": 5}
+
+        mock_result = MagicMock()
+        mock_result.all.return_value = [mock_row]
+
+        mock_db = AsyncMock()
+        mock_db.execute.return_value = mock_result
+
+        async def _fake_get_db():
+            yield mock_db
+
+        with patch("app.dependencies.get_db", _fake_get_db):
+            rows = await execute_sql(
+                "SELECT filename, COUNT(*) AS cnt FROM documents WHERE matter_id = :matter_id GROUP BY filename LIMIT 10",
+                "matter-123",
+            )
+
+        assert len(rows) == 1
+        assert rows[0]["filename"] == "test.pdf"
+        assert rows[0]["cnt"] == 5
+
+    @pytest.mark.asyncio
+    async def test_execute_sql_injects_matter_id(self):
+        """execute_sql ensures matter_id parameter is present."""
+        from unittest.mock import MagicMock, patch
+
+        from app.query.sql_generator import execute_sql
+
+        mock_result = MagicMock()
+        mock_result.all.return_value = []
+
+        mock_db = AsyncMock()
+        mock_db.execute.return_value = mock_result
+
+        async def _fake_get_db():
+            yield mock_db
+
+        with patch("app.dependencies.get_db", _fake_get_db):
+            await execute_sql(
+                "SELECT COUNT(*) FROM documents LIMIT 10",
+                "matter-456",
+            )
+
+        # The SQL should have had matter_id injected
+        call_args = mock_db.execute.call_args
+        executed_sql = str(call_args[0][0])
+        assert "matter_id" in executed_sql
+        assert call_args[0][1]["matter_id"] == "matter-456"

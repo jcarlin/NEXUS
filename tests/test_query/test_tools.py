@@ -406,3 +406,120 @@ async def test_stub_tools_in_investigation_tools():
     assert "communication_matrix" in tool_names
     assert "topic_cluster" in tool_names
     assert "network_analysis" in tool_names
+    assert "structured_query" in tool_names
+
+
+async def test_structured_query_disabled_returns_info():
+    """structured_query returns info message when feature flag is disabled."""
+    from app.query.tools import structured_query
+
+    mock_settings = AsyncMock()
+    mock_settings.enable_text_to_sql = False
+
+    with patch("app.config.Settings", return_value=mock_settings):
+        raw = await structured_query.ainvoke({"question": "How many documents?", "state": _SAMPLE_STATE})
+
+    parsed = json.loads(raw)
+    assert "info" in parsed
+    assert "not enabled" in parsed["info"]
+
+
+async def test_structured_query_executes_safe_sql():
+    """structured_query generates, validates, and executes SQL when enabled."""
+    from app.query.sql_generator import SQLQuery
+    from app.query.tools import structured_query
+
+    mock_settings = AsyncMock()
+    mock_settings.enable_text_to_sql = True
+
+    mock_sql_result = SQLQuery(
+        sql="SELECT document_type, COUNT(*) AS cnt FROM documents WHERE matter_id = :matter_id GROUP BY document_type LIMIT 50",
+        explanation="Count documents by type",
+        tables_used=["documents"],
+    )
+
+    mock_rows = [
+        {"document_type": "pdf", "cnt": 42},
+        {"document_type": "docx", "cnt": 7},
+    ]
+
+    with (
+        patch("app.config.Settings", return_value=mock_settings),
+        patch(
+            "app.query.sql_generator.generate_sql",
+            new_callable=AsyncMock,
+            return_value=mock_sql_result,
+        ) as mock_gen,
+        patch(
+            "app.query.sql_generator.validate_sql_safety",
+            return_value=(True, ""),
+        ),
+        patch(
+            "app.query.sql_generator.execute_sql",
+            new_callable=AsyncMock,
+            return_value=mock_rows,
+        ) as mock_exec,
+    ):
+        raw = await structured_query.ainvoke({"question": "How many documents by type?", "state": _SAMPLE_STATE})
+
+    mock_gen.assert_called_once()
+    mock_exec.assert_called_once()
+    parsed = json.loads(raw)
+    assert "results" in parsed
+    assert len(parsed["results"]) == 2
+    assert parsed["results"][0]["document_type"] == "pdf"
+    assert parsed["explanation"] == "Count documents by type"
+
+
+async def test_structured_query_rejects_unsafe_sql():
+    """structured_query returns error when generated SQL fails validation."""
+    from app.query.sql_generator import SQLQuery
+    from app.query.tools import structured_query
+
+    mock_settings = AsyncMock()
+    mock_settings.enable_text_to_sql = True
+
+    mock_sql_result = SQLQuery(
+        sql="DELETE FROM documents WHERE matter_id = :matter_id LIMIT 10",
+        explanation="Delete documents",
+        tables_used=["documents"],
+    )
+
+    with (
+        patch("app.config.Settings", return_value=mock_settings),
+        patch(
+            "app.query.sql_generator.generate_sql",
+            new_callable=AsyncMock,
+            return_value=mock_sql_result,
+        ),
+        patch(
+            "app.query.sql_generator.validate_sql_safety",
+            return_value=(False, "Write operation detected: DELETE"),
+        ),
+    ):
+        raw = await structured_query.ainvoke({"question": "delete all documents", "state": _SAMPLE_STATE})
+
+    parsed = json.loads(raw)
+    assert "error" in parsed
+    assert "safety validation" in parsed["error"]
+
+
+async def test_structured_query_error_returns_json():
+    """structured_query returns error JSON when LLM call fails."""
+    from app.query.tools import structured_query
+
+    mock_settings = AsyncMock()
+    mock_settings.enable_text_to_sql = True
+
+    with (
+        patch("app.config.Settings", return_value=mock_settings),
+        patch(
+            "app.dependencies.get_llm",
+            side_effect=RuntimeError("LLM unavailable"),
+        ),
+    ):
+        raw = await structured_query.ainvoke({"question": "count docs", "state": _SAMPLE_STATE})
+
+    parsed = json.loads(raw)
+    assert "error" in parsed
+    assert "RuntimeError" in parsed["error"]

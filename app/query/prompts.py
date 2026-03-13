@@ -257,43 +257,9 @@ finding source documents that directly support or refute these claims."""
 # T2-10: Text-to-SQL safe schema description
 # ---------------------------------------------------------------------------
 
-TEXT_TO_SQL_SCHEMA = """\
-Safe queryable tables (PostgreSQL):
-
-1. documents (doc metadata):
-   - id (UUID), filename (VARCHAR), document_type (VARCHAR), page_count (INT),
-     chunk_count (INT), entity_count (INT), matter_id (UUID),
-     created_at (TIMESTAMPTZ), updated_at (TIMESTAMPTZ),
-     sentiment_positive (FLOAT), sentiment_negative (FLOAT),
-     sentiment_pressure (FLOAT), sentiment_concealment (FLOAT),
-     hot_doc_score (FLOAT), context_gap_score (FLOAT),
-     privilege_status (VARCHAR), thread_id (VARCHAR),
-     is_inclusive (BOOLEAN), metadata_ (JSONB)
-
-2. entities (named entities extracted from documents):
-   - Table: uses Neo4j, not queryable via SQL.
-   - For entity queries, use the entity_mentions table below.
-
-3. annotations (user annotations on documents):
-   - id (UUID), document_id (UUID), matter_id (UUID), user_id (UUID),
-     page_number (INT), content (TEXT), annotation_type (VARCHAR),
-     created_at (TIMESTAMPTZ)
-
-4. memos (investigation memos):
-   - id (UUID), matter_id (UUID), title (VARCHAR), content (TEXT),
-     memo_type (VARCHAR), created_by (UUID), created_at (TIMESTAMPTZ)
-
-5. chat_messages (conversation history):
-   - id (UUID), thread_id (UUID), matter_id (UUID), role (VARCHAR),
-     content (TEXT), created_at (TIMESTAMPTZ)
-
-6. jobs (ingestion jobs):
-   - id (UUID), filename (VARCHAR), status (VARCHAR), stage (VARCHAR),
-     matter_id (UUID), created_at (TIMESTAMPTZ), updated_at (TIMESTAMPTZ)
-
-IMPORTANT: All queries MUST include WHERE matter_id = :matter_id.
-Never query: users, audit_log, ai_audit_log, agent_audit_log, sessions,
-feature_flag_overrides, llm_providers, llm_tier_config, or any auth tables."""
+# Canonical schema definition lives in sql_schema.py; re-export for
+# backward compatibility.
+from app.query.sql_schema import QUERYABLE_SCHEMA_DESCRIPTION as TEXT_TO_SQL_SCHEMA  # noqa: F401, E402
 
 TEXT_TO_SQL_PROMPT = """\
 You are a SQL query generator for a legal investigation platform (PostgreSQL).
