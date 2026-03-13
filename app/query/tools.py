@@ -57,10 +57,28 @@ async def vector_search(
     try:
         retriever = get_retriever()
 
-        # Multi-query expansion (T1-1)
+        # HyDE: generate hypothetical document for dense retrieval (T2-6)
         from app.config import Settings
 
         settings = Settings()
+        hyde_vector: list[float] | None = None
+        if settings.enable_hyde:
+            from app.dependencies import get_embedder, get_llm
+            from app.query.hyde import generate_hypothetical_document
+
+            try:
+                llm = get_llm()
+                hypothetical = await generate_hypothetical_document(
+                    query,
+                    llm,
+                    matter_context=state.get("_case_context", ""),
+                )
+                embedder = get_embedder()
+                hyde_vector = await embedder.embed_query(hypothetical)
+            except Exception:
+                logger.warning("tool.vector_search.hyde_failed", exc_info=True)
+
+        # Multi-query expansion (T1-1)
         if settings.enable_multi_query_expansion:
             from app.dependencies import get_llm
             from app.query.multi_query import expand_query
@@ -84,6 +102,7 @@ async def vector_search(
                         filters=state.get("_filters"),
                         exclude_privilege_statuses=state.get("_exclude_privilege") or None,
                         dataset_doc_ids=state.get("_dataset_doc_ids"),
+                        hyde_vector=hyde_vector,
                     )
                     for q in all_queries
                 ]
@@ -106,6 +125,7 @@ async def vector_search(
                     filters=state.get("_filters"),
                     exclude_privilege_statuses=state.get("_exclude_privilege") or None,
                     dataset_doc_ids=state.get("_dataset_doc_ids"),
+                    hyde_vector=hyde_vector,
                 )
         else:
             results = await retriever.retrieve_text(
@@ -114,6 +134,7 @@ async def vector_search(
                 filters=state.get("_filters"),
                 exclude_privilege_statuses=state.get("_exclude_privilege") or None,
                 dataset_doc_ids=state.get("_dataset_doc_ids"),
+                hyde_vector=hyde_vector,
             )
     except Exception as exc:
         logger.warning("tool.error", tool="vector_search", error=str(exc))
@@ -740,6 +761,75 @@ async def cypher_query(
 
 
 # ---------------------------------------------------------------------------
+# T2-10: Text-to-SQL tool
+# ---------------------------------------------------------------------------
+
+
+@tool
+async def structured_query(
+    question: str,
+    state: Annotated[dict, InjectedState] = {},  # noqa: B006
+) -> str:
+    """Query the structured database for document counts, entity statistics, date ranges, and other factual data.
+
+    Use for questions like "How many documents were ingested?", "What document
+    types are present?", "Show document counts by type", or any question about
+    aggregate statistics and metadata.
+    """
+    from app.config import Settings
+
+    settings = Settings()
+    if not settings.enable_text_to_sql:
+        return json.dumps({"info": "Text-to-SQL generation is not enabled."})
+
+    from app.dependencies import get_llm
+    from app.query.sql_generator import (
+        execute_sql,
+        generate_sql,
+        validate_sql_safety,
+    )
+
+    filters = state.get("_filters", {})
+    matter_id = filters.get("matter_id", "")
+
+    try:
+        llm = get_llm()
+        sql_result = await generate_sql(question, matter_id, llm)
+
+        # Validate safety before execution
+        is_safe, reason = validate_sql_safety(sql_result.sql)
+        if not is_safe:
+            logger.warning(
+                "tool.structured_query.unsafe",
+                reason=reason,
+                sql=sql_result.sql,
+            )
+            return json.dumps({"error": f"Generated SQL failed safety validation: {reason}"})
+
+        # Execute the query
+        rows = await execute_sql(sql_result.sql, matter_id)
+
+        logger.info(
+            "tool.structured_query.executed",
+            sql=sql_result.sql[:200],
+            result_count=len(rows),
+        )
+
+        return json.dumps(
+            {
+                "sql": sql_result.sql,
+                "explanation": sql_result.explanation,
+                "results": rows[:100],
+            },
+            default=str,
+        )
+
+    except Exception as exc:
+        logger.warning("tool.error", tool="structured_query", error=str(exc))
+        return json.dumps({"error": f"Tool failed: {type(exc).__name__}: {exc}"})
+
+
+# ---------------------------------------------------------------------------
 # Tool lists
 # ---------------------------------------------------------------------------
 
@@ -760,4 +850,6 @@ INVESTIGATION_TOOLS = [
     # Tier 1 maturity tools
     decompose_query,
     cypher_query,
+    # Tier 2 maturity tools
+    structured_query,
 ]

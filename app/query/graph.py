@@ -140,6 +140,10 @@ class AgentState(TypedDict, total=False):
     follow_up_questions: Annotated[list[str], _replace]
     entities_mentioned: Annotated[list[dict[str, Any]], _replace]
 
+    # Self-reflection loop (T2-8)
+    _reflection_count: int
+    _flagged_claims: Annotated[list[dict[str, Any]], _replace]
+
 
 # ---------------------------------------------------------------------------
 # V1 graph
@@ -216,6 +220,46 @@ build_graph = build_graph_v1
 # ---------------------------------------------------------------------------
 
 
+def _route_after_verification(state: dict) -> str:
+    """Conditional edge after verify_citations (T2-8 self-reflection).
+
+    If self-reflection is enabled, faithfulness is below threshold,
+    and we haven't exhausted retries, route to "reflect".
+    Otherwise, route to "end".
+    """
+    from app.dependencies import get_settings
+
+    settings = get_settings()
+    if not settings.enable_self_reflection:
+        return "end"
+
+    cited_claims = state.get("cited_claims", [])
+    if not cited_claims:
+        return "end"
+
+    # Calculate faithfulness ratio
+    verified = sum(1 for c in cited_claims if c.get("verification_status") == "verified")
+    total = len(cited_claims)
+    faithfulness = verified / total if total > 0 else 1.0
+
+    reflection_count = state.get("_reflection_count", 0)
+    max_retries = settings.self_reflection_max_retries
+    threshold = settings.self_reflection_faithfulness_threshold
+
+    if faithfulness < threshold and reflection_count < max_retries:
+        import structlog as _sl
+
+        _sl.get_logger(__name__).info(
+            "graph.self_reflection.triggered",
+            faithfulness=faithfulness,
+            threshold=threshold,
+            reflection_count=reflection_count,
+        )
+        return "reflect"
+
+    return "end"
+
+
 def _build_chat_model(provider: str, model: str, api_key: str, base_url: str | None, **kwargs: Any) -> Any:
     """Build a LangChain chat model based on provider type."""
     if provider == "anthropic":
@@ -261,6 +305,7 @@ def build_agentic_graph(settings: Settings, checkpointer: Any) -> Any:
         case_context_resolve,
         generate_follow_ups_agentic,
         post_agent_extract,
+        reflect,
         verify_citations,
     )
     from app.query.tools import INVESTIGATION_TOOLS
@@ -302,6 +347,7 @@ def build_agentic_graph(settings: Settings, checkpointer: Any) -> Any:
     parent.add_node("post_agent_extract", post_agent_extract)
     parent.add_node("verify_citations", verify_citations)
     parent.add_node("generate_follow_ups", generate_follow_ups_agentic)
+    parent.add_node("reflect", reflect)
 
     parent.add_edge(START, "case_context_resolve")
     parent.add_edge("case_context_resolve", "investigation_agent")
@@ -310,7 +356,16 @@ def build_agentic_graph(settings: Settings, checkpointer: Any) -> Any:
     # Both only read from state (response, source_documents, entities_mentioned).
     parent.add_edge("post_agent_extract", "verify_citations")
     parent.add_edge("post_agent_extract", "generate_follow_ups")
-    parent.add_edge("verify_citations", END)
     parent.add_edge("generate_follow_ups", END)
+
+    # Self-reflection conditional edge (T2-8):
+    # After verify_citations, check faithfulness ratio. If below threshold
+    # and retries not exhausted, route to reflect -> investigation_agent.
+    parent.add_conditional_edges(
+        "verify_citations",
+        _route_after_verification,
+        {"end": END, "reflect": "reflect"},
+    )
+    parent.add_edge("reflect", "investigation_agent")
 
     return parent.compile(checkpointer=checkpointer)

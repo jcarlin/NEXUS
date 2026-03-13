@@ -56,6 +56,8 @@ class RetrievalConfig(BaseModel):
     text_limit: int
     graph_limit: int
     prefetch_multiplier: int
+    dense_prefetch_multiplier: int
+    sparse_prefetch_multiplier: int
     entity_threshold: float
     enable_reranker: bool
     reranker_model: str
@@ -111,6 +113,9 @@ class FeatureFlags(BaseModel):
     prompt_routing: bool
     question_decomposition: bool
     data_retention: bool
+    hyde: bool
+    self_reflection: bool
+    text_to_sql: bool
 
 
 class Settings(BaseSettings):
@@ -307,6 +312,22 @@ class Settings(BaseSettings):
     # --- Question Decomposition (T1-10) ---
     enable_question_decomposition: bool = False
 
+    # --- HyDE (Hypothetical Document Embeddings) (T2-6) ---
+    enable_hyde: bool = False
+    hyde_model: str = ""  # Falls back to llm_model if empty
+
+    # --- Self-Reflection Loop (T2-8) ---
+    enable_self_reflection: bool = False
+    self_reflection_faithfulness_threshold: float = 0.8
+    self_reflection_max_retries: int = 1
+
+    # --- RRF Per-Modality Prefetch Multipliers (T2-9) ---
+    retrieval_dense_prefetch_multiplier: int = 2
+    retrieval_sparse_prefetch_multiplier: int = 2
+
+    # --- Text-to-SQL Generation (T2-10) ---
+    enable_text_to_sql: bool = False
+
     # --- Data Retention ---
     enable_data_retention: bool = False
     grading_model: str = ""  # Falls back to llm_model if empty
@@ -404,6 +425,8 @@ class Settings(BaseSettings):
                 text_limit=self.retrieval_text_limit,
                 graph_limit=self.retrieval_graph_limit,
                 prefetch_multiplier=self.retrieval_prefetch_multiplier,
+                dense_prefetch_multiplier=self.retrieval_dense_prefetch_multiplier,
+                sparse_prefetch_multiplier=self.retrieval_sparse_prefetch_multiplier,
                 entity_threshold=self.query_entity_threshold,
                 enable_reranker=self.enable_reranker,
                 reranker_model=self.reranker_model,
@@ -459,5 +482,8 @@ class Settings(BaseSettings):
                 prompt_routing=self.enable_prompt_routing,
                 question_decomposition=self.enable_question_decomposition,
                 data_retention=self.enable_data_retention,
+                hyde=self.enable_hyde,
+                self_reflection=self.enable_self_reflection,
+                text_to_sql=self.enable_text_to_sql,
             )
         return self

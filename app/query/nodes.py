@@ -25,6 +25,7 @@ from app.query.prompts import (
     INVESTIGATION_SYSTEM_PROMPT,
     PROMPT_ROUTING_MAP,
     REWRITE_PROMPT,
+    SELF_REFLECTION_PROMPT,
     SYNTHESIS_PROMPT,
     VERIFY_CLAIMS_PROMPT,
     VERIFY_JUDGMENT_PROMPT,
@@ -894,6 +895,38 @@ async def verify_citations(state: dict) -> dict:
     )
 
     return {"cited_claims": verified_claims}
+
+
+async def reflect(state: dict) -> dict:
+    """Self-reflection node: append flagged claims as a retry message (T2-8).
+
+    Reads ``cited_claims`` from state, formats flagged claims, appends a
+    HumanMessage instructing the agent to re-investigate, and increments
+    ``_reflection_count``.
+    """
+    from langchain_core.messages import HumanMessage
+
+    cited_claims = state.get("cited_claims", [])
+    flagged = [c for c in cited_claims if c.get("verification_status") == "flagged"]
+
+    flagged_text = "\n".join(f"- {c.get('claim_text', 'unknown claim')}" for c in flagged)
+
+    message = HumanMessage(
+        content=SELF_REFLECTION_PROMPT.format(flagged_claims=flagged_text),
+    )
+
+    reflection_count = state.get("_reflection_count", 0) + 1
+    logger.info(
+        "node.reflect",
+        reflection_count=reflection_count,
+        flagged_claim_count=len(flagged),
+    )
+
+    return {
+        "messages": [message],
+        "_reflection_count": reflection_count,
+        "_flagged_claims": flagged,
+    }
 
 
 def _parse_claims(raw: str) -> list[dict[str, Any]]:
