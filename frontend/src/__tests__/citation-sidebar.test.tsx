@@ -8,21 +8,56 @@ vi.mock("react-pdf", () => ({
   pdfjs: { GlobalWorkerOptions: { workerSrc: "" } },
 }));
 
-vi.mock("@tanstack/react-router", () => ({
-  Link: ({
-    children,
-    ...props
-  }: {
-    children: React.ReactNode;
-    to: string;
-    search?: Record<string, unknown>;
-  }) => <a href={props.to}>{children}</a>,
-  useParams: () => ({}),
-}));
+const mockNavigate = vi.fn();
+
+vi.mock("@tanstack/react-router", () => {
+  // Chainable stub that supports all methods used in routeTree.gen.ts
+  const stub = (opts: Record<string, unknown> = {}): Record<string, unknown> => {
+    const self: Record<string, unknown> = {
+      ...opts,
+      update: (u: Record<string, unknown>) => stub({ ...opts, ...u }),
+      addChildren: () => self,
+      _addFileChildren: () => self,
+      _addFileTypes: () => self,
+    };
+    return self;
+  };
+  return {
+    Link: ({
+      children,
+      ...props
+    }: {
+      children: React.ReactNode;
+      to: string;
+      search?: Record<string, unknown>;
+    }) => <a href={props.to}>{children}</a>,
+    useParams: () => ({}),
+    useNavigate: () => mockNavigate,
+    createRootRoute: (opts: Record<string, unknown>) => stub(opts),
+    createRoute: (opts: Record<string, unknown>) => stub(opts),
+    createFileRoute: () => (opts: Record<string, unknown>) => stub(opts),
+    createRouter: (opts: Record<string, unknown>) => opts,
+    useMatches: () => [],
+    Outlet: () => null,
+    RouterProvider: () => null,
+  };
+});
 
 vi.mock("@tanstack/react-query", () => ({
   useQuery: () => ({ data: [], isLoading: false }),
   useQueryClient: () => ({ prefetchQuery: vi.fn() }),
+  QueryClient: class {
+    defaultOptions = {};
+    constructor() {}
+    invalidateQueries() {}
+  },
+}));
+
+vi.mock("@/main", () => ({
+  queryClient: {
+    invalidateQueries: vi.fn(),
+    prefetchQuery: vi.fn(),
+  },
 }));
 
 vi.mock("@/api/client", () => ({
@@ -136,6 +171,56 @@ describe("CitationSidebar", () => {
     expect(
       screen.getByText("The parties agreed to the terms."),
     ).toBeInTheDocument();
+  });
+
+  it("renders 'View in Document' button", () => {
+    useCitationStore.getState().openWithSources(MOCK_SOURCES, []);
+    render(<CitationSidebar />);
+    expect(screen.getByTestId("view-in-document")).toBeInTheDocument();
+    expect(screen.getByText("View in Document")).toBeInTheDocument();
+  });
+
+  it("clicking 'View in Document' navigates with page and highlight params", () => {
+    mockNavigate.mockClear();
+    useCitationStore.getState().openWithSources(MOCK_SOURCES, []);
+    render(<CitationSidebar />);
+
+    const btn = screen.getByTestId("view-in-document");
+    fireEvent.click(btn);
+
+    expect(mockNavigate).toHaveBeenCalledWith({
+      to: "/documents/$id",
+      params: { id: "doc-1" },
+      search: {
+        page: 5,
+        highlight: "The parties agreed to the terms.",
+      },
+    });
+  });
+
+  it("clicking 'View in Document' uses doc_id when available", () => {
+    mockNavigate.mockClear();
+    const sourcesWithDocId: SourceDocument[] = [
+      {
+        id: "chunk-1",
+        doc_id: "real-doc-id",
+        filename: "contract.pdf",
+        page: 3,
+        chunk_text: "Some text.",
+        relevance_score: 0.9,
+      },
+    ];
+    useCitationStore.getState().openWithSources(sourcesWithDocId, []);
+    render(<CitationSidebar />);
+
+    const btn = screen.getByTestId("view-in-document");
+    fireEvent.click(btn);
+
+    expect(mockNavigate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: { id: "real-doc-id" },
+      }),
+    );
   });
 });
 

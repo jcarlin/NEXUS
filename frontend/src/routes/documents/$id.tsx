@@ -16,12 +16,22 @@ import { useFeatureFlag } from "@/hooks/use-feature-flags";
 import { detectDocumentType } from "@/lib/utils";
 import type { DocumentDetail, Annotation, AnnotationAnchor } from "@/types";
 
+interface DocumentSearchParams {
+  page?: number;
+  highlight?: string;
+}
+
 export const Route = createFileRoute("/documents/$id")({
   component: DocumentDetailPage,
+  validateSearch: (search: Record<string, unknown>): DocumentSearchParams => ({
+    page: typeof search.page === "number" ? search.page : typeof search.page === "string" ? Number(search.page) || undefined : undefined,
+    highlight: typeof search.highlight === "string" ? search.highlight : undefined,
+  }),
 });
 
 function DocumentDetailPage() {
   const { id } = Route.useParams();
+  const { page: searchPage, highlight: searchHighlight } = Route.useSearch();
 
   const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | null>(null);
   const [pendingAnchor, setPendingAnchor] = useState<{
@@ -107,6 +117,8 @@ function DocumentDetailPage() {
               url={downloadUrl}
               filename={doc.filename}
               type={doc.type}
+              initialPage={searchPage}
+              highlightText={searchHighlight}
               annotations={annotations}
               selectedAnnotationId={selectedAnnotationId}
               onAnnotationClick={handleAnnotationClick}

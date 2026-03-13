@@ -18,6 +18,9 @@ vi.mock("@tanstack/react-router", () => ({
   }) => <a href={props.to}>{children}</a>,
 }));
 
+// After import, patch useSearch onto the route object
+
+
 vi.mock("@/api/client", () => ({
   apiClient: vi.fn(),
 }));
@@ -58,12 +61,14 @@ vi.mock("@/components/documents/redaction-panel", () => ({
 
 import { Route } from "@/routes/documents/$id";
 
-// The route uses Route.useParams() — we need to mock it
+// The route uses Route.useParams() and Route.useSearch() — we need to mock them
 const routeObj = Route as unknown as {
   component: React.ComponentType;
   useParams: () => { id: string };
+  useSearch: () => { page?: number; highlight?: string };
 };
 routeObj.useParams = () => ({ id: "doc-123" });
+routeObj.useSearch = () => ({});
 
 const Component = routeObj.component;
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { renderHook } from "@testing-library/react";
+import { renderHook, act } from "@testing-library/react";
 
 const mockNavigate = vi.fn();
 const mockToggleThreadSidebar = vi.fn();
@@ -25,7 +25,7 @@ vi.mock("@/stores/app-store", () => ({
   ),
 }));
 
-import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
+import { useKeyboardShortcuts, useReviewShortcuts } from "@/hooks/use-keyboard-shortcuts";
 
 function fireKeyDown(
   key: string,
@@ -173,5 +173,259 @@ describe("useKeyboardShortcuts", () => {
     expect(mockToggleThreadSidebar).not.toHaveBeenCalled();
     fireKeyDown("d");
     expect(mockToggleDefinedTerms).not.toHaveBeenCalled();
+  });
+
+  it("Shift+? toggles shortcutsHelpOpen state", () => {
+    const { result } = setup();
+    expect(result.current.shortcutsHelpOpen).toBe(false);
+
+    act(() => {
+      fireKeyDown("?", { shiftKey: true });
+    });
+    expect(result.current.shortcutsHelpOpen).toBe(true);
+
+    act(() => {
+      fireKeyDown("?", { shiftKey: true });
+    });
+    expect(result.current.shortcutsHelpOpen).toBe(false);
+  });
+
+  it("setShortcutsHelpOpen can close the dialog", () => {
+    const { result } = setup();
+
+    act(() => {
+      result.current.setShortcutsHelpOpen(true);
+    });
+    expect(result.current.shortcutsHelpOpen).toBe(true);
+
+    act(() => {
+      result.current.setShortcutsHelpOpen(false);
+    });
+    expect(result.current.shortcutsHelpOpen).toBe(false);
+  });
+});
+
+describe("useReviewShortcuts", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("j moves focus down", () => {
+    const onFocusChange = vi.fn();
+    renderHook(() =>
+      useReviewShortcuts({
+        itemCount: 5,
+        focusedIndex: 1,
+        onFocusChange,
+      }),
+    );
+
+    fireKeyDown("j");
+    expect(onFocusChange).toHaveBeenCalledWith(2);
+  });
+
+  it("j does not exceed itemCount - 1", () => {
+    const onFocusChange = vi.fn();
+    renderHook(() =>
+      useReviewShortcuts({
+        itemCount: 3,
+        focusedIndex: 2,
+        onFocusChange,
+      }),
+    );
+
+    fireKeyDown("j");
+    expect(onFocusChange).toHaveBeenCalledWith(2);
+  });
+
+  it("k moves focus up", () => {
+    const onFocusChange = vi.fn();
+    renderHook(() =>
+      useReviewShortcuts({
+        itemCount: 5,
+        focusedIndex: 3,
+        onFocusChange,
+      }),
+    );
+
+    fireKeyDown("k");
+    expect(onFocusChange).toHaveBeenCalledWith(2);
+  });
+
+  it("k does not go below 0", () => {
+    const onFocusChange = vi.fn();
+    renderHook(() =>
+      useReviewShortcuts({
+        itemCount: 5,
+        focusedIndex: 0,
+        onFocusChange,
+      }),
+    );
+
+    fireKeyDown("k");
+    expect(onFocusChange).toHaveBeenCalledWith(0);
+  });
+
+  it("k with meta key is ignored (allows Cmd+K to pass through)", () => {
+    const onFocusChange = vi.fn();
+    renderHook(() =>
+      useReviewShortcuts({
+        itemCount: 5,
+        focusedIndex: 3,
+        onFocusChange,
+      }),
+    );
+
+    fireKeyDown("k", { metaKey: true });
+    expect(onFocusChange).not.toHaveBeenCalled();
+  });
+
+  it("Enter calls onOpen with focused index", () => {
+    const onOpen = vi.fn();
+    renderHook(() =>
+      useReviewShortcuts({
+        itemCount: 5,
+        focusedIndex: 2,
+        onFocusChange: vi.fn(),
+        onOpen,
+      }),
+    );
+
+    fireKeyDown("Enter");
+    expect(onOpen).toHaveBeenCalledWith(2);
+  });
+
+  it("Enter does not call onOpen when no item is focused", () => {
+    const onOpen = vi.fn();
+    renderHook(() =>
+      useReviewShortcuts({
+        itemCount: 5,
+        focusedIndex: -1,
+        onFocusChange: vi.fn(),
+        onOpen,
+      }),
+    );
+
+    fireKeyDown("Enter");
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it("Escape calls onEscape", () => {
+    const onEscape = vi.fn();
+    renderHook(() =>
+      useReviewShortcuts({
+        itemCount: 5,
+        focusedIndex: 0,
+        onFocusChange: vi.fn(),
+        onEscape,
+      }),
+    );
+
+    fireKeyDown("Escape");
+    expect(onEscape).toHaveBeenCalledTimes(1);
+  });
+
+  it("r calls onToggleRelevance with focused index", () => {
+    const onToggleRelevance = vi.fn();
+    renderHook(() =>
+      useReviewShortcuts({
+        itemCount: 5,
+        focusedIndex: 1,
+        onFocusChange: vi.fn(),
+        onToggleRelevance,
+      }),
+    );
+
+    fireKeyDown("r");
+    expect(onToggleRelevance).toHaveBeenCalledWith(1);
+  });
+
+  it("p calls onTogglePrivilege with focused index", () => {
+    const onTogglePrivilege = vi.fn();
+    renderHook(() =>
+      useReviewShortcuts({
+        itemCount: 5,
+        focusedIndex: 1,
+        onFocusChange: vi.fn(),
+        onTogglePrivilege,
+      }),
+    );
+
+    fireKeyDown("p");
+    expect(onTogglePrivilege).toHaveBeenCalledWith(1);
+  });
+
+  it("[ calls onPrevDocument", () => {
+    const onPrevDocument = vi.fn();
+    renderHook(() =>
+      useReviewShortcuts({
+        itemCount: 5,
+        focusedIndex: 0,
+        onFocusChange: vi.fn(),
+        onPrevDocument,
+      }),
+    );
+
+    fireKeyDown("[");
+    expect(onPrevDocument).toHaveBeenCalledTimes(1);
+  });
+
+  it("] calls onNextDocument", () => {
+    const onNextDocument = vi.fn();
+    renderHook(() =>
+      useReviewShortcuts({
+        itemCount: 5,
+        focusedIndex: 0,
+        onFocusChange: vi.fn(),
+        onNextDocument,
+      }),
+    );
+
+    fireKeyDown("]");
+    expect(onNextDocument).toHaveBeenCalledTimes(1);
+  });
+
+  it("shortcuts are ignored when focus is in an input", () => {
+    const onFocusChange = vi.fn();
+    const onOpen = vi.fn();
+    renderHook(() =>
+      useReviewShortcuts({
+        itemCount: 5,
+        focusedIndex: 0,
+        onFocusChange,
+        onOpen,
+      }),
+    );
+
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+
+    fireKeyDown("j", {}, input);
+    expect(onFocusChange).not.toHaveBeenCalled();
+
+    fireKeyDown("Enter", {}, input);
+    expect(onOpen).not.toHaveBeenCalled();
+
+    document.body.removeChild(input);
+  });
+
+  it("cleans up event listener on unmount", () => {
+    const removeEventListenerSpy = vi.spyOn(document, "removeEventListener");
+    const { unmount } = renderHook(() =>
+      useReviewShortcuts({
+        itemCount: 5,
+        focusedIndex: 0,
+        onFocusChange: vi.fn(),
+      }),
+    );
+    unmount();
+    expect(removeEventListenerSpy).toHaveBeenCalledWith(
+      "keydown",
+      expect.any(Function),
+    );
   });
 });

@@ -4,6 +4,11 @@ import React from "react";
 import { AuditLogTable } from "@/components/admin/audit-log-table";
 import type { AuditLogEntry } from "@/types";
 
+vi.mock("@/api/client", () => ({
+  apiClient: vi.fn(),
+  apiFetchRaw: vi.fn(),
+}));
+
 vi.mock("@/components/ui/data-table-column-header", () => ({
   DataTableColumnHeader: ({ title }: { title: string }) => <span>{title}</span>,
 }));
@@ -97,9 +102,9 @@ describe("AuditLogTable", () => {
     expect(screen.getByText("500")).toBeInTheDocument();
   });
 
-  it("renders Export CSV button", () => {
+  it("renders Export button", () => {
     render(<AuditLogTable data={MOCK_ENTRIES} isLoading={false} />);
-    expect(screen.getByText("Export CSV")).toBeInTheDocument();
+    expect(screen.getByText("Export")).toBeInTheDocument();
   });
 
   it("shows loading skeletons when isLoading=true", () => {

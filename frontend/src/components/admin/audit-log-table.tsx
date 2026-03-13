@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback } from "react";
 import {
   useReactTable,
   getCoreRowModel,
@@ -24,6 +24,23 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { DataTableToolbar } from "@/components/ui/data-table-toolbar";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { apiFetchRaw } from "@/api/client";
 
 const columnHelper = createColumnHelper<AuditLogEntry>();
 
@@ -101,6 +118,7 @@ interface AuditLogTableProps {
 export function AuditLogTable({ data, isLoading }: AuditLogTableProps) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = useState("");
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
 
   const actionFacetOptions = useMemo(() => {
     const actions = [...new Set(data.map((e) => e.action))].sort();
@@ -117,34 +135,6 @@ export function AuditLogTable({ data, isLoading }: AuditLogTableProps) {
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
   });
-
-  function exportCSV() {
-    const rows = table.getFilteredRowModel().rows;
-    const headers = ["timestamp", "user_email", "action", "resource", "status_code", "ip_address", "duration_ms"];
-    const csvRows = [headers.join(",")];
-    for (const row of rows) {
-      const e = row.original;
-      csvRows.push(
-        [
-          e.created_at,
-          e.user_email ?? "",
-          e.action,
-          e.resource,
-          String(e.status_code),
-          e.ip_address,
-          String(e.duration_ms ?? ""),
-        ].join(","),
-      );
-    }
-    const csv = csvRows.join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "audit-log.csv";
-    a.click();
-    URL.revokeObjectURL(url);
-  }
 
   if (isLoading) {
     return (
@@ -165,9 +155,14 @@ export function AuditLogTable({ data, isLoading }: AuditLogTableProps) {
           { columnId: "action", title: "All actions", options: actionFacetOptions },
         ]}
       >
-        <Button variant="outline" size="sm" onClick={exportCSV}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setExportDialogOpen(true)}
+          data-testid="server-export-button"
+        >
           <Download className="mr-1.5 h-3.5 w-3.5" />
-          Export CSV
+          Export
         </Button>
       </DataTableToolbar>
 
@@ -212,6 +207,140 @@ export function AuditLogTable({ data, isLoading }: AuditLogTableProps) {
       <p className="text-xs text-muted-foreground">
         Showing {table.getFilteredRowModel().rows.length} of {data.length} entries
       </p>
+
+      <AuditExportDialog
+        open={exportDialogOpen}
+        onOpenChange={setExportDialogOpen}
+      />
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Server-side audit export dialog
+// ---------------------------------------------------------------------------
+
+interface AuditExportDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+function AuditExportDialog({ open, onOpenChange }: AuditExportDialogProps) {
+  const [format, setFormat] = useState<"csv" | "json">("csv");
+  const [table, setTable] = useState("audit_log");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExport = useCallback(async () => {
+    setIsExporting(true);
+    try {
+      const params = new URLSearchParams();
+      params.set("format", format);
+      params.set("table", table);
+      if (startDate) params.set("date_from", new Date(startDate).toISOString());
+      if (endDate) params.set("date_to", new Date(endDate).toISOString());
+
+      const res = await apiFetchRaw(
+        `/api/v1/admin/audit/export?${params.toString()}`,
+      );
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${table}_export.${format}`;
+      a.click();
+      URL.revokeObjectURL(url);
+      onOpenChange(false);
+    } finally {
+      setIsExporting(false);
+    }
+  }, [format, table, startDate, endDate, onOpenChange]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent data-testid="audit-export-dialog" className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Export Audit Logs</DialogTitle>
+          <DialogDescription>
+            Download audit log data from the server with optional date range filtering.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          {/* Table selector */}
+          <div className="space-y-2">
+            <Label htmlFor="export-table">Log Table</Label>
+            <Select value={table} onValueChange={setTable}>
+              <SelectTrigger id="export-table" data-testid="export-table-select">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="audit_log">API Audit Log</SelectItem>
+                <SelectItem value="ai_audit_log">AI Audit Log</SelectItem>
+                <SelectItem value="agent_audit_log">Agent Audit Log</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Format selector */}
+          <div className="space-y-2">
+            <Label htmlFor="export-format">Format</Label>
+            <Select value={format} onValueChange={(v) => setFormat(v as "csv" | "json")}>
+              <SelectTrigger id="export-format" data-testid="export-format-select">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="csv">CSV</SelectItem>
+                <SelectItem value="json">JSON</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Date range */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="export-start-date">Start Date</Label>
+              <input
+                id="export-start-date"
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                data-testid="export-start-date"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="export-end-date">End Date</Label>
+              <input
+                id="export-end-date"
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                data-testid="export-end-date"
+              />
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleExport}
+            disabled={isExporting}
+            data-testid="export-submit"
+          >
+            <Download className="mr-1.5 h-3.5 w-3.5" />
+            {isExporting ? "Exporting..." : "Export"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
