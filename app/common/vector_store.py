@@ -199,8 +199,20 @@ class VectorStoreClient:
         exclude_privilege_statuses: list[str] | None = None,
         prefetch_multiplier: int = 2,
         dataset_doc_ids: list[str] | None = None,
+        dense_prefetch_multiplier: int | None = None,
+        sparse_prefetch_multiplier: int | None = None,
     ) -> list[dict[str, Any]]:
-        """Search ``nexus_text``. Uses RRF fusion when sparse vector is provided."""
+        """Search ``nexus_text``. Uses RRF fusion when sparse vector is provided.
+
+        Per-modality prefetch multipliers (T2-9):
+        - *dense_prefetch_multiplier*: multiplier for dense prefetch limit.
+        - *sparse_prefetch_multiplier*: multiplier for sparse prefetch limit.
+        If not provided, falls back to the shared *prefetch_multiplier*.
+        """
+        # Resolve per-modality multipliers (T2-9)
+        dense_mult = dense_prefetch_multiplier if dense_prefetch_multiplier is not None else prefetch_multiplier
+        sparse_mult = sparse_prefetch_multiplier if sparse_prefetch_multiplier is not None else prefetch_multiplier
+
         must_conditions: list[FieldCondition] = []
         must_not_conditions: list[FieldCondition] = []
 
@@ -222,13 +234,13 @@ class VectorStoreClient:
             )
 
         if sparse_vector is not None and self._enable_sparse:
-            # Native RRF fusion via prefetch
+            # Native RRF fusion via prefetch with per-modality multipliers (T2-9)
             sv = SparseVector(indices=sparse_vector[0], values=sparse_vector[1])
             results = self.client.query_points(
                 collection_name=TEXT_COLLECTION,
                 prefetch=[
-                    Prefetch(query=vector, using="dense", limit=limit * prefetch_multiplier, filter=qdrant_filter),
-                    Prefetch(query=sv, using="sparse", limit=limit * prefetch_multiplier, filter=qdrant_filter),
+                    Prefetch(query=vector, using="dense", limit=limit * dense_mult, filter=qdrant_filter),
+                    Prefetch(query=sv, using="sparse", limit=limit * sparse_mult, filter=qdrant_filter),
                 ],
                 query=FusionQuery(fusion=Fusion.RRF),
                 limit=limit,

@@ -109,6 +109,84 @@ async def test_query_with_rrf_fusion(mock_qdrant_client):
 
 
 # ---------------------------------------------------------------------------
+# T2-9: Per-modality RRF prefetch multiplier tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_per_modality_multipliers(mock_qdrant_client):
+    """When separate dense/sparse multipliers provided, each prefetch uses its own."""
+    mock_qdrant_client.query_points.return_value.points = []
+
+    client = VectorStoreClient(_make_settings(enable_sparse=True))
+
+    await client.query_text(
+        vector=[0.1] * 1024,
+        limit=10,
+        sparse_vector=([0, 5], [0.9, 0.4]),
+        dense_prefetch_multiplier=3,
+        sparse_prefetch_multiplier=4,
+    )
+
+    call_kwargs = mock_qdrant_client.query_points.call_args.kwargs
+    prefetches = call_kwargs["prefetch"]
+    assert len(prefetches) == 2
+
+    # Dense prefetch: limit = 10 * 3 = 30
+    dense_prefetch = prefetches[0]
+    assert dense_prefetch.limit == 30
+
+    # Sparse prefetch: limit = 10 * 4 = 40
+    sparse_prefetch = prefetches[1]
+    assert sparse_prefetch.limit == 40
+
+
+@pytest.mark.asyncio
+async def test_default_multipliers_backward_compatible(mock_qdrant_client):
+    """When no per-modality multipliers provided, falls back to shared multiplier."""
+    mock_qdrant_client.query_points.return_value.points = []
+
+    client = VectorStoreClient(_make_settings(enable_sparse=True))
+
+    await client.query_text(
+        vector=[0.1] * 1024,
+        limit=10,
+        sparse_vector=([0, 5], [0.9, 0.4]),
+        prefetch_multiplier=2,
+    )
+
+    call_kwargs = mock_qdrant_client.query_points.call_args.kwargs
+    prefetches = call_kwargs["prefetch"]
+    # Both should use shared multiplier: 10 * 2 = 20
+    assert prefetches[0].limit == 20
+    assert prefetches[1].limit == 20
+
+
+@pytest.mark.asyncio
+async def test_mixed_multipliers(mock_qdrant_client):
+    """When only one per-modality multiplier provided, the other falls back."""
+    mock_qdrant_client.query_points.return_value.points = []
+
+    client = VectorStoreClient(_make_settings(enable_sparse=True))
+
+    # Only provide dense_prefetch_multiplier, sparse falls back to prefetch_multiplier
+    await client.query_text(
+        vector=[0.1] * 1024,
+        limit=10,
+        sparse_vector=([0, 5], [0.9, 0.4]),
+        prefetch_multiplier=2,
+        dense_prefetch_multiplier=4,
+    )
+
+    call_kwargs = mock_qdrant_client.query_points.call_args.kwargs
+    prefetches = call_kwargs["prefetch"]
+    # Dense: 10 * 4 = 40
+    assert prefetches[0].limit == 40
+    # Sparse: falls back to prefetch_multiplier: 10 * 2 = 20
+    assert prefetches[1].limit == 20
+
+
+# ---------------------------------------------------------------------------
 # Visual collection tests
 # ---------------------------------------------------------------------------
 

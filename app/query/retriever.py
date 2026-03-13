@@ -65,13 +65,24 @@ class HybridRetriever:
         prefetch_multiplier: int = 2,
         dataset_doc_ids: list[str] | None = None,
         query_vector: list[float] | None = None,
+        hyde_vector: list[float] | None = None,
     ) -> list[dict[str, Any]]:
         """Embed *query* and run dense (+ optional sparse RRF) search against ``nexus_text``.
 
         If *query_vector* is provided, skip the embedding call and use it directly.
+        If *hyde_vector* is provided, use it for dense retrieval instead of the
+        raw query embedding (HyDE T2-6). The raw query is still used for sparse
+        retrieval to preserve lexical matching.
         """
-        vector = query_vector if query_vector is not None else await self._embedder.embed_query(query)
+        # Dense vector: prefer HyDE vector > explicit query_vector > embed query
+        if hyde_vector is not None:
+            vector = hyde_vector
+        elif query_vector is not None:
+            vector = query_vector
+        else:
+            vector = await self._embedder.embed_query(query)
 
+        # Sparse vector always uses the raw query for lexical matching
         sparse_vector: tuple[list[int], list[float]] | None = None
         if self._sparse_embedder is not None:
             sparse_vector = self._sparse_embedder.embed_single(query)
