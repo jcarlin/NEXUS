@@ -119,25 +119,25 @@ All 12 items implemented (T2-3 was completed as M19).
 | T2-11 | **Multi-representation indexing** | RAG Arch §6 | ✅ Chunk summaries as third Qdrant vector, triple RRF fusion, `ENABLE_MULTI_REPRESENTATION` |
 | T2-12 | **Document summarization at ingestion** | RAG Maturity §4 | ✅ `app/ingestion/summarizer.py`, `ENABLE_DOCUMENT_SUMMARIZATION` |
 
-### Tier 3 — Nice to Have (Polish and Future-Proofing)
+### Tier 3 — Nice to Have (Polish and Future-Proofing) — Phase 1 Complete
 
-| # | Item | Source Audit | Rationale | Effort |
-|---|------|-------------|-----------|--------|
-| T3-1 | **Dark mode** | Platform §7 | Quality-of-life for late-night document review. | Low |
-| T3-2 | **Mobile responsive design** | Platform §7 | Partners checking case status from phones. | Medium |
-| T3-3 | **Deposition prep workflow** | Platform §5 | Pull all docs mentioning a witness, suggest examination questions. Specialized workflow. | High |
-| T3-4 | **Document comparison/redline** | Platform §5 | Compare two versions of a contract or agreement. Specialized workflow. | High |
-| T3-5 | **Interactive graph editing** | Platform §4 | Let lawyers manually merge entities, add relationships, correct errors. | Medium |
-| T3-6 | **Onboarding flow** for new users | Platform §7 | Guided first-use experience. | Medium |
-| T3-7 | **SPLADE for sparse retrieval** | RAG Maturity §3 | Learned query expansion for legal vocabulary mismatch. Replaces BM42. Self-hosted. | Medium |
-| T3-8 | **BGE-M3 unified dense+sparse model** | RAG Maturity §3 | Single model pass for both vector types. Simplifies pipeline. | Medium |
-| T3-9 | **Entity-graph alignment check** (HalluGraph) | RAG Maturity §7 | Extract entity graphs from response and context, verify structural alignment. Catches fabricated relationships. | High |
-| T3-10 | **GraphRAG community summaries** | RAG Maturity §6 | RAPTOR-style hierarchical summaries for corpus-wide exploratory queries. | High |
-| T3-11 | **Kubernetes manifests / Helm charts** | Platform §9 | For enterprise deployments requiring orchestration. | Medium |
-| T3-12 | **Automatic V1/Agentic graph routing** | RAG Maturity §6 | Route simple factual queries to V1 (faster, cheaper) and complex queries to agentic graph. Currently manual API parameter. | Low |
-| T3-13 | **Adaptive retrieval depth** | RAG Maturity §5 | Query-type-dependent retrieval depth: factual=10, analytical=30, exploratory=40, timeline=30. | Low |
-| T3-14 | **OCR error correction** | RAG Maturity §1 | Post-OCR cleanup for scanned documents. Low priority unless corpus quality is an issue. | Low |
-| T3-15 | **Matryoshka dimensionality optimization** | RAG Maturity §3 | 256d first pass, full-dim reranking. Low priority — current 1024d is a reasonable operating point. | Low |
+| # | Item | Source Audit | Status |
+|---|------|-------------|--------|
+| T3-1 | **Dark mode** | Platform §7 | ✅ `.light` CSS theme, `useTheme` hook, Sun/Moon header toggle |
+| T3-2 | **Mobile responsive design** | Platform §7 | Planned |
+| T3-3 | **Deposition prep workflow** | Platform §5 | Planned |
+| T3-4 | **Document comparison/redline** | Platform §5 | Planned |
+| T3-5 | **Interactive graph editing** | Platform §4 | Planned |
+| T3-6 | **Onboarding flow** for new users | Platform §7 | Planned |
+| T3-7 | **SPLADE for sparse retrieval** | RAG Maturity §3 | Planned |
+| T3-8 | **BGE-M3 unified dense+sparse model** | RAG Maturity §3 | Planned |
+| T3-9 | **Entity-graph alignment check** (HalluGraph) | RAG Maturity §7 | Planned |
+| T3-10 | **GraphRAG community summaries** | RAG Maturity §6 | Planned |
+| T3-11 | **Kubernetes manifests / Helm charts** | Platform §9 | Planned |
+| T3-12 | **Automatic V1/Agentic graph routing** | RAG Maturity §6 | ✅ Fast queries → V1, standard/deep → agentic, `ENABLE_AUTO_GRAPH_ROUTING` |
+| T3-13 | **Adaptive retrieval depth** | RAG Maturity §5 | ✅ Per-query-type limits (factual=15, analytical=30, exploratory=40), `ENABLE_ADAPTIVE_RETRIEVAL_DEPTH` |
+| T3-14 | **OCR error correction** | RAG Maturity §1 | ✅ Regex ligature/legal term fixes + optional LLM cleanup, `ENABLE_OCR_CORRECTION` |
+| T3-15 | **Matryoshka dimensionality optimization** | RAG Maturity §3 | ✅ Query vector truncation for faster approximate search, `MATRYOSHKA_SEARCH_DIMENSIONS` |
 
 ---
 

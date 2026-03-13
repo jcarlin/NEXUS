@@ -1,6 +1,6 @@
 # Feature Flags Reference
 
-All 35 feature flags are defined in `app/config.py` (Settings class) and read from environment variables. They are aggregated into a `FeatureFlags` nested model at `Settings.features`. All default to `false` unless noted otherwise.
+All 41 feature flags are defined in `app/config.py` (Settings class) and read from environment variables. 38 are registered in `app/feature_flags/registry.py` and toggleable at runtime via the admin UI. All default to `false` unless noted otherwise.
 
 ## Runtime Toggling (Admin UI)
 
@@ -22,9 +22,9 @@ Each flag has a risk level that determines the toggle behavior:
 
 | Risk Level | Behavior | Count |
 |---|---|---|
-| **Safe** | Takes effect immediately, no side effects | 17 flags |
+| **Safe** | Takes effect immediately, no side effects | 25 flags |
 | **Cache Clear** | Clears DI singleton caches, may reload models on next request | 7 flags |
-| **Restart Required** | Saved to DB but requires server restart (router/middleware mounts) | 5 flags |
+| **Restart Required** | Saved to DB but requires server restart (router/middleware mounts) | 6 flags |
 
 ### Celery Caveat
 
@@ -352,3 +352,49 @@ Celery workers run in separate processes with their own Settings singleton. They
 - **Resources gated**: No DI singleton. Fire-and-forget background task after query response.
 - **Runtime impact**: Scoring is lightweight (no LLM calls — uses existing retrieval scores and verification results). Only samples a configurable percentage of queries.
 - **Related settings**: `QUALITY_MONITORING_SAMPLE_RATE` (default 0.1 = 10%)
+
+### Tier 3 Maturity
+
+#### `ENABLE_ADAPTIVE_RETRIEVAL_DEPTH`
+- **Default**: `false`
+- **Module**: `app/query/`
+- **Config key**: `Settings.enable_adaptive_retrieval_depth`
+- **Description**: Query-type-dependent retrieval depth. Factual queries retrieve fewer chunks (15 text, 8 graph), while exploratory queries retrieve more (40 text, 20 graph). Query type determined by the classifier node.
+- **Resources gated**: No DI singleton. Checked inline in retrieval logic.
+- **Runtime impact**: Adjusts retrieval call parameters. No additional model loading.
+- **Related settings**: `RETRIEVAL_DEPTH_FACTUAL_TEXT`, `RETRIEVAL_DEPTH_FACTUAL_GRAPH`, `RETRIEVAL_DEPTH_ANALYTICAL_TEXT`, `RETRIEVAL_DEPTH_ANALYTICAL_GRAPH`, `RETRIEVAL_DEPTH_COMPARATIVE_TEXT`, `RETRIEVAL_DEPTH_COMPARATIVE_GRAPH`, `RETRIEVAL_DEPTH_TEMPORAL_TEXT`, `RETRIEVAL_DEPTH_TEMPORAL_GRAPH`, `RETRIEVAL_DEPTH_PROCEDURAL_TEXT`, `RETRIEVAL_DEPTH_PROCEDURAL_GRAPH`, `RETRIEVAL_DEPTH_EXPLORATORY_TEXT`, `RETRIEVAL_DEPTH_EXPLORATORY_GRAPH`
+
+#### `ENABLE_AUTO_GRAPH_ROUTING`
+- **Default**: `false`
+- **Module**: `app/query/`
+- **Config key**: `Settings.enable_auto_graph_routing`
+- **Description**: Automatically routes simple factual queries to the V1 linear graph (faster, cheaper) and complex queries to the agentic graph. When disabled, routing is manual via the API `tier` parameter.
+- **Resources gated**: No DI singleton. Checked inline in query router.
+- **Runtime impact**: Adds one query classification call. Simple queries execute significantly faster via V1.
+- **Related settings**: `AGENTIC_RECURSION_LIMIT_FAST`, `AGENTIC_RECURSION_LIMIT_STANDARD`, `AGENTIC_RECURSION_LIMIT_DEEP`
+
+#### `ENABLE_OCR_CORRECTION`
+- **Default**: `false`
+- **Module**: `app/ingestion/`
+- **Config key**: `Settings.enable_ocr_correction`
+- **Description**: Post-OCR cleanup for scanned documents. Applies regex-based ligature fixes (ff→ff, fi→fi, etc.) and legal term corrections. Optional LLM-assisted correction for higher quality (expensive).
+- **Resources gated**: No DI singleton. Called inline during ingestion.
+- **Runtime impact**: Regex corrections are negligible (~1ms/chunk). LLM correction adds one LLM call per chunk when `OCR_CORRECTION_USE_LLM` is enabled.
+- **Related settings**: `OCR_CORRECTION_USE_LLM`
+
+#### `ENABLE_DATA_RETENTION`
+- **Default**: `false`
+- **Module**: `app/common/`
+- **Config key**: `Settings.enable_data_retention`
+- **Description**: Configurable per-matter data retention with automated purge after retention period. Law firms have ethical obligations to destroy matter data after retention expires.
+- **Resources gated**: No DI singleton. Checked by retention management endpoints and scheduled tasks.
+- **Runtime impact**: No impact on request path. Purge operations run as background tasks.
+
+#### `ENABLE_SAML`
+- **Default**: `false`
+- **Module**: `app/auth/`
+- **Config key**: `Settings.enable_saml`
+- **Description**: SAML 2.0 SSO authentication for enterprise identity providers (Okta, Azure AD, etc.). Extends the OIDC auth flow with SAML support.
+- **Resources gated**: SAML router mounted at startup when enabled.
+- **Runtime impact**: No startup cost beyond router registration. SAML assertion processing on auth requests.
+- **Related settings**: `SAML_ENTITY_ID`, `SAML_IDP_METADATA_URL`, `SAML_IDP_SSO_URL`, `SAML_IDP_CERT`

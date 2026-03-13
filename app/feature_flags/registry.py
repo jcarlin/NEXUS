@@ -235,6 +235,37 @@ FLAG_REGISTRY: dict[str, FlagMeta] = {
         category=FlagCategory.QUERY,
         risk_level=FlagRiskLevel.SAFE,
     ),
+    # --- Tier 3 Maturity flags ---
+    "enable_adaptive_retrieval_depth": FlagMeta(
+        display_name="Adaptive Retrieval Depth",
+        description="Query-type-dependent retrieval depth (factual=15, analytical=30, exploratory=40, etc.).",
+        category=FlagCategory.RETRIEVAL,
+        risk_level=FlagRiskLevel.SAFE,
+    ),
+    "enable_auto_graph_routing": FlagMeta(
+        display_name="Automatic Graph Routing",
+        description="Route simple factual queries to V1 (faster) and complex queries to agentic graph automatically.",
+        category=FlagCategory.QUERY,
+        risk_level=FlagRiskLevel.SAFE,
+    ),
+    "enable_ocr_correction": FlagMeta(
+        display_name="OCR Error Correction",
+        description="Regex-based ligature and legal term correction for scanned documents, with optional LLM cleanup.",
+        category=FlagCategory.INGESTION,
+        risk_level=FlagRiskLevel.SAFE,
+    ),
+    "enable_data_retention": FlagMeta(
+        display_name="Data Retention Policies",
+        description="Configurable per-matter data retention with automated purge after retention period.",
+        category=FlagCategory.AUDIT,
+        risk_level=FlagRiskLevel.SAFE,
+    ),
+    "enable_saml": FlagMeta(
+        display_name="SAML Authentication",
+        description="SAML 2.0 SSO authentication for enterprise identity providers.",
+        category=FlagCategory.INTEGRATIONS,
+        risk_level=FlagRiskLevel.RESTART,
+    ),
 }
 
 
