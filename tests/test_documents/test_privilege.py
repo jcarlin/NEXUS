@@ -255,6 +255,7 @@ async def test_qdrant_query_builds_must_not_filter() -> None:
     mock_settings.embedding_dimensions = 1024
     mock_settings.enable_visual_embeddings = False
     mock_settings.enable_sparse_embeddings = False
+    mock_settings.enable_multi_representation = False
 
     with patch("app.common.vector_store.QdrantClient"):
         vs = VectorStoreClient(mock_settings)

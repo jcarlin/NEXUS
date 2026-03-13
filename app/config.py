@@ -116,6 +116,9 @@ class FeatureFlags(BaseModel):
     hyde: bool
     self_reflection: bool
     text_to_sql: bool
+    document_summarization: bool
+    multi_representation: bool
+    production_quality_monitoring: bool
 
 
 class Settings(BaseSettings):
@@ -328,6 +331,17 @@ class Settings(BaseSettings):
     # --- Text-to-SQL Generation (T2-10) ---
     enable_text_to_sql: bool = False
 
+    # --- Document Summarization (T2-12) ---
+    enable_document_summarization: bool = False
+
+    # --- Multi-Representation Indexing (T2-11) ---
+    enable_multi_representation: bool = False
+    multi_representation_concurrency: int = 4
+
+    # --- Production Quality Monitoring (T2-5) ---
+    enable_production_quality_monitoring: bool = False
+    quality_monitoring_sample_rate: float = 0.1
+
     # --- Data Retention ---
     enable_data_retention: bool = False
     grading_model: str = ""  # Falls back to llm_model if empty
@@ -485,5 +499,8 @@ class Settings(BaseSettings):
                 hyde=self.enable_hyde,
                 self_reflection=self.enable_self_reflection,
                 text_to_sql=self.enable_text_to_sql,
+                document_summarization=self.enable_document_summarization,
+                multi_representation=self.enable_multi_representation,
+                production_quality_monitoring=self.enable_production_quality_monitoring,
             )
         return self

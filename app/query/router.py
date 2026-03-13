@@ -126,21 +126,48 @@ async def query(
 
     config = QueryService.build_graph_config(thread_id, settings, request.query)
     tier = "standard"
+    query_type = "factual"
     try:
         final_state = await graph.ainvoke(initial_state, config)
         tier = final_state.get("_tier", "standard")
+        query_type = final_state.get("_query_type", "factual") or "factual"
     except Exception:
-        from app.common.metrics import QUERY_DURATION, QUERY_TOTAL
+        from app.common.metrics import QUERY_DURATION, QUERY_TOTAL, QUERY_TYPE_DURATION, QUERY_TYPE_TOTAL
 
         QUERY_TOTAL.labels(tier=tier, status="error").inc()
         QUERY_DURATION.labels(tier=tier).observe(_time.perf_counter() - _query_start)
+        QUERY_TYPE_TOTAL.labels(query_type=query_type, status="error").inc()
+        QUERY_TYPE_DURATION.labels(query_type=query_type).observe(_time.perf_counter() - _query_start)
         raise
 
-    # Record success metrics (T1-8)
-    from app.common.metrics import QUERY_DURATION, QUERY_TOTAL
+    # Record success metrics (T1-8 + T2-4)
+    from app.common.metrics import (
+        FAITHFULNESS_SCORE,
+        QUERY_DURATION,
+        QUERY_TOTAL,
+        QUERY_TYPE_DURATION,
+        QUERY_TYPE_TOTAL,
+        RETRIEVAL_CONFIDENCE,
+    )
 
+    elapsed = _time.perf_counter() - _query_start
     QUERY_TOTAL.labels(tier=tier, status="success").inc()
-    QUERY_DURATION.labels(tier=tier).observe(_time.perf_counter() - _query_start)
+    QUERY_DURATION.labels(tier=tier).observe(elapsed)
+    QUERY_TYPE_TOTAL.labels(query_type=query_type, status="success").inc()
+    QUERY_TYPE_DURATION.labels(query_type=query_type).observe(elapsed)
+
+    # Record retrieval confidence: average score from source documents
+    source_docs = final_state.get("source_documents", [])
+    if source_docs:
+        avg_score = sum(d.get("score", 0) for d in source_docs) / len(source_docs)
+        RETRIEVAL_CONFIDENCE.labels(query_type=query_type).observe(avg_score)
+
+    # Record faithfulness: ratio of verified claims
+    cited_claims = final_state.get("cited_claims", [])
+    if cited_claims:
+        verified = sum(1 for c in cited_claims if c.get("verified", False))
+        faithfulness = verified / len(cited_claims) if cited_claims else 0.0
+        FAITHFULNESS_SCORE.labels(query_type=query_type).observe(faithfulness)
 
     # Extract response (agentic: from last AI message; v1: from response field)
     response_text = QueryService.extract_response(final_state, settings.enable_agentic_pipeline)
@@ -163,6 +190,23 @@ async def query(
 
     await db.commit()
 
+    # Fire-and-forget quality monitoring (T2-5)
+    if settings.enable_production_quality_monitoring:
+        import asyncio
+        import random
+
+        if random.random() < settings.quality_monitoring_sample_rate:
+            asyncio.ensure_future(
+                _score_and_record_quality(
+                    query=request.query,
+                    response=response_text,
+                    source_docs=final_state.get("source_documents", []),
+                    cited_claims=final_state.get("cited_claims", []),
+                    thread_id=thread_id,
+                    query_type=query_type,
+                )
+            )
+
     return QueryResponse(
         response=response_text,
         source_documents=[SourceDocument(**doc) for doc in final_state.get("source_documents", [])],
@@ -173,6 +217,71 @@ async def query(
         cited_claims=[CitedClaim(**c) for c in final_state.get("cited_claims", []) if "claim_text" in c],
         tier=final_state.get("_tier"),
     )
+
+
+# ------------------------------------------------------------------
+# Quality monitoring helper (T2-5)
+# ------------------------------------------------------------------
+
+
+async def _score_and_record_quality(
+    query: str,
+    response: str,
+    source_docs: list[dict],
+    cited_claims: list[dict],
+    thread_id: str,
+    query_type: str,
+) -> None:
+    """Score query quality and record to DB + Prometheus (fire-and-forget)."""
+    try:
+        from app.common.metrics import PRODUCTION_FAITHFULNESS, PRODUCTION_RETRIEVAL_RELEVANCE
+        from app.query.quality_monitor import score_query_quality
+
+        score = score_query_quality(
+            query=query,
+            response=response,
+            source_docs=source_docs,
+            cited_claims=cited_claims,
+        )
+
+        # Record to Prometheus
+        PRODUCTION_FAITHFULNESS.observe(score.faithfulness)
+        PRODUCTION_RETRIEVAL_RELEVANCE.observe(score.retrieval_relevance)
+
+        # Record to DB
+        from app.dependencies import get_session_factory
+
+        factory = get_session_factory()
+        async with factory() as session:
+            await session.execute(
+                text("""
+                    INSERT INTO query_quality_metrics
+                        (thread_id, query, query_type, retrieval_relevance,
+                         faithfulness, citation_density)
+                    VALUES
+                        (:thread_id, :query, :query_type, :retrieval_relevance,
+                         :faithfulness, :citation_density)
+                """),
+                {
+                    "thread_id": thread_id,
+                    "query": query[:500],  # Truncate to avoid storing huge queries
+                    "query_type": query_type,
+                    "retrieval_relevance": score.retrieval_relevance,
+                    "faithfulness": score.faithfulness,
+                    "citation_density": score.citation_density,
+                },
+            )
+            await session.commit()
+
+        logger.info(
+            "quality_monitor.recorded",
+            thread_id=thread_id,
+            retrieval_relevance=score.retrieval_relevance,
+            faithfulness=score.faithfulness,
+            citation_density=score.citation_density,
+        )
+    except Exception:
+        logger.warning("quality_monitor.failed", exc_info=True)
 
 
 # ------------------------------------------------------------------

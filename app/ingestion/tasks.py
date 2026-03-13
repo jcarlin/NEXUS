@@ -130,6 +130,7 @@ def _create_document_record(
     content_hash: str,
     matter_id: str | None = None,
     metadata: dict | None = None,
+    summary: str | None = None,
 ) -> str:
     """Insert a row into the ``documents`` table and return its id."""
     doc_id = str(uuid.uuid4())
@@ -144,11 +145,11 @@ def _create_document_record(
                 INSERT INTO documents
                     (id, job_id, filename, document_type, page_count, chunk_count,
                      entity_count, minio_path, file_size_bytes, content_hash,
-                     matter_id, metadata_, created_at, updated_at)
+                     matter_id, metadata_, summary, created_at, updated_at)
                 VALUES
                     (:id, :job_id, :filename, :doc_type, :page_count, :chunk_count,
                      :entity_count, :minio_path, :file_size, :content_hash,
-                     :matter_id, :metadata_, now(), now())
+                     :matter_id, :metadata_, :summary, now(), now())
                 """
             ),
             {
@@ -164,6 +165,7 @@ def _create_document_record(
                 "content_hash": content_hash,
                 "matter_id": matter_id,
                 "metadata_": metadata_json,
+                "summary": summary or None,
             },
         )
         conn.commit()
@@ -525,7 +527,11 @@ class _PipelineContext:
     # Populated by _stage_embed
     embeddings: list[list[float]] = field(default_factory=list)
     sparse_embeddings: list[tuple[list[int], list[float]]] = field(default_factory=list)
+    summary_embeddings: list[list[float]] = field(default_factory=list)
     visual_page_embeddings: list[dict[str, Any]] = field(default_factory=list)
+
+    # Populated by _stage_summarize
+    document_summary: str = ""
 
     # Populated by _stage_extract
     all_entities: list[dict] = field(default_factory=list)
@@ -733,6 +739,61 @@ def _stage_contextualize(ctx: _PipelineContext) -> None:
     _update_stage(ctx.engine, ctx.job_id, "embedding", "processing", progress=ctx.progress)
 
 
+def _stage_summarize(ctx: _PipelineContext) -> None:
+    """Stage 2c: Document + chunk summarization (feature-flagged).
+
+    When ``ENABLE_DOCUMENT_SUMMARIZATION`` is on, generates a 2-3 sentence
+    document summary from the first N chunks.
+    When ``ENABLE_MULTI_REPRESENTATION`` is on, generates a one-sentence
+    summary per chunk for multi-representation indexing.
+    """
+    has_doc_summary = ctx.settings.enable_document_summarization and ctx.chunks
+    has_chunk_summary = ctx.settings.enable_multi_representation and ctx.chunks
+
+    if not has_doc_summary and not has_chunk_summary:
+        return
+
+    from app.common.llm import LLMClient
+    from app.llm_config.resolver import resolve_llm_config_sync
+
+    # Resolve LLM from the "ingestion" tier
+    try:
+        config = resolve_llm_config_sync("ingestion", ctx.engine)
+        llm = LLMClient.from_resolved_config(config)
+    except Exception:
+        logger.warning("task.summarize_resolver_fallback", exc_info=True)
+        llm = LLMClient(ctx.settings)
+
+    # Document summary
+    if has_doc_summary:
+        try:
+            from app.ingestion.summarizer import summarize_document
+
+            ctx.document_summary = asyncio.run(summarize_document(ctx.chunks, llm, ctx.filename))
+            ctx.progress["document_summary_generated"] = True
+            logger.info("task.document_summarized", summary_length=len(ctx.document_summary))
+        except Exception:
+            logger.warning("task.document_summarization_failed", exc_info=True)
+
+    # Chunk summaries (multi-representation)
+    if has_chunk_summary:
+        try:
+            from app.ingestion.chunk_summarizer import summarize_chunks
+
+            ctx.chunks = asyncio.run(
+                summarize_chunks(
+                    ctx.chunks,
+                    llm,
+                    concurrency=ctx.settings.multi_representation_concurrency,
+                )
+            )
+            summarized = sum(1 for c in ctx.chunks if c.metadata.get("chunk_summary"))
+            ctx.progress["chunk_summaries_generated"] = summarized
+            logger.info("task.chunks_summarized", summarized=summarized, total=len(ctx.chunks))
+        except Exception:
+            logger.warning("task.chunk_summarization_failed", exc_info=True)
+
+
 def _stage_embed(ctx: _PipelineContext) -> None:
     """Stage 3: Dense + sparse (feature-flagged) + visual (feature-flagged) embeddings."""
     # If context_prefix exists, prepend it to chunk text for embedding
@@ -751,6 +812,17 @@ def _stage_embed(ctx: _PipelineContext) -> None:
         sparse_emb = SparseEmbedder(model_name=ctx.settings.sparse_embedding_model)
         ctx.sparse_embeddings = sparse_emb.embed_texts(chunk_texts)
         logger.info("task.sparse_embedded", count=len(ctx.sparse_embeddings))
+
+    # Summary embeddings for multi-representation indexing (feature-flagged)
+    ctx.summary_embeddings = []
+    if ctx.settings.enable_multi_representation and ctx.chunks:
+        summary_texts = [c.metadata.get("chunk_summary", "") for c in ctx.chunks]
+        # Only embed summaries that exist; use dense embedding for empty ones
+        if any(summary_texts):
+            ctx.summary_embeddings = asyncio.run(
+                _embed_chunks(ctx.settings, [t if t else "empty" for t in summary_texts])
+            )
+            logger.info("task.summary_embedded", count=len(ctx.summary_embeddings))
 
     # Visual embeddings (feature-flagged, experimental).
     # Acceptable degradation: visual embeddings are optional enrichment
@@ -906,8 +978,10 @@ def _stage_index(ctx: _PipelineContext) -> None:
             payload["quality_score"] = chunk.metadata["quality_score"]
         if chunk.context_prefix:
             payload["context_prefix"] = chunk.context_prefix
+        if chunk.metadata.get("chunk_summary"):
+            payload["chunk_summary"] = chunk.metadata["chunk_summary"]
 
-        # Build vector: named format when sparse enabled, unnamed otherwise
+        # Build vector: named format when sparse/multi-repr enabled, unnamed otherwise
         vector: dict[str, Any] | list[float]
         if ctx.sparse_embeddings:
             indices, values = ctx.sparse_embeddings[i]
@@ -915,9 +989,13 @@ def _stage_index(ctx: _PipelineContext) -> None:
                 "dense": embedding,
                 "sparse": SparseVector(indices=indices, values=values),
             }
-        elif ctx.settings.enable_sparse_embeddings:
-            # Sparse enabled but no sparse vectors (e.g. empty text)
+            if ctx.summary_embeddings and i < len(ctx.summary_embeddings):
+                vector["summary"] = ctx.summary_embeddings[i]
+        elif ctx.settings.enable_sparse_embeddings or ctx.settings.enable_multi_representation:
+            # Named vector format
             vector = {"dense": embedding}
+            if ctx.summary_embeddings and i < len(ctx.summary_embeddings):
+                vector["summary"] = ctx.summary_embeddings[i]
         else:
             vector = embedding
 
@@ -1044,6 +1122,7 @@ def _stage_complete(ctx: _PipelineContext) -> None:
         content_hash=ctx.content_hash,
         matter_id=ctx.matter_id,
         metadata=ctx.parse_result.metadata,
+        summary=ctx.document_summary or None,
     )
 
     # Update Qdrant payload with real document ID (was using job_id as placeholder)
@@ -1403,6 +1482,7 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
         _stage_parse,
         _stage_chunk,
         _stage_contextualize,
+        _stage_summarize,
         _stage_embed,
         _stage_extract,
         _stage_index,

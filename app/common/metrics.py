@@ -106,6 +106,52 @@ CONTEXT_WINDOW_USAGE = Histogram(
 )
 
 # ---------------------------------------------------------------------------
+# Per-query-type metrics (T2-4)
+# ---------------------------------------------------------------------------
+
+QUERY_TYPE_DURATION = Histogram(
+    "nexus_query_type_duration_seconds",
+    "Query pipeline latency segmented by query archetype",
+    labelnames=["query_type"],
+)
+
+QUERY_TYPE_TOTAL = Counter(
+    "nexus_query_type_total",
+    "Total queries processed by query archetype",
+    labelnames=["query_type", "status"],
+)
+
+RETRIEVAL_CONFIDENCE = Histogram(
+    "nexus_retrieval_confidence",
+    "Retrieval confidence score distribution by query type",
+    labelnames=["query_type"],
+    buckets=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+)
+
+FAITHFULNESS_SCORE = Histogram(
+    "nexus_faithfulness_score",
+    "Faithfulness score distribution by query type",
+    labelnames=["query_type"],
+    buckets=[0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+)
+
+# ---------------------------------------------------------------------------
+# Production quality monitoring metrics (T2-5)
+# ---------------------------------------------------------------------------
+
+PRODUCTION_FAITHFULNESS = Histogram(
+    "nexus_production_faithfulness",
+    "Production faithfulness score from sampled queries",
+    buckets=[0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+)
+
+PRODUCTION_RETRIEVAL_RELEVANCE = Histogram(
+    "nexus_production_retrieval_relevance",
+    "Production retrieval relevance from sampled queries",
+    buckets=[0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+)
+
+# ---------------------------------------------------------------------------
 # Helper
 # ---------------------------------------------------------------------------
 

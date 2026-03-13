@@ -5,17 +5,19 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
+from qdrant_client.models import Distance
 
 from app.common.vector_store import TEXT_COLLECTION, VISUAL_COLLECTION, VectorStoreClient
 
 
-def _make_settings(enable_sparse: bool = False, enable_visual: bool = False):
+def _make_settings(enable_sparse: bool = False, enable_visual: bool = False, enable_multi_repr: bool = False):
     """Create a minimal mock Settings."""
     s = MagicMock()
     s.qdrant_url = "http://localhost:6333"
     s.embedding_dimensions = 1024
     s.enable_visual_embeddings = enable_visual
     s.enable_sparse_embeddings = enable_sparse
+    s.enable_multi_representation = enable_multi_repr
     return s
 
 
@@ -261,3 +263,155 @@ async def test_query_visual(mock_qdrant_client):
     assert len(results) == 1
     assert results[0]["doc_id"] == "job1"
     assert results[0]["score"] == 0.85
+
+
+# ---------------------------------------------------------------------------
+# Multi-representation indexing tests
+# ---------------------------------------------------------------------------
+
+
+def test_ensure_collections_multi_repr_creates_summary_vector(mock_qdrant_client):
+    """When multi_repr enabled, collection includes 'summary' named vector."""
+    mock_qdrant_client.get_collections.return_value.collections = []
+
+    client = VectorStoreClient(_make_settings(enable_multi_repr=True))
+    import asyncio
+
+    asyncio.run(client.ensure_collections())
+
+    call_kwargs = mock_qdrant_client.create_collection.call_args_list[0].kwargs
+    assert call_kwargs["collection_name"] == TEXT_COLLECTION
+    # Named config is a dict with both dense and summary
+    assert isinstance(call_kwargs["vectors_config"], dict)
+    assert "dense" in call_kwargs["vectors_config"]
+    assert "summary" in call_kwargs["vectors_config"]
+
+    from qdrant_client.models import VectorParams
+
+    summary_config = call_kwargs["vectors_config"]["summary"]
+    assert isinstance(summary_config, VectorParams)
+    assert summary_config.size == 1024
+    assert summary_config.distance == Distance.COSINE
+
+
+@pytest.mark.asyncio
+async def test_upsert_with_summary_vector(mock_qdrant_client):
+    """When multi_repr enabled, upsert includes summary vector in named format."""
+    client = VectorStoreClient(_make_settings(enable_multi_repr=True))
+
+    chunks = [
+        {
+            "id": "p1",
+            "vector": [0.1] * 1024,
+            "payload": {"chunk_text": "hello"},
+            "summary_vector": [0.2] * 1024,
+        }
+    ]
+
+    await client.upsert_text_chunks(chunks)
+
+    call_args = mock_qdrant_client.upsert.call_args
+    point = call_args.kwargs["points"][0]
+    assert isinstance(point.vector, dict)
+    assert "dense" in point.vector
+    assert "summary" in point.vector
+    assert len(point.vector["summary"]) == 1024
+
+
+@pytest.mark.asyncio
+async def test_upsert_multi_repr_without_summary_vector(mock_qdrant_client):
+    """When multi_repr enabled but chunk lacks summary_vector, only dense is set."""
+    client = VectorStoreClient(_make_settings(enable_multi_repr=True))
+
+    chunks = [
+        {
+            "id": "p1",
+            "vector": [0.1] * 1024,
+            "payload": {"chunk_text": "hello"},
+        }
+    ]
+
+    await client.upsert_text_chunks(chunks)
+
+    call_args = mock_qdrant_client.upsert.call_args
+    point = call_args.kwargs["points"][0]
+    assert isinstance(point.vector, dict)
+    assert "dense" in point.vector
+    assert "summary" not in point.vector
+
+
+@pytest.mark.asyncio
+async def test_query_multi_repr_dense_only_uses_rrf(mock_qdrant_client):
+    """When multi_repr enabled (no sparse), query uses RRF between dense + summary."""
+    mock_qdrant_client.query_points.return_value.points = []
+
+    client = VectorStoreClient(_make_settings(enable_multi_repr=True))
+
+    await client.query_text(
+        vector=[0.1] * 1024,
+        limit=10,
+    )
+
+    call_kwargs = mock_qdrant_client.query_points.call_args.kwargs
+    assert "prefetch" in call_kwargs
+    assert len(call_kwargs["prefetch"]) == 2  # dense + summary
+
+    from qdrant_client.models import FusionQuery
+
+    assert isinstance(call_kwargs["query"], FusionQuery)
+
+    # Verify the using fields
+    prefetch_usings = [p.using for p in call_kwargs["prefetch"]]
+    assert "dense" in prefetch_usings
+    assert "summary" in prefetch_usings
+
+
+@pytest.mark.asyncio
+async def test_query_triple_rrf_with_sparse_and_multi_repr(mock_qdrant_client):
+    """When both sparse and multi_repr enabled, query uses triple RRF fusion."""
+    mock_qdrant_client.query_points.return_value.points = []
+
+    client = VectorStoreClient(_make_settings(enable_sparse=True, enable_multi_repr=True))
+
+    await client.query_text(
+        vector=[0.1] * 1024,
+        limit=10,
+        sparse_vector=([0, 5], [0.9, 0.4]),
+    )
+
+    call_kwargs = mock_qdrant_client.query_points.call_args.kwargs
+    assert "prefetch" in call_kwargs
+    assert len(call_kwargs["prefetch"]) == 3  # dense + sparse + summary
+
+    from qdrant_client.models import FusionQuery
+
+    assert isinstance(call_kwargs["query"], FusionQuery)
+
+    # Verify all three vector types in prefetch
+    prefetch_usings = [p.using for p in call_kwargs["prefetch"]]
+    assert "dense" in prefetch_usings
+    assert "sparse" in prefetch_usings
+    assert "summary" in prefetch_usings
+
+
+@pytest.mark.asyncio
+async def test_query_multi_repr_disabled_no_summary_prefetch(mock_qdrant_client):
+    """When multi_repr disabled, query does NOT include summary prefetch."""
+    mock_qdrant_client.query_points.return_value.points = []
+
+    client = VectorStoreClient(_make_settings(enable_sparse=True, enable_multi_repr=False))
+
+    await client.query_text(
+        vector=[0.1] * 1024,
+        limit=10,
+        sparse_vector=([0, 5], [0.9, 0.4]),
+    )
+
+    call_kwargs = mock_qdrant_client.query_points.call_args.kwargs
+    assert "prefetch" in call_kwargs
+    assert len(call_kwargs["prefetch"]) == 2  # dense + sparse only
+
+    prefetch_usings = [p.using for p in call_kwargs["prefetch"]]
+    assert "dense" in prefetch_usings
+    assert "sparse" in prefetch_usings
+    assert "summary" not in prefetch_usings

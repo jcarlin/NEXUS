@@ -18,3 +18,25 @@ Author: {author} | Date: {date}
 {numbered_chunks}
 
 Context sentences:"""
+
+# ---------------------------------------------------------------------------
+# Document summarization (T2-12)
+# ---------------------------------------------------------------------------
+
+DOC_SUMMARY_PROMPT = """\
+Summarize this legal document in 2-3 sentences. Include the document type, \
+key parties, and main subject matter.
+
+Document: {filename}
+
+Content:
+{content}"""
+
+# ---------------------------------------------------------------------------
+# Chunk summarization for multi-representation indexing (T2-11)
+# ---------------------------------------------------------------------------
+
+CHUNK_SUMMARY_PROMPT = """\
+Summarize the following passage from a legal document in one sentence:
+
+{chunk_text}"""
