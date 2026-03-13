@@ -42,3 +42,23 @@ groups:
         annotations:
           summary: "Ingestion failure rate exceeds 20%"
           description: "{{ $value | humanizePercentage }} of ingestion jobs are failing."
+
+      - alert: ProductionFaithfulnessLow
+        expr: >
+          histogram_quantile(0.50, rate(nexus_production_faithfulness_bucket[24h])) < 0.85
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Rolling 24h production faithfulness below 0.85"
+          description: "Median faithfulness score is {{ $value }} over the last 24 hours."
+
+      - alert: ProductionRetrievalRelevanceLow
+        expr: >
+          histogram_quantile(0.50, rate(nexus_production_retrieval_relevance_bucket[24h])) < 0.5
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Rolling 24h retrieval relevance below 0.5"
+          description: "Median retrieval relevance is {{ $value }} over the last 24 hours."

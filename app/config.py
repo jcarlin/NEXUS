@@ -111,6 +111,9 @@ class FeatureFlags(BaseModel):
     prompt_routing: bool
     question_decomposition: bool
     data_retention: bool
+    document_summarization: bool
+    multi_representation: bool
+    production_quality_monitoring: bool
 
 
 class Settings(BaseSettings):
@@ -307,6 +310,17 @@ class Settings(BaseSettings):
     # --- Question Decomposition (T1-10) ---
     enable_question_decomposition: bool = False
 
+    # --- Document Summarization ---
+    enable_document_summarization: bool = False
+
+    # --- Multi-Representation Indexing ---
+    enable_multi_representation: bool = False
+    multi_representation_concurrency: int = 4
+
+    # --- Production Quality Monitoring ---
+    enable_production_quality_monitoring: bool = False
+    quality_monitoring_sample_rate: float = 0.1
+
     # --- Data Retention ---
     enable_data_retention: bool = False
     grading_model: str = ""  # Falls back to llm_model if empty
@@ -459,5 +473,8 @@ class Settings(BaseSettings):
                 prompt_routing=self.enable_prompt_routing,
                 question_decomposition=self.enable_question_decomposition,
                 data_retention=self.enable_data_retention,
+                document_summarization=self.enable_document_summarization,
+                multi_representation=self.enable_multi_representation,
+                production_quality_monitoring=self.enable_production_quality_monitoring,
             )
         return self

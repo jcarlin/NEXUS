@@ -26,6 +26,7 @@ class DocumentResponse(BaseModel):
     duplicate_cluster_id: str | None = None
     version_group_id: str | None = None
     hot_doc_score: float | None = None
+    summary: str | None = None
 
 
 class DocumentDetail(DocumentResponse):

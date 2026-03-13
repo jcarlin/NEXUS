@@ -52,7 +52,13 @@ class VectorStoreClient:
         self._embedding_dim = settings.embedding_dimensions
         self._enable_visual = settings.enable_visual_embeddings
         self._enable_sparse = settings.enable_sparse_embeddings
-        logger.info("qdrant.init", url=settings.qdrant_url, sparse=self._enable_sparse)
+        self._enable_multi_repr = settings.enable_multi_representation
+        logger.info(
+            "qdrant.init",
+            url=settings.qdrant_url,
+            sparse=self._enable_sparse,
+            multi_repr=self._enable_multi_repr,
+        )
 
     # ------------------------------------------------------------------
     # Collection management
@@ -68,24 +74,33 @@ class VectorStoreClient:
 
         # --- Text collection ---
         if TEXT_COLLECTION not in existing:
-            if self._enable_sparse:
-                # Named vectors: dense (1024d COSINE) + sparse (BM42)
-                self.client.create_collection(
-                    collection_name=TEXT_COLLECTION,
-                    vectors_config={
-                        "dense": VectorParams(
-                            size=self._embedding_dim,
-                            distance=Distance.COSINE,
-                        ),
-                    },
-                    sparse_vectors_config={
-                        "sparse": SparseVectorParams(),
-                    },
-                )
+            if self._enable_sparse or self._enable_multi_repr:
+                # Named vectors: dense (1024d COSINE) + optional summary + sparse (BM42)
+                named_vectors: dict[str, VectorParams] = {
+                    "dense": VectorParams(
+                        size=self._embedding_dim,
+                        distance=Distance.COSINE,
+                    ),
+                }
+                if self._enable_multi_repr:
+                    named_vectors["summary"] = VectorParams(
+                        size=self._embedding_dim,
+                        distance=Distance.COSINE,
+                    )
+                sparse_config = {"sparse": SparseVectorParams()} if self._enable_sparse else None
+                create_kwargs: dict[str, Any] = {
+                    "collection_name": TEXT_COLLECTION,
+                    "vectors_config": named_vectors,
+                }
+                if sparse_config:
+                    create_kwargs["sparse_vectors_config"] = sparse_config
+                self.client.create_collection(**create_kwargs)
                 logger.info(
                     "qdrant.collection_created",
                     name=TEXT_COLLECTION,
-                    mode="named+sparse",
+                    mode="named"
+                    + ("+sparse" if self._enable_sparse else "")
+                    + ("+summary" if self._enable_multi_repr else ""),
                     dim=self._embedding_dim,
                 )
             else:
@@ -115,6 +130,28 @@ class VectorStoreClient:
                         name=TEXT_COLLECTION,
                         added="sparse_vectors",
                     )
+            # Upgrade: add summary vector if multi-repr enabled but missing
+            if self._enable_multi_repr:
+                info = self.client.get_collection(TEXT_COLLECTION)
+                existing_vectors = info.config.params.vectors
+                has_summary = isinstance(existing_vectors, dict) and "summary" in existing_vectors
+                if not has_summary:
+                    # Need to ensure collection uses named vectors first
+                    if isinstance(existing_vectors, dict):
+                        self.client.update_collection(
+                            collection_name=TEXT_COLLECTION,
+                            vectors_config={
+                                "summary": VectorParams(
+                                    size=self._embedding_dim,
+                                    distance=Distance.COSINE,
+                                ),
+                            },
+                        )
+                        logger.info(
+                            "qdrant.collection_upgraded",
+                            name=TEXT_COLLECTION,
+                            added="summary_vector",
+                        )
             logger.info("qdrant.collection_exists", name=TEXT_COLLECTION)
 
         # --- Visual collection (multi-vector MaxSim for ColQwen2.5 reranking) ---
@@ -146,14 +183,16 @@ class VectorStoreClient:
           - ``vector``  (list[float]) -- dense embedding
           - ``payload`` (dict) -- arbitrary metadata stored alongside the vector
           - ``sparse_vector`` (optional dict with ``indices`` and ``values``)
+          - ``summary_vector`` (optional list[float]) -- summary embedding for multi-repr
         """
         points = []
         for chunk in chunks:
             point_id = chunk.get("id") or str(uuid.uuid4())
             payload = chunk.get("payload", {})
             sparse = chunk.get("sparse_vector")
+            summary_vec = chunk.get("summary_vector")
 
-            if self._enable_sparse or sparse is not None:
+            if self._enable_sparse or self._enable_multi_repr or sparse is not None:
                 # Named vector format
                 vector: dict[str, Any] = {"dense": chunk["vector"]}
                 if sparse is not None:
@@ -161,6 +200,8 @@ class VectorStoreClient:
                         indices=sparse["indices"],
                         values=sparse["values"],
                     )
+                if summary_vec is not None and self._enable_multi_repr:
+                    vector["summary"] = summary_vec
                 points.append(PointStruct(id=point_id, vector=vector, payload=payload))
             else:
                 # Unnamed vector (backward compatible)
@@ -224,26 +265,46 @@ class VectorStoreClient:
         if sparse_vector is not None and self._enable_sparse:
             # Native RRF fusion via prefetch
             sv = SparseVector(indices=sparse_vector[0], values=sparse_vector[1])
+            prefetches = [
+                Prefetch(query=vector, using="dense", limit=limit * prefetch_multiplier, filter=qdrant_filter),
+                Prefetch(query=sv, using="sparse", limit=limit * prefetch_multiplier, filter=qdrant_filter),
+            ]
+            # Multi-representation: add summary vector prefetch for triple RRF
+            if self._enable_multi_repr:
+                prefetches.append(
+                    Prefetch(query=vector, using="summary", limit=limit * prefetch_multiplier, filter=qdrant_filter),
+                )
             results = self.client.query_points(
                 collection_name=TEXT_COLLECTION,
-                prefetch=[
-                    Prefetch(query=vector, using="dense", limit=limit * prefetch_multiplier, filter=qdrant_filter),
-                    Prefetch(query=sv, using="sparse", limit=limit * prefetch_multiplier, filter=qdrant_filter),
-                ],
+                prefetch=prefetches,
                 query=FusionQuery(fusion=Fusion.RRF),
                 limit=limit,
                 with_payload=True,
             )
-        elif self._enable_sparse:
-            # Sparse enabled but no sparse vector — dense-only with named vector
-            results = self.client.query_points(
-                collection_name=TEXT_COLLECTION,
-                query=vector,
-                using="dense",
-                limit=limit,
-                query_filter=qdrant_filter,
-                with_payload=True,
-            )
+        elif self._enable_sparse or self._enable_multi_repr:
+            # Named vectors mode — dense-only or with summary prefetch
+            if self._enable_multi_repr:
+                # RRF between dense and summary
+                prefetches = [
+                    Prefetch(query=vector, using="dense", limit=limit * prefetch_multiplier, filter=qdrant_filter),
+                    Prefetch(query=vector, using="summary", limit=limit * prefetch_multiplier, filter=qdrant_filter),
+                ]
+                results = self.client.query_points(
+                    collection_name=TEXT_COLLECTION,
+                    prefetch=prefetches,
+                    query=FusionQuery(fusion=Fusion.RRF),
+                    limit=limit,
+                    with_payload=True,
+                )
+            else:
+                results = self.client.query_points(
+                    collection_name=TEXT_COLLECTION,
+                    query=vector,
+                    using="dense",
+                    limit=limit,
+                    query_filter=qdrant_filter,
+                    with_payload=True,
+                )
         else:
             # Unnamed vector (backward compatible)
             results = self.client.query_points(
