@@ -18,6 +18,7 @@ vi.mock("@tanstack/react-router", () => ({
     search?: Record<string, unknown>;
   }) => <a href={props.to}>{children}</a>,
   useParams: () => ({}),
+  useNavigate: () => vi.fn(),
 }));
 
 vi.mock("@tanstack/react-query", () => ({

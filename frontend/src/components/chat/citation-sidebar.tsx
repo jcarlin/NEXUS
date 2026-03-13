@@ -7,8 +7,9 @@ import {
   ArrowLeft,
   ChevronLeft,
   ChevronRight,
+  Eye,
 } from "lucide-react";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -21,6 +22,7 @@ import { useCitationStore } from "@/stores/citation-store";
 function CompactView() {
   const { activeSource, allSources, close, setActiveSource, expandView } =
     useCitationStore();
+  const navigate = useNavigate();
 
   return (
     <div className="flex h-full flex-col" data-testid="citation-sidebar">
@@ -103,6 +105,26 @@ function CompactView() {
                   >
                     <Expand className="h-3.5 w-3.5" />
                     Expand View
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="justify-start gap-2 text-xs"
+                    data-testid="view-in-document"
+                    onClick={() => {
+                      const docId = activeSource.doc_id ?? activeSource.id;
+                      navigate({
+                        to: "/documents/$id",
+                        params: { id: docId },
+                        search: {
+                          page: activeSource.page ?? undefined,
+                          highlight: activeSource.chunk_text ?? undefined,
+                        },
+                      });
+                    }}
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                    View in Document
                   </Button>
                   <Button
                     variant="outline"
