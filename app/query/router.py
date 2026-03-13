@@ -99,7 +99,16 @@ async def query(
 
         dataset_doc_ids = await DatasetService.get_document_ids_for_dataset(db, request.dataset_id, matter_id)
 
-    if settings.enable_agentic_pipeline:
+    # Auto graph routing (T3-12): classify query and route fast→V1, standard/deep→agentic
+    use_agentic = settings.enable_agentic_pipeline
+    if settings.enable_auto_graph_routing:
+        from app.query.nodes import classify_tier
+
+        auto_tier = classify_tier(request.query)
+        use_agentic = auto_tier != "fast"
+        logger.info("query.auto_route", tier=auto_tier, use_agentic=use_agentic)
+
+    if use_agentic:
         initial_state = QueryService.build_agentic_state(
             query=request.query,
             messages=messages,
@@ -170,7 +179,7 @@ async def query(
         FAITHFULNESS_SCORE.labels(query_type=query_type).observe(faithfulness)
 
     # Extract response (agentic: from last AI message; v1: from response field)
-    response_text = QueryService.extract_response(final_state, settings.enable_agentic_pipeline)
+    response_text = QueryService.extract_response(final_state, use_agentic)
 
     # Save user message
     await ChatService.save_message(db, thread_id, "user", request.query, matter_id=matter_id)
@@ -324,7 +333,16 @@ async def query_stream(
 
         dataset_doc_ids = await DatasetService.get_document_ids_for_dataset(db, request.dataset_id, matter_id)
 
-    if settings.enable_agentic_pipeline:
+    # Auto graph routing (T3-12): classify query and route fast→V1, standard/deep→agentic
+    use_agentic = settings.enable_agentic_pipeline
+    if settings.enable_auto_graph_routing:
+        from app.query.nodes import classify_tier
+
+        auto_tier = classify_tier(request.query)
+        use_agentic = auto_tier != "fast"
+        logger.info("query_stream.auto_route", tier=auto_tier, use_agentic=use_agentic)
+
+    if use_agentic:
         initial_state = QueryService.build_agentic_state(
             query=request.query,
             messages=messages,
@@ -351,7 +369,7 @@ async def query_stream(
 
     config = QueryService.build_graph_config(thread_id, settings, request.query)
 
-    if settings.enable_agentic_pipeline:
+    if use_agentic:
         return EventSourceResponse(
             _agentic_event_generator(graph, initial_state, config, db, thread_id, request.query, matter_id)
         )

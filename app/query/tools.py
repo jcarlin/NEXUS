@@ -61,6 +61,13 @@ async def vector_search(
         from app.config import Settings
 
         settings = Settings()
+
+        # Adaptive retrieval depth (T3-13)
+        if settings.enable_adaptive_retrieval_depth:
+            adaptive_limit = state.get("_adaptive_text_limit")
+            if adaptive_limit:
+                limit = adaptive_limit
+
         hyde_vector: list[float] | None = None
         if settings.enable_hyde:
             from app.dependencies import get_embedder, get_llm
@@ -167,6 +174,15 @@ async def graph_query(
     from app.dependencies import get_graph_service
 
     try:
+        # Adaptive retrieval depth (T3-13)
+        from app.config import Settings
+
+        settings = Settings()
+        if settings.enable_adaptive_retrieval_depth:
+            adaptive_limit = state.get("_adaptive_graph_limit")
+            if adaptive_limit:
+                limit = adaptive_limit
+
         gs = get_graph_service()
         filters = state.get("_filters", {})
         matter_id = filters.get("matter_id", "")

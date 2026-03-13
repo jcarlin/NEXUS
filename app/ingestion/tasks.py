@@ -642,6 +642,31 @@ def _stage_parse(ctx: _PipelineContext) -> None:
     _update_stage(ctx.engine, ctx.job_id, "chunking", "processing", progress=ctx.progress)
 
 
+def _stage_ocr_correct(ctx: _PipelineContext) -> None:
+    """Stage 1b: OCR error correction (feature-flagged).
+
+    Applies regex-based OCR corrections to parsed text. Skipped when
+    ``ENABLE_OCR_CORRECTION`` is ``false``.
+    """
+    if not ctx.settings.enable_ocr_correction or not ctx.parse_result:
+        return
+
+    from app.ingestion.ocr_corrector import OCRCorrector
+
+    corrector = OCRCorrector(use_llm=ctx.settings.ocr_correction_use_llm)
+    original_text = ctx.parse_result.text
+    corrected_text, correction_count = corrector.correct(original_text)
+
+    if correction_count > 0:
+        ctx.parse_result.text = corrected_text
+        logger.info(
+            "task.ocr_corrected",
+            corrections=correction_count,
+            original_length=len(original_text),
+            corrected_length=len(corrected_text),
+        )
+
+
 def _stage_chunk(ctx: _PipelineContext) -> None:
     """Stage 2: Semantic chunking + document type inference."""
     from app.ingestion.chunker import TextChunker
@@ -1480,6 +1505,7 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
 
     stages = [
         _stage_parse,
+        _stage_ocr_correct,
         _stage_chunk,
         _stage_contextualize,
         _stage_summarize,

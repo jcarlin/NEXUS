@@ -61,6 +61,55 @@
   --radius-xl: 0.75rem;
 }
 
+.light {
+  --color-background: oklch(0.985 0.002 260);
+  --color-foreground: oklch(0.145 0.004 260);
+  --color-card: oklch(0.97 0.003 260);
+  --color-card-foreground: oklch(0.185 0.005 260);
+  --color-popover: oklch(0.97 0.003 260);
+  --color-popover-foreground: oklch(0.185 0.005 260);
+
+  --color-primary: oklch(0.55 0.169 237.323);
+  --color-primary-foreground: oklch(0.985 0 0);
+
+  --color-secondary: oklch(0.93 0.005 260);
+  --color-secondary-foreground: oklch(0.185 0.005 260);
+  --color-muted: oklch(0.93 0.005 260);
+  --color-muted-foreground: oklch(0.45 0.01 260);
+  --color-accent: oklch(0.94 0.008 260);
+  --color-accent-foreground: oklch(0.185 0.005 260);
+  --color-destructive: oklch(0.577 0.245 27.325);
+  --color-destructive-foreground: oklch(0.985 0 0);
+  --color-border: oklch(0.88 0.006 260);
+  --color-input: oklch(0.88 0.006 260);
+  --color-ring: oklch(0.55 0.169 237.323);
+
+  --color-amber: oklch(0.65 0.18 75);
+  --color-amber-foreground: oklch(0.15 0.04 75);
+
+  --color-chart-1: oklch(0.488 0.243 264.376);
+  --color-chart-2: oklch(0.696 0.17 162.48);
+  --color-chart-3: oklch(0.769 0.188 70.08);
+  --color-chart-4: oklch(0.627 0.265 303.9);
+  --color-chart-5: oklch(0.645 0.246 16.439);
+
+  --color-sidebar: oklch(0.96 0.003 260);
+  --color-sidebar-foreground: oklch(0.145 0.004 260);
+  --color-sidebar-primary: oklch(0.55 0.169 237.323);
+  --color-sidebar-primary-foreground: oklch(0.985 0 0);
+  --color-sidebar-accent: oklch(0.92 0.01 260);
+  --color-sidebar-accent-foreground: oklch(0.185 0.005 260);
+  --color-sidebar-border: oklch(0.88 0.006 260);
+  --color-sidebar-ring: oklch(0.55 0.169 237.323);
+
+  --color-entity-person: oklch(0.55 0.15 250);
+  --color-entity-org: oklch(0.58 0.17 165);
+  --color-entity-location: oklch(0.58 0.16 55);
+  --color-entity-date: oklch(0.52 0.18 290);
+  --color-entity-money: oklch(0.55 0.18 345);
+  --color-entity-default: oklch(0.5 0.02 260);
+}
+
 @layer base {
   * {
     @apply border-border;

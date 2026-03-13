@@ -1,6 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
-import { LogOut, User } from "lucide-react";
+import { LogOut, Moon, Sun, User } from "lucide-react";
 import { useAuthStore } from "@/stores/auth-store";
+import { useTheme } from "@/hooks/use-theme";
 import { MatterSelector } from "./matter-selector";
 import { DatasetSelector } from "@/components/datasets/dataset-selector";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ export function Header() {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const navigate = useNavigate();
+  const { resolved, toggle } = useTheme();
 
   function handleLogout() {
     logout();
@@ -40,6 +42,19 @@ export function Header() {
       </div>
 
       <div className="flex items-center gap-3">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          onClick={toggle}
+          aria-label={`Switch to ${resolved === "dark" ? "light" : "dark"} mode`}
+        >
+          {resolved === "dark" ? (
+            <Sun className="h-4 w-4" />
+          ) : (
+            <Moon className="h-4 w-4" />
+          )}
+        </Button>
         <kbd className="hidden rounded border bg-muted px-2 py-0.5 text-xs text-muted-foreground sm:inline-block">
           Ctrl+K
         </kbd>

@@ -133,9 +133,9 @@ class QueryService:
         """Build the LangGraph config dict with checkpointer thread_id and recursion_limit."""
         config: dict[str, Any] = {"configurable": {"thread_id": thread_id}}
         if settings.enable_agentic_pipeline:
-            from app.query.nodes import _classify_tier
+            from app.query.nodes import classify_tier
 
-            tier = _classify_tier(query) if query else "standard"
+            tier = classify_tier(query) if query else "standard"
             limits = {
                 "fast": settings.agentic_recursion_limit_fast,
                 "standard": settings.agentic_recursion_limit_standard,

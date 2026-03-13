@@ -245,11 +245,22 @@ class VectorStoreClient:
     ) -> list[dict[str, Any]]:
         """Search ``nexus_text``. Uses RRF fusion when sparse vector is provided.
 
+        Matryoshka dimensionality optimization (T3-15): when enabled, truncates
+        query vectors to fewer dimensions for faster approximate search.
+
         Per-modality prefetch multipliers (T2-9):
         - *dense_prefetch_multiplier*: multiplier for dense prefetch limit.
         - *sparse_prefetch_multiplier*: multiplier for sparse prefetch limit.
         If not provided, falls back to the shared *prefetch_multiplier*.
         """
+        # Matryoshka dimensionality optimization (T3-15):
+        # Truncate query vector to fewer dimensions for faster search.
+        from app.dependencies import get_settings
+
+        _settings = get_settings()
+        if _settings.matryoshka_search_dimensions > 0 and len(vector) > _settings.matryoshka_search_dimensions:
+            vector = vector[: _settings.matryoshka_search_dimensions]
+
         # Resolve per-modality multipliers (T2-9)
         dense_mult = dense_prefetch_multiplier if dense_prefetch_multiplier is not None else prefetch_multiplier
         sparse_mult = sparse_prefetch_multiplier if sparse_prefetch_multiplier is not None else prefetch_multiplier

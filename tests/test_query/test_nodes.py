@@ -9,7 +9,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.query.nodes import (
-    _classify_tier,
     _decompose_claims,
     _format_chat_history,
     _format_context,
@@ -17,6 +16,7 @@ from app.query.nodes import (
     _verify_single_claim,
     audit_log_hook,
     build_system_prompt,
+    classify_tier,
     create_nodes,
     post_agent_extract,
 )
@@ -735,61 +735,61 @@ async def test_audit_log_hook_fires_and_forgets():
 
 
 # ---------------------------------------------------------------------------
-# _classify_tier tests
+# classify_tier tests
 # ---------------------------------------------------------------------------
 
 
-def test_classify_tier_question_mark_fast():
+def testclassify_tier_question_mark_fast():
     """Short query with ? should be fast tier."""
-    assert _classify_tier("Who is John Doe?") == "fast"
+    assert classify_tier("Who is John Doe?") == "fast"
 
 
-def test_classify_tier_no_question_mark_with_interrogative():
+def testclassify_tier_no_question_mark_with_interrogative():
     """Short query starting with interrogative word, no ? — still fast."""
-    assert _classify_tier("who is the main lawyer") == "fast"
+    assert classify_tier("who is the main lawyer") == "fast"
 
 
-def test_classify_tier_who_are():
-    assert _classify_tier("who are the key parties") == "fast"
+def testclassify_tier_who_are():
+    assert classify_tier("who are the key parties") == "fast"
 
 
-def test_classify_tier_what_is():
-    assert _classify_tier("what is the settlement amount") == "fast"
+def testclassify_tier_what_is():
+    assert classify_tier("what is the settlement amount") == "fast"
 
 
-def test_classify_tier_when_did():
-    assert _classify_tier("when did the contract expire") == "fast"
+def testclassify_tier_when_did():
+    assert classify_tier("when did the contract expire") == "fast"
 
 
-def test_classify_tier_list_the():
-    assert _classify_tier("list the defendants") == "fast"
+def testclassify_tier_list_the():
+    assert classify_tier("list the defendants") == "fast"
 
 
-def test_classify_tier_which():
-    assert _classify_tier("which documents mention Epstein") == "fast"
+def testclassify_tier_which():
+    assert classify_tier("which documents mention Epstein") == "fast"
 
 
-def test_classify_tier_deep_compare():
-    assert _classify_tier("compare the testimonies of witness A and witness B") == "deep"
+def testclassify_tier_deep_compare():
+    assert classify_tier("compare the testimonies of witness A and witness B") == "deep"
 
 
-def test_classify_tier_deep_long_query():
+def testclassify_tier_deep_long_query():
     long_query = " ".join(["word"] * 35)
-    assert _classify_tier(long_query) == "deep"
+    assert classify_tier(long_query) == "deep"
 
 
-def test_classify_tier_deep_analyze():
-    assert _classify_tier("analyze the relationship between the parties") == "deep"
+def testclassify_tier_deep_analyze():
+    assert classify_tier("analyze the relationship between the parties") == "deep"
 
 
-def test_classify_tier_standard_medium_length():
+def testclassify_tier_standard_medium_length():
     """Medium-length query without fast markers or deep markers → standard."""
-    assert _classify_tier("tell me about the financial transactions in this case") == "standard"
+    assert classify_tier("tell me about the financial transactions in this case") == "standard"
 
 
-def test_classify_tier_standard_imperative_no_marker():
+def testclassify_tier_standard_imperative_no_marker():
     """Imperative without recognized fast opener → standard."""
-    assert _classify_tier("describe the events leading up to the settlement") == "standard"
+    assert classify_tier("describe the events leading up to the settlement") == "standard"
 
 
 # ---------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 """Prompt templates for the ingestion pipeline.
 
-Used by the contextual chunk enrichment stage (feature-flagged).
+Used by the contextual chunk enrichment stage and OCR correction (feature-flagged).
 """
 
 CONTEXT_SYSTEM_PROMPT = """\
@@ -40,3 +40,16 @@ CHUNK_SUMMARY_PROMPT = """\
 Summarize the following passage from a legal document in one sentence:
 
 {chunk_text}"""
+
+# ---------------------------------------------------------------------------
+# OCR error correction (T3-14)
+# ---------------------------------------------------------------------------
+
+OCR_CORRECTION_PROMPT = """\
+Fix OCR errors in the following legal document text. \
+Only fix clear OCR misrecognitions (wrong characters, broken words). \
+Do NOT change meaning, add content, or rephrase. \
+Return ONLY the corrected text with no explanation.
+
+Text:
+{chunk}"""
