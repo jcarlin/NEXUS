@@ -336,8 +336,8 @@ class Settings(BaseSettings):
     retrieval_depth_analytical_graph: int = 15
     retrieval_depth_comparative_text: int = 35
     retrieval_depth_comparative_graph: int = 20
-    retrieval_depth_temporal_text: int = 25
-    retrieval_depth_temporal_graph: int = 12
+    retrieval_depth_timeline_text: int = 25
+    retrieval_depth_timeline_graph: int = 12
     retrieval_depth_procedural_text: int = 20
     retrieval_depth_procedural_graph: int = 10
     retrieval_depth_exploratory_text: int = 40

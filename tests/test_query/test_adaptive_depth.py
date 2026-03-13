@@ -17,8 +17,8 @@ class TestAdaptiveDepthConfig:
             assert s.retrieval_depth_analytical_graph == 15
             assert s.retrieval_depth_comparative_text == 35
             assert s.retrieval_depth_comparative_graph == 20
-            assert s.retrieval_depth_temporal_text == 25
-            assert s.retrieval_depth_temporal_graph == 12
+            assert s.retrieval_depth_timeline_text == 25
+            assert s.retrieval_depth_timeline_graph == 12
             assert s.retrieval_depth_procedural_text == 20
             assert s.retrieval_depth_procedural_graph == 10
             assert s.retrieval_depth_exploratory_text == 40
@@ -36,7 +36,7 @@ class TestAdaptiveDepthConfig:
         from app.config import Settings
 
         s = Settings()
-        for qt in ["factual", "analytical", "comparative", "temporal", "procedural", "exploratory"]:
+        for qt in ["factual", "analytical", "comparative", "timeline", "procedural", "exploratory"]:
             text_val = getattr(s, f"retrieval_depth_{qt}_text")
             graph_val = getattr(s, f"retrieval_depth_{qt}_graph")
             assert isinstance(text_val, int) and text_val > 0

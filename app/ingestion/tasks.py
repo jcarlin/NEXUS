@@ -12,6 +12,7 @@ its own database connections and tears them down on completion.
 from __future__ import annotations
 
 import asyncio
+import functools
 import hashlib
 import json
 import tempfile
@@ -307,10 +308,22 @@ def _upload_to_minio(settings, key: str, data: bytes, content_type: str = "image
 # ---------------------------------------------------------------------------
 
 
+@functools.lru_cache(maxsize=1)
+def _get_bgem3_provider(model_name: str, max_length: int, batch_size: int, use_fp16: bool):
+    """Return a cached BGEM3Provider instance (one per Celery worker process)."""
+    from app.common.embedder import BGEM3Provider
+
+    return BGEM3Provider(
+        model_name=model_name,
+        max_length=max_length,
+        batch_size=batch_size,
+        use_fp16=use_fp16,
+    )
+
+
 async def _embed_chunks(settings, chunk_texts: list[str]) -> list[list[float]]:
     """Embed chunk texts using the configured embedding provider."""
     from app.common.embedder import (
-        BGEM3Provider,
         EmbeddingProvider,
         GeminiEmbeddingProvider,
         LocalEmbeddingProvider,
@@ -321,7 +334,7 @@ async def _embed_chunks(settings, chunk_texts: list[str]) -> list[list[float]]:
 
     provider: EmbeddingProvider
     if settings.embedding_provider == "bgem3":
-        provider = BGEM3Provider(
+        provider = _get_bgem3_provider(
             model_name=settings.bgem3_model_name,
             max_length=settings.bgem3_max_length,
             batch_size=settings.bgem3_batch_size,
@@ -834,9 +847,7 @@ def _stage_embed(ctx: _PipelineContext) -> None:
 
     # BGE-M3 unified path: single forward pass for both dense + sparse
     if ctx.settings.embedding_provider == "bgem3" and chunk_texts:
-        from app.common.embedder import BGEM3Provider
-
-        bgem3 = BGEM3Provider(
+        bgem3 = _get_bgem3_provider(
             model_name=ctx.settings.bgem3_model_name,
             max_length=ctx.settings.bgem3_max_length,
             batch_size=ctx.settings.bgem3_batch_size,
@@ -854,8 +865,6 @@ def _stage_embed(ctx: _PipelineContext) -> None:
         ctx.embeddings = []
 
     # Sparse embeddings (feature-flagged) — skip if already populated by BGE-M3
-    if not ctx.sparse_embeddings:
-        ctx.sparse_embeddings = []
     if ctx.settings.enable_sparse_embeddings and chunk_texts and not ctx.sparse_embeddings:
         from app.ingestion.sparse_embedder import SparseEmbedder
 
@@ -1694,9 +1703,7 @@ def import_text_document(
         # BGE-M3 unified path: single forward pass for both dense + sparse
         sparse_embeddings: list[tuple[list[int], list[float]]] = []
         if settings.embedding_provider == "bgem3" and chunk_texts:
-            from app.common.embedder import BGEM3Provider
-
-            bgem3 = BGEM3Provider(
+            bgem3 = _get_bgem3_provider(
                 model_name=settings.bgem3_model_name,
                 max_length=settings.bgem3_max_length,
                 batch_size=settings.bgem3_batch_size,

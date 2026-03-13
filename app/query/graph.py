@@ -140,6 +140,10 @@ class AgentState(TypedDict, total=False):
     follow_up_questions: Annotated[list[str], _replace]
     entities_mentioned: Annotated[list[dict[str, Any]], _replace]
 
+    # Adaptive retrieval depth (T3-13)
+    _adaptive_text_limit: int | None
+    _adaptive_graph_limit: int | None
+
     # Self-reflection loop (T2-8)
     _reflection_count: int
     _flagged_claims: Annotated[list[dict[str, Any]], _replace]

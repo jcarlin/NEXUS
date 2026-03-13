@@ -58,9 +58,9 @@ async def vector_search(
         retriever = get_retriever()
 
         # HyDE: generate hypothetical document for dense retrieval (T2-6)
-        from app.config import Settings
+        from app.dependencies import get_settings
 
-        settings = Settings()
+        settings = get_settings()
 
         # Adaptive retrieval depth (T3-13)
         if settings.enable_adaptive_retrieval_depth:
@@ -175,9 +175,9 @@ async def graph_query(
 
     try:
         # Adaptive retrieval depth (T3-13)
-        from app.config import Settings
+        from app.dependencies import get_settings
 
-        settings = Settings()
+        settings = get_settings()
         if settings.enable_adaptive_retrieval_depth:
             adaptive_limit = state.get("_adaptive_graph_limit")
             if adaptive_limit:
