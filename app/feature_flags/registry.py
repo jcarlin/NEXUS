@@ -197,6 +197,44 @@ FLAG_REGISTRY: dict[str, FlagMeta] = {
         category=FlagCategory.QUERY,
         risk_level=FlagRiskLevel.SAFE,
     ),
+    # --- Tier 2 Maturity flags ---
+    "enable_hyde": FlagMeta(
+        display_name="HyDE (Hypothetical Document Embeddings)",
+        description="Bridge vocabulary gap by embedding a hypothetical answer for dense retrieval instead of the raw query.",
+        category=FlagCategory.QUERY,
+        risk_level=FlagRiskLevel.SAFE,
+    ),
+    "enable_self_reflection": FlagMeta(
+        display_name="Self-Reflection Loop",
+        description="Re-investigate flagged claims when citation faithfulness falls below threshold (max 1 retry).",
+        category=FlagCategory.QUERY,
+        risk_level=FlagRiskLevel.SAFE,
+    ),
+    "enable_text_to_sql": FlagMeta(
+        display_name="Text-to-SQL Generation",
+        description="Generate and execute read-only SQL queries against the relational schema from natural language.",
+        category=FlagCategory.QUERY,
+        risk_level=FlagRiskLevel.SAFE,
+    ),
+    "enable_document_summarization": FlagMeta(
+        display_name="Document Summarization",
+        description="Generate 2-3 sentence LLM summaries per document at ingestion time.",
+        category=FlagCategory.INGESTION,
+        risk_level=FlagRiskLevel.SAFE,
+    ),
+    "enable_multi_representation": FlagMeta(
+        display_name="Multi-Representation Indexing",
+        description="Store chunk summaries as a third named vector for triple RRF fusion (dense + sparse + summary).",
+        category=FlagCategory.INGESTION,
+        risk_level=FlagRiskLevel.CACHE_CLEAR,
+        di_caches=["get_vector_store", "get_retriever"],
+    ),
+    "enable_production_quality_monitoring": FlagMeta(
+        display_name="Production Quality Monitoring",
+        description="Score sampled production queries for retrieval relevance and generation faithfulness.",
+        category=FlagCategory.QUERY,
+        risk_level=FlagRiskLevel.SAFE,
+    ),
 }
 
 

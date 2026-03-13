@@ -1,6 +1,6 @@
 # Feature Flags Reference
 
-All 25 feature flags are defined in `app/config.py` (Settings class) and read from environment variables. They are aggregated into a `FeatureFlags` nested model at `Settings.features`. All default to `false` unless noted otherwise.
+All 35 feature flags are defined in `app/config.py` (Settings class) and read from environment variables. They are aggregated into a `FeatureFlags` nested model at `Settings.features`. All default to `false` unless noted otherwise.
 
 ## Runtime Toggling (Admin UI)
 
@@ -22,8 +22,8 @@ Each flag has a risk level that determines the toggle behavior:
 
 | Risk Level | Behavior | Count |
 |---|---|---|
-| **Safe** | Takes effect immediately, no side effects | 12 flags |
-| **Cache Clear** | Clears DI singleton caches, may reload models on next request | 6 flags |
+| **Safe** | Takes effect immediately, no side effects | 17 flags |
+| **Cache Clear** | Clears DI singleton caches, may reload models on next request | 7 flags |
 | **Restart Required** | Saved to DB but requires server restart (router/middleware mounts) | 5 flags |
 
 ### Celery Caveat
@@ -63,6 +63,12 @@ Celery workers run in separate processes with their own Settings singleton. They
 | `ENABLE_PROMPT_ROUTING` | `false` | Semantic routing to specialized system prompts |
 | `ENABLE_QUESTION_DECOMPOSITION` | `false` | Decompose complex queries into sub-questions |
 | `ENABLE_DATA_RETENTION` | `false` | Data retention policy enforcement |
+| `ENABLE_HYDE` | `false` | HyDE: embed hypothetical answer for dense retrieval vocabulary bridging |
+| `ENABLE_SELF_REFLECTION` | `false` | Re-investigate flagged claims when faithfulness < threshold |
+| `ENABLE_TEXT_TO_SQL` | `false` | Natural language to SQL query generation |
+| `ENABLE_DOCUMENT_SUMMARIZATION` | `false` | LLM-generated 2-3 sentence document summaries at ingestion |
+| `ENABLE_MULTI_REPRESENTATION` | `false` | Chunk summaries as third vector for triple RRF fusion |
+| `ENABLE_PRODUCTION_QUALITY_MONITORING` | `false` | Sampled production query quality scoring and alerting |
 
 ---
 
@@ -292,3 +298,57 @@ Celery workers run in separate processes with their own Settings singleton. They
 - **Description**: Provides a `decompose_query` tool that breaks complex multi-part questions into 2-4 independent sub-questions with independent retrieval per sub-question.
 - **Resources gated**: No DI singleton. Registered as an agent tool. Uses existing `LLMClient` and `HybridRetriever`.
 - **Runtime impact**: Adds one Instructor call for decomposition + parallel retrieval per sub-question. Only triggered when the agent selects the tool.
+
+### Tier 2 Maturity
+
+#### `ENABLE_HYDE`
+- **Default**: `false`
+- **Module**: `app/query/`
+- **Config key**: `Settings.enable_hyde`
+- **Description**: Hypothetical Document Embeddings (HyDE). Generates a hypothetical answer passage and embeds it instead of the raw query for dense retrieval. Bridges vocabulary gap between user questions and legal document language. Sparse/BM42 retrieval still uses the raw query for exact term matching.
+- **Resources gated**: No DI singleton. Checked inline in `HybridRetriever.retrieve_text()`. Uses existing `LLMClient`.
+- **Runtime impact**: Adds one LLM call per retrieval to generate the hypothetical document (~100-200 tokens). Increases retrieval latency by ~0.5-1s.
+- **Related settings**: `HYDE_MODEL` (override model, empty = use default LLM)
+
+#### `ENABLE_SELF_REFLECTION`
+- **Default**: `false`
+- **Module**: `app/query/`
+- **Config key**: `Settings.enable_self_reflection`
+- **Description**: Self-RAG reflection loop. After citation verification, if faithfulness ratio falls below the configured threshold, routes back to the investigation agent with flagged claims highlighted. Maximum 1 retry to prevent infinite loops.
+- **Resources gated**: No DI singleton. Adds a conditional edge and `reflect` node to the agentic query graph.
+- **Runtime impact**: When triggered, adds one full agent loop iteration (retrieval + synthesis + verification). Only fires when faithfulness < threshold.
+- **Related settings**: `SELF_REFLECTION_FAITHFULNESS_THRESHOLD` (default 0.8), `SELF_REFLECTION_MAX_RETRIES` (default 1)
+
+#### `ENABLE_TEXT_TO_SQL`
+- **Default**: `false`
+- **Module**: `app/query/`
+- **Config key**: `Settings.enable_text_to_sql`
+- **Description**: Enables a `structured_query` agent tool that generates read-only SQL queries from natural language against a curated subset of safe tables (documents, entities, annotations, memos, entity_relationships). All queries validated for safety (no writes, matter-scoped, LIMIT enforced, table allowlist).
+- **Resources gated**: No DI singleton. Registered as an agent tool. Uses existing `LLMClient` and DB session.
+- **Runtime impact**: Adds one LLM call for SQL generation + DB query execution. Only triggered when the agent selects the tool.
+
+#### `ENABLE_DOCUMENT_SUMMARIZATION`
+- **Default**: `false`
+- **Module**: `app/ingestion/`
+- **Config key**: `Settings.enable_document_summarization`
+- **Description**: Generates a 2-3 sentence summary per document at ingestion time using the first N chunks. Summaries stored in the `documents.summary` column and exposed via the documents API.
+- **Resources gated**: No DI singleton. Called inline in ingestion pipeline after chunking. Uses existing `LLMClient`.
+- **Runtime impact**: Adds one LLM call per document during ingestion (~200 tokens output). Negligible per-document overhead.
+
+#### `ENABLE_MULTI_REPRESENTATION`
+- **Default**: `false`
+- **Module**: `app/ingestion/`, `app/common/vector_store.py`
+- **Config key**: `Settings.enable_multi_representation`
+- **Description**: Multi-representation indexing. Generates one-sentence chunk summaries and stores them as a third named vector (`"summary"`) in Qdrant alongside dense and sparse vectors. Retrieval uses triple RRF fusion across all three representations. Summaries provide broader semantic match; full chunk text is always returned for precise citations.
+- **Resources gated**: `VectorStoreClient` creates the `"summary"` named vector in Qdrant. Chunk summarizer uses existing `LLMClient` with configurable concurrency.
+- **Runtime impact**: Adds one LLM call per chunk during ingestion (batched, concurrent). Qdrant collection requires schema migration (handled automatically). Retrieval adds one prefetch query.
+- **Related settings**: `MULTI_REPRESENTATION_CONCURRENCY` (default 4)
+
+#### `ENABLE_PRODUCTION_QUALITY_MONITORING`
+- **Default**: `false`
+- **Module**: `app/query/`
+- **Config key**: `Settings.enable_production_quality_monitoring`
+- **Description**: Scores sampled production queries for retrieval relevance, generation faithfulness, and citation density. Scores stored in `query_quality_metrics` table and recorded as Prometheus histograms. Alert rules fire on rolling 24h average degradation.
+- **Resources gated**: No DI singleton. Fire-and-forget background task after query response.
+- **Runtime impact**: Scoring is lightweight (no LLM calls — uses existing retrieval scores and verification results). Only samples a configurable percentage of queries.
+- **Related settings**: `QUALITY_MONITORING_SAMPLE_RATE` (default 0.1 = 10%)

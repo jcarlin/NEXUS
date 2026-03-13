@@ -119,6 +119,9 @@ class FeatureFlags(BaseModel):
     document_summarization: bool
     multi_representation: bool
     production_quality_monitoring: bool
+    auto_graph_routing: bool
+    adaptive_retrieval_depth: bool
+    ocr_correction: bool
 
 
 class Settings(BaseSettings):
@@ -197,6 +200,9 @@ class Settings(BaseSettings):
     contextual_chunk_max_tokens: int = 100
     contextual_chunk_batch_size: int = 20  # Chunks per LLM call
     contextual_chunk_concurrency: int = 4  # Concurrent batches
+
+    # --- Matryoshka Dimensionality Optimization (T3-15) ---
+    matryoshka_search_dimensions: int = 0  # 0 = disabled; e.g. 256, 512 for smaller query vectors
 
     # --- Embedding ---
     embedding_batch_size: int = 32  # Conservative for 16GB Mac
@@ -315,6 +321,25 @@ class Settings(BaseSettings):
     # --- Question Decomposition (T1-10) ---
     enable_question_decomposition: bool = False
 
+    # --- Adaptive Retrieval Depth (T3-13) ---
+    enable_adaptive_retrieval_depth: bool = False
+    retrieval_depth_factual_text: int = 15
+    retrieval_depth_factual_graph: int = 8
+    retrieval_depth_analytical_text: int = 30
+    retrieval_depth_analytical_graph: int = 15
+    retrieval_depth_comparative_text: int = 35
+    retrieval_depth_comparative_graph: int = 20
+    retrieval_depth_temporal_text: int = 25
+    retrieval_depth_temporal_graph: int = 12
+    retrieval_depth_procedural_text: int = 20
+    retrieval_depth_procedural_graph: int = 10
+    retrieval_depth_exploratory_text: int = 40
+    retrieval_depth_exploratory_graph: int = 20
+
+    # --- OCR Error Correction (T3-14) ---
+    enable_ocr_correction: bool = False
+    ocr_correction_use_llm: bool = False  # LLM-assisted correction (expensive)
+
     # --- HyDE (Hypothetical Document Embeddings) (T2-6) ---
     enable_hyde: bool = False
     hyde_model: str = ""  # Falls back to llm_model if empty
@@ -350,6 +375,8 @@ class Settings(BaseSettings):
     # --- Agentic Pipeline ---
     enable_agentic_pipeline: bool = True
     enable_citation_verification: bool = True
+    # --- Automatic Graph Routing (T3-12) ---
+    enable_auto_graph_routing: bool = False
     agentic_recursion_limit_fast: int = 24
     agentic_recursion_limit_standard: int = 40
     agentic_recursion_limit_deep: int = 60
@@ -502,5 +529,8 @@ class Settings(BaseSettings):
                 document_summarization=self.enable_document_summarization,
                 multi_representation=self.enable_multi_representation,
                 production_quality_monitoring=self.enable_production_quality_monitoring,
+                auto_graph_routing=self.enable_auto_graph_routing,
+                adaptive_retrieval_depth=self.enable_adaptive_retrieval_depth,
+                ocr_correction=self.enable_ocr_correction,
             )
         return self

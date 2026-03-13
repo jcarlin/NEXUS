@@ -28,9 +28,9 @@ Six audits have been conducted across the NEXUS platform:
 - Ruff lint/format enforced, mypy configured
 
 **Estimated current scores:**
-- RAG Maturity: **8.5/10** (up from 7.5)
-- Platform Maturity: **8.5/10** (up from 8.2)
-- RAG Architecture Coverage: **~82%** (up from ~75%)
+- RAG Maturity: **9.3/10** (up from 7.5)
+- Platform Maturity: **9.5/10** (up from 8.2)
+- RAG Architecture Coverage: **~93%** (up from ~75%)
 
 ---
 
@@ -100,22 +100,24 @@ These items must be addressed before any enterprise law firm engagement.
 
 **Score impact**: Completing Tier 1 moves RAG Maturity → **9.0/10**, Platform → **9.2/10**, RAG Architecture → **~90%**.
 
-### Tier 2 — Medium (Quality-of-Life and Operational Improvements)
+### Tier 2 — Medium (Quality-of-Life and Operational Improvements) ✅ COMPLETE
 
-| # | Item | Source Audit | Rationale | Effort |
-|---|------|-------------|-----------|--------|
-| T2-1 | **Highlighted passage linking** | Platform §7 | Click a citation in chat → jump to highlighted passage in source document viewer. High-value UX for citation verification workflow. | Medium |
-| T2-2 | **Keyboard shortcuts for document review** | Platform §7 | Reviewers process thousands of documents; keyboard navigation is essential. Code, tag, privilege, advance — all from keyboard. | Medium |
-| T2-3 | **Brief/memo drafting** from query results | Platform §5 | Generate a cited summary memo for a specific legal issue. High-value lawyer workflow — query results become work product. | Medium |
-| T2-4 | **Per-query-type metrics dashboards** | RAG Maturity §8 | Segment metrics by query archetype (factual, analytical, timeline, entity-relationship). Aggregate metrics hide systematic failures on specific query types. | Low |
-| T2-5 | **Production quality monitoring** | RAG Maturity §8 | LangSmith evaluator scoring every production query for retrieval relevance and generation faithfulness. Alert when rolling average drops below threshold. | Medium |
-| T2-6 | **HyDE (Hypothetical Document Embeddings)** | RAG Arch §5 | Bridge vocabulary gap between lawyer questions and document language. Generate hypothetical answer, embed that for retrieval. Feature-flag gated. | Low |
-| T2-7 | **Audit log export** (CSV/JSON) | Platform §6 | Compliance reporting requires exportable audit trails. Currently view-only. | Low |
-| T2-8 | **Self-reflection loop** | RAG Maturity §6 | If `verify_citations` finds faithfulness < 0.8, route back to agent with failed claims highlighted (max 1 retry). Implements Self-RAG. | Medium |
-| T2-9 | **RRF weight tuning** | RAG Maturity §5 | Sweep dense:sparse weight ratios using evaluation framework. Legal queries often benefit from higher sparse weight for exact name matching. | Low |
-| T2-10 | **Text-to-SQL generation** | RAG Arch §7 | Opens the full relational schema to ad-hoc structured queries. "How many documents mention Company X filed after January 2020?" | Medium |
-| T2-11 | **Multi-representation indexing** | RAG Arch §6 | Store chunk summaries alongside full text. Retrieve on summaries (broader match), return full text (precise citations). | Medium |
-| T2-12 | **Document summarization at ingestion** | RAG Maturity §4 | 2-3 sentence summary per document. Feeds contextual prefixes, enables document-level search and browsing. | Low |
+All 12 items implemented (T2-3 was completed as M19).
+
+| # | Item | Source Audit | Status |
+|---|------|-------------|--------|
+| T2-1 | **Highlighted passage linking** | Platform §7 | ✅ Citation sidebar "View in Document" button → highlighted passage in doc viewer |
+| T2-2 | **Keyboard shortcuts for document review** | Platform §7 | ✅ j/k navigation, Enter/Esc, r/p toggles, Shift+? help dialog |
+| T2-3 | **Brief/memo drafting** from query results | Platform §5 | ✅ Completed as M19 (`app/memos/`) |
+| T2-4 | **Per-query-type metrics dashboards** | RAG Maturity §8 | ✅ Prometheus metrics with `query_type` label, 7 new Grafana panels |
+| T2-5 | **Production quality monitoring** | RAG Maturity §8 | ✅ Sampled scoring (retrieval relevance, faithfulness, citation density), alerting |
+| T2-6 | **HyDE (Hypothetical Document Embeddings)** | RAG Arch §5 | ✅ `app/query/hyde.py`, feature-flagged `ENABLE_HYDE` |
+| T2-7 | **Audit log export** (CSV/JSON) | Platform §6 | ✅ Server-side export dialog with date range, format, and table selection |
+| T2-8 | **Self-reflection loop** | RAG Maturity §6 | ✅ Conditional edge after verify_citations, max 1 retry, `ENABLE_SELF_REFLECTION` |
+| T2-9 | **RRF weight tuning** | RAG Maturity §5 | ✅ Per-modality prefetch multipliers + `scripts/tune_rrf.py` sweep script |
+| T2-10 | **Text-to-SQL generation** | RAG Arch §7 | ✅ `app/query/sql_generator.py` with safety validation, `ENABLE_TEXT_TO_SQL` |
+| T2-11 | **Multi-representation indexing** | RAG Arch §6 | ✅ Chunk summaries as third Qdrant vector, triple RRF fusion, `ENABLE_MULTI_REPRESENTATION` |
+| T2-12 | **Document summarization at ingestion** | RAG Maturity §4 | ✅ `app/ingestion/summarizer.py`, `ENABLE_DOCUMENT_SUMMARIZATION` |
 
 ### Tier 3 — Nice to Have (Polish and Future-Proofing)
 
@@ -143,10 +145,10 @@ These items must be addressed before any enterprise law firm engagement.
 
 | Milestone | RAG Maturity | Platform Maturity | RAG Arch Coverage | Key Changes |
 |-----------|-------------|-------------------|-------------------|-------------|
-| **Current** | ~8.5/10 | ~8.5/10 | ~82% | M21 done, tests 4x, GCP resolved |
-| **After Tier 0** | ~8.5/10 | **9.0/10** | ~82% | SSO, privilege log, frontend tests, audit redaction, retention |
-| **After Tier 1** | **9.0/10** | **9.2/10** | **~90%** | Multi-query, text-to-Cypher, eval CI, load testing, adversarial tests, observability |
-| **After Tier 2** | **9.3/10** | **9.5/10** | **~93%** | Passage linking, keyboard shortcuts, memo drafting, self-reflection, production monitoring |
+| **Current (post Tier 2)** | **9.3/10** | **9.5/10** | **~93%** | Tiers 0-2 complete, 35 feature flags, 6 new RAG techniques |
+| ~~After Tier 0~~ | ~~~8.5/10~~ | ~~**9.0/10**~~ | ~~~82%~~ | ✅ SSO, privilege log, frontend tests, audit redaction, retention |
+| ~~After Tier 1~~ | ~~**9.0/10**~~ | ~~**9.2/10**~~ | ~~**~90%**~~ | ✅ Multi-query, text-to-Cypher, eval CI, load testing, adversarial tests, observability |
+| ~~After Tier 2~~ | ~~**9.3/10**~~ | ~~**9.5/10**~~ | ~~**~93%**~~ | ✅ Passage linking, keyboard shortcuts, HyDE, self-reflection, production monitoring, text-to-SQL, multi-repr indexing |
 | **After Tier 3** | **9.5/10** | **9.7/10** | **~97%** | SPLADE, HalluGraph, GraphRAG, K8s, deposition prep |
 
 ---
@@ -180,42 +182,47 @@ These items must be addressed before any enterprise law firm engagement.
 
 **Assessment:** Solid. Improvements are optimization, not gaps.
 
-### 4. Data Quality & Enrichment — 5/10 → 7.5/10
+### 4. Data Quality & Enrichment — 5/10 → 8.5/10
 
 **Resolved:**
 - Chunk quality scoring (M21)
 - Contextual chunk enrichment (M21, via Dimension 2)
+- Near-duplicate detection enabled (Tier 1-7)
+- Document summarization at ingestion (Tier 2-12) — `app/ingestion/summarizer.py`
+- Multi-representation indexing (Tier 2-11) — chunk summaries as third vector
 
 **Remaining gaps:**
-- Near-duplicate detection still flagged off (Tier 1-7 — flip the flag)
-- Document summarization at ingestion (Tier 2-12)
 - Topic classification per chunk (not prioritized — agent tools cover this at query time)
 
-**Assessment:** Biggest jump. Enable dedup to reach 8/10.
+**Assessment:** Major dimension uplift. Document summaries + multi-repr indexing provide comprehensive enrichment.
 
-### 5. Hybrid Retrieval & Reranking — 7/10 → 8.5/10
+### 5. Hybrid Retrieval & Reranking — 7/10 → 9.0/10
 
 **Resolved:**
 - Reranking enabled by default (M21)
 - CRAG-style retrieval grading (M21)
-
-**Remaining gaps:**
-- RRF weight tuning (Tier 2-9)
-- Adaptive retrieval depth (Tier 3-13)
-- Multi-query expansion (Tier 1-1) — crosses into this dimension
-
-**Assessment:** Core gaps closed. Remaining items are optimization.
-
-### 6. Query Orchestration — 9/10 → 9/10
-
-**Remaining gaps:**
-- Self-reflection loop (Tier 2-8) — re-retrieve on citation failure
-- Automatic V1/Agentic routing (Tier 3-12)
 - Multi-query expansion (Tier 1-1)
-- Explicit question decomposition (Tier 1-10)
-- Text-to-Cypher (Tier 1-2)
+- RRF per-modality weight tuning (Tier 2-9) — `scripts/tune_rrf.py`
+- HyDE hypothetical document embeddings (Tier 2-6) — `app/query/hyde.py`
 
-**Assessment:** Already industry-leading. Improvements add depth, not fix gaps.
+**Remaining gaps:**
+- Adaptive retrieval depth (Tier 3-13)
+
+**Assessment:** Near-ceiling. HyDE + RRF tuning + multi-query close all meaningful gaps.
+
+### 6. Query Orchestration — 9/10 → 9.5/10
+
+**Resolved:**
+- Multi-query expansion (Tier 1-1)
+- Text-to-Cypher (Tier 1-2)
+- Question decomposition (Tier 1-10)
+- Self-reflection loop (Tier 2-8) — re-investigate on low faithfulness
+- Text-to-SQL generation (Tier 2-10) — `structured_query` agent tool
+
+**Remaining gaps:**
+- Automatic V1/Agentic routing (Tier 3-12)
+
+**Assessment:** Industry-leading. 14 agent tools, self-reflection, multi-modal query support.
 
 ### 7. Citation & Faithfulness — 8/10 → 8/10
 
@@ -225,51 +232,58 @@ These items must be addressed before any enterprise law firm engagement.
 
 **Assessment:** Strong. Confidence scores are the highest-value addition.
 
-### 8. Evaluation & Observability — 6/10 → 6.5/10
+### 8. Evaluation & Observability — 6/10 → 8.5/10
 
-**Partially resolved:**
-- CI/CD workflows exist but evaluation step not blocking PRs
-
-**Remaining gaps:**
-- Operationalize evaluation in CI (Tier 1-3) — quality gates must block deploys
-- Adversarial test suite (Tier 1-5) — schema exists, dataset empty
-- Per-query-type metrics (Tier 2-4)
-- Production quality monitoring (Tier 2-5)
-- Observability stack (Tier 1-8)
-
-**Assessment:** Largest remaining gap. This dimension needs the most work to reach 8+.
-
-### 9. Security & Compliance — 9/10 → 9/10
+**Resolved:**
+- CI/CD evaluation workflows (Tier 1-3)
+- Adversarial test suite (Tier 1-5)
+- Observability stack with Prometheus + Grafana (Tier 1-8)
+- Per-query-type metrics dashboards (Tier 2-4) — 4 new Prometheus metrics, 7 Grafana panels
+- Production quality monitoring (Tier 2-5) — sampled scoring, `query_quality_metrics` table, alerting
 
 **Remaining gaps:**
-- SSO/SAML (Tier 0-1) — adoption blocker
+- None significant — dimension fully addressed through Tiers 1-2
+
+**Assessment:** Transformed from weakest to strong. Full observability pipeline in place.
+
+### 9. Security & Compliance — 9/10 → 9.5/10
+
+**Resolved:**
+- SSO/SAML (Tier 0-1)
 - Data retention policies (Tier 0-5)
-- Audit log export (Tier 2-7)
 - Error message redaction (Tier 0-4)
-
-**Assessment:** Strong foundation. SSO is the critical missing piece.
-
-### 10. Frontend & UX — 7/10 → 7/10
+- Audit log export (Tier 2-7) — server-side CSV/JSON export with date range and table selection
 
 **Remaining gaps:**
-- Frontend test coverage (Tier 0-3) — 37 tests is inadequate
-- Highlighted passage linking (Tier 2-1)
-- Keyboard shortcuts (Tier 2-2)
+- None significant
+
+**Assessment:** Enterprise-grade. Full SSO, audit trail, privilege enforcement, data retention.
+
+### 10. Frontend & UX — 7/10 → 8.5/10
+
+**Resolved:**
+- Frontend test coverage (Tier 0-3) — expanded significantly
+- Highlighted passage linking (Tier 2-1) — citation → document viewer with highlight
+- Keyboard shortcuts (Tier 2-2) — j/k navigation, Shift+? help dialog
+
+**Remaining gaps:**
 - Dark mode (Tier 3-1)
 - Mobile responsive (Tier 3-2)
 - Onboarding flow (Tier 3-6)
 
-**Assessment:** The weakest dimension for enterprise readiness. Frontend tests and passage linking are the highest-value improvements.
+**Assessment:** Major improvement. Core review workflow is keyboard-accessible. Remaining items are polish.
 
-### 11. Case Building & Litigation Workflow — 7.5/10 → 7.5/10
+### 11. Case Building & Litigation Workflow — 7.5/10 → 9.0/10
+
+**Resolved:**
+- Privilege log generation (Tier 0-2)
+- Brief/memo drafting (Tier 2-3 / M19) — full memo module
 
 **Remaining gaps:**
-- Privilege log generation (Tier 0-2) — court-mandated
-- Brief/memo drafting (Tier 2-3)
 - Deposition prep (Tier 3-3)
 - Document comparison (Tier 3-4)
 
-**Assessment:** Privilege log is the critical gap. Others are differentiating features.
+**Assessment:** Strong. Core litigation workflows covered. Remaining items are specialized workflows.
 
 ### 12. Deployment & Operations — 8/10 → 8.5/10
 
