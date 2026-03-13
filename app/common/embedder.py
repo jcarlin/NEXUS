@@ -451,3 +451,142 @@ class OllamaEmbeddingProvider:
     async def close(self) -> None:
         """Close the underlying HTTP client."""
         await self._client.aclose()
+
+
+# ---------------------------------------------------------------------------
+# BGE-M3 provider (unified dense + sparse in single forward pass)
+# ---------------------------------------------------------------------------
+
+
+class BGEM3Provider:
+    """Unified dense + sparse embeddings via BGE-M3 (``BAAI/bge-m3``).
+
+    A single forward pass produces dense (1024-d), sparse (lexical weights),
+    and optionally ColBERT vectors.  The model is lazy-loaded on first use
+    and inference runs synchronously, wrapped in ``asyncio.to_thread()``.
+
+    No data leaves the machine — safe for privileged documents.
+    """
+
+    def __init__(
+        self,
+        model_name: str = "BAAI/bge-m3",
+        max_length: int = 8192,
+        batch_size: int = 12,
+        use_fp16: bool = True,
+    ) -> None:
+        self._model_name = model_name
+        self._max_length = max_length
+        self._batch_size = batch_size
+        self._use_fp16 = use_fp16
+        self._model = None
+
+    def _load_model(self):
+        """Load the BGEM3FlagModel into memory (once)."""
+        if self._model is None:
+            from FlagEmbedding import BGEM3FlagModel
+
+            logger.info("embedder.bgem3.loading", model=self._model_name)
+            self._model = BGEM3FlagModel(
+                self._model_name,
+                use_fp16=self._use_fp16,
+            )
+            logger.info("embedder.bgem3.loaded")
+        return self._model
+
+    def _encode_dense_sync(self, texts: list[str]) -> list[list[float]]:
+        """Synchronous dense-only encode."""
+        model = self._load_model()
+        output = model.encode(
+            texts,
+            batch_size=self._batch_size,
+            max_length=self._max_length,
+            return_dense=True,
+            return_sparse=False,
+            return_colbert_vecs=False,
+        )
+        return output["dense_vecs"].tolist()
+
+    def _encode_all_sync(self, texts: list[str]) -> tuple[list[list[float]], list[tuple[list[int], list[float]]]]:
+        """Synchronous unified encode returning (dense, sparse) vectors."""
+        model = self._load_model()
+        output = model.encode(
+            texts,
+            batch_size=self._batch_size,
+            max_length=self._max_length,
+            return_dense=True,
+            return_sparse=True,
+            return_colbert_vecs=False,
+        )
+        dense_vecs = output["dense_vecs"].tolist()
+        sparse_vecs = self._convert_sparse(output["lexical_weights"])
+        return dense_vecs, sparse_vecs
+
+    @staticmethod
+    def _convert_sparse(
+        lexical_weights: list[dict],
+    ) -> list[tuple[list[int], list[float]]]:
+        """Convert BGE-M3 lexical weight dicts to (indices, values) tuples."""
+        result: list[tuple[list[int], list[float]]] = []
+        for weights in lexical_weights:
+            indices = [int(k) for k in weights.keys()]
+            values = [float(v) for v in weights.values()]
+            result.append((indices, values))
+        return result
+
+    async def embed_texts(self, texts: list[str]) -> list[list[float]]:
+        """Embed a batch of texts (dense only)."""
+        if not texts:
+            raise ValueError("Cannot embed an empty list of texts.")
+
+        from app.common.metrics import EMBEDDING_CALLS_TOTAL, EMBEDDING_DURATION, track_duration
+
+        with track_duration(EMBEDDING_DURATION, provider="bgem3"):
+            result = await asyncio.to_thread(self._encode_dense_sync, texts)
+
+        EMBEDDING_CALLS_TOTAL.labels(provider="bgem3").inc()
+        logger.info(
+            "embedder.batch_complete",
+            provider="bgem3",
+            model=self._model_name,
+            count=len(texts),
+        )
+        return result
+
+    async def embed_query(self, text: str) -> list[float]:
+        """Embed a single query string."""
+        results = await self.embed_texts([text])
+        return results[0]
+
+    async def embed_all(self, texts: list[str]) -> tuple[list[list[float]], list[tuple[list[int], list[float]]]]:
+        """Unified single-pass embed returning (dense_vectors, sparse_vectors)."""
+        if not texts:
+            raise ValueError("Cannot embed an empty list of texts.")
+
+        from app.common.metrics import EMBEDDING_CALLS_TOTAL, EMBEDDING_DURATION, track_duration
+
+        with track_duration(EMBEDDING_DURATION, provider="bgem3"):
+            dense, sparse = await asyncio.to_thread(self._encode_all_sync, texts)
+
+        EMBEDDING_CALLS_TOTAL.labels(provider="bgem3").inc()
+        logger.info(
+            "embedder.batch_complete",
+            provider="bgem3",
+            model=self._model_name,
+            count=len(texts),
+            mode="unified",
+        )
+        return dense, sparse
+
+    def embed_sparse_sync(self, texts: list[str]) -> list[tuple[list[int], list[float]]]:
+        """Synchronous sparse-only embed for adapter compatibility."""
+        model = self._load_model()
+        output = model.encode(
+            texts,
+            batch_size=self._batch_size,
+            max_length=self._max_length,
+            return_dense=False,
+            return_sparse=True,
+            return_colbert_vecs=False,
+        )
+        return self._convert_sparse(output["lexical_weights"])

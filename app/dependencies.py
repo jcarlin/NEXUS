@@ -17,6 +17,7 @@ from neo4j import AsyncGraphDatabase
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.common.embedder import (
+    BGEM3Provider,
     EmbeddingProvider,
     GeminiEmbeddingProvider,
     LocalEmbeddingProvider,
@@ -30,7 +31,7 @@ from app.common.vector_store import VectorStoreClient
 from app.config import Settings
 from app.entities.extractor import EntityExtractor
 from app.entities.graph_service import GraphService
-from app.ingestion.sparse_embedder import SparseEmbedder
+from app.ingestion.sparse_embedder import BGEM3SparseAdapter, SparseEmbedder
 from app.ingestion.visual_embedder import VisualEmbedder
 from app.query.reranker import Reranker, TEIReranker
 from app.query.retriever import HybridRetriever
@@ -206,6 +207,13 @@ def get_embedder() -> EmbeddingProvider:
             dimensions=settings.embedding_dimensions,
             batch_size=settings.embedding_batch_size,
         )
+    if settings.embedding_provider == "bgem3":
+        return BGEM3Provider(
+            model_name=settings.bgem3_model_name,
+            max_length=settings.bgem3_max_length,
+            batch_size=settings.bgem3_batch_size,
+            use_fp16=settings.bgem3_use_fp16,
+        )
     if settings.embedding_provider == "ollama":
         return OllamaEmbeddingProvider(
             base_url=settings.ollama_base_url.removesuffix("/v1"),
@@ -265,11 +273,13 @@ def get_reranker() -> Reranker | TEIReranker | None:
 
 
 @functools.cache
-def get_sparse_embedder() -> SparseEmbedder | None:
+def get_sparse_embedder() -> SparseEmbedder | BGEM3SparseAdapter | None:
     """Return the ``SparseEmbedder`` singleton, or ``None`` when disabled."""
     settings = get_settings()
     if not settings.enable_sparse_embeddings:
         return None
+    if settings.embedding_provider == "bgem3":
+        return BGEM3SparseAdapter(get_embedder())
     return SparseEmbedder(model_name=settings.sparse_embedding_model)
 
 

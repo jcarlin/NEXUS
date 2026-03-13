@@ -113,6 +113,54 @@ class TestCachedSingletons:
             get_qdrant.cache_clear()
 
 
+class TestBGEM3DI:
+    """DI factory tests for BGE-M3 embedding provider."""
+
+    def test_get_embedder_returns_bgem3_provider(self):
+        """get_embedder() should return BGEM3Provider when provider is bgem3."""
+        from app.common.embedder import BGEM3Provider
+        from app.dependencies import get_embedder
+
+        mock_settings = _make_test_settings(
+            embedding_provider="bgem3",
+            bgem3_model_name="BAAI/bge-m3",
+            bgem3_max_length=8192,
+            bgem3_batch_size=12,
+            bgem3_use_fp16=True,
+        )
+        with patch("app.dependencies.get_settings", return_value=mock_settings):
+            get_embedder.cache_clear()
+            embedder = get_embedder()
+
+        assert isinstance(embedder, BGEM3Provider)
+        assert embedder._model_name == "BAAI/bge-m3"
+        get_embedder.cache_clear()
+
+    def test_get_sparse_embedder_returns_adapter_sharing_instance(self):
+        """get_sparse_embedder() should return BGEM3SparseAdapter wrapping the same embedder."""
+        from app.dependencies import get_embedder, get_sparse_embedder
+        from app.ingestion.sparse_embedder import BGEM3SparseAdapter
+
+        mock_settings = _make_test_settings(
+            embedding_provider="bgem3",
+            enable_sparse_embeddings=True,
+            bgem3_model_name="BAAI/bge-m3",
+            bgem3_max_length=8192,
+            bgem3_batch_size=12,
+            bgem3_use_fp16=True,
+        )
+        with patch("app.dependencies.get_settings", return_value=mock_settings):
+            get_embedder.cache_clear()
+            get_sparse_embedder.cache_clear()
+            embedder = get_embedder()
+            sparse = get_sparse_embedder()
+
+        assert isinstance(sparse, BGEM3SparseAdapter)
+        assert sparse._provider is embedder  # Same instance
+        get_embedder.cache_clear()
+        get_sparse_embedder.cache_clear()
+
+
 class TestFeatureFlaggedFactories:
     """Feature-flagged factories return ``None`` when the flag is off."""
 

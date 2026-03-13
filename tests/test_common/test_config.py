@@ -96,3 +96,26 @@ class TestNestedConfig:
         assert s.processing.chunk_overlap == 64
         assert s.processing.celery_concurrency == 1
         assert s.processing.enable_relationship_extraction is False
+
+
+class TestBGEM3Config:
+    """BGE-M3 config auto-population tests."""
+
+    def test_bgem3_auto_enables_sparse(self):
+        """When embedding_provider is bgem3, sparse embeddings should auto-enable."""
+        s = Settings(
+            anthropic_api_key="k",
+            openai_api_key="k",
+            embedding_provider="bgem3",
+        )
+        assert s.enable_sparse_embeddings is True
+
+    def test_bgem3_forces_1024_dimensions(self):
+        """When embedding_provider is bgem3, dimensions should be forced to 1024."""
+        s = Settings(
+            anthropic_api_key="k",
+            openai_api_key="k",
+            embedding_provider="bgem3",
+            embedding_dimensions=512,  # User tries to set 512
+        )
+        assert s.embedding_dimensions == 1024

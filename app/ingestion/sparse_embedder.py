@@ -44,3 +44,22 @@ class SparseEmbedder:
     def embed_single(self, text: str) -> tuple[list[int], list[float]]:
         """Convenience wrapper for a single text."""
         return self.embed_texts([text])[0]
+
+
+class BGEM3SparseAdapter:
+    """Sparse embedding adapter that delegates to a shared ``BGEM3Provider``.
+
+    Duck-types with ``SparseEmbedder`` so existing code that expects
+    ``embed_texts()`` / ``embed_single()`` works transparently.
+    """
+
+    def __init__(self, bgem3_provider) -> None:
+        self._provider = bgem3_provider
+
+    def embed_texts(self, texts: list[str]) -> list[tuple[list[int], list[float]]]:
+        """Generate sparse embeddings via the shared BGE-M3 model."""
+        return self._provider.embed_sparse_sync(texts)
+
+    def embed_single(self, text: str) -> tuple[list[int], list[float]]:
+        """Convenience wrapper for a single text."""
+        return self.embed_texts([text])[0]

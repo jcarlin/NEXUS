@@ -33,3 +33,37 @@ def test_embed_texts_returns_indices_values():
     indices, values = results[0]
     assert indices == [0, 3, 7]
     assert values == [0.5, 0.8, 0.3]
+
+
+# ---------------------------------------------------------------------------
+# BGEM3SparseAdapter
+# ---------------------------------------------------------------------------
+
+
+def test_bgem3_sparse_adapter_delegates():
+    """BGEM3SparseAdapter.embed_texts should delegate to provider.embed_sparse_sync."""
+    from app.ingestion.sparse_embedder import BGEM3SparseAdapter
+
+    mock_provider = MagicMock()
+    mock_provider.embed_sparse_sync.return_value = [([1, 2, 3], [0.5, 0.8, 0.3])]
+
+    adapter = BGEM3SparseAdapter(mock_provider)
+    result = adapter.embed_texts(["hello world"])
+
+    mock_provider.embed_sparse_sync.assert_called_once_with(["hello world"])
+    assert len(result) == 1
+    assert result[0] == ([1, 2, 3], [0.5, 0.8, 0.3])
+
+
+def test_bgem3_sparse_adapter_embed_single():
+    """BGEM3SparseAdapter.embed_single should return a single (indices, values) tuple."""
+    from app.ingestion.sparse_embedder import BGEM3SparseAdapter
+
+    mock_provider = MagicMock()
+    mock_provider.embed_sparse_sync.return_value = [([10, 20], [0.1, 0.9])]
+
+    adapter = BGEM3SparseAdapter(mock_provider)
+    indices, values = adapter.embed_single("test text")
+
+    assert indices == [10, 20]
+    assert values == [0.1, 0.9]

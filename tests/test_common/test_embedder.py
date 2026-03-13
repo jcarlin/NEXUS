@@ -396,3 +396,81 @@ def test_protocol_is_runtime_checkable():
     """EmbeddingProvider should be a runtime-checkable Protocol."""
     provider = OpenAIEmbeddingProvider(api_key="test-key")
     assert isinstance(provider, EmbeddingProvider)
+
+
+# ---------------------------------------------------------------------------
+# BGE-M3 provider
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_bgem3_provider_embed_texts_dense():
+    """BGEM3Provider.embed_texts should return dense vectors."""
+    from app.common.embedder import BGEM3Provider
+
+    provider = BGEM3Provider(model_name="test-model", batch_size=4)
+
+    mock_output = {"dense_vecs": np.array([[0.1, 0.2, 0.3] * 341 + [0.4]])}
+
+    mock_model = MagicMock()
+    mock_model.encode.return_value = mock_output
+
+    with patch.object(provider, "_load_model", return_value=mock_model):
+        result = await provider.embed_texts(["test text"])
+
+    assert len(result) == 1
+    assert len(result[0]) == 1024
+    mock_model.encode.assert_called_once()
+    call_kwargs = mock_model.encode.call_args
+    assert call_kwargs[1]["return_dense"] is True
+    assert call_kwargs[1]["return_sparse"] is False
+
+
+@pytest.mark.asyncio
+async def test_bgem3_provider_embed_all_unified():
+    """BGEM3Provider.embed_all should return both dense and sparse vectors."""
+    from app.common.embedder import BGEM3Provider
+
+    provider = BGEM3Provider(model_name="test-model", batch_size=4)
+
+    mock_output = {
+        "dense_vecs": np.array([[0.1] * 1024, [0.2] * 1024]),
+        "lexical_weights": [
+            {101: 0.5, 200: 0.8},
+            {50: 0.3, 300: 0.9, 400: 0.1},
+        ],
+    }
+
+    mock_model = MagicMock()
+    mock_model.encode.return_value = mock_output
+
+    with patch.object(provider, "_load_model", return_value=mock_model):
+        dense, sparse = await provider.embed_all(["text one", "text two"])
+
+    assert len(dense) == 2
+    assert len(dense[0]) == 1024
+    assert len(sparse) == 2
+    # Check sparse format
+    indices, values = sparse[0]
+    assert indices == [101, 200]
+    assert values == [0.5, 0.8]
+
+
+@pytest.mark.asyncio
+async def test_bgem3_provider_empty_raises():
+    """BGEM3Provider should raise ValueError on empty list."""
+    from app.common.embedder import BGEM3Provider
+
+    provider = BGEM3Provider(model_name="test-model")
+    with pytest.raises(ValueError, match="empty"):
+        await provider.embed_texts([])
+    with pytest.raises(ValueError, match="empty"):
+        await provider.embed_all([])
+
+
+def test_bgem3_provider_satisfies_protocol():
+    """BGEM3Provider satisfies the EmbeddingProvider protocol."""
+    from app.common.embedder import BGEM3Provider
+
+    provider = BGEM3Provider(model_name="test-model")
+    assert isinstance(provider, EmbeddingProvider)

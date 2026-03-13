@@ -310,6 +310,7 @@ def _upload_to_minio(settings, key: str, data: bytes, content_type: str = "image
 async def _embed_chunks(settings, chunk_texts: list[str]) -> list[list[float]]:
     """Embed chunk texts using the configured embedding provider."""
     from app.common.embedder import (
+        BGEM3Provider,
         EmbeddingProvider,
         GeminiEmbeddingProvider,
         LocalEmbeddingProvider,
@@ -319,7 +320,14 @@ async def _embed_chunks(settings, chunk_texts: list[str]) -> list[list[float]]:
     )
 
     provider: EmbeddingProvider
-    if settings.embedding_provider == "local":
+    if settings.embedding_provider == "bgem3":
+        provider = BGEM3Provider(
+            model_name=settings.bgem3_model_name,
+            max_length=settings.bgem3_max_length,
+            batch_size=settings.bgem3_batch_size,
+            use_fp16=settings.bgem3_use_fp16,
+        )
+    elif settings.embedding_provider == "local":
         provider = LocalEmbeddingProvider(
             model_name=settings.local_embedding_model,
             dimensions=settings.embedding_dimensions,
@@ -824,14 +832,31 @@ def _stage_embed(ctx: _PipelineContext) -> None:
     # If context_prefix exists, prepend it to chunk text for embedding
     chunk_texts = [f"{c.context_prefix}\n\n{c.text}" if c.context_prefix else c.text for c in ctx.chunks]
 
-    if chunk_texts:
+    # BGE-M3 unified path: single forward pass for both dense + sparse
+    if ctx.settings.embedding_provider == "bgem3" and chunk_texts:
+        from app.common.embedder import BGEM3Provider
+
+        bgem3 = BGEM3Provider(
+            model_name=ctx.settings.bgem3_model_name,
+            max_length=ctx.settings.bgem3_max_length,
+            batch_size=ctx.settings.bgem3_batch_size,
+            use_fp16=ctx.settings.bgem3_use_fp16,
+        )
+        ctx.embeddings, ctx.sparse_embeddings = asyncio.run(bgem3.embed_all(chunk_texts))
+        logger.info(
+            "task.bgem3_unified_embedded",
+            dense_count=len(ctx.embeddings),
+            sparse_count=len(ctx.sparse_embeddings),
+        )
+    elif chunk_texts:
         ctx.embeddings = asyncio.run(_embed_chunks(ctx.settings, chunk_texts))
     else:
         ctx.embeddings = []
 
-    # Sparse embeddings (feature-flagged)
-    ctx.sparse_embeddings = []
-    if ctx.settings.enable_sparse_embeddings and chunk_texts:
+    # Sparse embeddings (feature-flagged) — skip if already populated by BGE-M3
+    if not ctx.sparse_embeddings:
+        ctx.sparse_embeddings = []
+    if ctx.settings.enable_sparse_embeddings and chunk_texts and not ctx.sparse_embeddings:
         from app.ingestion.sparse_embedder import SparseEmbedder
 
         sparse_emb = SparseEmbedder(model_name=ctx.settings.sparse_embedding_model)
@@ -1666,13 +1691,24 @@ def import_text_document(
         # ---------------------------------------------------------------
         chunk_texts = [c.text for c in chunks]
 
-        if chunk_texts:
+        # BGE-M3 unified path: single forward pass for both dense + sparse
+        sparse_embeddings: list[tuple[list[int], list[float]]] = []
+        if settings.embedding_provider == "bgem3" and chunk_texts:
+            from app.common.embedder import BGEM3Provider
+
+            bgem3 = BGEM3Provider(
+                model_name=settings.bgem3_model_name,
+                max_length=settings.bgem3_max_length,
+                batch_size=settings.bgem3_batch_size,
+                use_fp16=settings.bgem3_use_fp16,
+            )
+            embeddings, sparse_embeddings = asyncio.run(bgem3.embed_all(chunk_texts))
+        elif chunk_texts:
             embeddings = asyncio.run(_embed_chunks(settings, chunk_texts))
         else:
             embeddings = []
 
-        sparse_embeddings: list[tuple[list[int], list[float]]] = []
-        if settings.enable_sparse_embeddings and chunk_texts:
+        if settings.enable_sparse_embeddings and chunk_texts and not sparse_embeddings:
             from app.ingestion.sparse_embedder import SparseEmbedder
 
             sparse_emb = SparseEmbedder(model_name=settings.sparse_embedding_model)

@@ -19,7 +19,6 @@ Usage::
 from __future__ import annotations
 
 import argparse
-import sys
 import time
 
 from qdrant_client import QdrantClient
@@ -58,11 +57,13 @@ def _scroll_all(client: QdrantClient, batch_size: int) -> list[dict]:
             if isinstance(vector, dict):
                 vector = vector.get("dense", vector)
 
-            points.append({
-                "id": point.id,
-                "vector": vector,
-                "payload": point.payload,
-            })
+            points.append(
+                {
+                    "id": point.id,
+                    "vector": vector,
+                    "payload": point.payload,
+                }
+            )
 
         if next_offset is None:
             break
@@ -75,11 +76,32 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Re-embed nexus_text with named dense + sparse vectors")
     parser.add_argument("--batch-size", type=int, default=100, help="Scroll/upsert batch size")
     parser.add_argument("--dry-run", action="store_true", help="Scroll and embed but don't modify collection")
+    parser.add_argument(
+        "--provider",
+        choices=["bm42", "bgem3"],
+        default="bm42",
+        help="Sparse embedding provider (bm42=FastEmbed BM42, bgem3=BGE-M3 unified dense+sparse)",
+    )
     args = parser.parse_args()
 
     settings = Settings()
     client = QdrantClient(url=settings.qdrant_url)
-    sparse_embedder = SparseEmbedder(model_name=settings.sparse_embedding_model)
+
+    use_bgem3 = args.provider == "bgem3"
+    sparse_embedder = None
+    bgem3_provider = None
+
+    if use_bgem3:
+        from app.common.embedder import BGEM3Provider
+
+        bgem3_provider = BGEM3Provider(
+            model_name=settings.bgem3_model_name,
+            max_length=settings.bgem3_max_length,
+            batch_size=settings.bgem3_batch_size,
+            use_fp16=settings.bgem3_use_fp16,
+        )
+    else:
+        sparse_embedder = SparseEmbedder(model_name=settings.sparse_embedding_model)
 
     # Step 1: Scroll all existing points
     print(f"Scrolling all points from '{COLLECTION}' (batch_size={args.batch_size})...")
@@ -91,18 +113,35 @@ def main() -> None:
         print("No points to migrate. Done.")
         return
 
-    # Step 2: Generate sparse embeddings
-    print("Generating sparse embeddings...")
-    t0 = time.time()
+    # Step 2: Generate embeddings
     texts = [p["payload"].get("chunk_text", "") for p in points]
 
+    dense_vectors: list[list[float]] | None = None
     sparse_vectors: list[tuple[list[int], list[float]]] = []
-    for i in range(0, len(texts), args.batch_size):
-        batch = texts[i : i + args.batch_size]
-        sparse_vectors.extend(sparse_embedder.embed_texts(batch))
-        print(f"  Embedded {min(i + args.batch_size, len(texts))}/{len(texts)}")
 
-    print(f"  Sparse embeddings generated in {time.time() - t0:.1f}s")
+    if use_bgem3:
+        import asyncio
+
+        print("Generating unified dense + sparse embeddings (BGE-M3)...")
+        t0 = time.time()
+        for i in range(0, len(texts), args.batch_size):
+            batch = texts[i : i + args.batch_size]
+            batch_dense, batch_sparse = asyncio.run(bgem3_provider.embed_all(batch))
+            if dense_vectors is None:
+                dense_vectors = batch_dense
+            else:
+                dense_vectors.extend(batch_dense)
+            sparse_vectors.extend(batch_sparse)
+            print(f"  Embedded {min(i + args.batch_size, len(texts))}/{len(texts)}")
+        print(f"  BGE-M3 embeddings generated in {time.time() - t0:.1f}s")
+    else:
+        print("Generating sparse embeddings...")
+        t0 = time.time()
+        for i in range(0, len(texts), args.batch_size):
+            batch = texts[i : i + args.batch_size]
+            sparse_vectors.extend(sparse_embedder.embed_texts(batch))
+            print(f"  Embedded {min(i + args.batch_size, len(texts))}/{len(texts)}")
+        print(f"  Sparse embeddings generated in {time.time() - t0:.1f}s")
 
     if args.dry_run:
         print("[DRY RUN] Would delete and recreate collection, then upsert all points.")
@@ -134,12 +173,14 @@ def main() -> None:
         batch_sparse = sparse_vectors[i : i + args.batch_size]
 
         qdrant_points = []
-        for p, (indices, values) in zip(batch_points, batch_sparse):
+        for j, (p, (indices, values)) in enumerate(zip(batch_points, batch_sparse)):
+            # Use new dense vectors from BGE-M3 or keep existing ones
+            point_dense = dense_vectors[i + j] if dense_vectors else p["vector"]
             qdrant_points.append(
                 PointStruct(
                     id=p["id"],
                     vector={
-                        "dense": p["vector"],
+                        "dense": point_dense,
                         "sparse": SparseVector(indices=indices, values=values),
                     },
                     payload=p["payload"],

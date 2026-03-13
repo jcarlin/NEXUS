@@ -141,13 +141,20 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434/v1"
 
     # --- Embedding ---
-    embedding_provider: str = "openai"  # openai | local | tei | gemini | ollama
+    embedding_provider: str = "openai"  # openai | local | tei | gemini | ollama | bgem3
     embedding_model: str = "text-embedding-3-large"
     gemini_embedding_model: str = "gemini-embedding-exp-03-07"
     embedding_dimensions: int = 1024
     local_embedding_model: str = "BAAI/bge-large-en-v1.5"
     tei_embedding_url: str = "http://localhost:8081"
     ollama_embedding_model: str = "nomic-embed-text"
+
+    # --- BGE-M3 (unified dense+sparse in single pass) ---
+    bgem3_model_name: str = "BAAI/bge-m3"
+    bgem3_max_length: int = 8192
+    bgem3_batch_size: int = 12
+    bgem3_use_fp16: bool = True
+
     enable_visual_embeddings: bool = False  # ColQwen2.5 visual reranking
     visual_embedding_model: str = "vidore/colqwen2.5-v0.2"
     visual_embedding_device: str = "mps"  # mps | cuda | cpu
@@ -415,6 +422,11 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _populate_nested(self) -> "Settings":
+        # BGE-M3: auto-enable sparse embeddings and force 1024 dimensions
+        if self.embedding_provider == "bgem3":
+            self.enable_sparse_embeddings = True
+            self.embedding_dimensions = 1024
+
         if self.llm is None:
             self.llm = LLMConfig(
                 provider=self.llm_provider,

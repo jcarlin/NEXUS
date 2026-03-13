@@ -30,6 +30,7 @@ dependencies = [
     # Retrieval
     "llama-index-core",
     "fastembed",
+    "FlagEmbedding>=1.2",
 
     # Vector DB & Graph
     "qdrant-client>=1.12",

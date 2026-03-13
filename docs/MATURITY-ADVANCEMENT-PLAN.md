@@ -130,7 +130,7 @@ All 12 items implemented (T2-3 was completed as M19).
 | T3-5 | **Interactive graph editing** | Platform §4 | Planned |
 | T3-6 | **Onboarding flow** for new users | Platform §7 | Planned |
 | T3-7 | **SPLADE for sparse retrieval** | RAG Maturity §3 | Planned |
-| T3-8 | **BGE-M3 unified dense+sparse model** | RAG Maturity §3 | Planned |
+| T3-8 | **BGE-M3 unified dense+sparse model** | RAG Maturity §3 | ✅ `BGEM3Provider` in embedder.py, `BGEM3SparseAdapter`, unified single-pass ingestion, `EMBEDDING_PROVIDER=bgem3` |
 | T3-9 | **Entity-graph alignment check** (HalluGraph) | RAG Maturity §7 | Planned |
 | T3-10 | **GraphRAG community summaries** | RAG Maturity §6 | Planned |
 | T3-11 | **Kubernetes manifests / Helm charts** | Platform §9 | Planned |

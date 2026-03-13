@@ -602,7 +602,7 @@ async def case_context_resolve(state: dict) -> dict:
 
     # Classify tier based on query complexity heuristic
     original_query = state.get("original_query", "")
-    tier = _classify_tier(original_query)
+    tier = classify_tier(original_query)
 
     # Determine if verification should be skipped (fast tier)
     from app.dependencies import get_settings
@@ -638,16 +638,29 @@ async def case_context_resolve(state: dict) -> dict:
         query_type=query_type,
     )
 
+    # Adaptive retrieval depth (T3-13)
+    adaptive_text_limit = None
+    adaptive_graph_limit = None
+    if settings.enable_adaptive_retrieval_depth and query_type:
+        adaptive_text_limit = (
+            getattr(settings, f"retrieval_depth_{query_type}_text", None) or settings.retrieval_text_limit
+        )
+        adaptive_graph_limit = (
+            getattr(settings, f"retrieval_depth_{query_type}_graph", None) or settings.retrieval_graph_limit
+        )
+
     return {
         "_case_context": case_context_text,
         "_term_map": term_map,
         "_tier": tier,
         "_skip_verification": skip_verification,
         "_query_type": query_type,
+        "_adaptive_text_limit": adaptive_text_limit,
+        "_adaptive_graph_limit": adaptive_graph_limit,
     }
 
 
-def _classify_tier(query: str) -> str:
+def classify_tier(query: str) -> str:
     """Lightweight heuristic tier classification.
 
     - **fast**: Short factual queries (<= 15 words, question mark OR interrogative opener)

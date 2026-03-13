@@ -4,7 +4,7 @@ Multimodal RAG investigation platform for legal document intelligence. Ingests, 
 
 *See `ARCHITECTURE.md` for full system design, tech stack, and data flow diagrams.*
 
-**Status**: All 22 milestones complete (M0–M21) + Tier 2 Maturity + Tier 3 Phase 1. ~1354 backend + 66 frontend tests passing.
+**Status**: All 22 milestones complete (M0–M21) + Tier 2 Maturity + Tier 3 Phase 1-2. ~1376 backend + 66 frontend tests passing.
 19 domain modules, 23 DI factories, 41 feature flags (38 runtime-toggleable), 6 autonomous LangGraph agents, 16 agent tools.
 Full local deployment with zero cloud API dependency.
 
@@ -139,7 +139,7 @@ Full local deployment with zero cloud API dependency.
 ## Key Patterns
 
 - **LLM abstraction** (`app/common/llm.py`): Unified client for Anthropic/OpenAI/vLLM/Ollama. Cloud→local migration = change `LLM_PROVIDER` + base URL in `.env`
-- **Multi-provider embeddings** (`app/common/embedder.py`): `EmbeddingProvider` protocol with 5 implementations (OpenAI, Ollama, local, TEI, Gemini). Switch via `EMBEDDING_PROVIDER`
+- **Multi-provider embeddings** (`app/common/embedder.py`): `EmbeddingProvider` protocol with 6 implementations (OpenAI, Ollama, local, TEI, Gemini, BGE-M3). Switch via `EMBEDDING_PROVIDER`. BGE-M3 (`bgem3`) produces dense+sparse in a single forward pass
 - **DI singletons** (`app/dependencies.py`): All clients via `@functools.cache` factory functions (23 factories, see `_ALL_CACHED_FACTORIES`)
 - **Hybrid retrieval** (`app/query/retriever.py`): Qdrant dense+sparse with native RRF fusion + Neo4j multi-hop graph traversal + optional visual rerank
 - **Agentic query** (`app/query/graph.py`): `create_react_agent` with 16 tools → `case_context_resolve` → `investigation_agent` → `verify_citations` → optional `reflect` → `generate_follow_ups`
