@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { X } from "lucide-react";
 import { apiClient } from "@/api/client";
@@ -59,7 +60,12 @@ export function PipelineStatus() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-sm font-medium">Pipeline Status</CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm font-medium">Pipeline Status</CardTitle>
+          <Link to="/documents/import" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+            View all
+          </Link>
+        </div>
       </CardHeader>
       <CardContent>
         <ScrollArea className="h-[280px]">

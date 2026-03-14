@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { apiClient } from "@/api/client";
 import { useAppStore } from "@/stores/app-store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,7 +27,12 @@ export function RecentActivity() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-sm font-medium">Recent Activity</CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm font-medium">Recent Activity</CardTitle>
+          <Link to="/admin/audit-log" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+            View all
+          </Link>
+        </div>
       </CardHeader>
       <CardContent>
         <ScrollArea className="h-[280px]">
