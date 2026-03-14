@@ -668,6 +668,7 @@ async def case_context_resolve(state: dict) -> dict:
         )
 
     return {
+        "messages": state.get("messages", []),  # Explicitly preserve messages field
         "_case_context": case_context_text,
         "_term_map": term_map,
         "_tier": tier,
