@@ -1,6 +1,6 @@
 # Feature Flags Reference
 
-All 41 feature flags are defined in `app/config.py` (Settings class) and read from environment variables. 38 are registered in `app/feature_flags/registry.py` and toggleable at runtime via the admin UI. All default to `false` unless noted otherwise.
+All 42 feature flags are defined in `app/config.py` (Settings class) and read from environment variables. 39 are registered in `app/feature_flags/registry.py` and toggleable at runtime via the admin UI. All default to `false` unless noted otherwise.
 
 ## Runtime Toggling (Admin UI)
 
@@ -49,6 +49,7 @@ Celery workers run in separate processes with their own Settings singleton. They
 | `ENABLE_TOPIC_CLUSTERING` | `false` | BERTopic-based topic clustering of document chunks |
 | `ENABLE_AGENTIC_PIPELINE` | **`true`** | Agentic LangGraph query pipeline (vs. v1 linear chain) |
 | `ENABLE_CITATION_VERIFICATION` | **`true`** | Self-RAG citation verification in query synthesis |
+| `ENABLE_AGENT_CLARIFICATION` | `false` | Agent can ask one clarifying question per query when ambiguous |
 | `ENABLE_REDACTION` | `false` | PII detection and document redaction engine |
 | `ENABLE_GOOGLE_DRIVE` | `false` | Google Drive OAuth connector for document ingestion |
 | `ENABLE_CHUNK_QUALITY_SCORING` | `false` | Heuristic chunk quality scoring at ingestion time |
@@ -177,6 +178,15 @@ Celery workers run in separate processes with their own Settings singleton. They
 - **Resources gated**: No DI singleton. The `case_context_resolve` node in `app/query/nodes.py` reads the flag to decide whether to run verification logic. Verification may consume additional LLM API calls.
 - **Runtime impact**: Adds latency to query responses by verifying up to `MAX_CLAIMS_TO_VERIFY` (default 10) claims. Each verification may require an LLM call. No local model loading.
 - **Related settings**: `MAX_CLAIMS_TO_VERIFY`
+
+#### `ENABLE_AGENT_CLARIFICATION`
+- **Default**: `false`
+- **Module**: `app/query/tools.py`, `app/query/graph.py`, `app/query/nodes.py`, `app/query/router.py`
+- **Config key**: `Settings.enable_agent_clarification`
+- **Description**: Allows the investigation agent to ask the user one clarifying question per query when it encounters genuine ambiguity (multiple entity matches, unclear time ranges, too many results). Uses LangGraph's `interrupt()` primitive to pause the graph, stream the question via SSE, and resume via `POST /query/resume` when the user responds.
+- **Resources gated**: No DI singleton. Adds `ask_user` to the agent's tool list and appends `CLARIFICATION_ADDENDUM` to the system prompt. DI caches cleared: `get_query_graph`.
+- **Runtime impact**: Minimal — only adds one additional tool binding to the agent. The at-most-one guard ensures the agent can only ask a single question per investigation. No model loading.
+- **Related settings**: None
 
 #### `ENABLE_TOPIC_CLUSTERING`
 - **Default**: `false`

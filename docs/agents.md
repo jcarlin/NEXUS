@@ -62,6 +62,11 @@ The primary query agent. Receives a user question, autonomously selects and call
   | `communication_matrix` | Analyze sender-recipient communication patterns |
   | `topic_cluster` | Cluster retrieved documents by topic using BERTopic |
   | `network_analysis` | Compute entity centrality metrics (degree, pagerank, betweenness) |
+  | `decompose_query` | Decompose complex multi-part questions into sub-questions |
+  | `cypher_query` | Generate and execute read-only Cypher queries against the knowledge graph |
+  | `structured_query` | Generate and execute read-only SQL queries for aggregate statistics |
+  | `get_community_context` | Retrieve GraphRAG community context for an entity |
+  | `ask_user` | Ask the user a clarifying question via LangGraph `interrupt()` (feature-flagged: `ENABLE_AGENT_CLARIFICATION`) |
 
 - **Output format**: `QueryResponse` schema containing:
   - `response` (str) -- The synthesized answer with `[Source: filename, page X]` citations

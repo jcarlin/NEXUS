@@ -5,7 +5,7 @@ Multimodal RAG investigation platform for legal document intelligence. Ingests, 
 *See `ARCHITECTURE.md` for full system design, tech stack, and data flow diagrams.*
 
 **Status**: All 22 milestones complete (M0–M21) + Tier 2 Maturity + Tier 3 (all 15 items). ~1528 backend + 77 frontend tests passing.
-20 domain modules, 23 DI factories, 47 feature flags (44 runtime-toggleable), 6 autonomous LangGraph agents, 17 agent tools.
+20 domain modules, 23 DI factories, 48 feature flags (45 runtime-toggleable), 6 autonomous LangGraph agents, 17 agent tools.
 Full local deployment with zero cloud API dependency.
 
 ---
@@ -179,8 +179,8 @@ This project uses [Semantic Versioning](https://semver.org/) with `v`-prefixed g
 - **Multi-provider embeddings** (`app/common/embedder.py`): `EmbeddingProvider` protocol with 6 implementations (OpenAI, Ollama, local, TEI, Gemini, BGE-M3). Switch via `EMBEDDING_PROVIDER`. BGE-M3 (`bgem3`) produces dense+sparse in a single forward pass
 - **DI singletons** (`app/dependencies.py`): All clients via `@functools.cache` factory functions (23 factories, see `_ALL_CACHED_FACTORIES`)
 - **Hybrid retrieval** (`app/query/retriever.py`): Qdrant dense+sparse with native RRF fusion + Neo4j multi-hop graph traversal + optional visual rerank
-- **Agentic query** (`app/query/graph.py`): `create_react_agent` with 16 tools → `case_context_resolve` → `investigation_agent` → `verify_citations` → optional `reflect` → `generate_follow_ups`
-- **Agentic tools** (`app/query/tools.py`): 16 `@tool` functions with `InjectedState` for security-scoped matter_id and privilege filters
+- **Agentic query** (`app/query/graph.py`): `create_react_agent` with 16 tools (+1 `ask_user` when clarification enabled) → `case_context_resolve` → `investigation_agent` → `verify_citations` → optional `reflect` → `generate_follow_ups`
+- **Agentic tools** (`app/query/tools.py`): 17 `@tool` functions with `InjectedState` for security-scoped matter_id and privilege filters
 - **6 autonomous agents**: Investigation Orchestrator, Citation Verifier, Case Setup Agent, Hot Doc Scanner, Contextual Completeness, Entity Resolution Agent (see `docs/agents.md`)
 - **Case context** (`app/cases/`): Case Setup Agent extracts claims/parties/timeline from anchor doc, auto-injected into query graph via `context_resolver.py`
 - **SSE streaming** (`app/query/router.py`): Sources sent before generation starts, then token-by-token LLM streaming via `graph.astream` + `get_stream_writer`
@@ -188,7 +188,7 @@ This project uses [Semantic Versioning](https://semver.org/) with `v`-prefixed g
 - **Audit logging** (`app/common/middleware.py`): Every API call → `audit_log` table (user, action, resource, matter, IP)
 - **AI audit logging** (`app/common/llm.py`): Every LLM call logged with prompt hash, tokens, latency → `ai_audit_log` table
 - **Structured logging**: `structlog` with contextvars (`request_id`, `task_id`, `job_id`)
-- **Feature flags**: 35 `ENABLE_*` flags, 33 runtime-toggleable via admin UI (see `docs/feature-flags.md` for full reference)
+- **Feature flags**: 36 `ENABLE_*` flags, 34 runtime-toggleable via admin UI (see `docs/feature-flags.md` for full reference)
 - **Runtime feature flags** (`app/feature_flags/`): Admin UI toggle, DB override persistence, DI cache clearing, risk-level gating
 - **LLM config management** (`app/llm_config/`): Runtime provider CRUD, tier assignment, auto-registration from env vars, model discovery, cost estimation
 - **RAG quality pipeline**: Chunk quality scoring → contextual enrichment → CRAG grading (heuristic + conditional LLM) → reranking (enabled by default)

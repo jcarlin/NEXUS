@@ -717,7 +717,7 @@ NEXUS has 19 domain modules under `app/`, plus a shared `app/common/` infrastruc
 
 | File | Description |
 |------|-------------|
-| `router.py` | POST /query, POST /query/stream (SSE), GET /chats, GET /chats/{thread_id}, DELETE /chats/{thread_id} |
+| `router.py` | POST /query, POST /query/stream (SSE), POST /query/resume, GET /chats, GET /chats/{thread_id}, DELETE /chats/{thread_id} |
 | `graph.py` | `build_graph` factory -- v1 (9-node chain) or agentic (4-node parent + create_react_agent subgraph) |
 | `nodes.py` | Node functions: classify, rewrite, retrieve, rerank, check_relevance, graph_lookup, synthesize, verify_citations, generate_follow_ups, case_context_resolve, audit_log_hook |
 | `retriever.py` | `HybridRetriever` -- parallel dense Qdrant search + Neo4j entity-centric graph traversal |
@@ -725,7 +725,7 @@ NEXUS has 19 domain modules under `app/`, plus a shared `app/common/` infrastruc
 | `tools.py` | LangGraph `@tool`-decorated functions: vector_search, graph_search, entity_lookup, timeline_query, communication_query |
 | `service.py` | `QueryService` (graph state construction, response extraction) + `ChatService` (message persistence via raw SQL) |
 | `prompts.py` | CLASSIFY_PROMPT, REWRITE_PROMPT, SYNTHESIS_PROMPT, FOLLOWUP_PROMPT, INVESTIGATION_SYSTEM_PROMPT, VERIFY_CLAIMS_PROMPT, VERIFY_JUDGMENT_PROMPT |
-| `schemas.py` | QueryRequest, QueryResponse, SourceDocument, CitedClaim, EntityMention, ChatMessage, ChatThread, VerificationJudgment |
+| `schemas.py` | QueryRequest, QueryResponse, ClarificationResponse, SourceDocument, CitedClaim, EntityMention, ChatMessage, ChatThread, VerificationJudgment |
 
 ### Key Schemas
 
@@ -743,6 +743,7 @@ NEXUS has 19 domain modules under `app/`, plus a shared `app/common/` infrastruc
 
 - `POST /api/v1/query` -- synchronous query (full response)
 - `POST /api/v1/query/stream` -- SSE streaming query (sources sent first, then token-by-token)
+- `POST /api/v1/query/resume` -- resume a paused investigation after user answers a clarification question
 - `GET /api/v1/chats` -- list chat threads for current user/matter
 - `GET /api/v1/chats/{thread_id}` -- full chat history
 - `DELETE /api/v1/chats/{thread_id}` -- delete chat thread
