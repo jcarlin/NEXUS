@@ -566,6 +566,15 @@ def build_system_prompt(state: dict) -> list:
         system_text += CLARIFICATION_ADDENDUM
 
     messages = state.get("messages", [])
+    # Gemini requires at least one non-system message in contents.
+    # If messages is empty (e.g. V1 state passed to agentic graph),
+    # fall back to original_query so the model always has user input.
+    if not messages:
+        from langchain_core.messages import HumanMessage
+
+        original_query = state.get("original_query", "")
+        if original_query:
+            messages = [HumanMessage(content=original_query)]
     return [SystemMessage(content=system_text)] + messages
 
 

@@ -35,6 +35,94 @@ class TestClassifyTier:
         assert classify_tier(long_query) == "deep"
 
 
+class TestBuildSystemPrompt:
+    """Test build_system_prompt handles empty messages for Gemini compatibility."""
+
+    def _make_state(self, messages=None, original_query="", case_context="", query_type=""):
+        state = {
+            "messages": messages or [],
+            "original_query": original_query,
+            "_case_context": case_context,
+            "_query_type": query_type,
+        }
+        return state
+
+    @patch("app.dependencies.get_settings")
+    def test_empty_messages_falls_back_to_original_query(self, mock_settings):
+        """When messages is empty, build_system_prompt should create a HumanMessage from original_query."""
+        from langchain_core.messages import HumanMessage, SystemMessage
+
+        from app.query.nodes import build_system_prompt
+
+        mock_settings.return_value = MagicMock(enable_agent_clarification=False)
+        state = self._make_state(messages=[], original_query="What patent disputes exist?")
+        result = build_system_prompt(state)
+
+        assert len(result) >= 2
+        assert isinstance(result[0], SystemMessage)
+        assert isinstance(result[1], HumanMessage)
+        assert result[1].content == "What patent disputes exist?"
+
+    @patch("app.dependencies.get_settings")
+    def test_populated_messages_used_as_is(self, mock_settings):
+        """When messages is populated, build_system_prompt should use them directly."""
+        from langchain_core.messages import HumanMessage, SystemMessage
+
+        from app.query.nodes import build_system_prompt
+
+        mock_settings.return_value = MagicMock(enable_agent_clarification=False)
+        existing = [HumanMessage(content="existing question")]
+        state = self._make_state(messages=existing, original_query="original question")
+        result = build_system_prompt(state)
+
+        assert len(result) == 2
+        assert isinstance(result[0], SystemMessage)
+        assert result[1].content == "existing question"
+
+    @patch("app.dependencies.get_settings")
+    def test_empty_messages_no_original_query(self, mock_settings):
+        """When both messages and original_query are empty, only SystemMessage is returned."""
+        from langchain_core.messages import SystemMessage
+
+        from app.query.nodes import build_system_prompt
+
+        mock_settings.return_value = MagicMock(enable_agent_clarification=False)
+        state = self._make_state(messages=[], original_query="")
+        result = build_system_prompt(state)
+
+        assert len(result) == 1
+        assert isinstance(result[0], SystemMessage)
+
+
+class TestBuildChatModelGemini:
+    """Test _build_chat_model translates max_tokens to max_output_tokens for Gemini."""
+
+    def test_gemini_max_tokens_translated(self):
+        """max_tokens kwarg should become max_output_tokens for Gemini."""
+        mock_cls = MagicMock()
+        mock_module = MagicMock()
+        mock_module.ChatGoogleGenerativeAI = mock_cls
+
+        import sys
+
+        original = sys.modules.get("langchain_google_genai")
+        sys.modules["langchain_google_genai"] = mock_module
+        try:
+            from app.query.graph import _build_chat_model
+
+            _build_chat_model("gemini", "gemini-pro", "fake-key", None, max_tokens=4096, temperature=0.7)
+
+            _, call_kwargs = mock_cls.call_args
+            assert "max_tokens" not in call_kwargs
+            assert call_kwargs["max_output_tokens"] == 4096
+            assert call_kwargs["temperature"] == 0.7
+        finally:
+            if original is None:
+                sys.modules.pop("langchain_google_genai", None)
+            else:
+                sys.modules["langchain_google_genai"] = original
+
+
 class TestAutoRouting:
     """Test auto-routing logic."""
 

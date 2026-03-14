@@ -276,7 +276,11 @@ def _build_chat_model(provider: str, model: str, api_key: str, base_url: str | N
     elif provider == "gemini":
         from langchain_google_genai import ChatGoogleGenerativeAI
 
-        return ChatGoogleGenerativeAI(model=model, google_api_key=api_key, **kwargs)
+        # Gemini uses max_output_tokens, not max_tokens
+        gemini_kwargs = {k: v for k, v in kwargs.items() if k != "max_tokens"}
+        if "max_tokens" in kwargs:
+            gemini_kwargs["max_output_tokens"] = kwargs["max_tokens"]
+        return ChatGoogleGenerativeAI(model=model, google_api_key=api_key, **gemini_kwargs)
     elif provider in ("openai", "vllm", "ollama"):
         from langchain_openai import ChatOpenAI
 
