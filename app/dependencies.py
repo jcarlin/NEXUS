@@ -397,6 +397,22 @@ def get_saml_provider():
 
 
 # ---------------------------------------------------------------------------
+# Docker (feature-flagged)
+# ---------------------------------------------------------------------------
+
+
+@functools.cache
+def get_docker():
+    """Return the aiodocker.Docker client singleton, or None when disabled."""
+    settings = get_settings()
+    if not settings.enable_service_operations:
+        return None
+    import aiodocker
+
+    return aiodocker.Docker(url=f"unix://{settings.docker_socket_path}")
+
+
+# ---------------------------------------------------------------------------
 # Hybrid Retriever
 # ---------------------------------------------------------------------------
 
@@ -513,6 +529,7 @@ _ALL_CACHED_FACTORIES = [
     get_gdrive_service,
     get_oidc_provider,
     get_saml_provider,
+    get_docker,
     _get_checkpointer_conn,
     get_checkpointer,
     get_query_graph,
@@ -552,6 +569,13 @@ async def close_all() -> None:
     if get_redis.cache_info().currsize:
         await get_redis().aclose()
         logger.info("shutdown.redis")
+
+    # Close Docker client
+    if get_docker.cache_info().currsize:
+        docker = get_docker()
+        if docker is not None:
+            await docker.close()
+        logger.info("shutdown.docker")
 
     # Close TEI HTTP clients (embedder and reranker)
     if get_embedder.cache_info().currsize:

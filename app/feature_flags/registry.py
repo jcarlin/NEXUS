@@ -297,6 +297,13 @@ FLAG_REGISTRY: dict[str, FlagMeta] = {
         category=FlagCategory.ENTITY_GRAPH,
         risk_level=FlagRiskLevel.SAFE,
     ),
+    "enable_service_operations": FlagMeta(
+        display_name="Service Operations",
+        description="Docker container management, Celery worker control, and uptime monitoring admin panel.",
+        category=FlagCategory.INTEGRATIONS,
+        risk_level=FlagRiskLevel.RESTART,
+        di_caches=["get_docker"],
+    ),
 }
 
 

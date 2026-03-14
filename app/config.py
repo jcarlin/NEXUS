@@ -127,6 +127,7 @@ class FeatureFlags(BaseModel):
     hallugraph_alignment: bool
     document_comparison: bool
     graphrag_communities: bool
+    service_operations: bool
 
 
 class Settings(BaseSettings):
@@ -370,6 +371,11 @@ class Settings(BaseSettings):
     # --- GraphRAG Community Summaries (T3-10) ---
     enable_graphrag_communities: bool = False
 
+    # --- Service Operations ---
+    enable_service_operations: bool = False
+    docker_socket_path: str = "/var/run/docker.sock"
+    docker_compose_project: str = "nexus"
+
     # --- HyDE (Hypothetical Document Embeddings) (T2-6) ---
     enable_hyde: bool = False
     hyde_model: str = ""  # Falls back to llm_model if empty
@@ -572,5 +578,6 @@ class Settings(BaseSettings):
                 hallugraph_alignment=self.enable_hallugraph_alignment,
                 document_comparison=self.enable_document_comparison,
                 graphrag_communities=self.enable_graphrag_communities,
+                service_operations=self.enable_service_operations,
             )
         return self

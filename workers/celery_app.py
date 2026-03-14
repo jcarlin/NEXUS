@@ -55,10 +55,14 @@ celery_app.conf.update(
             "task": "app.retention.tasks.check_retention_expirations",
             "schedule": 86400,  # Daily
         },
+        "poll-service-health": {
+            "task": "app.operations.tasks.poll_service_health",
+            "schedule": 60,
+        },
     },
 )
 
 # Autodiscover tasks in all domains with Celery tasks.
 celery_app.autodiscover_tasks(
-    ["app.ingestion", "app.entities", "app.cases", "app.analysis", "app.exports", "app.retention"]
+    ["app.ingestion", "app.entities", "app.cases", "app.analysis", "app.exports", "app.retention", "app.operations"]
 )

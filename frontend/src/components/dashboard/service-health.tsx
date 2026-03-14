@@ -1,7 +1,9 @@
+import { Link } from "@tanstack/react-router";
 import { useHealthApiV1HealthGet } from "@/api/generated/system/system";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
+  ArrowRight,
   Database,
   Search,
   GitBranch,
@@ -9,6 +11,7 @@ import {
   HardDrive,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { useAuthStore } from "@/stores/auth-store";
 
 interface ServiceDef {
   key: string;
@@ -46,6 +49,7 @@ function StatusDot({ status }: { status: "ok" | "error" | "loading" }) {
 }
 
 export function ServiceHealth() {
+  const userRole = useAuthStore((s) => s.user?.role);
   const { data, isLoading } = useHealthApiV1HealthGet({
     query: { refetchInterval: 30000 },
   });
@@ -79,7 +83,7 @@ export function ServiceHealth() {
             );
           })}
         </div>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
           {isLoading ? (
             <Badge variant="secondary">Checking...</Badge>
           ) : allOk ? (
@@ -88,6 +92,15 @@ export function ServiceHealth() {
             </Badge>
           ) : (
             <Badge variant="destructive">Degraded</Badge>
+          )}
+          {userRole === "admin" && (
+            <Link
+              to="/admin/operations"
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+            >
+              Operations
+              <ArrowRight className="h-3 w-3" />
+            </Link>
           )}
         </div>
       </CardContent>

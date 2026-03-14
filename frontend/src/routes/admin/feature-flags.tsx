@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2, RotateCcw, Server } from "lucide-react";
 import { apiClient } from "@/api/client";
@@ -111,7 +111,9 @@ function FeatureFlagsPage() {
       queryClient.invalidateQueries({ queryKey: ["admin-feature-flags"] });
       queryClient.invalidateQueries({ queryKey: ["feature-flags"] });
       if (result.restart_required) {
-        notify.info(`${result.display_name} saved. Takes effect after server restart.`);
+        notify.info(
+          `${result.display_name} saved. Takes effect after server restart. Go to Operations page to restart.`,
+        );
       } else if (result.caches_cleared.length > 0) {
         notify.success(
           `${result.display_name} ${result.enabled ? "enabled" : "disabled"}. Cleared ${result.caches_cleared.length} cache(s).`,
@@ -183,12 +185,12 @@ function FeatureFlagsPage() {
         </p>
       </div>
 
-      {/* Celery warning */}
+      {/* Celery info */}
       {hasIngestionFlags && (
-        <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950">
-          <Server className="h-4 w-4 text-amber-600 dark:text-amber-500 mt-0.5 shrink-0" />
-          <p className="text-xs text-amber-800 dark:text-amber-200">
-            Ingestion pipeline flags require a Celery worker restart to take effect in background tasks.
+        <div className="flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 p-3 dark:border-blue-900 dark:bg-blue-950">
+          <Server className="h-4 w-4 text-blue-600 dark:text-blue-500 mt-0.5 shrink-0" />
+          <p className="text-xs text-blue-800 dark:text-blue-200">
+            Ingestion pipeline flag changes take effect on the next background task execution.
           </p>
         </div>
       )}

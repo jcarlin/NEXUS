@@ -274,6 +274,11 @@ def create_app() -> FastAPI:
 
         application.include_router(depositions_router, prefix="/api/v1")
 
+    if settings.enable_service_operations:
+        from app.operations.router import router as operations_router
+
+        application.include_router(operations_router, prefix="/api/v1")
+
     from app.retention.router import router as retention_router
 
     application.include_router(retention_router, prefix="/api/v1")

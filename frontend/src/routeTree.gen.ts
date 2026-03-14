@@ -28,6 +28,7 @@ import { Route as ChatThreadIdRouteImport } from './routes/chat/$threadId'
 import { Route as AnalyticsTimelineRouteImport } from './routes/analytics/timeline'
 import { Route as AnalyticsCommsRouteImport } from './routes/analytics/comms'
 import { Route as AdminUsersRouteImport } from './routes/admin/users'
+import { Route as AdminOperationsRouteImport } from './routes/admin/operations'
 import { Route as AdminLlmSettingsRouteImport } from './routes/admin/llm-settings'
 import { Route as AdminKnowledgeGraphRouteImport } from './routes/admin/knowledge-graph'
 import { Route as AdminFeatureFlagsRouteImport } from './routes/admin/feature-flags'
@@ -130,6 +131,11 @@ const AdminUsersRoute = AdminUsersRouteImport.update({
   path: '/admin/users',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminOperationsRoute = AdminOperationsRouteImport.update({
+  id: '/admin/operations',
+  path: '/admin/operations',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminLlmSettingsRoute = AdminLlmSettingsRouteImport.update({
   id: '/admin/llm-settings',
   path: '/admin/llm-settings',
@@ -170,6 +176,7 @@ export interface FileRoutesByFullPath {
   '/admin/feature-flags': typeof AdminFeatureFlagsRoute
   '/admin/knowledge-graph': typeof AdminKnowledgeGraphRoute
   '/admin/llm-settings': typeof AdminLlmSettingsRoute
+  '/admin/operations': typeof AdminOperationsRoute
   '/admin/users': typeof AdminUsersRoute
   '/analytics/comms': typeof AnalyticsCommsRoute
   '/analytics/timeline': typeof AnalyticsTimelineRoute
@@ -197,6 +204,7 @@ export interface FileRoutesByTo {
   '/admin/feature-flags': typeof AdminFeatureFlagsRoute
   '/admin/knowledge-graph': typeof AdminKnowledgeGraphRoute
   '/admin/llm-settings': typeof AdminLlmSettingsRoute
+  '/admin/operations': typeof AdminOperationsRoute
   '/admin/users': typeof AdminUsersRoute
   '/analytics/comms': typeof AnalyticsCommsRoute
   '/analytics/timeline': typeof AnalyticsTimelineRoute
@@ -225,6 +233,7 @@ export interface FileRoutesById {
   '/admin/feature-flags': typeof AdminFeatureFlagsRoute
   '/admin/knowledge-graph': typeof AdminKnowledgeGraphRoute
   '/admin/llm-settings': typeof AdminLlmSettingsRoute
+  '/admin/operations': typeof AdminOperationsRoute
   '/admin/users': typeof AdminUsersRoute
   '/analytics/comms': typeof AnalyticsCommsRoute
   '/analytics/timeline': typeof AnalyticsTimelineRoute
@@ -254,6 +263,7 @@ export interface FileRouteTypes {
     | '/admin/feature-flags'
     | '/admin/knowledge-graph'
     | '/admin/llm-settings'
+    | '/admin/operations'
     | '/admin/users'
     | '/analytics/comms'
     | '/analytics/timeline'
@@ -281,6 +291,7 @@ export interface FileRouteTypes {
     | '/admin/feature-flags'
     | '/admin/knowledge-graph'
     | '/admin/llm-settings'
+    | '/admin/operations'
     | '/admin/users'
     | '/analytics/comms'
     | '/analytics/timeline'
@@ -308,6 +319,7 @@ export interface FileRouteTypes {
     | '/admin/feature-flags'
     | '/admin/knowledge-graph'
     | '/admin/llm-settings'
+    | '/admin/operations'
     | '/admin/users'
     | '/analytics/comms'
     | '/analytics/timeline'
@@ -336,6 +348,7 @@ export interface RootRouteChildren {
   AdminFeatureFlagsRoute: typeof AdminFeatureFlagsRoute
   AdminKnowledgeGraphRoute: typeof AdminKnowledgeGraphRoute
   AdminLlmSettingsRoute: typeof AdminLlmSettingsRoute
+  AdminOperationsRoute: typeof AdminOperationsRoute
   AdminUsersRoute: typeof AdminUsersRoute
   AnalyticsCommsRoute: typeof AnalyticsCommsRoute
   AnalyticsTimelineRoute: typeof AnalyticsTimelineRoute
@@ -490,6 +503,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminUsersRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/operations': {
+      id: '/admin/operations'
+      path: '/admin/operations'
+      fullPath: '/admin/operations'
+      preLoaderRoute: typeof AdminOperationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/llm-settings': {
       id: '/admin/llm-settings'
       path: '/admin/llm-settings'
@@ -544,6 +564,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminFeatureFlagsRoute: AdminFeatureFlagsRoute,
   AdminKnowledgeGraphRoute: AdminKnowledgeGraphRoute,
   AdminLlmSettingsRoute: AdminLlmSettingsRoute,
+  AdminOperationsRoute: AdminOperationsRoute,
   AdminUsersRoute: AdminUsersRoute,
   AnalyticsCommsRoute: AnalyticsCommsRoute,
   AnalyticsTimelineRoute: AnalyticsTimelineRoute,

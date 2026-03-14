@@ -103,6 +103,8 @@ services:
       ENABLE_RERANKER: "true"
       RERANKER_PROVIDER: tei
       TEI_RERANKER_URL: http://tei-reranker:80
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8000/api/v1/health || exit 1"]
       interval: 15s
