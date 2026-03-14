@@ -22,7 +22,9 @@ from app.common.storage import StorageClient
 from app.common.vector_store import VectorStoreClient
 from app.dependencies import get_db, get_graph_service, get_minio, get_qdrant
 from app.documents.schemas import (
+    DiffBlock,
     DocumentDetail,
+    DocumentDiffResponse,
     DocumentHealthItem,
     DocumentHealthResponse,
     DocumentListResponse,
@@ -33,6 +35,8 @@ from app.documents.schemas import (
     PrivilegeLogResponse,
     PrivilegeUpdateRequest,
     PrivilegeUpdateResponse,
+    VersionGroupMember,
+    VersionGroupResponse,
 )
 from app.documents.service import DocumentService
 from app.entities.graph_service import GraphService
@@ -181,6 +185,81 @@ async def list_documents(
         total=total,
         offset=offset,
         limit=limit,
+    )
+
+
+# -----------------------------------------------------------------------
+# GET /documents/compare — side-by-side diff of two documents
+# -----------------------------------------------------------------------
+
+
+@router.get("/documents/compare", response_model=DocumentDiffResponse)
+async def compare_documents(
+    left_id: UUID = Query(..., description="Left document ID"),
+    right_id: UUID = Query(..., description="Right document ID"),
+    db: AsyncSession = Depends(get_db),
+    current_user: UserRecord = Depends(get_current_user),
+    matter_id: UUID = Depends(get_matter_id),
+    storage: StorageClient = Depends(get_minio),
+):
+    """Compare two documents and return a text diff."""
+    from app.documents.comparison import compute_text_diff
+
+    try:
+        left_text = await DocumentService.get_document_text(db=db, doc_id=left_id, matter_id=matter_id, storage=storage)
+    except LookupError:
+        raise HTTPException(status_code=404, detail=f"Document {left_id} not found")
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Parsed text not found for document {left_id}")
+
+    try:
+        right_text = await DocumentService.get_document_text(
+            db=db, doc_id=right_id, matter_id=matter_id, storage=storage
+        )
+    except LookupError:
+        raise HTTPException(status_code=404, detail=f"Document {right_id} not found")
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Parsed text not found for document {right_id}")
+
+    left_doc = await DocumentService.get_document(
+        db=db, doc_id=left_id, matter_id=matter_id, user_role=current_user.role
+    )
+    right_doc = await DocumentService.get_document(
+        db=db, doc_id=right_id, matter_id=matter_id, user_role=current_user.role
+    )
+
+    blocks, truncated = compute_text_diff(left_text, right_text)
+
+    return DocumentDiffResponse(
+        left_id=left_id,
+        right_id=right_id,
+        left_filename=left_doc["filename"] if left_doc else str(left_id),
+        right_filename=right_doc["filename"] if right_doc else str(right_id),
+        blocks=[DiffBlock(**b) for b in blocks],
+        truncated=truncated,
+    )
+
+
+# -----------------------------------------------------------------------
+# GET /documents/versions/{version_group_id} — version group members
+# -----------------------------------------------------------------------
+
+
+@router.get("/documents/versions/{version_group_id}", response_model=VersionGroupResponse)
+async def get_version_group(
+    version_group_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserRecord = Depends(get_current_user),
+    matter_id: UUID = Depends(get_matter_id),
+):
+    """Get all document versions in a group."""
+    members = await DocumentService.get_version_group(db=db, version_group_id=version_group_id, matter_id=matter_id)
+    if not members:
+        raise HTTPException(status_code=404, detail=f"Version group {version_group_id} not found")
+
+    return VersionGroupResponse(
+        version_group_id=version_group_id,
+        members=[VersionGroupMember(**m) for m in members],
     )
 
 

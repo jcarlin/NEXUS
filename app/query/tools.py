@@ -846,6 +846,80 @@ async def structured_query(
 
 
 # ---------------------------------------------------------------------------
+# T3-10: GraphRAG community context tool
+# ---------------------------------------------------------------------------
+
+
+@tool
+async def get_community_context(
+    entity_name: str,
+    state: Annotated[dict, InjectedState] = {},  # noqa: B006
+) -> str:
+    """Retrieve community context for an entity from GraphRAG communities.
+
+    Use for understanding which community an entity belongs to, what other
+    entities are in the same cluster, and the community summary describing
+    relationships and themes.
+    """
+    from app.config import Settings
+
+    settings = Settings()
+    if not settings.enable_graphrag_communities:
+        return json.dumps({"info": "GraphRAG communities not enabled. Set ENABLE_GRAPHRAG_COMMUNITIES=true."})
+
+    filters = state.get("_filters", {})
+    matter_id = filters.get("matter_id", "")
+
+    if not matter_id:
+        return json.dumps({"error": "No matter context available."})
+
+    try:
+        async with _tool_db_session() as db:
+            from sqlalchemy import text
+
+            # Find the community containing this entity (JSONB array search)
+            result = await db.execute(
+                text("""
+                    SELECT id, entity_names, relationship_types,
+                           summary, entity_count, level
+                    FROM communities
+                    WHERE matter_id = :matter_id
+                      AND entity_names::jsonb @> :entity_filter::jsonb
+                    LIMIT 1
+                """),
+                {
+                    "matter_id": matter_id,
+                    "entity_filter": json.dumps([entity_name]),
+                },
+            )
+            row = result.mappings().first()
+
+            if row is None:
+                return json.dumps({"error": f"No community found containing entity '{entity_name}'."})
+
+            entity_names = row["entity_names"]
+            if isinstance(entity_names, str):
+                entity_names = json.loads(entity_names)
+
+            return json.dumps(
+                {
+                    "community_id": row["id"],
+                    "members": entity_names,
+                    "relationship_types": row["relationship_types"]
+                    if not isinstance(row["relationship_types"], str)
+                    else json.loads(row["relationship_types"]),
+                    "summary": row["summary"],
+                    "entity_count": row["entity_count"],
+                    "level": row["level"],
+                },
+                default=str,
+            )
+    except Exception as exc:
+        logger.warning("tool.error", tool="get_community_context", error=str(exc))
+        return json.dumps({"error": f"Tool failed: {type(exc).__name__}: {exc}"})
+
+
+# ---------------------------------------------------------------------------
 # Tool lists
 # ---------------------------------------------------------------------------
 
@@ -868,4 +942,6 @@ INVESTIGATION_TOOLS = [
     cypher_query,
     # Tier 2 maturity tools
     structured_query,
+    # Tier 3 maturity tools
+    get_community_context,
 ]

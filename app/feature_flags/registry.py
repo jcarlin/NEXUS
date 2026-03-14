@@ -266,6 +266,37 @@ FLAG_REGISTRY: dict[str, FlagMeta] = {
         category=FlagCategory.INTEGRATIONS,
         risk_level=FlagRiskLevel.RESTART,
     ),
+    "enable_splade_sparse": FlagMeta(
+        display_name="SPLADE Sparse Retrieval",
+        description="Learned sparse embeddings (SPLADE v3) with query expansion for legal vocabulary, replacing BM42.",
+        category=FlagCategory.RETRIEVAL,
+        risk_level=FlagRiskLevel.CACHE_CLEAR,
+        di_caches=["get_sparse_embedder", "get_retriever", "get_query_graph"],
+    ),
+    "enable_deposition_prep": FlagMeta(
+        display_name="Deposition Prep Workflow",
+        description="AI-assisted deposition preparation with witness profiling and question generation.",
+        category=FlagCategory.INTELLIGENCE,
+        risk_level=FlagRiskLevel.RESTART,
+    ),
+    "enable_document_comparison": FlagMeta(
+        display_name="Document Comparison / Redline",
+        description="Side-by-side diff of document versions with change highlighting.",
+        category=FlagCategory.INTELLIGENCE,
+        risk_level=FlagRiskLevel.SAFE,
+    ),
+    "enable_hallugraph_alignment": FlagMeta(
+        display_name="HalluGraph Entity-Graph Alignment",
+        description="Post-generation check — extract entities from LLM response, verify each exists in Neo4j KG, flag hallucinated entities.",
+        category=FlagCategory.QUERY,
+        risk_level=FlagRiskLevel.SAFE,
+    ),
+    "enable_graphrag_communities": FlagMeta(
+        display_name="GraphRAG Community Summaries",
+        description="Neo4j GDS Louvain community detection with LLM-generated summaries for entity clusters.",
+        category=FlagCategory.ENTITY_GRAPH,
+        risk_level=FlagRiskLevel.SAFE,
+    ),
 }
 
 

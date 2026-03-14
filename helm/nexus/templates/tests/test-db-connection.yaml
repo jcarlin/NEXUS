@@ -1,0 +1,28 @@
+{{- if .Values.postgres.enabled }}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "nexus.fullname" . }}-test-db
+  labels:
+    {{- include "nexus.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+spec:
+  restartPolicy: Never
+  containers:
+    - name: pg-check
+      image: postgres:16-alpine
+      env:
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "nexus.fullname" . }}-secret
+              key: POSTGRES_PASSWORD
+      command:
+        - sh
+        - -c
+        - |
+          echo "Testing PostgreSQL connectivity..."
+          pg_isready -h {{ include "nexus.fullname" . }}-postgres -U {{ .Values.postgres.credentials.username }} -d {{ .Values.postgres.credentials.database }} || exit 1
+          echo "PostgreSQL connection check passed."
+{{- end }}

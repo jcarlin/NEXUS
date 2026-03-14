@@ -1,0 +1,52 @@
+{{- if .Values.flower.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "nexus.fullname" . }}-flower
+  labels:
+    {{- include "nexus.labels" . | nindent 4 }}
+    app.kubernetes.io/component: flower
+spec:
+  replicas: {{ .Values.flower.replicas }}
+  selector:
+    matchLabels:
+      {{- include "nexus.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: flower
+  template:
+    metadata:
+      labels:
+        {{- include "nexus.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: flower
+    spec:
+      containers:
+        - name: flower
+          image: "{{ .Values.flower.image.repository }}:{{ .Values.flower.image.tag }}"
+          imagePullPolicy: {{ .Values.flower.image.pullPolicy }}
+          command:
+            - celery
+            - -A
+            - workers.celery_app
+            - flower
+            - --port=5555
+            - --basic_auth=$(FLOWER_USER):$(FLOWER_PASSWORD)
+            - --persistent=True
+            - --db=/data/flower.db
+            - --url_prefix=flower
+          ports:
+            - name: http
+              containerPort: 5555
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "nexus.fullname" . }}-config
+            - secretRef:
+                name: {{ include "nexus.fullname" . }}-secret
+          resources:
+            {{- toYaml .Values.flower.resources | nindent 12 }}
+          volumeMounts:
+            - name: flower-data
+              mountPath: /data
+      volumes:
+        - name: flower-data
+          emptyDir: {}
+{{- end }}

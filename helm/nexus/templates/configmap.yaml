@@ -1,0 +1,201 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "nexus.fullname" . }}-config
+  labels:
+    {{- include "nexus.labels" . | nindent 4 }}
+data:
+  # --- Connection Strings (auto-generated from service names) ---
+  {{- if .Values.postgres.enabled }}
+  POSTGRES_URL: "postgresql+asyncpg://{{ .Values.postgres.credentials.username }}:$(POSTGRES_PASSWORD)@{{ include "nexus.fullname" . }}-postgres:5432/{{ .Values.postgres.credentials.database }}"
+  POSTGRES_URL_SYNC: "postgresql://{{ .Values.postgres.credentials.username }}:$(POSTGRES_PASSWORD)@{{ include "nexus.fullname" . }}-postgres:5432/{{ .Values.postgres.credentials.database }}"
+  {{- else }}
+  POSTGRES_URL: {{ .Values.postgres.externalUrl | quote }}
+  POSTGRES_URL_SYNC: {{ .Values.postgres.externalSyncUrl | quote }}
+  {{- end }}
+  {{- if .Values.redis.enabled }}
+  REDIS_URL: "redis://{{ include "nexus.fullname" . }}-redis:6379/0"
+  {{- else }}
+  REDIS_URL: {{ .Values.redis.externalUrl | quote }}
+  {{- end }}
+  {{- if .Values.qdrant.enabled }}
+  QDRANT_URL: "http://{{ include "nexus.fullname" . }}-qdrant:6333"
+  {{- else }}
+  QDRANT_URL: {{ .Values.qdrant.externalUrl | quote }}
+  {{- end }}
+  {{- if .Values.neo4j.enabled }}
+  NEO4J_URI: "bolt://{{ include "nexus.fullname" . }}-neo4j:7687"
+  NEO4J_USER: "neo4j"
+  {{- else }}
+  NEO4J_URI: {{ .Values.neo4j.externalUri | quote }}
+  NEO4J_USER: "neo4j"
+  {{- end }}
+  {{- if .Values.minio.enabled }}
+  MINIO_ENDPOINT: "{{ include "nexus.fullname" . }}-minio:9000"
+  {{- else }}
+  MINIO_ENDPOINT: {{ .Values.minio.externalEndpoint | quote }}
+  {{- end }}
+  MINIO_BUCKET: "documents"
+  MINIO_USE_SSL: "false"
+
+  # --- LLM Providers ---
+  LLM_PROVIDER: {{ .Values.config.llmProvider | quote }}
+  LLM_MODEL: {{ .Values.config.llmModel | quote }}
+  QUERY_LLM_MODEL: {{ .Values.config.queryLlmModel | quote }}
+  VLLM_BASE_URL: {{ .Values.config.vllmBaseUrl | quote }}
+  OLLAMA_BASE_URL: {{ .Values.config.ollamaBaseUrl | quote }}
+
+  # --- Embedding ---
+  EMBEDDING_PROVIDER: {{ .Values.config.embeddingProvider | quote }}
+  EMBEDDING_MODEL: {{ .Values.config.embeddingModel | quote }}
+  GEMINI_EMBEDDING_MODEL: {{ .Values.config.geminiEmbeddingModel | quote }}
+  EMBEDDING_DIMENSIONS: {{ .Values.config.embeddingDimensions | quote }}
+  LOCAL_EMBEDDING_MODEL: {{ .Values.config.localEmbeddingModel | quote }}
+  OLLAMA_EMBEDDING_MODEL: {{ .Values.config.ollamaEmbeddingModel | quote }}
+  EMBEDDING_BATCH_SIZE: {{ .Values.config.embeddingBatchSize | quote }}
+  VISUAL_EMBEDDING_MODEL: {{ .Values.config.visualEmbeddingModel | quote }}
+  VISUAL_EMBEDDING_DEVICE: {{ .Values.config.visualEmbeddingDevice | quote }}
+  VISUAL_EMBEDDING_BATCH_SIZE: {{ .Values.config.visualEmbeddingBatchSize | quote }}
+  VISUAL_EMBEDDING_DIM: {{ .Values.config.visualEmbeddingDim | quote }}
+  VISUAL_RERANK_WEIGHT: {{ .Values.config.visualRerankWeight | quote }}
+  VISUAL_RERANK_TOP_N: {{ .Values.config.visualRerankTopN | quote }}
+  VISUAL_PAGE_DPI: {{ .Values.config.visualPageDpi | quote }}
+
+  # --- Processing ---
+  CELERY_CONCURRENCY: {{ .Values.worker.celery.concurrency | quote }}
+  CHUNK_SIZE: {{ .Values.config.chunkSize | quote }}
+  CHUNK_OVERLAP: {{ .Values.config.chunkOverlap | quote }}
+  GLINER_MODEL: {{ .Values.config.glinerModel | quote }}
+
+  # --- Sparse Embeddings ---
+  SPARSE_EMBEDDING_MODEL: {{ .Values.config.sparseEmbeddingModel | quote }}
+
+  # --- Retrieval Tuning ---
+  RETRIEVAL_TEXT_LIMIT: {{ .Values.config.retrievalTextLimit | quote }}
+  RETRIEVAL_GRAPH_LIMIT: {{ .Values.config.retrievalGraphLimit | quote }}
+  RETRIEVAL_PREFETCH_MULTIPLIER: {{ .Values.config.retrievalPrefetchMultiplier | quote }}
+  QUERY_ENTITY_THRESHOLD: {{ .Values.config.queryEntityThreshold | quote }}
+  RETRIEVAL_DENSE_PREFETCH_MULTIPLIER: {{ .Values.config.retrievalDensePrefetchMultiplier | quote }}
+  RETRIEVAL_SPARSE_PREFETCH_MULTIPLIER: {{ .Values.config.retrievalSparsePrefetchMultiplier | quote }}
+
+  # --- Reranker ---
+  RERANKER_MODEL: {{ .Values.config.rerankerModel | quote }}
+  RERANKER_TOP_N: {{ .Values.config.rerankerTopN | quote }}
+
+  # --- Auth ---
+  JWT_ALGORITHM: {{ .Values.config.jwtAlgorithm | quote }}
+  JWT_ACCESS_TOKEN_EXPIRE_MINUTES: {{ .Values.config.jwtAccessTokenExpireMinutes | quote }}
+  JWT_REFRESH_TOKEN_EXPIRE_DAYS: {{ .Values.config.jwtRefreshTokenExpireDays | quote }}
+  CORS_ALLOWED_ORIGINS: {{ .Values.config.corsAllowedOrigins | quote }}
+
+  # --- Multi-Tenancy ---
+  REQUIRE_MATTER_HEADER: {{ .Values.config.requireMatterHeader | quote }}
+
+  # --- Near-Duplicate Detection ---
+  DEDUP_JACCARD_THRESHOLD: {{ .Values.config.dedupJaccardThreshold | quote }}
+  DEDUP_NUM_PERMUTATIONS: {{ .Values.config.dedupNumPermutations | quote }}
+
+  # --- Audit ---
+  AUDIT_RETENTION_DAYS: {{ .Values.config.auditRetentionDays | quote }}
+
+  # --- Batch Embeddings ---
+  BATCH_EMBEDDINGS_POLL_INTERVAL: {{ .Values.config.batchEmbeddingsPollInterval | quote }}
+
+  # --- Coreference ---
+  COREFERENCE_MODEL: {{ .Values.config.coreferenceModel | quote }}
+
+  # --- Agentic Pipeline ---
+  AGENTIC_RECURSION_LIMIT_FAST: {{ .Values.config.agenticRecursionLimitFast | quote }}
+  AGENTIC_RECURSION_LIMIT_STANDARD: {{ .Values.config.agenticRecursionLimitStandard | quote }}
+  AGENTIC_RECURSION_LIMIT_DEEP: {{ .Values.config.agenticRecursionLimitDeep | quote }}
+
+  # --- Hot Doc Detection ---
+  HOT_DOC_SCORE_THRESHOLD: {{ .Values.config.hotDocScoreThreshold | quote }}
+
+  # --- Contextual Chunks ---
+  CONTEXTUAL_CHUNK_MODEL: {{ .Values.config.contextualChunkModel | quote }}
+  CONTEXTUAL_CHUNK_MAX_TOKENS: {{ .Values.config.contextualChunkMaxTokens | quote }}
+  CONTEXTUAL_CHUNK_BATCH_SIZE: {{ .Values.config.contextualChunkBatchSize | quote }}
+  CONTEXTUAL_CHUNK_CONCURRENCY: {{ .Values.config.contextualChunkConcurrency | quote }}
+
+  # --- Retrieval Grading (CRAG) ---
+  GRADING_MODEL: {{ .Values.config.gradingModel | quote }}
+  GRADING_CONFIDENCE_THRESHOLD: {{ .Values.config.gradingConfidenceThreshold | quote }}
+
+  # --- HyDE ---
+  HYDE_MODEL: {{ .Values.config.hydeModel | quote }}
+
+  # --- Self-Reflection ---
+  SELF_REFLECTION_FAITHFULNESS_THRESHOLD: {{ .Values.config.selfReflectionFaithfulnessThreshold | quote }}
+  SELF_REFLECTION_MAX_RETRIES: {{ .Values.config.selfReflectionMaxRetries | quote }}
+
+  # --- Multi-Query ---
+  MULTI_QUERY_COUNT: {{ .Values.config.multiQueryCount | quote }}
+
+  # --- Logging ---
+  LOG_LEVEL: {{ .Values.config.logLevel | quote }}
+
+  # --- Google Drive ---
+  GDRIVE_REDIRECT_URI: {{ .Values.config.gdriveRedirectUri | quote }}
+  GDRIVE_MAX_CONCURRENT_DOWNLOADS: {{ .Values.config.gdriveMaxConcurrentDownloads | quote }}
+
+  # --- BERTopic ---
+  BERTOPIC_EMBEDDING_MODEL: {{ .Values.config.bertopicEmbeddingModel | quote }}
+  BERTOPIC_MIN_CLUSTER_SIZE: {{ .Values.config.bertopicMinClusterSize | quote }}
+
+  # --- SSO / OIDC ---
+  OIDC_PROVIDER_NAME: {{ .Values.config.oidcProviderName | quote }}
+  OIDC_ISSUER_URL: {{ .Values.config.oidcIssuerUrl | quote }}
+  OIDC_REDIRECT_URI: {{ .Values.config.oidcRedirectUri | quote }}
+  OIDC_ROLE_MAPPING: {{ .Values.config.oidcRoleMapping | quote }}
+  OIDC_DEFAULT_ROLE: {{ .Values.config.oidcDefaultRole | quote }}
+
+  # --- SSO / SAML ---
+  SAML_ENTITY_ID: {{ .Values.config.samlEntityId | quote }}
+  SAML_IDP_METADATA_URL: {{ .Values.config.samlIdpMetadataUrl | quote }}
+  SAML_IDP_SSO_URL: {{ .Values.config.samlIdpSsoUrl | quote }}
+  SAML_IDP_CERT: {{ .Values.config.samlIdpCert | quote }}
+  SAML_SP_CERT: {{ .Values.config.samlSpCert | quote }}
+  SAML_SP_KEY: {{ .Values.config.samlSpKey | quote }}
+  SAML_ROLE_MAPPING: {{ .Values.config.samlRoleMapping | quote }}
+  SAML_DEFAULT_ROLE: {{ .Values.config.samlDefaultRole | quote }}
+
+  # --- Quality Monitoring ---
+  QUALITY_MONITORING_SAMPLE_RATE: {{ .Values.config.qualityMonitoringSampleRate | quote }}
+
+  # --- Feature Flags ---
+  ENABLE_SPARSE_EMBEDDINGS: {{ .Values.featureFlags.enableSparseEmbeddings | quote }}
+  ENABLE_VISUAL_EMBEDDINGS: {{ .Values.featureFlags.enableVisualEmbeddings | quote }}
+  ENABLE_RELATIONSHIP_EXTRACTION: {{ .Values.featureFlags.enableRelationshipExtraction | quote }}
+  ENABLE_RERANKER: {{ .Values.featureFlags.enableReranker | quote }}
+  ENABLE_EMAIL_THREADING: {{ .Values.featureFlags.enableEmailThreading | quote }}
+  ENABLE_NEAR_DUPLICATE_DETECTION: {{ .Values.featureFlags.enableNearDuplicateDetection | quote }}
+  ENABLE_AI_AUDIT_LOGGING: {{ .Values.featureFlags.enableAiAuditLogging | quote }}
+  ENABLE_BATCH_EMBEDDINGS: {{ .Values.featureFlags.enableBatchEmbeddings | quote }}
+  ENABLE_COREFERENCE_RESOLUTION: {{ .Values.featureFlags.enableCoreferenceResolution | quote }}
+  ENABLE_GRAPH_CENTRALITY: {{ .Values.featureFlags.enableGraphCentrality | quote }}
+  ENABLE_CASE_SETUP_AGENT: {{ .Values.featureFlags.enableCaseSetupAgent | quote }}
+  ENABLE_AGENTIC_PIPELINE: {{ .Values.featureFlags.enableAgenticPipeline | quote }}
+  ENABLE_CITATION_VERIFICATION: {{ .Values.featureFlags.enableCitationVerification | quote }}
+  ENABLE_HOT_DOC_DETECTION: {{ .Values.featureFlags.enableHotDocDetection | quote }}
+  ENABLE_CHUNK_QUALITY_SCORING: {{ .Values.featureFlags.enableChunkQualityScoring | quote }}
+  ENABLE_CONTEXTUAL_CHUNKS: {{ .Values.featureFlags.enableContextualChunks | quote }}
+  ENABLE_RETRIEVAL_GRADING: {{ .Values.featureFlags.enableRetrievalGrading | quote }}
+  ENABLE_REDACTION: {{ .Values.featureFlags.enableRedaction | quote }}
+  ENABLE_PROMETHEUS_METRICS: {{ .Values.featureFlags.enablePrometheusMetrics | quote }}
+  ENABLE_MEMO_DRAFTING: {{ .Values.featureFlags.enableMemoDrafting | quote }}
+  ENABLE_TOPIC_CLUSTERING: {{ .Values.featureFlags.enableTopicClustering | quote }}
+  ENABLE_SSO: {{ .Values.featureFlags.enableSso | quote }}
+  ENABLE_SAML: {{ .Values.featureFlags.enableSaml | quote }}
+  ENABLE_MULTI_QUERY_EXPANSION: {{ .Values.featureFlags.enableMultiQueryExpansion | quote }}
+  ENABLE_TEXT_TO_CYPHER: {{ .Values.featureFlags.enableTextToCypher | quote }}
+  ENABLE_PROMPT_ROUTING: {{ .Values.featureFlags.enablePromptRouting | quote }}
+  ENABLE_QUESTION_DECOMPOSITION: {{ .Values.featureFlags.enableQuestionDecomposition | quote }}
+  ENABLE_DATA_RETENTION: {{ .Values.featureFlags.enableDataRetention | quote }}
+  ENABLE_HYDE: {{ .Values.featureFlags.enableHyde | quote }}
+  ENABLE_SELF_REFLECTION: {{ .Values.featureFlags.enableSelfReflection | quote }}
+  ENABLE_TEXT_TO_SQL: {{ .Values.featureFlags.enableTextToSql | quote }}
+  ENABLE_DOCUMENT_SUMMARIZATION: {{ .Values.featureFlags.enableDocumentSummarization | quote }}
+  ENABLE_MULTI_REPRESENTATION: {{ .Values.featureFlags.enableMultiRepresentation | quote }}
+  ENABLE_PRODUCTION_QUALITY_MONITORING: {{ .Values.featureFlags.enableProductionQualityMonitoring | quote }}
+  ENABLE_GOOGLE_DRIVE: {{ .Values.featureFlags.enableGoogleDrive | quote }}

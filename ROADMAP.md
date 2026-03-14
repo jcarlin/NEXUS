@@ -43,11 +43,11 @@
 | M20 | Observability & Load Testing | — | Done | 23 | Regression | — | M17 |
 | M21 | RAG Quality Improvements | — | Done | 43 | Regression + eval non-regression | — | M8, M9, M15 |
 
-**Total tests: ~1364 backend + 73 frontend test files** (~1322 backend tests passing; frontend: 73 Vitest unit/component test files + 2 Playwright E2E specs)
+**Total tests: ~1478 backend + 77 frontend test files** (~1478 backend tests passing; frontend: 77 Vitest unit/component test files + 2 Playwright E2E specs)
 
 **6 autonomous LangGraph agents** across the pipeline (Case Setup, Investigation Orchestrator, Citation Verifier, Hot Doc Scanner, Contextual Completeness, Entity Resolution)
 
-**All milestones complete.** M0–M21 + Tier 2 Maturity + Tier 3 Phase 1-3 — full local deployment with zero cloud API dependency. 41 feature flags (38 runtime-toggleable via admin UI), 16 agent tools. Tier 2 adds: HyDE retrieval, self-reflection loop, text-to-SQL, multi-representation indexing, document summarization, per-query-type metrics, production quality monitoring, passage linking, keyboard shortcuts, audit export. Tier 3 Phase 1 adds: dark mode, auto graph routing, adaptive retrieval depth, OCR correction, Matryoshka dimensionality optimization. Tier 3 Phase 2 adds: BGE-M3 unified dense+sparse embedding provider (single-pass, 1024d + lexical weights). Tier 3 Phase 3 adds: mobile responsive design (ResizeObserver, responsive tables/graphs), onboarding flow (react-joyride guided tour), interactive graph editing (CRUD endpoints + context menu + edit dialogs). RAG 9.5/10, Platform 9.6/10, RAG Arch ~95%.
+**All milestones complete.** M0–M21 + Tier 2 Maturity + Tier 3 (all 15 items) — full local deployment with zero cloud API dependency. 47 feature flags (44 runtime-toggleable via admin UI), 17 agent tools. Tier 3 Phase 4 adds: deposition prep workflow (witness profiling + LLM question generation), document comparison/redline (difflib side-by-side diff), SPLADE v3 learned sparse retrieval (asymmetric doc/query encoding). Tier 3 Phase 5 adds: HalluGraph entity-graph alignment (post-generation KG verification), GraphRAG community summaries (Neo4j GDS Louvain + LLM summaries), Kubernetes/Helm charts (production-ready K8s deployment). RAG 9.5/10, Platform 9.7/10, RAG Arch ~97%.
 
 **Cloud demo hosting:** GCP + Vercel deployment tested and working. Run `./scripts/cloud-deploy.sh` to deploy, `./scripts/cloud-teardown.sh` to tear down. See `docs/CLOUD-DEPLOY.md` for full guide. Config files: `Caddyfile`, `docker-compose.cloud.yml`, `.env.cloud.example`, `frontend/vercel.json`, `scripts/seed_admin.py`.
 
@@ -1128,6 +1128,35 @@ frontend/
 - Adversarial dataset expanded from 4 to 27 items across 9 categories
 - Prometheus metrics now recorded for query duration/count, ingestion jobs/duration, citation verification, retrieval chunks
 - Load tests have real SLA assertions (p95 latency, error rate thresholds)
+
+---
+
+### Tier 3 Maturity — Phases 4-5
+
+*Final 6 items completing all 15 Tier 3 items. RAG 9.5/10, Platform 9.7/10, Architecture ~97%.*
+
+**Status: Done** — All 6 items implemented, ~96 new backend tests + 6 frontend tests.
+
+| # | Item | Status | New Tests |
+|---|------|--------|-----------|
+| T3-3 | Deposition Prep Workflow | Done | 21 (test_depositions/) |
+| T3-4 | Document Comparison / Redline | Done | 23 (test_comparison.py, test_comparison_router.py) + 6 frontend |
+| T3-7 | SPLADE Sparse Retrieval | Done | 13 (test_splade_embedder.py, test_dependencies_splade.py) |
+| T3-9 | HalluGraph Entity-Graph Alignment | Done | 14 (test_hallugraph.py) |
+| T3-10 | GraphRAG Community Summaries | Done | 25 (test_communities.py, test_community_router.py, test_community_tool.py) |
+| T3-11 | Kubernetes / Helm Charts | Done | 0 (CI lint: helm-lint.yml) |
+
+**New modules/files:**
+- `app/depositions/` — router, service, schemas, prompts for deposition prep workflow
+- `app/documents/comparison.py` — difflib-based text comparison (50K char limit)
+- `app/ingestion/splade_embedder.py` — SPLADE v3 asymmetric doc/query sparse encoding
+- `app/analytics/communities.py`, `community_schemas.py`, `community_prompts.py` — GraphRAG community detection + summarization
+- `helm/nexus/` — 30 Helm templates (StatefulSets, Deployments, HPAs, Ingress, migration job)
+- `migrations/versions/026_add_community_summaries.py` — community_summaries table
+- `frontend/src/components/documents/diff-viewer.tsx`, `version-selector.tsx` — comparison UI
+- `frontend/src/routes/documents/compare.tsx` — document comparison page
+
+**Feature flags added:** `enable_deposition_prep`, `enable_document_comparison`, `enable_splade_sparse`, `enable_hallugraph_alignment`, `enable_graphrag_communities` (all default off)
 
 ---
 

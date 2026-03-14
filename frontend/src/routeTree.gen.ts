@@ -22,6 +22,7 @@ import { Route as ReviewExportsRouteImport } from './routes/review/exports'
 import { Route as EntitiesNetworkRouteImport } from './routes/entities/network'
 import { Route as EntitiesIdRouteImport } from './routes/entities/$id'
 import { Route as DocumentsImportRouteImport } from './routes/documents/import'
+import { Route as DocumentsCompareRouteImport } from './routes/documents/compare'
 import { Route as DocumentsIdRouteImport } from './routes/documents/$id'
 import { Route as ChatThreadIdRouteImport } from './routes/chat/$threadId'
 import { Route as AnalyticsTimelineRouteImport } from './routes/analytics/timeline'
@@ -99,6 +100,11 @@ const DocumentsImportRoute = DocumentsImportRouteImport.update({
   path: '/documents/import',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DocumentsCompareRoute = DocumentsCompareRouteImport.update({
+  id: '/documents/compare',
+  path: '/documents/compare',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DocumentsIdRoute = DocumentsIdRouteImport.update({
   id: '/documents/$id',
   path: '/documents/$id',
@@ -169,6 +175,7 @@ export interface FileRoutesByFullPath {
   '/analytics/timeline': typeof AnalyticsTimelineRoute
   '/chat/$threadId': typeof ChatThreadIdRoute
   '/documents/$id': typeof DocumentsIdRoute
+  '/documents/compare': typeof DocumentsCompareRoute
   '/documents/import': typeof DocumentsImportRoute
   '/entities/$id': typeof EntitiesIdRoute
   '/entities/network': typeof EntitiesNetworkRoute
@@ -195,6 +202,7 @@ export interface FileRoutesByTo {
   '/analytics/timeline': typeof AnalyticsTimelineRoute
   '/chat/$threadId': typeof ChatThreadIdRoute
   '/documents/$id': typeof DocumentsIdRoute
+  '/documents/compare': typeof DocumentsCompareRoute
   '/documents/import': typeof DocumentsImportRoute
   '/entities/$id': typeof EntitiesIdRoute
   '/entities/network': typeof EntitiesNetworkRoute
@@ -222,6 +230,7 @@ export interface FileRoutesById {
   '/analytics/timeline': typeof AnalyticsTimelineRoute
   '/chat/$threadId': typeof ChatThreadIdRoute
   '/documents/$id': typeof DocumentsIdRoute
+  '/documents/compare': typeof DocumentsCompareRoute
   '/documents/import': typeof DocumentsImportRoute
   '/entities/$id': typeof EntitiesIdRoute
   '/entities/network': typeof EntitiesNetworkRoute
@@ -250,6 +259,7 @@ export interface FileRouteTypes {
     | '/analytics/timeline'
     | '/chat/$threadId'
     | '/documents/$id'
+    | '/documents/compare'
     | '/documents/import'
     | '/entities/$id'
     | '/entities/network'
@@ -276,6 +286,7 @@ export interface FileRouteTypes {
     | '/analytics/timeline'
     | '/chat/$threadId'
     | '/documents/$id'
+    | '/documents/compare'
     | '/documents/import'
     | '/entities/$id'
     | '/entities/network'
@@ -302,6 +313,7 @@ export interface FileRouteTypes {
     | '/analytics/timeline'
     | '/chat/$threadId'
     | '/documents/$id'
+    | '/documents/compare'
     | '/documents/import'
     | '/entities/$id'
     | '/entities/network'
@@ -329,6 +341,7 @@ export interface RootRouteChildren {
   AnalyticsTimelineRoute: typeof AnalyticsTimelineRoute
   ChatThreadIdRoute: typeof ChatThreadIdRoute
   DocumentsIdRoute: typeof DocumentsIdRoute
+  DocumentsCompareRoute: typeof DocumentsCompareRoute
   DocumentsImportRoute: typeof DocumentsImportRoute
   EntitiesIdRoute: typeof EntitiesIdRoute
   EntitiesNetworkRoute: typeof EntitiesNetworkRoute
@@ -435,6 +448,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DocumentsImportRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/documents/compare': {
+      id: '/documents/compare'
+      path: '/documents/compare'
+      fullPath: '/documents/compare'
+      preLoaderRoute: typeof DocumentsCompareRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/documents/$id': {
       id: '/documents/$id'
       path: '/documents/$id'
@@ -529,6 +549,7 @@ const rootRouteChildren: RootRouteChildren = {
   AnalyticsTimelineRoute: AnalyticsTimelineRoute,
   ChatThreadIdRoute: ChatThreadIdRoute,
   DocumentsIdRoute: DocumentsIdRoute,
+  DocumentsCompareRoute: DocumentsCompareRoute,
   DocumentsImportRoute: DocumentsImportRoute,
   EntitiesIdRoute: EntitiesIdRoute,
   EntitiesNetworkRoute: EntitiesNetworkRoute,

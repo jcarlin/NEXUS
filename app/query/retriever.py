@@ -83,9 +83,13 @@ class HybridRetriever:
             vector = await self._embedder.embed_query(query)
 
         # Sparse vector always uses the raw query for lexical matching
+        # SPLADE providers expose embed_query_sparse() for asymmetric encoding
         sparse_vector: tuple[list[int], list[float]] | None = None
         if self._sparse_embedder is not None:
-            sparse_vector = self._sparse_embedder.embed_single(query)
+            if hasattr(self._sparse_embedder, "embed_query_sparse"):
+                sparse_vector = self._sparse_embedder.embed_query_sparse(query)
+            else:
+                sparse_vector = self._sparse_embedder.embed_single(query)
 
         results = await self._vector_store.query_text(
             vector,

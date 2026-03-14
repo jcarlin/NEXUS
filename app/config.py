@@ -122,6 +122,11 @@ class FeatureFlags(BaseModel):
     auto_graph_routing: bool
     adaptive_retrieval_depth: bool
     ocr_correction: bool
+    splade_sparse: bool
+    deposition_prep: bool
+    hallugraph_alignment: bool
+    document_comparison: bool
+    graphrag_communities: bool
 
 
 class Settings(BaseSettings):
@@ -230,6 +235,12 @@ class Settings(BaseSettings):
     # --- Sparse Embeddings ---
     enable_sparse_embeddings: bool = False
     sparse_embedding_model: str = "Qdrant/bm42-all-minilm-l6-v2-attentions"
+
+    # --- SPLADE Sparse Retrieval (T3-7) ---
+    enable_splade_sparse: bool = False
+    splade_doc_model: str = "naver/splade-v3-doc"
+    splade_query_model: str = "naver/splade-v3-query"
+    splade_max_length: int = 512
 
     # --- Email Threading ---
     enable_email_threading: bool = True
@@ -346,6 +357,18 @@ class Settings(BaseSettings):
     # --- OCR Error Correction (T3-14) ---
     enable_ocr_correction: bool = False
     ocr_correction_use_llm: bool = False  # LLM-assisted correction (expensive)
+
+    # --- Deposition Prep (T3-3) ---
+    enable_deposition_prep: bool = False
+
+    # --- Document Comparison / Redline (T3-4) ---
+    enable_document_comparison: bool = False
+
+    # --- HalluGraph Entity-Graph Alignment (T3-9) ---
+    enable_hallugraph_alignment: bool = False
+
+    # --- GraphRAG Community Summaries (T3-10) ---
+    enable_graphrag_communities: bool = False
 
     # --- HyDE (Hypothetical Document Embeddings) (T2-6) ---
     enable_hyde: bool = False
@@ -544,5 +567,10 @@ class Settings(BaseSettings):
                 auto_graph_routing=self.enable_auto_graph_routing,
                 adaptive_retrieval_depth=self.enable_adaptive_retrieval_depth,
                 ocr_correction=self.enable_ocr_correction,
+                splade_sparse=self.enable_splade_sparse,
+                deposition_prep=self.enable_deposition_prep,
+                hallugraph_alignment=self.enable_hallugraph_alignment,
+                document_comparison=self.enable_document_comparison,
+                graphrag_communities=self.enable_graphrag_communities,
             )
         return self

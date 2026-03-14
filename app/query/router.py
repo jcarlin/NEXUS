@@ -31,6 +31,7 @@ from app.query.schemas import (
     ChatMessage,
     ChatThread,
     CitedClaim,
+    EntityGrounding,
     EntityMention,
     QueryRequest,
     QueryResponse,
@@ -58,6 +59,7 @@ _STAGE_MAP = {
     "investigation_agent": "investigating",
     "post_agent_extract": "extracting_results",
     "verify_citations": "verifying_citations",
+    "hallugraph_check": "checking_entity_grounding",
 }
 
 
@@ -225,6 +227,7 @@ async def query(
         message_id=uuid.UUID(message_id),
         cited_claims=[CitedClaim(**c) for c in final_state.get("cited_claims", []) if "claim_text" in c],
         tier=final_state.get("_tier"),
+        entity_grounding=[EntityGrounding(**g) for g in final_state.get("entity_grounding", [])],
     )
 
 
@@ -592,6 +595,7 @@ async def _agentic_event_generator(graph, initial_state, config, db, thread_id, 
                 "entities": final_state.get("entities_mentioned", []),
                 "cited_claims": final_state.get("cited_claims", []),
                 "tier": final_state.get("_tier"),
+                "entity_grounding": final_state.get("entity_grounding", []),
             }
         ),
     }

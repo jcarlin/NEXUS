@@ -136,3 +136,57 @@ class PrivilegeBasisUpdate(BaseModel):
 
     privilege_basis: str | None = None
     privilege_log_excluded: bool = False
+
+
+# ---------------------------------------------------------------------------
+# Document Comparison / Redline schemas (T3-4)
+# ---------------------------------------------------------------------------
+
+
+class DiffOp(StrEnum):
+    """Operation type for a diff block."""
+
+    equal = "equal"
+    insert = "insert"
+    delete = "delete"
+    replace = "replace"
+
+
+class DiffBlock(BaseModel):
+    """A single diff block between two document texts."""
+
+    op: DiffOp
+    left_start: int | None = None
+    left_end: int | None = None
+    right_start: int | None = None
+    right_end: int | None = None
+    left_text: str = ""
+    right_text: str = ""
+
+
+class DocumentDiffResponse(BaseModel):
+    """Response for the document comparison endpoint."""
+
+    left_id: UUID
+    right_id: UUID
+    left_filename: str
+    right_filename: str
+    blocks: list[DiffBlock]
+    truncated: bool = False
+
+
+class VersionGroupMember(BaseModel):
+    """A single document within a version group."""
+
+    id: UUID
+    filename: str
+    version_number: int | None = None
+    is_final_version: bool | None = None
+    created_at: datetime
+
+
+class VersionGroupResponse(BaseModel):
+    """Response listing all documents in a version group."""
+
+    version_group_id: str
+    members: list[VersionGroupMember]

@@ -1,0 +1,362 @@
+# NEXUS Helm Chart — Default Values
+# Override per environment with values-dev.yaml, values-staging.yaml, values-prod.yaml
+
+nameOverride: ""
+fullnameOverride: ""
+
+# --- API Server (FastAPI + Uvicorn) ---
+api:
+  image:
+    repository: nexus-api
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicas: 2
+  resources:
+    requests:
+      memory: "768Mi"
+      cpu: "250m"
+    limits:
+      memory: "1536Mi"
+      cpu: "500m"
+  hpa:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+
+# --- Celery Worker ---
+worker:
+  image:
+    repository: nexus-api
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicas: 1
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "1024Mi"
+      cpu: "500m"
+  celery:
+    concurrency: 1
+    queues: "default,bulk,background"
+    maxTasksPerChild: 100
+    logLevel: info
+  hpa:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 80
+
+# --- Flower (Celery Monitoring) ---
+flower:
+  enabled: true
+  image:
+    repository: nexus-api
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicas: 1
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "250m"
+
+# --- PostgreSQL ---
+postgres:
+  enabled: true
+  image: postgres:16-alpine
+  storage: 10Gi
+  storageClassName: ""
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "1024Mi"
+      cpu: "500m"
+  credentials:
+    database: nexus
+    username: nexus
+    # password is set in secret.yaml via .Values.secrets.postgresPassword
+  externalUrl: ""  # Used when postgres.enabled=false (managed DB)
+  externalSyncUrl: ""
+
+# --- Redis ---
+redis:
+  enabled: true
+  image: redis:7-alpine
+  storage: 1Gi
+  storageClassName: ""
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "250m"
+  externalUrl: ""  # Used when redis.enabled=false
+
+# --- Qdrant ---
+qdrant:
+  enabled: true
+  image: qdrant/qdrant:v1.13.2
+  storage: 10Gi
+  storageClassName: ""
+  resources:
+    requests:
+      memory: "768Mi"
+      cpu: "250m"
+    limits:
+      memory: "1536Mi"
+      cpu: "500m"
+  externalUrl: ""  # Used when qdrant.enabled=false
+
+# --- Neo4j ---
+neo4j:
+  enabled: true
+  image: neo4j:5-community
+  storage: 10Gi
+  storageClassName: ""
+  resources:
+    requests:
+      memory: "768Mi"
+      cpu: "250m"
+    limits:
+      memory: "1536Mi"
+      cpu: "500m"
+  plugins: '["apoc", "graph-data-science"]'
+  externalUri: ""  # Used when neo4j.enabled=false
+
+# --- MinIO ---
+minio:
+  enabled: true
+  image: minio/minio:latest
+  storage: 20Gi
+  storageClassName: ""
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "250m"
+  externalEndpoint: ""  # Used when minio.enabled=false
+
+# --- Ingress ---
+ingress:
+  enabled: false
+  className: "nginx"
+  annotations: {}
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: nexus.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+    # - secretName: nexus-tls
+    #   hosts:
+    #     - nexus.example.com
+
+# --- Database Migration (Alembic) ---
+migration:
+  enabled: true
+  image:
+    repository: nexus-api
+    tag: latest
+    pullPolicy: IfNotPresent
+
+# --- Secrets ---
+# These values should be overridden via --set or a separate secrets file.
+# NEVER commit real secrets in values files.
+secrets:
+  anthropicApiKey: ""
+  openaiApiKey: ""
+  geminiApiKey: ""
+  postgresPassword: "changeme"
+  neo4jPassword: "changeme"
+  minioAccessKey: "nexus-admin"
+  minioSecretKey: "changeme"
+  jwtSecretKey: "change-me-to-a-random-64-char-string"
+  flowerUser: "admin"
+  flowerPassword: "changeme"
+  langchainApiKey: ""
+  oidcClientId: ""
+  oidcClientSecret: ""
+  gdriveClientId: ""
+  gdriveClientSecret: ""
+  gdriveEncryptionKey: ""
+
+# --- Application Config (non-sensitive) ---
+config:
+  # LLM
+  llmProvider: "anthropic"
+  llmModel: "claude-sonnet-4-5-20250929"
+  queryLlmModel: ""
+  vllmBaseUrl: "http://localhost:8080/v1"
+  ollamaBaseUrl: "http://localhost:11434/v1"
+
+  # Embedding
+  embeddingProvider: "openai"
+  embeddingModel: "text-embedding-3-large"
+  geminiEmbeddingModel: "gemini-embedding-exp-03-07"
+  embeddingDimensions: "1024"
+  localEmbeddingModel: "BAAI/bge-large-en-v1.5"
+  ollamaEmbeddingModel: "nomic-embed-text"
+  embeddingBatchSize: "100"
+
+  # Visual Embeddings
+  visualEmbeddingModel: "vidore/colqwen2.5-v0.2"
+  visualEmbeddingDevice: "cpu"
+  visualEmbeddingBatchSize: "4"
+  visualEmbeddingDim: "128"
+  visualRerankWeight: "0.3"
+  visualRerankTopN: "20"
+  visualPageDpi: "144"
+
+  # Processing
+  chunkSize: "512"
+  chunkOverlap: "64"
+  glinerModel: "urchade/gliner_multi_pii-v1"
+
+  # Sparse Embeddings
+  sparseEmbeddingModel: "Qdrant/bm42-all-minilm-l6-v2-attentions"
+
+  # Retrieval Tuning
+  retrievalTextLimit: "20"
+  retrievalGraphLimit: "20"
+  retrievalPrefetchMultiplier: "2"
+  queryEntityThreshold: "0.5"
+  retrievalDensePrefetchMultiplier: "2"
+  retrievalSparsePrefetchMultiplier: "2"
+
+  # Reranker
+  rerankerModel: "BAAI/bge-reranker-v2-m3"
+  rerankerTopN: "10"
+
+  # Auth
+  jwtAlgorithm: "HS256"
+  jwtAccessTokenExpireMinutes: "30"
+  jwtRefreshTokenExpireDays: "7"
+  corsAllowedOrigins: "http://localhost:5173,http://localhost:3000"
+
+  # Multi-Tenancy
+  requireMatterHeader: "true"
+
+  # Near-Duplicate Detection
+  dedupJaccardThreshold: "0.80"
+  dedupNumPermutations: "128"
+
+  # Audit
+  auditRetentionDays: "365"
+
+  # Batch Embeddings
+  batchEmbeddingsPollInterval: "60"
+
+  # Coreference
+  coreferenceModel: "en_core_web_lg"
+
+  # Agentic Pipeline
+  agenticRecursionLimitFast: "16"
+  agenticRecursionLimitStandard: "28"
+  agenticRecursionLimitDeep: "50"
+
+  # Hot Doc Detection
+  hotDocScoreThreshold: "0.6"
+
+  # Contextual Chunks
+  contextualChunkModel: ""
+  contextualChunkMaxTokens: "100"
+  contextualChunkBatchSize: "20"
+  contextualChunkConcurrency: "4"
+
+  # Retrieval Grading (CRAG)
+  gradingModel: ""
+  gradingConfidenceThreshold: "0.5"
+
+  # HyDE
+  hydeModel: ""
+
+  # Self-Reflection
+  selfReflectionFaithfulnessThreshold: "0.8"
+  selfReflectionMaxRetries: "1"
+
+  # Multi-Query
+  multiQueryCount: "3"
+
+  # Logging
+  logLevel: "INFO"
+
+  # Google Drive
+  gdriveRedirectUri: "http://localhost:5173/gdrive/callback"
+  gdriveMaxConcurrentDownloads: "10"
+
+  # BERTopic
+  bertopicEmbeddingModel: "all-MiniLM-L6-v2"
+  bertopicMinClusterSize: "5"
+
+  # SSO / OIDC
+  oidcProviderName: "SSO"
+  oidcIssuerUrl: ""
+  oidcRedirectUri: "http://localhost:5173/auth/oidc/callback"
+  oidcRoleMapping: "{}"
+  oidcDefaultRole: "reviewer"
+
+  # SSO / SAML
+  samlEntityId: ""
+  samlIdpMetadataUrl: ""
+  samlIdpSsoUrl: ""
+  samlIdpCert: ""
+  samlSpCert: ""
+  samlSpKey: ""
+  samlRoleMapping: "{}"
+  samlDefaultRole: "viewer"
+
+  # Quality Monitoring
+  qualityMonitoringSampleRate: "0.1"
+
+  # Domain (for ingress / TLS)
+  domain: ""
+
+# --- Feature Flags ---
+# All ENABLE_* flags with defaults matching .env.example
+featureFlags:
+  enableSparseEmbeddings: "false"
+  enableVisualEmbeddings: "false"
+  enableRelationshipExtraction: "false"
+  enableReranker: "true"
+  enableEmailThreading: "true"
+  enableNearDuplicateDetection: "true"
+  enableAiAuditLogging: "true"
+  enableBatchEmbeddings: "false"
+  enableCoreferenceResolution: "false"
+  enableGraphCentrality: "false"
+  enableCaseSetupAgent: "false"
+  enableAgenticPipeline: "true"
+  enableCitationVerification: "true"
+  enableHotDocDetection: "false"
+  enableChunkQualityScoring: "false"
+  enableContextualChunks: "false"
+  enableRetrievalGrading: "false"
+  enableRedaction: "false"
+  enablePrometheusMetrics: "true"
+  enableMemoDrafting: "false"
+  enableTopicClustering: "false"
+  enableSso: "false"
+  enableSaml: "false"
+  enableMultiQueryExpansion: "false"
+  enableTextToCypher: "false"
+  enablePromptRouting: "false"
+  enableQuestionDecomposition: "false"
+  enableDataRetention: "false"
+  enableHyde: "false"
+  enableSelfReflection: "false"
+  enableTextToSql: "false"
+  enableDocumentSummarization: "false"
+  enableMultiRepresentation: "false"
+  enableProductionQualityMonitoring: "false"
+  enableGoogleDrive: "false"

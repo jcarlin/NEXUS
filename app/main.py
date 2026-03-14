@@ -269,6 +269,11 @@ def create_app() -> FastAPI:
 
         application.include_router(memos_router, prefix="/api/v1")
 
+    if settings.enable_deposition_prep:
+        from app.depositions.router import router as depositions_router
+
+        application.include_router(depositions_router, prefix="/api/v1")
+
     from app.retention.router import router as retention_router
 
     application.include_router(retention_router, prefix="/api/v1")

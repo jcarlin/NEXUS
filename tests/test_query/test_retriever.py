@@ -137,7 +137,7 @@ async def test_retrieve_text_with_sparse_embedder(
 ):
     """When sparse_embedder is provided, retrieve_text generates sparse vector and passes it."""
     mock_sparse = MagicMock()
-    mock_sparse.embed_single.return_value = ([0, 5, 10], [0.9, 0.4, 0.1])
+    mock_sparse.embed_query_sparse.return_value = ([0, 5, 10], [0.9, 0.4, 0.1])
 
     retriever = HybridRetriever(
         embedder=mock_embedder,
@@ -149,7 +149,7 @@ async def test_retrieve_text_with_sparse_embedder(
 
     await retriever.retrieve_text("Who is Epstein?")
 
-    mock_sparse.embed_single.assert_called_once_with("Who is Epstein?")
+    mock_sparse.embed_query_sparse.assert_called_once_with("Who is Epstein?")
     call_kwargs = mock_vector_store.query_text.call_args.kwargs
     assert call_kwargs["sparse_vector"] == ([0, 5, 10], [0.9, 0.4, 0.1])
 

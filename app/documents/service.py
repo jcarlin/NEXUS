@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.db_utils import row_to_dict
 
 if TYPE_CHECKING:
+    from app.common.storage import StorageClient
     from app.common.vector_store import VectorStoreClient
     from app.entities.graph_service import GraphService
 
@@ -576,6 +577,60 @@ class DocumentService:
             "privilege_basis": row._mapping["privilege_basis"],
             "privilege_log_excluded": row._mapping["privilege_log_excluded"],
         }
+
+    # ------------------------------------------------------------------
+    # VERSION GROUP
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    async def get_version_group(
+        db: AsyncSession,
+        version_group_id: str,
+        matter_id: UUID,
+    ) -> list[dict]:
+        """Get all documents in a version group, ordered by version_number."""
+        result = await db.execute(
+            text(
+                "SELECT id, filename, version_number, is_final_version, created_at "
+                "FROM documents "
+                "WHERE version_group_id = :vgid AND matter_id = :mid "
+                "ORDER BY version_number ASC NULLS LAST, created_at ASC"
+            ),
+            {"vgid": version_group_id, "mid": matter_id},
+        )
+        return [row_to_dict(r) for r in result.all()]
+
+    # ------------------------------------------------------------------
+    # DOCUMENT TEXT (for comparison)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    async def get_document_text(
+        db: AsyncSession,
+        doc_id: UUID,
+        matter_id: UUID,
+        storage: StorageClient,
+    ) -> str:
+        """Read parsed text for a document from MinIO.
+
+        Raises ``FileNotFoundError`` if no parsed text is found.
+        Raises ``LookupError`` if the document does not exist.
+        """
+        from app.documents.comparison import extract_document_text
+
+        result = await db.execute(
+            text("SELECT job_id, filename FROM documents WHERE id = :doc_id AND matter_id = :mid"),
+            {"doc_id": doc_id, "mid": matter_id},
+        )
+        row = result.first()
+        if row is None:
+            raise LookupError(f"Document {doc_id} not found in matter {matter_id}")
+
+        m = row._mapping
+        job_id = str(m["job_id"]) if m["job_id"] else str(doc_id)
+        filename = m["filename"]
+
+        return await extract_document_text(job_id, filename, storage)
 
     # ------------------------------------------------------------------
     # DELETE

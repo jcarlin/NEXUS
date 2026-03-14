@@ -1,7 +1,10 @@
-"""Communication analytics API endpoints (M10c).
+"""Communication analytics API endpoints (M10c) + GraphRAG communities (T3-10).
 
-GET /analytics/communication-matrix  — pre-computed sender-recipient pairs
-GET /analytics/network-centrality    — Neo4j GDS centrality rankings
+GET  /analytics/communication-matrix     — pre-computed sender-recipient pairs
+GET  /analytics/network-centrality       — Neo4j GDS centrality rankings
+POST /analytics/communities/detect       — trigger community detection
+GET  /analytics/communities              — list detected communities
+GET  /analytics/communities/{id}         — get single community + related
 """
 
 from __future__ import annotations
@@ -69,3 +72,81 @@ async def get_network_centrality(
         str(matter_id),
         metric.value,
     )
+
+
+# ------------------------------------------------------------------
+# GraphRAG community endpoints (T3-10)
+# ------------------------------------------------------------------
+
+
+@router.post("/analytics/communities/detect", status_code=202)
+async def detect_communities(
+    db: AsyncSession = Depends(get_db),
+    current_user: UserRecord = Depends(get_current_user),
+    matter_id: UUID = Depends(get_matter_id),
+):
+    """Trigger community detection via Neo4j GDS Louvain."""
+    from app.config import Settings
+
+    settings = Settings()
+    if not settings.enable_graphrag_communities:
+        raise HTTPException(
+            status_code=501,
+            detail="GraphRAG communities not enabled. Set ENABLE_GRAPHRAG_COMMUNITIES=true.",
+        )
+
+    from app.analytics.communities import CommunityDetector
+
+    gs = get_graph_service()
+    communities = await CommunityDetector.detect_communities(str(matter_id), gs)
+    communities = CommunityDetector.build_hierarchy(communities)
+
+    # Persist to DB
+    await AnalyticsService.save_communities(db, str(matter_id), communities)
+
+    return {"status": "completed", "community_count": len(communities)}
+
+
+@router.get("/analytics/communities")
+async def list_communities(
+    db: AsyncSession = Depends(get_db),
+    current_user: UserRecord = Depends(get_current_user),
+    matter_id: UUID = Depends(get_matter_id),
+):
+    """List detected communities for the current matter."""
+    from app.config import Settings
+
+    settings = Settings()
+    if not settings.enable_graphrag_communities:
+        raise HTTPException(
+            status_code=501,
+            detail="GraphRAG communities not enabled. Set ENABLE_GRAPHRAG_COMMUNITIES=true.",
+        )
+
+    communities = await AnalyticsService.list_communities(db, str(matter_id))
+    return {"total": len(communities), "communities": communities}
+
+
+@router.get("/analytics/communities/{community_id}")
+async def get_community(
+    community_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserRecord = Depends(get_current_user),
+    matter_id: UUID = Depends(get_matter_id),
+):
+    """Get a single community with related communities."""
+    from app.config import Settings
+
+    settings = Settings()
+    if not settings.enable_graphrag_communities:
+        raise HTTPException(
+            status_code=501,
+            detail="GraphRAG communities not enabled. Set ENABLE_GRAPHRAG_COMMUNITIES=true.",
+        )
+
+    community = await AnalyticsService.get_community(db, community_id, str(matter_id))
+    if community is None:
+        raise HTTPException(status_code=404, detail="Community not found.")
+
+    related = await AnalyticsService.get_related_communities(db, community_id, str(matter_id))
+    return {"community": community, "related_communities": related}

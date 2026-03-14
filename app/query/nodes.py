@@ -1152,6 +1152,117 @@ async def post_agent_extract(state: dict) -> dict:
     }
 
 
+async def hallugraph_check(state: dict) -> dict:
+    """HalluGraph entity-graph alignment check (T3-9).
+
+    Extracts entities from the LLM response via GLiNER, checks each against
+    the Neo4j knowledge graph, and returns grounding results.  Ungrounded
+    entities receive a fuzzy-match ``closest_match`` from the graph.
+
+    Feature-flagged via ``enable_hallugraph_alignment``.
+    """
+    from app.dependencies import get_settings
+
+    settings = get_settings()
+    if not settings.enable_hallugraph_alignment:
+        return {"entity_grounding": []}
+
+    response = state.get("response", "")
+    if not response:
+        return {"entity_grounding": []}
+
+    # Extract entities via GLiNER
+    try:
+        from app.dependencies import get_entity_extractor
+
+        extractor = get_entity_extractor()
+        raw_entities = extractor.extract(
+            response,
+            entity_types=["person", "organization", "location"],
+            threshold=0.4,
+        )
+    except Exception:
+        logger.warning("node.hallugraph_check.extraction_failed", exc_info=True)
+        return {"entity_grounding": []}
+
+    if not raw_entities:
+        return {"entity_grounding": []}
+
+    # Deduplicate by lowercase name
+    seen: set[str] = set()
+    unique_entities: list[tuple[str, str]] = []
+    for ent in raw_entities:
+        key = ent.text.lower()
+        if key not in seen:
+            seen.add(key)
+            unique_entities.append((ent.text, ent.type))
+
+    # Extract matter_id from filters
+    filters = state.get("_filters", {}) or {}
+    matter_id = filters.get("matter_id")
+
+    # Check each entity against the knowledge graph
+    from app.dependencies import get_graph_service
+
+    gs = get_graph_service()
+    grounding_results: list[dict[str, Any]] = []
+
+    for name, entity_type in unique_entities:
+        try:
+            entity = await gs.get_entity_by_name(name, matter_id=matter_id)
+            if entity is not None:
+                grounding_results.append(
+                    {
+                        "name": name,
+                        "type": entity_type,
+                        "grounded": True,
+                        "confidence": 1.0,
+                        "closest_match": None,
+                    }
+                )
+            else:
+                # Fuzzy match: search for similar names in the graph
+                closest_match = None
+                try:
+                    fuzzy_results = await gs._run_query(
+                        "MATCH (e:Entity) WHERE e.name CONTAINS $fragment RETURN e.name AS name LIMIT 1",
+                        {"fragment": name},
+                    )
+                    if fuzzy_results:
+                        closest_match = fuzzy_results[0]["name"]
+                except Exception:
+                    logger.warning("node.hallugraph_check.fuzzy_failed", name=name)
+
+                grounding_results.append(
+                    {
+                        "name": name,
+                        "type": entity_type,
+                        "grounded": False,
+                        "confidence": 0.0,
+                        "closest_match": closest_match,
+                    }
+                )
+        except Exception:
+            logger.warning("node.hallugraph_check.entity_check_failed", name=name)
+            grounding_results.append(
+                {
+                    "name": name,
+                    "type": entity_type,
+                    "grounded": False,
+                    "confidence": 0.0,
+                    "closest_match": None,
+                }
+            )
+
+    logger.info(
+        "node.hallugraph_check",
+        total=len(grounding_results),
+        grounded=sum(1 for g in grounding_results if g["grounded"]),
+    )
+
+    return {"entity_grounding": grounding_results}
+
+
 TOOL_BUDGETS = {"fast": 5, "standard": 8, "deep": 15}
 
 

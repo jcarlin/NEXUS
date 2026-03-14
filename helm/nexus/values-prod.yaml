@@ -1,0 +1,87 @@
+# NEXUS Helm Chart — Production Overrides
+# Usage: helm install nexus helm/nexus/ -f helm/nexus/values-prod.yaml --set secrets.postgresPassword=... --set secrets.jwtSecretKey=...
+
+api:
+  replicas: 2
+  resources:
+    requests:
+      memory: "1024Mi"
+      cpu: "500m"
+    limits:
+      memory: "1536Mi"
+      cpu: "1000m"
+  hpa:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+
+worker:
+  replicas: 2
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "1024Mi"
+      cpu: "500m"
+  hpa:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 80
+
+flower:
+  enabled: true
+
+# Production: use managed databases — set enabled=false and provide externalUrl
+postgres:
+  enabled: false
+  externalUrl: ""      # Set via --set: postgresql+asyncpg://user:pass@host:5432/nexus
+  externalSyncUrl: ""  # Set via --set: postgresql://user:pass@host:5432/nexus
+
+redis:
+  enabled: false
+  externalUrl: ""  # Set via --set: redis://host:6379/0
+
+qdrant:
+  enabled: false
+  externalUrl: ""  # Set via --set: http://qdrant-host:6333
+
+neo4j:
+  enabled: false
+  externalUri: ""  # Set via --set: bolt://neo4j-host:7687
+
+minio:
+  enabled: false
+  externalEndpoint: ""  # Set via --set: minio-host:9000
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+  hosts:
+    - host: nexus.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: nexus-prod-tls
+      hosts:
+        - nexus.example.com
+
+config:
+  logLevel: "WARNING"
+  corsAllowedOrigins: "https://nexus.example.com"
+
+featureFlags:
+  enableAiAuditLogging: "true"
+  enablePrometheusMetrics: "true"
+  enableReranker: "true"
+  enableAgenticPipeline: "true"
+  enableCitationVerification: "true"
+  enableEmailThreading: "true"
+  enableNearDuplicateDetection: "true"

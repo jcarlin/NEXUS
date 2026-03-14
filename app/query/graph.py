@@ -148,6 +148,9 @@ class AgentState(TypedDict, total=False):
     _reflection_count: int
     _flagged_claims: Annotated[list[dict[str, Any]], _replace]
 
+    # HalluGraph entity-graph alignment (T3-9)
+    entity_grounding: Annotated[list[dict[str, Any]], _replace]
+
 
 # ---------------------------------------------------------------------------
 # V1 graph
@@ -308,6 +311,7 @@ def build_agentic_graph(settings: Settings, checkpointer: Any) -> Any:
         build_system_prompt,
         case_context_resolve,
         generate_follow_ups_agentic,
+        hallugraph_check,
         post_agent_extract,
         reflect,
         verify_citations,
@@ -350,6 +354,7 @@ def build_agentic_graph(settings: Settings, checkpointer: Any) -> Any:
     parent.add_node("investigation_agent", agent)
     parent.add_node("post_agent_extract", post_agent_extract)
     parent.add_node("verify_citations", verify_citations)
+    parent.add_node("hallugraph_check", hallugraph_check)
     parent.add_node("generate_follow_ups", generate_follow_ups_agentic)
     parent.add_node("reflect", reflect)
 

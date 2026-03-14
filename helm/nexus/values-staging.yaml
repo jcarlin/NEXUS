@@ -1,0 +1,59 @@
+# NEXUS Helm Chart — Staging Overrides
+# Usage: helm install nexus helm/nexus/ -f helm/nexus/values-staging.yaml
+
+api:
+  replicas: 1
+  hpa:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 75
+
+worker:
+  replicas: 1
+  hpa:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 80
+
+flower:
+  enabled: true
+
+postgres:
+  enabled: true
+  storage: 10Gi
+
+redis:
+  enabled: true
+  storage: 2Gi
+
+qdrant:
+  enabled: true
+  storage: 10Gi
+
+neo4j:
+  enabled: true
+  storage: 10Gi
+
+minio:
+  enabled: true
+  storage: 20Gi
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-staging
+  hosts:
+    - host: nexus-staging.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: nexus-staging-tls
+      hosts:
+        - nexus-staging.example.com
+
+config:
+  logLevel: "INFO"

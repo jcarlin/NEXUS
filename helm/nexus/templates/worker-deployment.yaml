@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "nexus.fullname" . }}-worker
+  labels:
+    {{- include "nexus.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  replicas: {{ .Values.worker.replicas }}
+  selector:
+    matchLabels:
+      {{- include "nexus.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      labels:
+        {{- include "nexus.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: worker
+    spec:
+      containers:
+        - name: worker
+          image: "{{ .Values.worker.image.repository }}:{{ .Values.worker.image.tag }}"
+          imagePullPolicy: {{ .Values.worker.image.pullPolicy }}
+          command:
+            - celery
+            - -A
+            - workers.celery_app
+            - worker
+            - -Q
+            - {{ .Values.worker.celery.queues }}
+            - -l
+            - {{ .Values.worker.celery.logLevel }}
+            - -c
+            - {{ .Values.worker.celery.concurrency | quote }}
+            - --max-tasks-per-child={{ .Values.worker.celery.maxTasksPerChild }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "nexus.fullname" . }}-config
+            - secretRef:
+                name: {{ include "nexus.fullname" . }}-secret
+          livenessProbe:
+            exec:
+              command:
+                - celery
+                - -A
+                - workers.celery_app
+                - inspect
+                - ping
+                - --timeout
+                - "10"
+            initialDelaySeconds: 30
+            periodSeconds: 60
+            timeoutSeconds: 15
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}

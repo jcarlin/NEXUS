@@ -1,0 +1,32 @@
+NEXUS has been deployed successfully!
+
+1. Get the API URL:
+{{- if .Values.ingress.enabled }}
+{{- range .Values.ingress.hosts }}
+  http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .host }}
+{{- end }}
+{{- else }}
+  export POD_NAME=$(kubectl get pods --namespace {{ .Release.Namespace }} -l "app.kubernetes.io/name={{ include "nexus.name" . }},app.kubernetes.io/instance={{ .Release.Name }},app.kubernetes.io/component=api" -o jsonpath="{.items[0].metadata.name}")
+  kubectl --namespace {{ .Release.Namespace }} port-forward $POD_NAME 8000:8000
+  echo "API available at http://localhost:8000"
+{{- end }}
+
+2. Check the health endpoint:
+  curl http://localhost:8000/api/v1/health
+
+3. View API pods:
+  kubectl get pods --namespace {{ .Release.Namespace }} -l "app.kubernetes.io/component=api"
+
+4. View worker pods:
+  kubectl get pods --namespace {{ .Release.Namespace }} -l "app.kubernetes.io/component=worker"
+
+{{- if .Values.flower.enabled }}
+
+5. Access Flower (Celery monitoring):
+  export FLOWER_POD=$(kubectl get pods --namespace {{ .Release.Namespace }} -l "app.kubernetes.io/component=flower" -o jsonpath="{.items[0].metadata.name}")
+  kubectl --namespace {{ .Release.Namespace }} port-forward $FLOWER_POD 5555:5555
+  echo "Flower available at http://localhost:5555/flower"
+{{- end }}
+
+6. Run Helm tests:
+  helm test {{ .Release.Name }} --namespace {{ .Release.Namespace }}

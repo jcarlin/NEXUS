@@ -274,10 +274,23 @@ def get_reranker() -> Reranker | TEIReranker | None:
 
 @functools.cache
 def get_sparse_embedder() -> SparseEmbedder | BGEM3SparseAdapter | None:
-    """Return the ``SparseEmbedder`` singleton, or ``None`` when disabled."""
+    """Return the ``SparseEmbedder`` singleton, or ``None`` when disabled.
+
+    SPLADE takes priority when explicitly enabled (``ENABLE_SPLADE_SPARSE``).
+    Falls back to BGE-M3 or BM42 when only ``ENABLE_SPARSE_EMBEDDINGS`` is set.
+    """
     settings = get_settings()
-    if not settings.enable_sparse_embeddings:
+    if not settings.enable_sparse_embeddings and not settings.enable_splade_sparse:
         return None
+    # SPLADE takes priority when explicitly enabled
+    if settings.enable_splade_sparse:
+        from app.ingestion.splade_embedder import SPLADEProvider
+
+        return SPLADEProvider(
+            doc_model=settings.splade_doc_model,
+            query_model=settings.splade_query_model,
+            max_length=settings.splade_max_length,
+        )
     if settings.embedding_provider == "bgem3":
         return BGEM3SparseAdapter(get_embedder())
     return SparseEmbedder(model_name=settings.sparse_embedding_model)

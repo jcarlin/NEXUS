@@ -1,0 +1,91 @@
+# NEXUS Helm Chart — Development Overrides
+# Usage: helm install nexus helm/nexus/ -f helm/nexus/values-dev.yaml
+
+api:
+  replicas: 1
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "100m"
+    limits:
+      memory: "1024Mi"
+      cpu: "250m"
+  hpa:
+    enabled: false
+
+worker:
+  replicas: 1
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "250m"
+  hpa:
+    enabled: false
+
+flower:
+  enabled: true
+  replicas: 1
+
+postgres:
+  enabled: true
+  storage: 5Gi
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "250m"
+
+redis:
+  enabled: true
+  storage: 1Gi
+  resources:
+    requests:
+      memory: "64Mi"
+      cpu: "50m"
+    limits:
+      memory: "128Mi"
+      cpu: "100m"
+
+qdrant:
+  enabled: true
+  storage: 5Gi
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "100m"
+    limits:
+      memory: "1024Mi"
+      cpu: "250m"
+
+neo4j:
+  enabled: true
+  storage: 5Gi
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "100m"
+    limits:
+      memory: "1024Mi"
+      cpu: "250m"
+
+minio:
+  enabled: true
+  storage: 5Gi
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "50m"
+    limits:
+      memory: "256Mi"
+      cpu: "100m"
+
+ingress:
+  enabled: false
+
+config:
+  logLevel: "DEBUG"

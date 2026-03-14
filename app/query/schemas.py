@@ -39,6 +39,16 @@ class EntityMention(BaseModel):
     connections: int = 0
 
 
+class EntityGrounding(BaseModel):
+    """Result of HalluGraph entity-graph alignment check (T3-9)."""
+
+    name: str
+    type: str
+    grounded: bool
+    confidence: float = Field(ge=0.0, le=1.0)
+    closest_match: str | None = None
+
+
 class QueryResponse(BaseModel):
     """Full (non-streaming) response to a user query."""
 
@@ -50,6 +60,7 @@ class QueryResponse(BaseModel):
     message_id: UUID
     cited_claims: list["CitedClaim"] = Field(default_factory=list)
     tier: str | None = None
+    entity_grounding: list[EntityGrounding] = Field(default_factory=list)
 
 
 class ChatMessage(BaseModel):

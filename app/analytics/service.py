@@ -383,3 +383,192 @@ class AnalyticsService:
             inferred_count=len(entries),
         )
         return entries
+
+    # ------------------------------------------------------------------
+    # GraphRAG community CRUD (T3-10)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    async def save_communities(
+        db: AsyncSession,
+        matter_id: str,
+        communities: list[dict],
+    ) -> None:
+        """Persist detected communities to the database."""
+        # Delete existing communities for this matter
+        await db.execute(
+            text("DELETE FROM communities WHERE matter_id = :matter_id"),
+            {"matter_id": matter_id},
+        )
+
+        for c in communities:
+            await db.execute(
+                text("""
+                    INSERT INTO communities
+                        (id, matter_id, level, parent_id,
+                         entity_names, relationship_types,
+                         summary, entity_count)
+                    VALUES
+                        (:id, :matter_id, :level, :parent_id,
+                         :entity_names, :relationship_types,
+                         :summary, :entity_count)
+                """),
+                {
+                    "id": c["id"],
+                    "matter_id": matter_id,
+                    "level": c.get("level", 0),
+                    "parent_id": c.get("parent_id"),
+                    "entity_names": json.dumps(c.get("entity_names", [])),
+                    "relationship_types": json.dumps(c.get("relationship_types", [])),
+                    "summary": c.get("summary"),
+                    "entity_count": c.get("entity_count", 0),
+                },
+            )
+
+        await db.commit()
+        logger.info(
+            "analytics.communities.saved",
+            matter_id=matter_id,
+            count=len(communities),
+        )
+
+    @staticmethod
+    async def list_communities(
+        db: AsyncSession,
+        matter_id: str,
+    ) -> list[dict]:
+        """List all communities for a matter."""
+        result = await db.execute(
+            text("""
+                SELECT id, matter_id, level, parent_id,
+                       entity_names, relationship_types,
+                       summary, entity_count
+                FROM communities
+                WHERE matter_id = :matter_id
+                ORDER BY level, entity_count DESC
+            """),
+            {"matter_id": matter_id},
+        )
+        rows = result.fetchall()
+
+        communities = []
+        for r in rows:
+            entity_names = r.entity_names
+            if isinstance(entity_names, str):
+                entity_names = json.loads(entity_names)
+            relationship_types = r.relationship_types
+            if isinstance(relationship_types, str):
+                relationship_types = json.loads(relationship_types)
+
+            communities.append(
+                {
+                    "id": r.id,
+                    "matter_id": r.matter_id,
+                    "level": r.level,
+                    "parent_id": r.parent_id,
+                    "entity_names": entity_names,
+                    "relationship_types": relationship_types,
+                    "summary": r.summary,
+                    "entity_count": r.entity_count,
+                }
+            )
+
+        return communities
+
+    @staticmethod
+    async def get_community(
+        db: AsyncSession,
+        community_id: str,
+        matter_id: str,
+    ) -> dict | None:
+        """Get a single community by ID."""
+        result = await db.execute(
+            text("""
+                SELECT id, matter_id, level, parent_id,
+                       entity_names, relationship_types,
+                       summary, entity_count
+                FROM communities
+                WHERE id = :community_id AND matter_id = :matter_id
+            """),
+            {"community_id": community_id, "matter_id": matter_id},
+        )
+        row = result.fetchone()
+        if row is None:
+            return None
+
+        entity_names = row.entity_names
+        if isinstance(entity_names, str):
+            entity_names = json.loads(entity_names)
+        relationship_types = row.relationship_types
+        if isinstance(relationship_types, str):
+            relationship_types = json.loads(relationship_types)
+
+        return {
+            "id": row.id,
+            "matter_id": row.matter_id,
+            "level": row.level,
+            "parent_id": row.parent_id,
+            "entity_names": entity_names,
+            "relationship_types": relationship_types,
+            "summary": row.summary,
+            "entity_count": row.entity_count,
+        }
+
+    @staticmethod
+    async def get_related_communities(
+        db: AsyncSession,
+        community_id: str,
+        matter_id: str,
+    ) -> list[dict]:
+        """Get communities related to the given one (same parent)."""
+        # First get the community to find its parent
+        result = await db.execute(
+            text("SELECT parent_id FROM communities WHERE id = :community_id AND matter_id = :matter_id"),
+            {"community_id": community_id, "matter_id": matter_id},
+        )
+        row = result.fetchone()
+        if row is None or row.parent_id is None:
+            return []
+
+        result = await db.execute(
+            text("""
+                SELECT id, matter_id, level, parent_id,
+                       entity_names, relationship_types,
+                       summary, entity_count
+                FROM communities
+                WHERE parent_id = :parent_id
+                  AND matter_id = :matter_id
+                  AND id != :community_id
+                ORDER BY entity_count DESC
+            """),
+            {
+                "parent_id": row.parent_id,
+                "matter_id": matter_id,
+                "community_id": community_id,
+            },
+        )
+        rows = result.fetchall()
+
+        communities = []
+        for r in rows:
+            entity_names = r.entity_names
+            if isinstance(entity_names, str):
+                entity_names = json.loads(entity_names)
+            relationship_types = r.relationship_types
+            if isinstance(relationship_types, str):
+                relationship_types = json.loads(relationship_types)
+
+            communities.append(
+                {
+                    "id": r.id,
+                    "matter_id": r.matter_id,
+                    "level": r.level,
+                    "parent_id": r.parent_id,
+                    "entity_names": entity_names,
+                    "relationship_types": relationship_types,
+                    "summary": r.summary,
+                    "entity_count": r.entity_count,
+                }
+            )
+
+        return communities
