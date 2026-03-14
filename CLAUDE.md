@@ -36,6 +36,33 @@ Full local deployment with zero cloud API dependency.
 - **Destructive commands need extra care.** `git reset --hard`, `git clean -f`, and `git checkout .` are high-blast-radius. Even if you believe you're the only session, prefer targeted alternatives (`git restore <specific-file>`) or ask the user first.
 - **Don't auto-resolve conflicts on others' files.** If a merge/rebase conflict involves files you didn't edit, stop and ask the user which version to keep.
 
+### Versioning & Releases
+
+This project uses [Semantic Versioning](https://semver.org/) with `v`-prefixed git tags (`v1.11.0`).
+
+**Version bumping rules:**
+- **Patch** (`v1.10.0` → `v1.10.1`): Bug fixes, typo corrections, test-only changes — no new behavior.
+- **Minor** (`v1.10.0` → `v1.11.0`): New features, new endpoints, new flags, behavioral changes, performance improvements — anything that adds or changes capability.
+- **Major** (`v1.x` → `v2.0.0`): Breaking API changes, schema migrations that drop data, or fundamental architecture shifts. Requires explicit user approval before tagging.
+
+**When to tag:**
+- Tag after every logical unit of work is committed — don't let multiple unrelated features pile up under one tag.
+- A single commit can be a tag (e.g., a perf improvement). Multiple related commits can share a tag (e.g., a feature + its tests + a follow-up fix).
+- Never tag uncommitted or untested work.
+
+**How to tag:**
+1. Update `CHANGELOG.md`: move items from `[Unreleased]` into a new version section with the current date. Group entries under `Added`, `Changed`, `Fixed`, `Performance`, or `Removed`.
+2. Commit the changelog update: `git add CHANGELOG.md && git commit -m "chore: update changelog for vX.Y.Z"`
+3. Create the annotated tag: `git tag -a vX.Y.Z -m "short description of what this release contains"`
+4. Optionally push: `git push origin main --tags` (only when the user asks to push).
+
+**Changelog format (`CHANGELOG.md`):**
+- Follows [Keep a Changelog](https://keepachangelog.com/).
+- Each version gets a `## [X.Y.Z] - YYYY-MM-DD` heading.
+- Entries are grouped: `Added`, `Changed`, `Fixed`, `Performance`, `Removed`.
+- Each entry is one line: `- Description (commit_hash)`.
+- The `[Unreleased]` section at the top collects changes that haven't been tagged yet.
+
 ### Code Quality — Library-First, Not Custom Code
 
 **This is an integration project.** We stitch together well-maintained libraries and APIs — FastAPI, LangGraph, Qdrant client, Neo4j driver, Instructor, Docling, GLiNER, etc. We do NOT write custom implementations of things these libraries already do.
@@ -241,6 +268,7 @@ The report has four sections:
 ### Start Here (read for any task)
 - `ARCHITECTURE.md` — System design, tech stack, security model, data flow
 - `ROADMAP.md` — Milestones M0–M21, build status, test counts
+- `CHANGELOG.md` — Version history with grouped changes per release
 
 ### Module & API Reference (read when working on specific modules)
 - `docs/modules.md` — All 19 domain modules with files, schemas, endpoints, and full API reference
