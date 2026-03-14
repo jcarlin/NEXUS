@@ -229,3 +229,91 @@ class TuningReport(BaseModel):
     comparisons: list[TuningComparison] = Field(default_factory=list)
     best_config: str = Field(..., description="Config name with best overall improvement")
     recommendation: str = Field(..., description="Human-readable tuning recommendation")
+
+
+# ---------------------------------------------------------------------------
+# Flag sweep schemas
+# ---------------------------------------------------------------------------
+
+
+class FlagRecommendation(StrEnum):
+    KEEP_ENABLED = "keep_enabled"
+    KEEP_DISABLED = "keep_disabled"
+    NEGLIGIBLE_IMPACT = "negligible_impact"
+
+
+class FlagSweepConfig(BaseModel):
+    """Configuration for a feature flag evaluation sweep."""
+
+    flags: list[str] = Field(
+        default_factory=list,
+        description="Flag names to sweep. Empty = all query/retrieval flags.",
+    )
+    combinations: bool = Field(
+        default=False,
+        description="Test pairwise flag combinations (exponential — use with care).",
+    )
+    api_url: str = Field(
+        default="http://localhost:8000",
+        description="Base URL of the running NEXUS instance.",
+    )
+    auth_token: str | None = Field(
+        default=None,
+        description="JWT token for admin auth. If None, logs in as admin.",
+    )
+    matter_id: str = Field(
+        default="00000000-0000-0000-0000-000000000001",
+        description="Matter ID to scope queries to.",
+    )
+    queries: list[str] = Field(
+        default_factory=list,
+        description="Custom queries. If empty, uses built-in evaluation queries.",
+    )
+
+
+class FlagRunMetrics(BaseModel):
+    """Metrics collected from a single evaluation run (one flag configuration)."""
+
+    retrieval: RetrievalMetrics | None = None
+    citation: CitationMetrics | None = None
+    latency_p50_ms: float = Field(0.0, ge=0.0)
+    latency_p95_ms: float = Field(0.0, ge=0.0)
+    latency_mean_ms: float = Field(0.0, ge=0.0)
+    num_queries: int = Field(0, ge=0)
+    quality_gates_passed: bool = False
+    gate_failures: list[str] = Field(default_factory=list)
+
+
+class FlagSweepResult(BaseModel):
+    """Result of evaluating one flag state configuration."""
+
+    flag_states: dict[str, bool] = Field(..., description="Exact flag on/off state for this run")
+    label: str = Field(..., description="Human-readable label (e.g., 'enable_reranker=ON')")
+    metrics: FlagRunMetrics
+
+
+class FlagImpactSummary(BaseModel):
+    """Measured impact of toggling a single flag (ON vs OFF deltas)."""
+
+    flag_name: str
+    delta_mrr: float = 0.0
+    delta_recall: float = 0.0
+    delta_ndcg: float = 0.0
+    delta_precision: float = 0.0
+    delta_citation_accuracy: float = 0.0
+    delta_latency_mean_ms: float = 0.0
+    gates_pass_when_on: bool = True
+    gates_pass_when_off: bool = True
+    recommendation: FlagRecommendation = FlagRecommendation.NEGLIGIBLE_IMPACT
+
+
+class FlagSweepReport(BaseModel):
+    """Complete flag sweep experiment report."""
+
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    config: FlagSweepConfig
+    baseline: FlagSweepResult
+    experiments: list[FlagSweepResult] = Field(default_factory=list)
+    impact_summary: list[FlagImpactSummary] = Field(default_factory=list)
+    total_queries_run: int = Field(0, ge=0)
+    total_duration_s: float = Field(0.0, ge=0.0)

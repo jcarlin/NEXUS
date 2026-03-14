@@ -22,8 +22,9 @@ project_root = Path(__file__).resolve().parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
+from evaluation.flag_sweep import format_flag_sweep_report, run_flag_sweep  # noqa: E402
 from evaluation.runner import run_dry  # noqa: E402
-from evaluation.schemas import TuningConfig  # noqa: E402
+from evaluation.schemas import FlagSweepConfig, TuningConfig  # noqa: E402
 from evaluation.tuning import run_tuning_comparison  # noqa: E402
 
 
@@ -98,8 +99,7 @@ def _run_tuning_sweep(verbose: bool = False) -> int:
     print(f"  Baseline Recall@10: {baseline_metrics.recall_at_10:.4f}")
     for comp in threshold_report.comparisons:
         print(
-            f"  {comp.config_name:20s}  Recall@10: {comp.metrics.recall_at_10:.4f}  "
-            f"(delta: {comp.delta_recall:+.4f})"
+            f"  {comp.config_name:20s}  Recall@10: {comp.metrics.recall_at_10:.4f}  (delta: {comp.delta_recall:+.4f})"
         )
     print(f"  Best: {threshold_report.best_config}")
     print(f"  {threshold_report.recommendation}\n")
@@ -123,6 +123,41 @@ def _run_tuning_sweep(verbose: bool = False) -> int:
         "entity_threshold": threshold_report.model_dump(mode="json"),
     }
     print(f"\n{json.dumps(summary, indent=2)}")
+
+    return 0
+
+
+def _run_flag_sweep(args) -> int:
+    """Run feature flag evaluation sweep against a live NEXUS instance."""
+    import asyncio
+
+    config = FlagSweepConfig(
+        flags=args.flags or [],
+        combinations=args.combinations,
+        api_url=args.api_url,
+        auth_token=args.auth_token,
+        matter_id=args.matter_id,
+    )
+
+    print(f"Running feature flag sweep against {config.api_url}...")
+    print(f"  Flags: {config.flags or 'all query-time flags'}")
+    print(f"  Combinations: {config.combinations}")
+    print()
+
+    try:
+        report = asyncio.run(run_flag_sweep(config, verbose=args.verbose))
+    except Exception as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+
+    # Print formatted report
+    print(format_flag_sweep_report(report))
+
+    # Write JSON output if requested
+    if args.output:
+        output_path = Path(args.output)
+        output_path.write_text(report.model_dump_json(indent=2))
+        print(f"\nResults written to {output_path}")
 
     return 0
 
@@ -164,12 +199,50 @@ def main() -> int:
         action="store_true",
         help="Run predefined tuning experiments (reranker, prefetch multiplier, entity threshold)",
     )
+    parser.add_argument(
+        "--flag-sweep",
+        action="store_true",
+        help="Run feature flag evaluation sweep against a live NEXUS instance",
+    )
+    parser.add_argument(
+        "--api-url",
+        type=str,
+        default="http://localhost:8000",
+        help="Base URL of the running NEXUS instance (flag-sweep mode)",
+    )
+    parser.add_argument(
+        "--auth-token",
+        type=str,
+        default=None,
+        help="JWT auth token for admin access (flag-sweep mode; omit to auto-login)",
+    )
+    parser.add_argument(
+        "--matter-id",
+        type=str,
+        default="00000000-0000-0000-0000-000000000001",
+        help="Matter ID to scope queries to (flag-sweep mode)",
+    )
+    parser.add_argument(
+        "--flags",
+        nargs="+",
+        metavar="FLAG",
+        help="Specific flags to sweep (flag-sweep mode; omit for all query-time flags)",
+    )
+    parser.add_argument(
+        "--combinations",
+        action="store_true",
+        help="Test pairwise flag combinations (flag-sweep mode; exponential)",
+    )
 
     args = parser.parse_args()
 
     # Tuning sweep mode
     if args.tune:
         return _run_tuning_sweep(verbose=args.verbose)
+
+    # Flag sweep mode
+    if args.flag_sweep:
+        return _run_flag_sweep(args)
 
     overrides = _parse_config_overrides(args.config_override)
 
