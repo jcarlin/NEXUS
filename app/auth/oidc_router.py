@@ -29,8 +29,16 @@ async def oidc_info() -> OIDCProviderInfo:
         return OIDCProviderInfo(enabled=False, provider_name="", authorize_url="")
 
     provider = get_oidc_provider()
-    state = str(uuid4())
-    authorize_url = await provider.get_authorize_url(state)
+    if provider is None:
+        return OIDCProviderInfo(enabled=False, provider_name="", authorize_url="")
+
+    try:
+        state = str(uuid4())
+        authorize_url = await provider.get_authorize_url(state)
+    except Exception as exc:
+        logger.warning("oidc.info.provider_unavailable", error=str(exc))
+        return OIDCProviderInfo(enabled=False, provider_name="", authorize_url="")
+
     return OIDCProviderInfo(
         enabled=True,
         provider_name=provider.provider_name,
@@ -50,6 +58,8 @@ async def oidc_callback(
         raise HTTPException(status_code=404, detail="SSO is not enabled")
 
     provider = get_oidc_provider()
+    if provider is None:
+        raise HTTPException(status_code=503, detail="OIDC provider is not configured")
 
     try:
         userinfo = await provider.exchange_code(code)

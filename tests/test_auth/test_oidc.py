@@ -198,6 +198,35 @@ class TestOIDCInfoEndpoint:
         assert data["enabled"] is True
         assert data["provider_name"] == "TestIDP"
 
+    @pytest.mark.asyncio
+    async def test_info_when_provider_is_none(self, client: AsyncClient, sso_settings: Settings) -> None:
+        """Returns enabled=False when SSO enabled but provider returns None."""
+        with (
+            patch("app.auth.oidc_router.get_settings", return_value=sso_settings),
+            patch("app.auth.oidc_router.get_oidc_provider", return_value=None),
+        ):
+            resp = await client.get("/api/v1/auth/oidc/info")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["enabled"] is False
+
+    @pytest.mark.asyncio
+    async def test_info_when_provider_unavailable(self, client: AsyncClient, sso_settings: Settings) -> None:
+        """Returns enabled=False when provider raises during authorize URL fetch."""
+        mock_provider = MagicMock()
+        mock_provider.get_authorize_url = AsyncMock(side_effect=Exception("connection refused"))
+
+        with (
+            patch("app.auth.oidc_router.get_settings", return_value=sso_settings),
+            patch("app.auth.oidc_router.get_oidc_provider", return_value=mock_provider),
+        ):
+            resp = await client.get("/api/v1/auth/oidc/info")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["enabled"] is False
+
 
 class TestOIDCCallbackEndpoint:
     """Test GET /auth/oidc/callback."""
@@ -226,6 +255,20 @@ class TestOIDCCallbackEndpoint:
         assert data["refresh_token"] == "test-refresh"
         assert data["is_new_user"] is True
         assert data["token_type"] == "bearer"
+
+    @pytest.mark.asyncio
+    async def test_callback_rejects_when_provider_none(self, client: AsyncClient, sso_settings: Settings) -> None:
+        """Callback returns 503 when SSO enabled but provider is None."""
+        with (
+            patch("app.auth.oidc_router.get_settings", return_value=sso_settings),
+            patch("app.auth.oidc_router.get_oidc_provider", return_value=None),
+        ):
+            resp = await client.get(
+                "/api/v1/auth/oidc/callback",
+                params={"code": "auth-code-123"},
+            )
+        assert resp.status_code == 503
+        assert "not configured" in resp.json()["detail"].lower()
 
     @pytest.mark.asyncio
     async def test_callback_rejects_when_disabled(self, client: AsyncClient) -> None:

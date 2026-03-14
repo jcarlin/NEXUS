@@ -109,6 +109,17 @@ class TestSAMLLoginEndpoint:
         resp = await client.get("/api/v1/auth/saml/login", follow_redirects=False)
         assert resp.status_code == 404
 
+    @pytest.mark.asyncio
+    async def test_login_when_provider_none(self, client: AsyncClient, saml_settings: Settings) -> None:
+        """Login returns 503 when SAML enabled but provider is None."""
+        with (
+            patch("app.auth.saml_router.get_settings", return_value=saml_settings),
+            patch("app.auth.saml_router.get_saml_provider", return_value=None),
+        ):
+            resp = await client.get("/api/v1/auth/saml/login", follow_redirects=False)
+        assert resp.status_code == 503
+        assert "not configured" in resp.json()["detail"].lower()
+
 
 # ---------------------------------------------------------------------------
 # POST /auth/saml/acs
@@ -191,6 +202,20 @@ class TestSAMLACSEndpoint:
         )
         assert resp.status_code == 404
 
+    @pytest.mark.asyncio
+    async def test_acs_when_provider_none(self, client: AsyncClient, saml_settings: Settings) -> None:
+        """ACS returns 503 when SAML enabled but provider is None."""
+        with (
+            patch("app.auth.saml_router.get_settings", return_value=saml_settings),
+            patch("app.auth.saml_router.get_saml_provider", return_value=None),
+        ):
+            resp = await client.post(
+                "/api/v1/auth/saml/acs",
+                data={"SAMLResponse": "base64encoded"},
+            )
+        assert resp.status_code == 503
+        assert "not configured" in resp.json()["detail"].lower()
+
 
 # ---------------------------------------------------------------------------
 # GET /auth/saml/metadata.xml
@@ -221,6 +246,17 @@ class TestSAMLMetadataEndpoint:
         """Metadata returns 404 when SAML is disabled (request-time guard)."""
         resp = await client.get("/api/v1/auth/saml/metadata.xml")
         assert resp.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_metadata_when_provider_none(self, client: AsyncClient, saml_settings: Settings) -> None:
+        """Metadata returns 503 when SAML enabled but provider is None."""
+        with (
+            patch("app.auth.saml_router.get_settings", return_value=saml_settings),
+            patch("app.auth.saml_router.get_saml_provider", return_value=None),
+        ):
+            resp = await client.get("/api/v1/auth/saml/metadata.xml")
+        assert resp.status_code == 503
+        assert "not configured" in resp.json()["detail"].lower()
 
     @pytest.mark.asyncio
     async def test_metadata_generation_failure(self, client: AsyncClient, saml_settings: Settings) -> None:

@@ -45,6 +45,8 @@ async def saml_login() -> RedirectResponse:
         raise HTTPException(status_code=404, detail="SAML SSO is not enabled")
 
     provider = get_saml_provider()
+    if provider is None:
+        raise HTTPException(status_code=503, detail="SAML provider is not configured")
     redirect_url = provider.get_authn_request_url()
     return RedirectResponse(url=redirect_url, status_code=302)
 
@@ -66,6 +68,8 @@ async def saml_acs(
         raise HTTPException(status_code=404, detail="SAML SSO is not enabled")
 
     provider = get_saml_provider()
+    if provider is None:
+        raise HTTPException(status_code=503, detail="SAML provider is not configured")
 
     # Build request_data for python3-saml from the incoming request
     request_data = _build_request_data(provider.entity_id)
@@ -104,6 +108,8 @@ async def saml_metadata() -> Response:
         raise HTTPException(status_code=404, detail="SAML SSO is not enabled")
 
     provider = get_saml_provider()
+    if provider is None:
+        raise HTTPException(status_code=503, detail="SAML provider is not configured")
 
     try:
         metadata_xml = provider.get_sp_metadata()

@@ -50,9 +50,20 @@ async def _docker_call(coro):
 
 async def get_docker_client(settings: Settings = Depends(get_settings)) -> Any:
     """Return an aiodocker.Docker client for the current request."""
-    import aiodocker
-
-    return aiodocker.Docker(url=f"unix://{settings.docker_socket_path}")
+    try:
+        import aiodocker
+    except ImportError:
+        raise HTTPException(
+            status_code=503,
+            detail="Docker management unavailable (aiodocker not installed).",
+        )
+    try:
+        return aiodocker.Docker(url=f"unix://{settings.docker_socket_path}")
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Docker daemon is unavailable. Ensure Docker is running.",
+        ) from exc
 
 
 def get_celery_app() -> Any:

@@ -113,8 +113,9 @@ dev = [
     "fpdf2>=2.7",
 ]
 coreference = [
-    "coreferee>=1.4",
-    "spacy>=3.8",
+    # NOTE: coreferee is abandoned (last release 1.4.1, requires spacy<3.6.0).
+    # Incompatible with our spacy>=3.8 requirement. Coreference resolution
+    # is feature-flagged (ENABLE_COREFERENCE) and currently disabled.
 ]
 visual = [
     "colpali-engine>=0.3.1",
