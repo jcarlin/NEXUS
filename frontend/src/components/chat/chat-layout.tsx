@@ -72,8 +72,7 @@ export function ChatLayout({ children }: ChatLayoutProps) {
   return (
     <div className="-m-6 flex h-[calc(100vh-3.5rem)] overflow-hidden">
       <div
-        style={{ width: collapsed ? 48 : 260 }}
-        className="shrink-0 transition-all duration-200"
+        className={`shrink-0 transition-all duration-200 hidden md:block ${collapsed ? "w-12" : "w-[260px]"}`}
       >
         <ThreadSidebar collapsed={collapsed} onToggle={toggle} />
       </div>

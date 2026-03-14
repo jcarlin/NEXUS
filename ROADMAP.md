@@ -43,11 +43,11 @@
 | M20 | Observability & Load Testing | — | Done | 23 | Regression | — | M17 |
 | M21 | RAG Quality Improvements | — | Done | 43 | Regression + eval non-regression | — | M8, M9, M15 |
 
-**Total tests: ~1354 backend + 66 frontend test files** (~1312 backend tests passing; frontend: 66 Vitest unit/component test files + 2 Playwright E2E specs)
+**Total tests: ~1364 backend + 73 frontend test files** (~1322 backend tests passing; frontend: 73 Vitest unit/component test files + 2 Playwright E2E specs)
 
 **6 autonomous LangGraph agents** across the pipeline (Case Setup, Investigation Orchestrator, Citation Verifier, Hot Doc Scanner, Contextual Completeness, Entity Resolution)
 
-**All milestones complete.** M0–M21 + Tier 2 Maturity + Tier 3 Phase 1-2 — full local deployment with zero cloud API dependency. 41 feature flags (38 runtime-toggleable via admin UI), 16 agent tools. Tier 2 adds: HyDE retrieval, self-reflection loop, text-to-SQL, multi-representation indexing, document summarization, per-query-type metrics, production quality monitoring, passage linking, keyboard shortcuts, audit export. Tier 3 Phase 1 adds: dark mode, auto graph routing, adaptive retrieval depth, OCR correction, Matryoshka dimensionality optimization. Tier 3 Phase 2 adds: BGE-M3 unified dense+sparse embedding provider (single-pass, 1024d + lexical weights). RAG 9.5/10, Platform 9.5/10, RAG Arch ~95%.
+**All milestones complete.** M0–M21 + Tier 2 Maturity + Tier 3 Phase 1-3 — full local deployment with zero cloud API dependency. 41 feature flags (38 runtime-toggleable via admin UI), 16 agent tools. Tier 2 adds: HyDE retrieval, self-reflection loop, text-to-SQL, multi-representation indexing, document summarization, per-query-type metrics, production quality monitoring, passage linking, keyboard shortcuts, audit export. Tier 3 Phase 1 adds: dark mode, auto graph routing, adaptive retrieval depth, OCR correction, Matryoshka dimensionality optimization. Tier 3 Phase 2 adds: BGE-M3 unified dense+sparse embedding provider (single-pass, 1024d + lexical weights). Tier 3 Phase 3 adds: mobile responsive design (ResizeObserver, responsive tables/graphs), onboarding flow (react-joyride guided tour), interactive graph editing (CRUD endpoints + context menu + edit dialogs). RAG 9.5/10, Platform 9.6/10, RAG Arch ~95%.
 
 **Cloud demo hosting:** GCP + Vercel deployment tested and working. Run `./scripts/cloud-deploy.sh` to deploy, `./scripts/cloud-teardown.sh` to tear down. See `docs/CLOUD-DEPLOY.md` for full guide. Config files: `Caddyfile`, `docker-compose.cloud.yml`, `.env.cloud.example`, `frontend/vercel.json`, `scripts/seed_admin.py`.
 

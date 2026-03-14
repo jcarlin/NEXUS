@@ -1444,3 +1444,227 @@ class GraphService:
                     row[key] = self._serialize_value(record[key])
                 records.append(row)
             return records
+
+    # ------------------------------------------------------------------
+    # Interactive graph editing (T3-5)
+    # ------------------------------------------------------------------
+
+    async def rename_entity(
+        self,
+        matter_id: str,
+        old_name: str,
+        new_name: str,
+    ) -> dict[str, Any] | None:
+        """Rename an entity node. Returns updated entity or None if not found."""
+        entity = await self.get_entity_by_name(old_name, matter_id=matter_id)
+        if entity is None:
+            return None
+
+        query = """
+        MATCH (e:Entity {name: $old_name, matter_id: $matter_id})
+        SET e.name = $new_name
+        RETURN e.name AS id, e.name AS name, e.type AS type,
+               e.mention_count AS mention_count,
+               coalesce(e.aliases, []) AS aliases
+        """
+        try:
+            records = await self._run_query(
+                query,
+                {"old_name": old_name, "new_name": new_name, "matter_id": matter_id},
+            )
+            logger.info(
+                "graph.entity.renamed",
+                old_name=old_name,
+                new_name=new_name,
+                matter_id=matter_id,
+            )
+            return records[0] if records else None
+        except Exception:
+            logger.error(
+                "graph.entity.rename_failed",
+                old_name=old_name,
+                new_name=new_name,
+                matter_id=matter_id,
+            )
+            raise
+
+    async def update_entity_type(
+        self,
+        matter_id: str,
+        name: str,
+        new_type: str,
+    ) -> dict[str, Any] | None:
+        """Update the type property of an entity. Returns updated entity or None."""
+        entity = await self.get_entity_by_name(name, matter_id=matter_id)
+        if entity is None:
+            return None
+
+        label = get_neo4j_label(new_type)
+        label_clause = f"SET e:{label}" if label else ""
+
+        query = f"""
+        MATCH (e:Entity {{name: $name, matter_id: $matter_id}})
+        SET e.type = $new_type
+        {label_clause}
+        RETURN e.name AS id, e.name AS name, e.type AS type,
+               e.mention_count AS mention_count,
+               coalesce(e.aliases, []) AS aliases
+        """
+        try:
+            records = await self._run_query(
+                query,
+                {"name": name, "new_type": new_type, "matter_id": matter_id},
+            )
+            logger.info(
+                "graph.entity.type_updated",
+                name=name,
+                new_type=new_type,
+                matter_id=matter_id,
+            )
+            return records[0] if records else None
+        except Exception:
+            logger.error(
+                "graph.entity.type_update_failed",
+                name=name,
+                new_type=new_type,
+                matter_id=matter_id,
+            )
+            raise
+
+    async def delete_entity(
+        self,
+        matter_id: str,
+        name: str,
+    ) -> bool:
+        """Delete an entity and all its relationships. Returns True if found."""
+        entity = await self.get_entity_by_name(name, matter_id=matter_id)
+        if entity is None:
+            return False
+
+        query = """
+        MATCH (e:Entity {name: $name, matter_id: $matter_id})
+        DETACH DELETE e
+        """
+        try:
+            await self._run_write(
+                query,
+                {"name": name, "matter_id": matter_id},
+            )
+            logger.info(
+                "graph.entity.deleted",
+                name=name,
+                matter_id=matter_id,
+            )
+            return True
+        except Exception:
+            logger.error(
+                "graph.entity.delete_failed",
+                name=name,
+                matter_id=matter_id,
+            )
+            raise
+
+    async def delete_relationship(
+        self,
+        matter_id: str,
+        source_name: str,
+        target_name: str,
+        relationship_type: str,
+    ) -> bool:
+        """Delete a specific relationship between two entities.
+
+        Returns True if the relationship was found and deleted.
+        """
+        source = await self.get_entity_by_name(source_name, matter_id=matter_id)
+        target = await self.get_entity_by_name(target_name, matter_id=matter_id)
+        if source is None or target is None:
+            return False
+
+        query = """
+        MATCH (src:Entity {name: $source_name, matter_id: $matter_id})
+              -[r:RELATED_TO {type: $rel_type}]->
+              (tgt:Entity {name: $target_name, matter_id: $matter_id})
+        DELETE r
+        """
+        try:
+            await self._run_write(
+                query,
+                {
+                    "source_name": source_name,
+                    "target_name": target_name,
+                    "rel_type": relationship_type,
+                    "matter_id": matter_id,
+                },
+            )
+            logger.info(
+                "graph.relationship.deleted",
+                source=source_name,
+                target=target_name,
+                type=relationship_type,
+                matter_id=matter_id,
+            )
+            return True
+        except Exception:
+            logger.error(
+                "graph.relationship.delete_failed",
+                source=source_name,
+                target=target_name,
+                type=relationship_type,
+                matter_id=matter_id,
+            )
+            raise
+
+    async def create_relationship(
+        self,
+        matter_id: str,
+        source_name: str,
+        target_name: str,
+        relationship_type: str,
+        properties: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        """Create a relationship between two entities.
+
+        Returns relationship info or None if either entity is not found.
+        """
+        source = await self.get_entity_by_name(source_name, matter_id=matter_id)
+        target = await self.get_entity_by_name(target_name, matter_id=matter_id)
+        if source is None or target is None:
+            return None
+
+        props = properties or {}
+
+        query = """
+        MATCH (src:Entity {name: $source_name, matter_id: $matter_id})
+        MATCH (tgt:Entity {name: $target_name, matter_id: $matter_id})
+        MERGE (src)-[r:RELATED_TO {type: $rel_type}]->(tgt)
+        SET r += $props
+        RETURN src.name AS source, tgt.name AS target, r.type AS relationship_type
+        """
+        try:
+            records = await self._run_query(
+                query,
+                {
+                    "source_name": source_name,
+                    "target_name": target_name,
+                    "rel_type": relationship_type,
+                    "props": props,
+                    "matter_id": matter_id,
+                },
+            )
+            logger.info(
+                "graph.relationship.created",
+                source=source_name,
+                target=target_name,
+                type=relationship_type,
+                matter_id=matter_id,
+            )
+            return records[0] if records else None
+        except Exception:
+            logger.error(
+                "graph.relationship.create_failed",
+                source=source_name,
+                target=target_name,
+                type=relationship_type,
+                matter_id=matter_id,
+            )
+            raise

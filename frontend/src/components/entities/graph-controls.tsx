@@ -1,7 +1,8 @@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Maximize2, ZoomIn, ZoomOut } from "lucide-react";
+import { Maximize2, ZoomIn, ZoomOut, Lock, Unlock } from "lucide-react";
+import { useAuthStore } from "@/stores/auth-store";
 
 const ENTITY_TYPES = [
   { value: "person", label: "Person", color: "#60a5fa" },
@@ -17,6 +18,8 @@ interface GraphControlsProps {
   onZoomIn: () => void;
   onZoomOut: () => void;
   onFitView: () => void;
+  editMode?: boolean;
+  onToggleEditMode?: () => void;
 }
 
 export function GraphControls({
@@ -25,7 +28,11 @@ export function GraphControls({
   onZoomIn,
   onZoomOut,
   onFitView,
+  editMode,
+  onToggleEditMode,
 }: GraphControlsProps) {
+  const user = useAuthStore((s) => s.user);
+  const canEdit = user?.role === "admin" || user?.role === "attorney";
   return (
     <div className="flex items-center justify-between gap-4 rounded-md border p-3">
       <div className="flex items-center gap-4 flex-wrap">
@@ -50,6 +57,17 @@ export function GraphControls({
         ))}
       </div>
       <div className="flex items-center gap-1">
+        {canEdit && onToggleEditMode && (
+          <Button
+            variant={editMode ? "default" : "outline"}
+            size="icon"
+            className="h-7 w-7"
+            onClick={onToggleEditMode}
+            title={editMode ? "Exit edit mode" : "Enter edit mode"}
+          >
+            {editMode ? <Unlock className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
+          </Button>
+        )}
         <Button variant="outline" size="icon" className="h-7 w-7" onClick={onZoomIn}>
           <ZoomIn className="h-3.5 w-3.5" />
         </Button>

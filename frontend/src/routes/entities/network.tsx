@@ -7,12 +7,24 @@ import { useAppStore } from "@/stores/app-store";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   NetworkGraph,
   type NetworkGraphHandle,
 } from "@/components/entities/network-graph";
 import { GraphControls } from "@/components/entities/graph-controls";
 import { PathFinder } from "@/components/entities/path-finder";
 import { CypherExplorer } from "@/components/entities/cypher-explorer";
+import {
+  RenameDialog,
+  ChangeTypeDialog,
+  MergeDialog,
+  DeleteConfirmDialog,
+} from "@/components/entities/entity-edit-dialogs";
 import type {
   EntityResponse,
   EntityConnection,
@@ -25,12 +37,25 @@ export const Route = createFileRoute("/entities/network")({
 
 const DEFAULT_TYPES = new Set(["person", "organization", "location", "date", "monetary_amount"]);
 
+interface ContextMenuState {
+  x: number;
+  y: number;
+  entityName: string;
+  entityType: string;
+}
+
+type DialogType = "rename" | "changeType" | "merge" | "delete" | null;
+
 function NetworkGraphPage() {
   const matterId = useAppStore((s) => s.matterId);
   const [activeTypes, setActiveTypes] = useState<Set<string>>(
     () => new Set(DEFAULT_TYPES),
   );
   const graphRef = useRef<NetworkGraphHandle>(null);
+  const [editMode, setEditMode] = useState(false);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [activeDialog, setActiveDialog] = useState<DialogType>(null);
+  const [selectedEntity, setSelectedEntity] = useState<{ name: string; type: string }>({ name: "", type: "" });
 
   const { data: entitiesData, isLoading: entitiesLoading } = useQuery({
     queryKey: ["entities-network", matterId],
@@ -99,6 +124,20 @@ function NetworkGraphPage() {
     });
   }, []);
 
+  const handleNodeContextMenu = useCallback((event: MouseEvent, node: { name: string; type: string }) => {
+    if (!editMode) return;
+    event.preventDefault();
+    setContextMenu({ x: event.clientX, y: event.clientY, entityName: node.name, entityType: node.type });
+  }, [editMode]);
+
+  const openDialog = useCallback((type: DialogType) => {
+    if (contextMenu) {
+      setSelectedEntity({ name: contextMenu.entityName, type: contextMenu.entityType });
+    }
+    setActiveDialog(type);
+    setContextMenu(null);
+  }, [contextMenu]);
+
   const isLoading = entitiesLoading || connectionsLoading;
 
   return (
@@ -128,6 +167,8 @@ function NetworkGraphPage() {
         onZoomIn={() => graphRef.current?.zoomIn()}
         onZoomOut={() => graphRef.current?.zoomOut()}
         onFitView={() => graphRef.current?.fitView()}
+        editMode={editMode}
+        onToggleEditMode={() => setEditMode((prev) => !prev)}
       />
 
       <PathFinder />
@@ -143,10 +184,49 @@ function NetworkGraphPage() {
           entities={entitiesData?.items ?? []}
           connections={connectionsData ?? []}
           activeTypes={activeTypes}
+          onNodeContextMenu={handleNodeContextMenu}
         />
       )}
 
       <CypherExplorer />
+
+      {/* Context menu for graph nodes */}
+      {contextMenu && (
+        <DropdownMenu open onOpenChange={() => setContextMenu(null)}>
+          <DropdownMenuTrigger asChild>
+            <div className="fixed" style={{ left: contextMenu.x, top: contextMenu.y, width: 1, height: 1 }} />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuItem onClick={() => openDialog("rename")}>Rename</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => openDialog("changeType")}>Change Type</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => openDialog("merge")}>Merge With...</DropdownMenuItem>
+            <DropdownMenuItem className="text-destructive" onClick={() => openDialog("delete")}>Delete</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+
+      {/* Edit dialogs */}
+      <RenameDialog
+        open={activeDialog === "rename"}
+        onOpenChange={(open) => !open && setActiveDialog(null)}
+        entityName={selectedEntity.name}
+      />
+      <ChangeTypeDialog
+        open={activeDialog === "changeType"}
+        onOpenChange={(open) => !open && setActiveDialog(null)}
+        entityName={selectedEntity.name}
+        currentType={selectedEntity.type}
+      />
+      <MergeDialog
+        open={activeDialog === "merge"}
+        onOpenChange={(open) => !open && setActiveDialog(null)}
+        entityName={selectedEntity.name}
+      />
+      <DeleteConfirmDialog
+        open={activeDialog === "delete"}
+        onOpenChange={(open) => !open && setActiveDialog(null)}
+        entityName={selectedEntity.name}
+      />
     </div>
   );
 }

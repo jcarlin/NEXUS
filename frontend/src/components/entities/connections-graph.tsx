@@ -3,6 +3,7 @@ import { useNavigate } from "@tanstack/react-router";
 import * as d3 from "d3";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { entityColor } from "@/lib/colors";
+import { useContainerSize } from "@/hooks/use-container-size";
 import type { EntityResponse, EntityConnection } from "@/types";
 
 interface GraphNode extends d3.SimulationNodeDatum {
@@ -25,13 +26,14 @@ interface ConnectionsGraphProps {
 export function ConnectionsGraph({ entity, connections }: ConnectionsGraphProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const navigate = useNavigate();
+  const { ref: containerRef, width: containerWidth, height: containerHeight } = useContainerSize();
 
   useEffect(() => {
     const svg = svgRef.current;
-    if (!svg || connections.length === 0) return;
+    if (!svg || connections.length === 0 || containerWidth === 0 || containerHeight === 0) return;
 
-    const width = svg.clientWidth || 500;
-    const height = 350;
+    const width = containerWidth;
+    const height = containerHeight;
 
     // Build nodes from connections
     const nodeMap = new Map<string, GraphNode>();
@@ -163,7 +165,7 @@ export function ConnectionsGraph({ entity, connections }: ConnectionsGraphProps)
     return () => {
       simulation.stop();
     };
-  }, [entity, connections, navigate]);
+  }, [entity, connections, navigate, containerWidth, containerHeight]);
 
   if (connections.length === 0) {
     return (
@@ -188,10 +190,12 @@ export function ConnectionsGraph({ entity, connections }: ConnectionsGraphProps)
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <svg
-          ref={svgRef}
-          className="w-full h-[350px]"
-        />
+        <div ref={containerRef} className="w-full min-h-[300px] h-[350px]">
+          <svg
+            ref={svgRef}
+            className="w-full h-full"
+          />
+        </div>
       </CardContent>
     </Card>
   );

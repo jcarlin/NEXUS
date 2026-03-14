@@ -63,7 +63,7 @@ function DashboardPage() {
         <p className="text-muted-foreground">Overview of your investigation workspace.</p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 animate-stagger-in">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 animate-stagger-in" data-tour="stat-cards">
         <StatCard
           title="Documents"
           value={docs?.total ?? 0}
@@ -94,7 +94,7 @@ function DashboardPage() {
         />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3 animate-stagger-in">
+      <div className="grid gap-4 lg:grid-cols-3 animate-stagger-in" data-tour="recent-activity">
         <RecentActivity />
         <PipelineStatus />
         <GraphOverview />

@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback, useImperativeHandle, forwardRef } from 
 import { useNavigate } from "@tanstack/react-router";
 import * as d3 from "d3";
 import { ENTITY_COLORS, entityColor } from "@/lib/colors";
+import { useContainerSize } from "@/hooks/use-container-size";
 import type { EntityResponse, EntityConnection } from "@/types";
 
 interface GraphNode extends d3.SimulationNodeDatum {
@@ -26,13 +27,15 @@ interface NetworkGraphProps {
   entities: EntityResponse[];
   connections: EntityConnection[];
   activeTypes: Set<string>;
+  onNodeContextMenu?: (event: MouseEvent, node: { name: string; type: string }) => void;
 }
 
 export const NetworkGraph = forwardRef<NetworkGraphHandle, NetworkGraphProps>(
-  function NetworkGraph({ entities, connections, activeTypes }, ref) {
+  function NetworkGraph({ entities, connections, activeTypes, onNodeContextMenu }, ref) {
     const svgRef = useRef<SVGSVGElement>(null);
     const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
     const navigate = useNavigate({});
+    const { ref: containerRef, width: containerWidth, height: containerHeight } = useContainerSize();
 
     const zoomIn = useCallback(() => {
       const svg = svgRef.current;
@@ -69,10 +72,10 @@ export const NetworkGraph = forwardRef<NetworkGraphHandle, NetworkGraphProps>(
 
     useEffect(() => {
       const svg = svgRef.current;
-      if (!svg) return;
+      if (!svg || containerWidth === 0 || containerHeight === 0) return;
 
-      const width = svg.clientWidth || 900;
-      const height = svg.clientHeight || 600;
+      const width = containerWidth;
+      const height = containerHeight;
 
       // Filter entities by active types
       const filteredEntities = entities.filter(
@@ -247,6 +250,13 @@ export const NetworkGraph = forwardRef<NetworkGraphHandle, NetworkGraphProps>(
         navigate({ to: "/entities/$id", params: { id: d.id } });
       });
 
+      // Right-click context menu
+      if (onNodeContextMenu) {
+        node.on("contextmenu", (event: MouseEvent, d) => {
+          onNodeContextMenu(event, { name: d.name, type: d.type });
+        });
+      }
+
       // Tick
       simulation.on("tick", () => {
         link
@@ -261,13 +271,15 @@ export const NetworkGraph = forwardRef<NetworkGraphHandle, NetworkGraphProps>(
       return () => {
         simulation.stop();
       };
-    }, [entities, connections, activeTypes, navigate]);
+    }, [entities, connections, activeTypes, navigate, containerWidth, containerHeight, onNodeContextMenu]);
 
     return (
-      <svg
-        ref={svgRef}
-        className="w-full rounded-md border bg-background h-[calc(100vh-220px)] min-h-[400px]"
-      />
+      <div ref={containerRef} className="w-full min-h-[300px] h-[calc(100vh-220px)]">
+        <svg
+          ref={svgRef}
+          className="w-full h-full rounded-md border bg-background"
+        />
+      </div>
     );
   },
 );

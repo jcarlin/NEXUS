@@ -89,13 +89,13 @@ export function DocumentTable({ data, loading }: DocumentTableProps) {
       },
       {
         accessorKey: "privilege_status",
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Privilege" />,
-        cell: ({ row }) => privilegeBadge(row.original.privilege_status) ?? <span className="text-muted-foreground">{"\u2014"}</span>,
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Privilege" className="hidden md:table-cell" />,
+        cell: ({ row }) => <div className="hidden md:table-cell">{privilegeBadge(row.original.privilege_status) ?? <span className="text-muted-foreground">{"\u2014"}</span>}</div>,
       },
       {
         accessorKey: "created_at",
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Date" />,
-        cell: ({ row }) => <span className="text-muted-foreground">{formatDate(row.original.created_at)}</span>,
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Date" className="hidden md:table-cell" />,
+        cell: ({ row }) => <div className="hidden md:table-cell"><span className="text-muted-foreground">{formatDate(row.original.created_at)}</span></div>,
       },
     ],
     [],
@@ -122,7 +122,7 @@ export function DocumentTable({ data, loading }: DocumentTableProps) {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-md border">
+      <div className="overflow-x-auto rounded-md border">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (

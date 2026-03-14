@@ -82,19 +82,23 @@ export function EntityTable({ data, loading }: EntityTableProps) {
       },
       {
         accessorKey: "type",
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Type" />,
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Type" className="hidden md:table-cell" />,
         cell: ({ row }) => (
-          <Badge variant="outline" className={`text-[10px] uppercase ${typeBadgeClass(row.original.type)}`}>
-            {row.original.type}
-          </Badge>
+          <div className="hidden md:table-cell">
+            <Badge variant="outline" className={`text-[10px] uppercase ${typeBadgeClass(row.original.type)}`}>
+              {row.original.type}
+            </Badge>
+          </div>
         ),
         filterFn: (row, _columnId, filterValue) => row.original.type === filterValue,
       },
       {
         accessorKey: "mention_count",
-        header: ({ column }) => <DataTableColumnHeader column={column} title="Mentions" />,
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Mentions" className="hidden md:table-cell" />,
         cell: ({ row }) => (
-          <span className="tabular-nums">{row.original.mention_count}</span>
+          <div className="hidden md:table-cell">
+            <span className="tabular-nums">{row.original.mention_count}</span>
+          </div>
         ),
       },
       {
@@ -134,7 +138,7 @@ export function EntityTable({ data, loading }: EntityTableProps) {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-md border">
+      <div className="overflow-x-auto rounded-md border">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (

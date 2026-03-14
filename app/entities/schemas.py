@@ -124,3 +124,44 @@ class KGResolveResponse(BaseModel):
 
     task_id: str
     mode: str
+
+
+# ---------------------------------------------------------------------------
+# Interactive graph editing (T3-5)
+# ---------------------------------------------------------------------------
+
+
+class EntityRenameRequest(BaseModel):
+    """Rename an entity node in the knowledge graph."""
+
+    new_name: str = Field(..., min_length=1, max_length=500)
+
+
+class EntityTypeUpdateRequest(BaseModel):
+    """Change the type of an entity node."""
+
+    new_type: str = Field(..., min_length=1, max_length=100)
+
+
+class EntityMergeRequest(BaseModel):
+    """Merge two entity nodes (source is absorbed into target)."""
+
+    source_name: str = Field(..., min_length=1)
+    target_name: str = Field(..., min_length=1)
+
+
+class RelationshipCreateRequest(BaseModel):
+    """Create a new relationship between two entities."""
+
+    source_name: str = Field(..., min_length=1)
+    target_name: str = Field(..., min_length=1)
+    relationship_type: str = Field(..., min_length=1)
+    properties: dict | None = None
+
+
+class RelationshipDeleteRequest(BaseModel):
+    """Delete a specific relationship between two entities."""
+
+    source_name: str = Field(..., min_length=1)
+    target_name: str = Field(..., min_length=1)
+    relationship_type: str = Field(..., min_length=1)

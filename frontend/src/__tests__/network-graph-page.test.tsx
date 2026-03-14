@@ -31,6 +31,19 @@ vi.mock("@/api/client", () => ({
 
 vi.mock("@tanstack/react-query", () => ({
   useQuery: (...args: unknown[]) => mockUseQuery(...args),
+  useQueryClient: () => ({ invalidateQueries: vi.fn() }),
+  useMutation: () => ({ mutate: vi.fn(), isPending: false }),
+  QueryClient: vi.fn(),
+  QueryClientProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
+
+vi.mock("@/stores/auth-store", () => ({
+  useAuthStore: (selector: (s: { user: { role: string } }) => unknown) =>
+    selector({ user: { role: "admin" } }),
+}));
+
+vi.mock("sonner", () => ({
+  toast: { success: vi.fn(), error: vi.fn() },
 }));
 
 vi.mock("@/components/entities/network-graph", () => ({

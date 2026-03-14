@@ -1,6 +1,7 @@
-import { useRef, useMemo } from "react";
+import { useMemo } from "react";
 import * as d3 from "d3";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useContainerSize } from "@/hooks/use-container-size";
 
 export interface MatrixEntry {
   sender: string;
@@ -15,12 +16,12 @@ interface CommMatrixProps {
   onCellClick?: (sender: string, receiver: string) => void;
 }
 
-const CELL_SIZE = 40;
 const LABEL_WIDTH = 120;
 const LABEL_HEIGHT = 120;
+const MIN_CELL_SIZE = 20;
 
 export function CommMatrix({ matrix, entities, loading, onCellClick }: CommMatrixProps) {
-  const svgRef = useRef<SVGSVGElement>(null);
+  const { ref: containerRef, width: containerWidth } = useContainerSize();
 
   const { countMap, maxCount } = useMemo(() => {
     const map = new Map<string, number>();
@@ -38,6 +39,12 @@ export function CommMatrix({ matrix, entities, loading, onCellClick }: CommMatri
     [maxCount],
   );
 
+  const cellSize = useMemo(() => {
+    if (containerWidth === 0 || entities.length === 0) return 40;
+    const available = containerWidth - LABEL_WIDTH;
+    return Math.max(MIN_CELL_SIZE, Math.floor(available / entities.length));
+  }, [containerWidth, entities.length]);
+
   if (loading) {
     return <Skeleton className="h-[400px] w-full" />;
   }
@@ -50,23 +57,23 @@ export function CommMatrix({ matrix, entities, loading, onCellClick }: CommMatri
     );
   }
 
-  const width = LABEL_WIDTH + entities.length * CELL_SIZE;
-  const height = LABEL_HEIGHT + entities.length * CELL_SIZE;
+  const width = LABEL_WIDTH + entities.length * cellSize;
+  const height = LABEL_HEIGHT + entities.length * cellSize;
 
   return (
-    <div className="overflow-auto rounded-md border">
-      <svg ref={svgRef} width={width} height={height}>
+    <div ref={containerRef} className="overflow-auto rounded-md border">
+      <svg width={width} height={height}>
         {/* Column labels (receivers) */}
         {entities.map((entity, i) => (
           <text
             key={`col-${entity}`}
-            x={LABEL_WIDTH + i * CELL_SIZE + CELL_SIZE / 2}
+            x={LABEL_WIDTH + i * cellSize + cellSize / 2}
             y={LABEL_HEIGHT - 6}
             textAnchor="end"
             fontSize={10}
             fill="currentColor"
             className="text-muted-foreground"
-            transform={`rotate(-45, ${LABEL_WIDTH + i * CELL_SIZE + CELL_SIZE / 2}, ${LABEL_HEIGHT - 6})`}
+            transform={`rotate(-45, ${LABEL_WIDTH + i * cellSize + cellSize / 2}, ${LABEL_HEIGHT - 6})`}
           >
             {entity.length > 15 ? entity.slice(0, 14) + "\u2026" : entity}
           </text>
@@ -77,7 +84,7 @@ export function CommMatrix({ matrix, entities, loading, onCellClick }: CommMatri
           <g key={`row-${sender}`}>
             <text
               x={LABEL_WIDTH - 6}
-              y={LABEL_HEIGHT + row * CELL_SIZE + CELL_SIZE / 2 + 4}
+              y={LABEL_HEIGHT + row * cellSize + cellSize / 2 + 4}
               textAnchor="end"
               fontSize={10}
               fill="currentColor"
@@ -91,10 +98,10 @@ export function CommMatrix({ matrix, entities, loading, onCellClick }: CommMatri
               return (
                 <g key={`cell-${sender}-${receiver}`}>
                   <rect
-                    x={LABEL_WIDTH + col * CELL_SIZE}
-                    y={LABEL_HEIGHT + row * CELL_SIZE}
-                    width={CELL_SIZE - 1}
-                    height={CELL_SIZE - 1}
+                    x={LABEL_WIDTH + col * cellSize}
+                    y={LABEL_HEIGHT + row * cellSize}
+                    width={cellSize - 1}
+                    height={cellSize - 1}
                     fill={count > 0 ? colorScale(count) : "var(--color-muted)"}
                     rx={2}
                     className="cursor-pointer"
@@ -102,10 +109,10 @@ export function CommMatrix({ matrix, entities, loading, onCellClick }: CommMatri
                   >
                     <title>{`${sender} → ${receiver}: ${count}`}</title>
                   </rect>
-                  {count > 0 && CELL_SIZE >= 30 && (
+                  {count > 0 && cellSize >= 30 && (
                     <text
-                      x={LABEL_WIDTH + col * CELL_SIZE + CELL_SIZE / 2 - 0.5}
-                      y={LABEL_HEIGHT + row * CELL_SIZE + CELL_SIZE / 2 + 4}
+                      x={LABEL_WIDTH + col * cellSize + cellSize / 2 - 0.5}
+                      y={LABEL_HEIGHT + row * cellSize + cellSize / 2 + 4}
                       textAnchor="middle"
                       fontSize={9}
                       fill={count > maxCount * 0.6 ? "white" : "black"}

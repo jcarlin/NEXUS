@@ -11,13 +11,20 @@ GET /graph/stats                      -- graph statistics (node / edge counts)
 import re
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
-from app.auth.middleware import get_current_user, get_matter_id
+from app.auth.middleware import get_current_user, get_matter_id, require_role
 from app.auth.schemas import UserRecord
 from app.dependencies import get_graph_service
 from app.entities.graph_service import GraphService
-from app.entities.schemas import CommunicationPairsResponse
+from app.entities.schemas import (
+    CommunicationPairsResponse,
+    EntityMergeRequest,
+    EntityRenameRequest,
+    EntityTypeUpdateRequest,
+    RelationshipCreateRequest,
+    RelationshipDeleteRequest,
+)
 
 router = APIRouter(tags=["entities"])
 
@@ -223,3 +230,146 @@ async def graph_path(
         matter_id=str(matter_id),
     )
     return {"entity_a": entity_a, "entity_b": entity_b, "paths": paths}
+
+
+# ---------------------------------------------------------------------------
+# Interactive graph editing (T3-5) — require admin or attorney role
+# ---------------------------------------------------------------------------
+
+
+@router.patch("/matters/{matter_id}/entities/{name}/rename")
+async def rename_entity(
+    matter_id: UUID,
+    name: str,
+    body: EntityRenameRequest,
+    gs: GraphService = Depends(get_graph_service),
+    current_user: UserRecord = Depends(require_role("admin", "attorney")),
+    _matter_id: UUID = Depends(get_matter_id),
+):
+    """Rename an entity node in the knowledge graph."""
+    result = await gs.rename_entity(
+        matter_id=str(matter_id),
+        old_name=name,
+        new_name=body.new_name,
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"Entity '{name}' not found")
+    return result
+
+
+@router.patch("/matters/{matter_id}/entities/{name}/type")
+async def update_entity_type(
+    matter_id: UUID,
+    name: str,
+    body: EntityTypeUpdateRequest,
+    gs: GraphService = Depends(get_graph_service),
+    current_user: UserRecord = Depends(require_role("admin", "attorney")),
+    _matter_id: UUID = Depends(get_matter_id),
+):
+    """Update the type of an entity node."""
+    result = await gs.update_entity_type(
+        matter_id=str(matter_id),
+        name=name,
+        new_type=body.new_type,
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"Entity '{name}' not found")
+    return result
+
+
+@router.delete("/matters/{matter_id}/entities/{name}")
+async def delete_entity(
+    matter_id: UUID,
+    name: str,
+    gs: GraphService = Depends(get_graph_service),
+    current_user: UserRecord = Depends(require_role("admin", "attorney")),
+    _matter_id: UUID = Depends(get_matter_id),
+):
+    """Delete an entity and all its relationships."""
+    deleted = await gs.delete_entity(
+        matter_id=str(matter_id),
+        name=name,
+    )
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Entity '{name}' not found")
+    return {"detail": f"Entity '{name}' deleted"}
+
+
+@router.post("/matters/{matter_id}/entities/merge")
+async def merge_entities(
+    matter_id: UUID,
+    body: EntityMergeRequest,
+    gs: GraphService = Depends(get_graph_service),
+    current_user: UserRecord = Depends(require_role("admin", "attorney")),
+    _matter_id: UUID = Depends(get_matter_id),
+):
+    """Merge two entities (source is absorbed into target)."""
+    if body.source_name == body.target_name:
+        raise HTTPException(
+            status_code=400,
+            detail="Source and target entity names must be different",
+        )
+
+    # Check both entities exist
+    source = await gs.get_entity_by_name(body.source_name, matter_id=str(matter_id))
+    if source is None:
+        raise HTTPException(status_code=404, detail=f"Source entity '{body.source_name}' not found")
+
+    target = await gs.get_entity_by_name(body.target_name, matter_id=str(matter_id))
+    if target is None:
+        raise HTTPException(status_code=404, detail=f"Target entity '{body.target_name}' not found")
+
+    await gs.merge_entities(
+        canonical_name=body.target_name,
+        alias_name=body.source_name,
+        entity_type=source["type"],
+        matter_id=str(matter_id),
+    )
+    return {"detail": f"Entity '{body.source_name}' merged into '{body.target_name}'"}
+
+
+@router.post("/matters/{matter_id}/relationships")
+async def create_relationship(
+    matter_id: UUID,
+    body: RelationshipCreateRequest,
+    gs: GraphService = Depends(get_graph_service),
+    current_user: UserRecord = Depends(require_role("admin", "attorney")),
+    _matter_id: UUID = Depends(get_matter_id),
+):
+    """Create a new relationship between two entities."""
+    result = await gs.create_relationship(
+        matter_id=str(matter_id),
+        source_name=body.source_name,
+        target_name=body.target_name,
+        relationship_type=body.relationship_type,
+        properties=body.properties,
+    )
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail="One or both entities not found",
+        )
+    return result
+
+
+@router.delete("/matters/{matter_id}/relationships")
+async def delete_relationship(
+    matter_id: UUID,
+    body: RelationshipDeleteRequest = Body(...),
+    gs: GraphService = Depends(get_graph_service),
+    current_user: UserRecord = Depends(require_role("admin", "attorney")),
+    _matter_id: UUID = Depends(get_matter_id),
+):
+    """Delete a specific relationship between two entities."""
+    deleted = await gs.delete_relationship(
+        matter_id=str(matter_id),
+        source_name=body.source_name,
+        target_name=body.target_name,
+        relationship_type=body.relationship_type,
+    )
+    if not deleted:
+        raise HTTPException(
+            status_code=404,
+            detail="Relationship or entities not found",
+        )
+    return {"detail": "Relationship deleted"}

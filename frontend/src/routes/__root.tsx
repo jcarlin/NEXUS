@@ -11,6 +11,7 @@ import { AuthGuard } from "@/components/layout/auth-guard";
 import { CommandPalette } from "@/components/layout/command-palette";
 import { DefinedTermsSidebar } from "@/components/layout/defined-terms-sidebar";
 import { KeyboardShortcutsDialog } from "@/components/ui/keyboard-shortcuts-dialog";
+import { OnboardingTour } from "@/components/onboarding/tour";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 
 export const Route = createRootRoute({
@@ -70,6 +71,7 @@ function RootLayout() {
         </div>
         <CommandPalette open={commandOpen} onOpenChange={setCommandOpen} />
         <KeyboardShortcutsDialog open={shortcutsHelpOpen} onOpenChange={setShortcutsHelpOpen} />
+        <OnboardingTour />
       </AuthGuard>
     </TooltipProvider>
   );
