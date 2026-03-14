@@ -41,26 +41,28 @@ function RootLayout() {
             <Sidebar />
           </div>
 
-          {/* Mobile sidebar drawer */}
-          <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
-            <SheetTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="fixed left-3 top-3 z-40 xl:hidden"
-              >
-                <Menu className="h-5 w-5" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-56 p-0">
-              <SheetTitle className="sr-only">Navigation</SheetTitle>
-              <SheetDescription className="sr-only">Main navigation menu</SheetDescription>
-              <Sidebar />
-            </SheetContent>
-          </Sheet>
-
           <div className="flex flex-1 flex-col overflow-hidden">
-            <Header />
+            {/* Mobile sidebar drawer — trigger is inside the header flow */}
+            <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
+              <Header
+                mobileNavTrigger={
+                  <SheetTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="shrink-0 xl:hidden"
+                    >
+                      <Menu className="h-5 w-5" />
+                    </Button>
+                  </SheetTrigger>
+                }
+              />
+              <SheetContent side="left" className="w-56 p-0" overlayClassName="bg-black/20">
+                <SheetTitle className="sr-only">Navigation</SheetTitle>
+                <SheetDescription className="sr-only">Main navigation menu</SheetDescription>
+                <Sidebar />
+              </SheetContent>
+            </Sheet>
             <main className="flex-1 overflow-auto p-4 md:p-6">
               <ErrorBoundary>
                 <Outlet />
