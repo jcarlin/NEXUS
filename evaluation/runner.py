@@ -304,12 +304,20 @@ async def _evaluate_single_query(
         latency_ms = (time.perf_counter() - start) * 1000
 
         if resp.status_code != 200:
+            # Try to extract structured detail from JSON error response
+            error_detail = ""
+            try:
+                err_json = resp.json()
+                error_detail = err_json.get("detail", "")
+            except Exception:
+                pass
+            error_msg = f"HTTP {resp.status_code}: {error_detail or resp.text[:500]}"
             return QueryEvalResult(
                 query_id=item.id,
                 question=item.question,
                 functional=False,
                 latency_ms=latency_ms,
-                error=f"HTTP {resp.status_code}: {resp.text[:200]}",
+                error=error_msg,
             )
 
         data = resp.json()

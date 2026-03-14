@@ -261,6 +261,25 @@ The report has four sections:
 - Running unit tests only (`pytest`)
 - Reading/exploring code without running it
 
+### LangSmith MCP (`nexus` project)
+
+Use the LangSmith MCP tools to debug pipeline internals. The `nexus` project logs all LangGraph runs.
+
+**When to use:**
+- Investigating HTTP 500s or unexpected query results — find errored traces with `fetch_runs`
+- QA evaluation analysis — cross-reference evaluation failures with actual trace errors
+- Performance debugging — find high-latency runs and identify slow nodes/tools
+- After E2E or integration tests — verify the pipeline executed the expected path
+- Monitoring production quality — spot tool failures, token anomalies, or unexpected agent behavior
+
+**Key operations:**
+- `mcp__langsmith__fetch_runs(project_name="nexus", limit=20, error="true")` — find errors
+- `mcp__langsmith__fetch_runs(project_name="nexus", limit=10, filter='gt(latency, "10s")')` — find slow runs
+- `mcp__langsmith__get_thread_history(project_name="nexus", thread_id="...")` — trace a conversation
+- `mcp__langsmith__list_projects()` — verify project exists
+
+**When NOT to use:** Unit tests (mocked, no LangSmith traces), code review, planning.
+
 ---
 
 ## See Also

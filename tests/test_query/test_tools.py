@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import ast
 import json
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 from app.query.tools import (
@@ -277,7 +279,7 @@ async def test_topic_cluster_error_returns_json():
     mock_retriever.retrieve_text.side_effect = ConnectionError("Qdrant unavailable")
 
     with (
-        patch("app.config.Settings", return_value=mock_settings),
+        patch("app.dependencies.get_settings", return_value=mock_settings),
         patch("app.dependencies.get_retriever", return_value=mock_retriever),
     ):
         raw = await topic_cluster.ainvoke({"query": "test topic", "state": _SAMPLE_STATE})
@@ -295,7 +297,7 @@ async def test_network_analysis_error_returns_json():
     mock_settings.enable_graph_centrality = True
 
     with (
-        patch("app.config.Settings", return_value=mock_settings),
+        patch("app.dependencies.get_settings", return_value=mock_settings),
         patch(
             "app.dependencies.get_graph_service",
             return_value=AsyncMock(),
@@ -416,7 +418,7 @@ async def test_structured_query_disabled_returns_info():
     mock_settings = AsyncMock()
     mock_settings.enable_text_to_sql = False
 
-    with patch("app.config.Settings", return_value=mock_settings):
+    with patch("app.dependencies.get_settings", return_value=mock_settings):
         raw = await structured_query.ainvoke({"question": "How many documents?", "state": _SAMPLE_STATE})
 
     parsed = json.loads(raw)
@@ -444,7 +446,8 @@ async def test_structured_query_executes_safe_sql():
     ]
 
     with (
-        patch("app.config.Settings", return_value=mock_settings),
+        patch("app.dependencies.get_settings", return_value=mock_settings),
+        patch("app.dependencies.get_llm", return_value=AsyncMock()),
         patch(
             "app.query.sql_generator.generate_sql",
             new_callable=AsyncMock,
@@ -486,7 +489,8 @@ async def test_structured_query_rejects_unsafe_sql():
     )
 
     with (
-        patch("app.config.Settings", return_value=mock_settings),
+        patch("app.dependencies.get_settings", return_value=mock_settings),
+        patch("app.dependencies.get_llm", return_value=AsyncMock()),
         patch(
             "app.query.sql_generator.generate_sql",
             new_callable=AsyncMock,
@@ -512,7 +516,7 @@ async def test_structured_query_error_returns_json():
     mock_settings.enable_text_to_sql = True
 
     with (
-        patch("app.config.Settings", return_value=mock_settings),
+        patch("app.dependencies.get_settings", return_value=mock_settings),
         patch(
             "app.dependencies.get_llm",
             side_effect=RuntimeError("LLM unavailable"),
@@ -523,3 +527,39 @@ async def test_structured_query_error_returns_json():
     parsed = json.loads(raw)
     assert "error" in parsed
     assert "RuntimeError" in parsed["error"]
+
+
+# ---------------------------------------------------------------------------
+# Verify all flag-gated tools use get_settings() (not Settings())
+# ---------------------------------------------------------------------------
+
+_TOOLS_FILE = Path(__file__).resolve().parent.parent.parent / "app" / "query" / "tools.py"
+
+
+def test_no_direct_settings_instantiation():
+    """All tools must use get_settings() instead of Settings() for runtime flag overrides."""
+    source = _TOOLS_FILE.read_text()
+    tree = ast.parse(source)
+
+    violations: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "Settings":
+            violations.append(f"line {node.lineno}: Settings() called directly")
+
+    assert not violations, "app/query/tools.py uses Settings() directly instead of get_settings():\n" + "\n".join(
+        violations
+    )
+
+
+def test_no_import_settings_from_config():
+    """tools.py should not import Settings from app.config (should use get_settings from dependencies)."""
+    source = _TOOLS_FILE.read_text()
+    tree = ast.parse(source)
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module == "app.config":
+            imported_names = [alias.name for alias in node.names]
+            assert "Settings" not in imported_names, (
+                f"line {node.lineno}: 'from app.config import Settings' found — "
+                "tools should use 'from app.dependencies import get_settings' instead"
+            )

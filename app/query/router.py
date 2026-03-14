@@ -153,14 +153,33 @@ async def query(
         final_state = await active_graph.ainvoke(initial_state, config)
         tier = final_state.get("_tier", "standard")
         query_type = final_state.get("_query_type", "factual") or "factual"
-    except Exception:
+    except Exception as exc:
         from app.common.metrics import QUERY_DURATION, QUERY_TOTAL, QUERY_TYPE_DURATION, QUERY_TYPE_TOTAL
 
         QUERY_TOTAL.labels(tier=tier, status="error").inc()
         QUERY_DURATION.labels(tier=tier).observe(_time.perf_counter() - _query_start)
         QUERY_TYPE_TOTAL.labels(query_type=query_type, status="error").inc()
         QUERY_TYPE_DURATION.labels(query_type=query_type).observe(_time.perf_counter() - _query_start)
-        raise
+
+        exc_type = type(exc).__name__
+        logger.error(
+            "query.graph_error",
+            error_type=exc_type,
+            error=str(exc)[:200],
+            thread_id=thread_id,
+            exc_info=True,
+        )
+
+        if "GraphRecursionError" in exc_type or "recursion" in str(exc).lower():
+            raise HTTPException(
+                status_code=500,
+                detail="Query exceeded processing budget — too many tool calls. Try a simpler or more specific query.",
+            ) from exc
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Query processing failed: {exc_type}",
+        ) from exc
 
     # Record success metrics (T1-8 + T2-4)
     from app.common.metrics import (

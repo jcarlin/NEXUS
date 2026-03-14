@@ -129,27 +129,32 @@ Each row shows the delta when the flag is toggled from its default state.
 
 - **enable_auto_graph_routing** (bug): 18/22 queries failed when flag toggled
   - Evidence: HTTP 500: Internal Server Error
+  - Root cause: `ValueError('contents are required.')` — Gemini API rejects empty `messages` list when V1 pipeline was selected by auto-routing but fed the agentic state
+  - **RESOLVED** in v1.11.0 (commit `1599ee7`): `prevent Gemini ValueError on empty messages in agentic pipeline`
 
 ### HIGH
 
-- **enable_hyde** (bug): 2/22 queries failed when flag toggled
-  - Evidence: HTTP 500: Internal Server Error
-- **enable_multi_query_expansion** (bug): 2/22 queries failed when flag toggled
-  - Evidence: HTTP 500: Internal Server Error
-- **enable_prompt_routing** (bug): 1/22 queries failed when flag toggled
-  - Evidence: HTTP 500: Internal Server Error
-- **enable_text_to_sql** (bug): 1/22 queries failed when flag toggled
-  - Evidence: HTTP 500: Internal Server Error
-- **enable_adaptive_retrieval_depth** (bug): 2/22 queries failed when flag toggled
-  - Evidence: HTTP 500: Internal Server Error
-- **enable_production_quality_monitoring** (bug): 2/22 queries failed when flag toggled
-  - Evidence: HTTP 500: Internal Server Error
-- **enable_question_decomposition** (bug): 1/22 queries failed when flag toggled
-  - Evidence: HTTP 500: Internal Server Error
-- **enable_reranker** (bug): 2/22 queries failed when flag toggled
-  - Evidence: HTTP 500: Internal Server Error
-- **enable_text_to_cypher** (bug): 1/22 queries failed when flag toggled
-  - Evidence: HTTP 500: Internal Server Error
+All 9 HIGH findings share the same root cause: **`Settings()` bug in 6 agent tools**.
+
+The tools `topic_cluster`, `network_analysis`, `decompose_query`, `cypher_query`, `structured_query`, and `get_community_context` used `Settings()` (reads env vars only) instead of `get_settings()` (reads runtime DB overrides). When the evaluation framework toggled flags via the runtime admin API, these tools never saw the changes. This caused:
+- **Incorrect evaluation metrics**: tools operated with default flag values regardless of what was toggled
+- **gt-009 failures (all 9 configs)**: complex timeline query that pushes the LLM close to timeout; any flag that adds overhead (HyDE, multi-query, quality monitoring) tipped it over the 120s eval client timeout
+- **gt-018/gt-019 failures (5 configs)**: similar timeout mechanism on hard queries
+
+**RESOLVED** in v1.12.2: all 6 tools now use `get_settings()` for runtime flag visibility. Router error handling also improved — graph exceptions now return structured HTTP 500 with actionable detail messages instead of opaque "Internal Server Error".
+
+Individual flag findings (to be re-evaluated after fix):
+- **enable_hyde**: 2/22 failed (gt-009, gt-018)
+- **enable_multi_query_expansion**: 2/22 failed (gt-009, gt-019)
+- **enable_prompt_routing**: 1/22 failed (gt-009)
+- **enable_text_to_sql**: 1/22 failed (gt-009)
+- **enable_adaptive_retrieval_depth**: 2/22 failed (gt-009, gt-019)
+- **enable_production_quality_monitoring**: 2/22 failed (gt-009, gt-018)
+- **enable_question_decomposition**: 1/22 failed (gt-009)
+- **enable_reranker**: 2/22 failed (gt-009, gt-018)
+- **enable_text_to_cypher**: 1/22 failed (gt-009)
+
+**Action required**: Re-run `python scripts/evaluate.py --flag-sweep --skip-judge --output docs/qa-evaluation-report.md` to generate updated metrics with the fix applied.
 
 ### MEDIUM
 

@@ -297,3 +297,43 @@ async def test_agentic_generator_persists_on_client_disconnect():
     # User message persisted (assistant only saved on full stream completion)
     assert mock_db.execute.call_count >= 1
     assert mock_db.commit.call_count >= 1
+
+
+# ---------------------------------------------------------------------------
+# Graph error handling tests
+# ---------------------------------------------------------------------------
+
+
+async def test_query_graph_error_returns_structured_500(query_client):
+    """When graph.ainvoke raises an exception, the endpoint returns a
+    structured HTTP 500 with a detail message (not a bare traceback)."""
+    client, mock_db, mock_graph = query_client
+    mock_graph.ainvoke.side_effect = ValueError("contents are required.")
+
+    response = await client.post(
+        "/api/v1/query",
+        json={"query": "test query"},
+    )
+    assert response.status_code == 500
+    data = response.json()
+    assert "detail" in data
+    assert "ValueError" in data["detail"]
+
+
+async def test_query_graph_recursion_error_returns_budget_message(query_client):
+    """GraphRecursionError should return a user-friendly budget-exceeded message."""
+    client, mock_db, mock_graph = query_client
+
+    class GraphRecursionError(Exception):
+        pass
+
+    mock_graph.ainvoke.side_effect = GraphRecursionError("Recursion limit reached")
+
+    response = await client.post(
+        "/api/v1/query",
+        json={"query": "complex multi-hop query"},
+    )
+    assert response.status_code == 500
+    data = response.json()
+    assert "detail" in data
+    assert "processing budget" in data["detail"]

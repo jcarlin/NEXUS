@@ -12,6 +12,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follo
 
 _Nothing yet._
 
+## [1.12.2] - 2026-03-14
+
+### Fixed
+- Fix `Settings()` → `get_settings()` in 6 agent tools (`topic_cluster`, `network_analysis`, `decompose_query`, `cypher_query`, `structured_query`, `get_community_context`) — runtime feature flag toggles were invisible to these tools because `Settings()` reads env vars only, not DB overrides
+- Replace bare `raise` with structured `HTTPException` in query router error handler — graph exceptions now return actionable error detail instead of opaque "Internal Server Error"
+- Improve evaluation runner error capture: extract JSON `detail` field from structured error responses, increase error text capture from 200 to 500 chars
+
+### Changed
+- Update QA evaluation report with root cause analysis for CRITICAL (resolved in v1.11.0) and HIGH findings (resolved in this release)
+- Add LangSmith MCP usage guide to `CLAUDE.md` for pipeline debugging
+- Add regression guard tests: AST-based checks ensure `tools.py` never regresses to `Settings()` or `from app.config import Settings`
+
 ## [1.12.1] - 2026-03-14
 
 ### Fixed

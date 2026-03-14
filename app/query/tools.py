@@ -567,10 +567,9 @@ async def topic_cluster(
     using BERTopic. Returns topic labels and representative terms.
     """
     from app.analytics.clustering import TopicClusterer
-    from app.config import Settings
-    from app.dependencies import get_retriever
+    from app.dependencies import get_retriever, get_settings
 
-    settings = Settings()
+    settings = get_settings()
     if not settings.enable_topic_clustering:
         return json.dumps({"info": "Topic clustering is not enabled. Set ENABLE_TOPIC_CLUSTERING=true."})
 
@@ -610,10 +609,9 @@ async def network_analysis(
     pagerank, betweenness. Returns ranked entities with scores.
     """
     from app.analytics.service import AnalyticsService
-    from app.config import Settings
-    from app.dependencies import get_graph_service
+    from app.dependencies import get_graph_service, get_settings
 
-    settings = Settings()
+    settings = get_settings()
     if not settings.enable_graph_centrality:
         return json.dumps(
             {
@@ -653,9 +651,9 @@ async def decompose_query(
     (e.g., "Who knew about the deal, when did they learn, and what did they do?").
     Each sub-question gets independent retrieval for more comprehensive results.
     """
-    from app.config import Settings
+    from app.dependencies import get_settings
 
-    settings = Settings()
+    settings = get_settings()
     if not settings.enable_question_decomposition:
         return json.dumps({"info": "Question decomposition is not enabled."})
 
@@ -726,9 +724,9 @@ async def cypher_query(
     communication between X and Y through intermediaries" or "find all
     entities within 3 hops of person Z". Only generates read-only queries.
     """
-    from app.config import Settings
+    from app.dependencies import get_settings
 
-    settings = Settings()
+    settings = get_settings()
     if not settings.enable_text_to_cypher:
         return json.dumps({"info": "Text-to-Cypher generation is not enabled."})
 
@@ -792,9 +790,9 @@ async def structured_query(
     types are present?", "Show document counts by type", or any question about
     aggregate statistics and metadata.
     """
-    from app.config import Settings
+    from app.dependencies import get_settings
 
-    settings = Settings()
+    settings = get_settings()
     if not settings.enable_text_to_sql:
         return json.dumps({"info": "Text-to-SQL generation is not enabled."})
 
@@ -861,9 +859,9 @@ async def get_community_context(
     entities are in the same cluster, and the community summary describing
     relationships and themes.
     """
-    from app.config import Settings
+    from app.dependencies import get_settings
 
-    settings = Settings()
+    settings = get_settings()
     if not settings.enable_graphrag_communities:
         return json.dumps({"info": "GraphRAG communities not enabled. Set ENABLE_GRAPHRAG_COMMUNITIES=true."})
 
