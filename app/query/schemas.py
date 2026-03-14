@@ -89,7 +89,7 @@ class CitedClaim(BaseModel):
 
     claim_text: str
     document_id: str
-    filename: str
+    filename: str | None = None
     page_number: int | None = None
     bates_range: str | None = None
     excerpt: str = Field(max_length=500)
