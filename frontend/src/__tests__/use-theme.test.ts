@@ -11,6 +11,7 @@ describe("useTheme", () => {
     matchMediaMatches = true; // default: system prefers dark
     localStorage.clear();
     document.documentElement.classList.remove("light");
+    document.documentElement.classList.remove("dark");
 
     vi.stubGlobal(
       "matchMedia",
@@ -100,7 +101,8 @@ describe("useTheme", () => {
     expect(result.current.resolved).toBe("light");
   });
 
-  it("applies light class to document element for light mode", () => {
+  it("applies light class and removes dark class for light mode", () => {
+    document.documentElement.classList.add("dark");
     const { result } = renderHook(() => useTheme());
 
     act(() => {
@@ -108,9 +110,10 @@ describe("useTheme", () => {
     });
 
     expect(document.documentElement.classList.contains("light")).toBe(true);
+    expect(document.documentElement.classList.contains("dark")).toBe(false);
   });
 
-  it("removes light class for dark mode", () => {
+  it("applies dark class and removes light class for dark mode", () => {
     document.documentElement.classList.add("light");
     const { result } = renderHook(() => useTheme());
 
@@ -119,5 +122,6 @@ describe("useTheme", () => {
     });
 
     expect(document.documentElement.classList.contains("light")).toBe(false);
+    expect(document.documentElement.classList.contains("dark")).toBe(true);
   });
 });
