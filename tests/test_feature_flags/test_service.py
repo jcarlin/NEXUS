@@ -102,6 +102,23 @@ class TestListFlags:
         assert reranker.is_override is True
 
     @pytest.mark.asyncio
+    async def test_depends_on_in_list_flags(self):
+        db = _mock_db(rows=[])
+        settings = _make_settings_mock()
+        with patch(_PATCH_GET_SETTINGS, return_value=settings):
+            items = await FeatureFlagService.list_flags(db)
+
+        reflection = next(i for i in items if i.flag_name == "enable_self_reflection")
+        assert reflection.depends_on == ["enable_citation_verification"]
+
+        clarification = next(i for i in items if i.flag_name == "enable_agent_clarification")
+        assert clarification.depends_on == ["enable_agentic_pipeline"]
+
+        # Flags without deps should have empty list
+        reranker = next(i for i in items if i.flag_name == "enable_reranker")
+        assert reranker.depends_on == []
+
+    @pytest.mark.asyncio
     async def test_non_override_not_marked(self):
         db = _mock_db(rows=[])
         settings = _make_settings_mock()
@@ -173,6 +190,103 @@ class TestUpdateFlag:
 
         mock_clear.assert_called_once()
         assert result.caches_cleared == ["get_reranker", "get_retriever", "get_query_graph"]
+
+    @pytest.mark.asyncio
+    async def test_enabling_flag_cascades_up_to_prerequisites(self):
+        """Enabling self_reflection when citation_verification is off → both enabled."""
+        from datetime import UTC, datetime
+
+        row = {
+            "flag_name": "enable_self_reflection",
+            "enabled": True,
+            "updated_at": datetime(2026, 3, 14, tzinfo=UTC),
+            "updated_by": _USER_ID,
+        }
+        dep_row = {
+            "flag_name": "enable_citation_verification",
+            "enabled": True,
+            "updated_at": datetime(2026, 3, 14, tzinfo=UTC),
+            "updated_by": _USER_ID,
+        }
+        db = AsyncMock()
+        # First call returns dep_row (prerequisite), second returns row (target)
+        result1 = MagicMock()
+        result1.mappings.return_value.one.return_value = dep_row
+        result2 = MagicMock()
+        result2.mappings.return_value.one.return_value = row
+        db.execute.side_effect = [result1, result2]
+
+        settings = _make_settings_mock()
+        settings.enable_citation_verification = False  # prerequisite is off
+        settings.enable_self_reflection = False
+
+        with patch(_PATCH_GET_SETTINGS, return_value=settings):
+            result = await FeatureFlagService.update_flag(db, "enable_self_reflection", True, user_id=_USER_ID)
+
+        assert result.enabled is True
+        assert "enable_citation_verification" in result.cascaded
+        assert settings.enable_citation_verification is True
+        assert settings.enable_self_reflection is True
+
+    @pytest.mark.asyncio
+    async def test_disabling_flag_cascades_down_to_dependents(self):
+        """Disabling agentic_pipeline when agent_clarification is on → both disabled."""
+        from datetime import UTC, datetime
+
+        row = {
+            "flag_name": "enable_agentic_pipeline",
+            "enabled": False,
+            "updated_at": datetime(2026, 3, 14, tzinfo=UTC),
+            "updated_by": _USER_ID,
+        }
+        dep_row = {
+            "flag_name": "enable_agent_clarification",
+            "enabled": False,
+            "updated_at": datetime(2026, 3, 14, tzinfo=UTC),
+            "updated_by": _USER_ID,
+        }
+        db = AsyncMock()
+        # First call: dependent (agent_clarification disable), second: target (agentic_pipeline disable)
+        result1 = MagicMock()
+        result1.mappings.return_value.one.return_value = dep_row
+        result2 = MagicMock()
+        result2.mappings.return_value.one.return_value = row
+        db.execute.side_effect = [result1, result2]
+
+        settings = _make_settings_mock()
+        settings.enable_agentic_pipeline = True
+        settings.enable_agent_clarification = True  # dependent is on
+
+        with patch(_PATCH_GET_SETTINGS, return_value=settings):
+            result = await FeatureFlagService.update_flag(db, "enable_agentic_pipeline", False, user_id=_USER_ID)
+
+        assert result.enabled is False
+        assert "enable_agent_clarification" in result.cascaded
+        assert settings.enable_agent_clarification is False
+        assert settings.enable_agentic_pipeline is False
+
+    @pytest.mark.asyncio
+    async def test_no_cascade_when_deps_already_met(self):
+        """Enabling self_reflection when citation_verification is already on → no cascade."""
+        from datetime import UTC, datetime
+
+        row = {
+            "flag_name": "enable_self_reflection",
+            "enabled": True,
+            "updated_at": datetime(2026, 3, 14, tzinfo=UTC),
+            "updated_by": _USER_ID,
+        }
+        db = _mock_db_upsert(row)
+
+        settings = _make_settings_mock()
+        settings.enable_citation_verification = True  # prerequisite already on
+        settings.enable_self_reflection = False
+
+        with patch(_PATCH_GET_SETTINGS, return_value=settings):
+            result = await FeatureFlagService.update_flag(db, "enable_self_reflection", True, user_id=_USER_ID)
+
+        assert result.enabled is True
+        assert result.cascaded == []
 
     @pytest.mark.asyncio
     async def test_restart_required_for_restart_flag(self):

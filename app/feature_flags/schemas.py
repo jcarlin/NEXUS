@@ -34,6 +34,7 @@ class FeatureFlagDetail(BaseModel):
     enabled: bool
     is_override: bool
     env_default: bool
+    depends_on: list[str] = []
     updated_at: datetime | None = None
     updated_by: UUID | None = None
 
@@ -49,3 +50,4 @@ class FeatureFlagUpdateRequest(BaseModel):
 class FeatureFlagUpdateResponse(FeatureFlagDetail):
     caches_cleared: list[str]
     restart_required: bool
+    cascaded: list[str] = []

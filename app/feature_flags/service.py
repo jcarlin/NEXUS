@@ -52,6 +52,7 @@ class FeatureFlagService:
                     enabled=current_value,
                     is_override=override is not None,
                     env_default=env_default,
+                    depends_on=list(meta.depends_on),
                     updated_at=override["updated_at"] if override else None,
                     updated_by=override["updated_by"] if override else None,
                 )
@@ -66,11 +67,37 @@ class FeatureFlagService:
         enabled: bool,
         user_id: UUID | None = None,
     ) -> FeatureFlagUpdateResponse:
-        """Toggle a flag: UPSERT DB override, mutate Settings singleton, clear DI caches."""
+        """Toggle a flag: UPSERT DB override, mutate Settings singleton, clear DI caches.
+
+        Cascades dependency changes:
+        - Enabling a flag also enables any unmet prerequisites (depends_on).
+        - Disabling a flag also disables any dependents that require it.
+        """
         if flag_name not in FLAG_REGISTRY:
             raise ValueError(f"Unknown feature flag: {flag_name}")
 
         meta = FLAG_REGISTRY[flag_name]
+        cascaded: list[str] = []
+
+        from app.dependencies import get_settings
+
+        settings = get_settings()
+
+        # Cascade: enabling → also enable unmet prerequisites
+        if enabled:
+            for dep in meta.depends_on:
+                if not getattr(settings, dep):
+                    dep_result = await FeatureFlagService.update_flag(db, dep, True, user_id=user_id)
+                    cascaded.append(dep)
+                    cascaded.extend(dep_result.cascaded)
+
+        # Cascade: disabling → also disable active dependents
+        if not enabled:
+            for other_name, other_meta in FLAG_REGISTRY.items():
+                if flag_name in other_meta.depends_on and getattr(settings, other_name):
+                    dep_result = await FeatureFlagService.update_flag(db, other_name, False, user_id=user_id)
+                    cascaded.append(other_name)
+                    cascaded.extend(dep_result.cascaded)
 
         # UPSERT override
         result = await db.execute(
@@ -92,9 +119,6 @@ class FeatureFlagService:
         row = result.mappings().one()
 
         # Mutate Settings singleton
-        from app.dependencies import get_settings
-
-        settings = get_settings()
         setattr(settings, flag_name, enabled)
         logger.info("feature_flag.updated", flag=flag_name, enabled=enabled)
 
@@ -114,6 +138,7 @@ class FeatureFlagService:
             updated_by=row["updated_by"],
             caches_cleared=caches_cleared,
             restart_required=meta.risk_level == "restart",
+            cascaded=cascaded,
         )
 
     @staticmethod

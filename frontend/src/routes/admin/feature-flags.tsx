@@ -34,6 +34,7 @@ interface FeatureFlagDetail {
   enabled: boolean;
   is_override: boolean;
   env_default: boolean;
+  depends_on: string[];
   updated_at: string | null;
   updated_by: string | null;
 }
@@ -45,6 +46,7 @@ interface FeatureFlagListResponse {
 interface FeatureFlagUpdateResponse extends FeatureFlagDetail {
   caches_cleared: string[];
   restart_required: boolean;
+  cascaded: string[];
 }
 
 // --- Constants ---
@@ -121,6 +123,10 @@ function FeatureFlagsPage() {
       } else {
         notify.success(`${result.display_name} ${result.enabled ? "enabled" : "disabled"}.`);
       }
+      if (result.cascaded.length > 0) {
+        const names = result.cascaded.map((f) => flagDisplayName(f)).join(", ");
+        notify.info(`Also ${result.enabled ? "enabled" : "disabled"}: ${names}`);
+      }
     },
     onError: (err) => {
       notify.error(err instanceof Error ? err.message : "Failed to update flag");
@@ -143,8 +149,29 @@ function FeatureFlagsPage() {
     },
   });
 
+  function flagDisplayName(flagName: string): string {
+    const found = flags.find((f) => f.flag_name === flagName);
+    return found?.display_name ?? flagName;
+  }
+
+  function computeCascade(flag: FeatureFlagDetail, newValue: boolean): string[] {
+    if (newValue) {
+      // Enabling: unmet prerequisites
+      return flag.depends_on.filter((dep) => {
+        const depFlag = flags.find((f) => f.flag_name === dep);
+        return depFlag && !depFlag.enabled;
+      });
+    } else {
+      // Disabling: active dependents
+      return flags
+        .filter((f) => f.depends_on.includes(flag.flag_name) && f.enabled)
+        .map((f) => f.flag_name);
+    }
+  }
+
   function handleToggle(flag: FeatureFlagDetail, newValue: boolean) {
-    if (flag.risk_level === "cache_clear" || flag.risk_level === "restart") {
+    const cascade = computeCascade(flag, newValue);
+    if (flag.risk_level === "cache_clear" || flag.risk_level === "restart" || cascade.length > 0) {
       setConfirmFlag({ flag, newValue });
     } else {
       toggleMutation.mutate({ flagName: flag.flag_name, enabled: newValue });
@@ -231,6 +258,11 @@ function FeatureFlagsPage() {
                     <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
                       {flag.description}
                     </p>
+                    {flag.depends_on.length > 0 && (
+                      <p className="text-xs text-muted-foreground/70 mt-0.5">
+                        Requires: {flag.depends_on.map((dep) => flagDisplayName(dep)).join(", ")}
+                      </p>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     {flag.is_override && (
@@ -267,19 +299,31 @@ function FeatureFlagsPage() {
                 ? "Restart Required"
                 : "Confirm Cache Clear"}
             </AlertDialogTitle>
-            <AlertDialogDescription>
-              {confirmFlag?.flag.risk_level === "restart" ? (
-                <>
-                  <strong>{confirmFlag?.flag.display_name}</strong> requires a server restart to
-                  take effect. The change will be saved to the database immediately.
-                </>
-              ) : (
-                <>
-                  Toggling <strong>{confirmFlag?.flag.display_name}</strong> will clear cached
-                  model/service instances and rebuild them on the next request. This may cause a
-                  brief delay.
-                </>
-              )}
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                {confirmFlag?.flag.risk_level === "restart" ? (
+                  <p>
+                    <strong>{confirmFlag?.flag.display_name}</strong> requires a server restart to
+                    take effect. The change will be saved to the database immediately.
+                  </p>
+                ) : confirmFlag?.flag.risk_level === "cache_clear" ? (
+                  <p>
+                    Toggling <strong>{confirmFlag?.flag.display_name}</strong> will clear cached
+                    model/service instances and rebuild them on the next request. This may cause a
+                    brief delay.
+                  </p>
+                ) : null}
+                {confirmFlag && (() => {
+                  const cascade = computeCascade(confirmFlag.flag, confirmFlag.newValue);
+                  if (cascade.length === 0) return null;
+                  const names = cascade.map((f) => flagDisplayName(f)).join(", ");
+                  return (
+                    <p className="font-medium">
+                      This will also {confirmFlag.newValue ? "enable" : "disable"}: {names}
+                    </p>
+                  );
+                })()}
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

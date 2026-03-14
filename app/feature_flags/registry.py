@@ -18,6 +18,7 @@ class FlagMeta:
     category: FlagCategory
     risk_level: FlagRiskLevel
     di_caches: list[str] = field(default_factory=list)
+    depends_on: list[str] = field(default_factory=list)
 
 
 FLAG_REGISTRY: dict[str, FlagMeta] = {
@@ -69,6 +70,7 @@ FLAG_REGISTRY: dict[str, FlagMeta] = {
         category=FlagCategory.QUERY,
         risk_level=FlagRiskLevel.CACHE_CLEAR,
         di_caches=["get_query_graph"],
+        depends_on=["enable_agentic_pipeline"],
     ),
     # --- Entity & Graph ---
     "enable_relationship_extraction": FlagMeta(
@@ -217,6 +219,7 @@ FLAG_REGISTRY: dict[str, FlagMeta] = {
         description="Re-investigate flagged claims when citation faithfulness falls below threshold (max 1 retry).",
         category=FlagCategory.QUERY,
         risk_level=FlagRiskLevel.SAFE,
+        depends_on=["enable_citation_verification"],
     ),
     "enable_text_to_sql": FlagMeta(
         display_name="Text-to-SQL Generation",
@@ -324,9 +327,12 @@ def validate_registry() -> None:
     from app.config import Settings
 
     settings_fields = set(Settings.model_fields.keys())
-    for flag_name in FLAG_REGISTRY:
+    for flag_name, meta in FLAG_REGISTRY.items():
         if flag_name not in settings_fields:
             raise ValueError(f"FLAG_REGISTRY key '{flag_name}' not found in Settings")
+        for dep in meta.depends_on:
+            if dep not in FLAG_REGISTRY:
+                raise ValueError(f"FLAG_REGISTRY '{flag_name}' depends_on '{dep}' which is not in the registry")
 
 
 validate_registry()
