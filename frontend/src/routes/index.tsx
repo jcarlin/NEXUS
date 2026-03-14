@@ -7,6 +7,7 @@ import { StatCard } from "@/components/dashboard/stat-card";
 import { RecentActivity } from "@/components/dashboard/recent-activity";
 import { PipelineStatus } from "@/components/dashboard/pipeline-status";
 import { GraphOverview } from "@/components/dashboard/graph-overview";
+import { ServiceHealth } from "@/components/dashboard/service-health";
 import type { PaginatedResponse, DocumentResponse, GraphStats } from "@/types";
 
 export const Route = createFileRoute("/")({
@@ -62,6 +63,8 @@ function DashboardPage() {
         <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
         <p className="text-muted-foreground">Overview of your investigation workspace.</p>
       </div>
+
+      <ServiceHealth />
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 animate-stagger-in" data-tour="stat-cards">
         <StatCard

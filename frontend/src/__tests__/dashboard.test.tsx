@@ -126,9 +126,9 @@ describe("DashboardPage", () => {
     expect(screen.getByText("Active pipeline jobs")).toBeInTheDocument();
   });
 
-  it("makes 4 useQuery calls", () => {
+  it("makes 5 useQuery calls (stats + service health)", () => {
     render(<Component />);
-    expect(mockUseQuery).toHaveBeenCalledTimes(4);
+    expect(mockUseQuery).toHaveBeenCalledTimes(5);
   });
 
   it("passes matterId-based query keys", () => {
