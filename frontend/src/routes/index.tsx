@@ -73,6 +73,7 @@ function DashboardPage() {
           icon={FileText}
           loading={docsLoading}
           description="Total ingested"
+          href="/documents"
         />
         <StatCard
           title="Entities"
@@ -80,6 +81,7 @@ function DashboardPage() {
           icon={Users}
           loading={graphLoading}
           description="In knowledge graph"
+          href="/entities"
         />
         <StatCard
           title="Hot Docs"
@@ -87,6 +89,7 @@ function DashboardPage() {
           icon={Flame}
           loading={hotDocsLoading}
           description="Score >= 0.7"
+          href="/review"
         />
         <StatCard
           title="Processing"
@@ -94,6 +97,7 @@ function DashboardPage() {
           icon={Loader2}
           loading={jobsLoading}
           description="Active pipeline jobs"
+          href="/ingestion"
         />
       </div>
 
