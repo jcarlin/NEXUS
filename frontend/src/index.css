@@ -2,7 +2,7 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-@theme inline {
+@theme {
   /* Backgrounds — subtle blue-steel tint instead of pure gray */
   --color-background: oklch(0.145 0.004 260);
   --color-foreground: oklch(0.985 0 0);
