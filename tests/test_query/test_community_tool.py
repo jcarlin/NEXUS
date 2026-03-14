@@ -16,10 +16,8 @@ import pytest
 
 
 @pytest.mark.asyncio
-async def test_get_community_context_found(monkeypatch):
+async def test_get_community_context_found():
     """Tool returns community info when entity is found."""
-    monkeypatch.setenv("ENABLE_GRAPHRAG_COMMUNITIES", "true")
-
     from app.query.tools import get_community_context
 
     mock_row = {
@@ -40,9 +38,15 @@ async def test_get_community_context_found(monkeypatch):
     async def _mock_get_db():
         yield mock_db
 
+    mock_settings = MagicMock()
+    mock_settings.enable_graphrag_communities = True
+
     state = {"_filters": {"matter_id": "test-matter-001"}}
 
-    with patch("app.dependencies.get_db", _mock_get_db):
+    with (
+        patch("app.dependencies.get_settings", return_value=mock_settings),
+        patch("app.dependencies.get_db", _mock_get_db),
+    ):
         result = await get_community_context.ainvoke({"entity_name": "Alice Smith", "state": state})
 
     parsed = json.loads(result)
@@ -53,10 +57,8 @@ async def test_get_community_context_found(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_get_community_context_not_found(monkeypatch):
+async def test_get_community_context_not_found():
     """Tool returns error when entity is not in any community."""
-    monkeypatch.setenv("ENABLE_GRAPHRAG_COMMUNITIES", "true")
-
     from app.query.tools import get_community_context
 
     mock_result = MagicMock()
@@ -68,9 +70,15 @@ async def test_get_community_context_not_found(monkeypatch):
     async def _mock_get_db():
         yield mock_db
 
+    mock_settings = MagicMock()
+    mock_settings.enable_graphrag_communities = True
+
     state = {"_filters": {"matter_id": "test-matter-001"}}
 
-    with patch("app.dependencies.get_db", _mock_get_db):
+    with (
+        patch("app.dependencies.get_settings", return_value=mock_settings),
+        patch("app.dependencies.get_db", _mock_get_db),
+    ):
         result = await get_community_context.ainvoke({"entity_name": "Unknown Person", "state": state})
 
     parsed = json.loads(result)
@@ -79,15 +87,17 @@ async def test_get_community_context_not_found(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_get_community_context_flag_disabled(monkeypatch):
+async def test_get_community_context_flag_disabled():
     """Tool returns info message when feature flag is disabled."""
-    monkeypatch.setenv("ENABLE_GRAPHRAG_COMMUNITIES", "false")
-
     from app.query.tools import get_community_context
+
+    mock_settings = MagicMock()
+    mock_settings.enable_graphrag_communities = False
 
     state = {"_filters": {"matter_id": "test-matter-001"}}
 
-    result = await get_community_context.ainvoke({"entity_name": "Alice", "state": state})
+    with patch("app.dependencies.get_settings", return_value=mock_settings):
+        result = await get_community_context.ainvoke({"entity_name": "Alice", "state": state})
 
     parsed = json.loads(result)
     assert "info" in parsed
@@ -95,15 +105,17 @@ async def test_get_community_context_flag_disabled(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_get_community_context_no_matter(monkeypatch):
+async def test_get_community_context_no_matter():
     """Tool returns error when no matter_id in state."""
-    monkeypatch.setenv("ENABLE_GRAPHRAG_COMMUNITIES", "true")
-
     from app.query.tools import get_community_context
+
+    mock_settings = MagicMock()
+    mock_settings.enable_graphrag_communities = True
 
     state = {"_filters": {}}
 
-    result = await get_community_context.ainvoke({"entity_name": "Alice", "state": state})
+    with patch("app.dependencies.get_settings", return_value=mock_settings):
+        result = await get_community_context.ainvoke({"entity_name": "Alice", "state": state})
 
     parsed = json.loads(result)
     assert "error" in parsed

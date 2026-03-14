@@ -141,17 +141,21 @@ async def test_centrality_pagerank_betweenness(gs):
 
 
 @pytest.mark.asyncio
-async def test_network_analysis_tool_disabled_by_flag(monkeypatch):
+async def test_network_analysis_tool_disabled_by_flag():
     """When ENABLE_GRAPH_CENTRALITY is false, the tool returns an info message
     instead of calling Neo4j GDS."""
-    monkeypatch.setenv("ENABLE_GRAPH_CENTRALITY", "false")
+    from unittest.mock import MagicMock, patch
 
     from app.query.tools import network_analysis
 
+    mock_settings = MagicMock()
+    mock_settings.enable_graph_centrality = False
+
     state = {"_filters": {"matter_id": "matter-1"}}
-    result = await network_analysis.ainvoke(
-        {"metric": "degree", "state": state},
-    )
+    with patch("app.dependencies.get_settings", return_value=mock_settings):
+        result = await network_analysis.ainvoke(
+            {"metric": "degree", "state": state},
+        )
 
     parsed = json.loads(result)
     assert "info" in parsed

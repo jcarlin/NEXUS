@@ -370,8 +370,11 @@ async def test_resume_endpoint_exists(client):
     assert response.status_code == 422
 
 
-async def test_resume_endpoint_rejects_missing_thread_id(client):
+async def test_resume_endpoint_rejects_missing_thread_id(client, _test_app):
     """POST /query/resume requires thread_id."""
+    from app.dependencies import get_query_graph
+
+    _test_app.dependency_overrides[get_query_graph] = lambda: MagicMock()
     response = await client.post(
         "/api/v1/query/resume",
         json={"answer": "John Smith the CFO"},
@@ -379,8 +382,11 @@ async def test_resume_endpoint_rejects_missing_thread_id(client):
     assert response.status_code == 422
 
 
-async def test_resume_endpoint_rejects_missing_answer(client):
+async def test_resume_endpoint_rejects_missing_answer(client, _test_app):
     """POST /query/resume requires answer."""
+    from app.dependencies import get_query_graph
+
+    _test_app.dependency_overrides[get_query_graph] = lambda: MagicMock()
     response = await client.post(
         "/api/v1/query/resume",
         json={"thread_id": str(uuid.uuid4())},
@@ -388,8 +394,11 @@ async def test_resume_endpoint_rejects_missing_answer(client):
     assert response.status_code == 422
 
 
-async def test_resume_endpoint_rejects_empty_answer(client):
+async def test_resume_endpoint_rejects_empty_answer(client, _test_app):
     """POST /query/resume rejects empty answer string (min_length=1)."""
+    from app.dependencies import get_query_graph
+
+    _test_app.dependency_overrides[get_query_graph] = lambda: MagicMock()
     response = await client.post(
         "/api/v1/query/resume",
         json={"thread_id": str(uuid.uuid4()), "answer": ""},

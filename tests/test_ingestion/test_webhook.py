@@ -51,7 +51,8 @@ def _make_s3_event(object_key: str, event_name: str = "s3:ObjectCreated:Put") ->
                     "object": {"key": object_key, "size": 1024},
                 },
             }
-        ]
+        ],
+        "matter_id": str(uuid4()),
     }
 
 
@@ -103,7 +104,7 @@ async def test_webhook_empty_records(webhook_client):
 
     response = await client.post(
         "/api/v1/ingest/webhook",
-        json={"Records": []},
+        json={"Records": [], "matter_id": str(uuid4())},
     )
     assert response.status_code == 400
 
@@ -121,7 +122,8 @@ async def test_webhook_missing_object_key(webhook_client):
                     "eventName": "s3:ObjectCreated:Put",
                     "s3": {"bucket": {"name": "documents"}, "object": {}},
                 }
-            ]
+            ],
+            "matter_id": str(uuid4()),
         },
     )
     assert response.status_code == 400
@@ -134,7 +136,7 @@ async def test_webhook_skips_non_create_events(webhook_client):
 
     response = await client.post(
         "/api/v1/ingest/webhook",
-        json=_make_s3_event("raw/test.pdf", event_name="s3:ObjectRemoved:Delete"),
+        json=_make_s3_event("raw/test.pdf", event_name="s3:ObjectRemoved:Delete"),  # matter_id included via helper
     )
     assert response.status_code == 400
     assert "actionable" in response.json()["detail"].lower()
@@ -173,7 +175,8 @@ async def test_webhook_multiple_records(webhook_client):
                 },
             }
             for i in range(3)
-        ]
+        ],
+        "matter_id": str(uuid4()),
     }
 
     with (

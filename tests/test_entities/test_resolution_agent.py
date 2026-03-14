@@ -170,6 +170,8 @@ async def test_resolution_agent_uncertain_merges() -> None:
 
 def test_resolution_agent_celery_task() -> None:
     """Celery task should invoke run_resolution_agent and return result."""
+    from uuid import uuid4
+
     expected_result = {
         "merges_performed": 5,
         "hierarchy_edges_created": 2,
@@ -178,14 +180,17 @@ def test_resolution_agent_celery_task() -> None:
         "entity_types_processed": 2,
     }
 
-    with patch(
-        "app.entities.tasks.asyncio.run",
-        return_value=expected_result,
-    ) as mock_asyncio_run:
+    with (
+        patch("app.entities.tasks.asyncio.run", return_value=expected_result) as mock_asyncio_run,
+        patch("app.entities.tasks._get_sync_engine"),
+        patch("app.entities.tasks._create_job_sync", return_value=str(uuid4())),
+        patch("app.entities.tasks._update_stage"),
+        patch("app.entities.tasks._store_celery_task_id"),
+    ):
         from app.entities.tasks import entity_resolution_agent
 
         # Use .run() to call the task function directly (bypasses broker)
-        result = entity_resolution_agent.run("test-matter-id")
+        result = entity_resolution_agent.run(str(uuid4()))
 
     assert result == expected_result
     assert result["merges_performed"] == 5
