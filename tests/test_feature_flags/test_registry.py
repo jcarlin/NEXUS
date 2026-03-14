@@ -77,7 +77,7 @@ class TestFlagRegistry:
             ("enable_reranker", FlagRiskLevel.CACHE_CLEAR),
             ("enable_agentic_pipeline", FlagRiskLevel.CACHE_CLEAR),
             ("enable_google_drive", FlagRiskLevel.RESTART),
-            ("enable_sso", FlagRiskLevel.RESTART),
+            ("enable_sso", FlagRiskLevel.CACHE_CLEAR),
             ("enable_ai_audit_logging", FlagRiskLevel.SAFE),
             ("enable_citation_verification", FlagRiskLevel.SAFE),
         ],

@@ -61,9 +61,11 @@ class TestSAMLInfoEndpoint:
 
     @pytest.mark.asyncio
     async def test_info_when_saml_disabled(self, client: AsyncClient) -> None:
-        """Returns 404 when SAML is disabled (router not registered in test app)."""
+        """Returns enabled=False when SAML is off (default test settings)."""
         resp = await client.get("/api/v1/auth/saml/info")
-        assert resp.status_code == 404
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["enabled"] is False
 
     @pytest.mark.asyncio
     async def test_info_when_saml_enabled(self, client: AsyncClient, saml_settings: Settings) -> None:
@@ -71,9 +73,6 @@ class TestSAMLInfoEndpoint:
         with patch("app.auth.saml_router.get_settings", return_value=saml_settings):
             resp = await client.get("/api/v1/auth/saml/info")
 
-        # Router not registered in default test app (feature-flagged)
-        if resp.status_code == 404:
-            return
         assert resp.status_code == 200
         data = resp.json()
         assert data["enabled"] is True
@@ -101,14 +100,12 @@ class TestSAMLLoginEndpoint:
         ):
             resp = await client.get("/api/v1/auth/saml/login", follow_redirects=False)
 
-        if resp.status_code == 404:
-            return
         assert resp.status_code == 302
         assert "idp.example.com" in resp.headers["location"]
 
     @pytest.mark.asyncio
     async def test_login_when_disabled(self, client: AsyncClient) -> None:
-        """Login returns 404 when SAML is disabled."""
+        """Login returns 404 when SAML is disabled (request-time guard)."""
         resp = await client.get("/api/v1/auth/saml/login", follow_redirects=False)
         assert resp.status_code == 404
 
@@ -140,8 +137,6 @@ class TestSAMLACSEndpoint:
                 data={"SAMLResponse": "base64encoded", "RelayState": ""},
             )
 
-        if resp.status_code == 404:
-            return
         assert resp.status_code == 200
         data = resp.json()
         assert data["access_token"] == "test-access"
@@ -165,8 +160,6 @@ class TestSAMLACSEndpoint:
                 data={"SAMLResponse": "bad-response"},
             )
 
-        if resp.status_code == 404:
-            return
         assert resp.status_code == 401
         assert "SAML authentication failed" in resp.json()["detail"]
 
@@ -186,14 +179,12 @@ class TestSAMLACSEndpoint:
                 data={"SAMLResponse": "base64encoded"},
             )
 
-        if resp.status_code == 404:
-            return
         assert resp.status_code == 401
         assert "email" in resp.json()["detail"].lower()
 
     @pytest.mark.asyncio
     async def test_acs_when_disabled(self, client: AsyncClient) -> None:
-        """ACS returns 404 when SAML is disabled."""
+        """ACS returns 404 when SAML is disabled (request-time guard)."""
         resp = await client.post(
             "/api/v1/auth/saml/acs",
             data={"SAMLResponse": "base64encoded"},
@@ -221,15 +212,13 @@ class TestSAMLMetadataEndpoint:
         ):
             resp = await client.get("/api/v1/auth/saml/metadata.xml")
 
-        if resp.status_code == 404:
-            return
         assert resp.status_code == 200
         assert "xml" in resp.headers.get("content-type", "")
         assert resp.text.startswith("<?xml")
 
     @pytest.mark.asyncio
     async def test_metadata_when_disabled(self, client: AsyncClient) -> None:
-        """Metadata returns 404 when SAML is disabled."""
+        """Metadata returns 404 when SAML is disabled (request-time guard)."""
         resp = await client.get("/api/v1/auth/saml/metadata.xml")
         assert resp.status_code == 404
 
@@ -245,7 +234,5 @@ class TestSAMLMetadataEndpoint:
         ):
             resp = await client.get("/api/v1/auth/saml/metadata.xml")
 
-        if resp.status_code == 404:
-            return
         assert resp.status_code == 500
         assert "metadata" in resp.json()["detail"].lower()

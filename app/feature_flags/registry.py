@@ -63,6 +63,13 @@ FLAG_REGISTRY: dict[str, FlagMeta] = {
         category=FlagCategory.QUERY,
         risk_level=FlagRiskLevel.SAFE,
     ),
+    "enable_agent_clarification": FlagMeta(
+        display_name="Agent Clarification (Human-in-the-Loop)",
+        description="Allow the investigation agent to ask the user one clarifying question per query when it encounters ambiguity.",
+        category=FlagCategory.QUERY,
+        risk_level=FlagRiskLevel.CACHE_CLEAR,
+        di_caches=["get_query_graph"],
+    ),
     # --- Entity & Graph ---
     "enable_relationship_extraction": FlagMeta(
         display_name="LLM Relationship Extraction",
@@ -150,9 +157,10 @@ FLAG_REGISTRY: dict[str, FlagMeta] = {
     ),
     "enable_sso": FlagMeta(
         display_name="SSO / OIDC Authentication",
-        description="OpenID Connect SSO authentication. OIDC router mounted at startup.",
+        description="OpenID Connect SSO authentication. Toggleable at runtime.",
         category=FlagCategory.INTEGRATIONS,
-        risk_level=FlagRiskLevel.RESTART,
+        risk_level=FlagRiskLevel.CACHE_CLEAR,
+        di_caches=["get_oidc_provider"],
     ),
     "enable_memo_drafting": FlagMeta(
         display_name="Memo Drafting",
@@ -263,9 +271,10 @@ FLAG_REGISTRY: dict[str, FlagMeta] = {
     ),
     "enable_saml": FlagMeta(
         display_name="SAML Authentication",
-        description="SAML 2.0 SSO authentication for enterprise identity providers.",
+        description="SAML 2.0 SSO authentication for enterprise identity providers. Toggleable at runtime.",
         category=FlagCategory.INTEGRATIONS,
-        risk_level=FlagRiskLevel.RESTART,
+        risk_level=FlagRiskLevel.CACHE_CLEAR,
+        di_caches=["get_saml_provider"],
     ),
     "enable_splade_sparse": FlagMeta(
         display_name="SPLADE Sparse Retrieval",

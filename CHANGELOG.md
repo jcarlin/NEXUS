@@ -12,6 +12,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follo
 
 _Nothing yet._
 
+## [1.11.1] - 2026-03-14
+
+### Fixed
+- Always mount OIDC/SAML routers so `/auth/oidc/info` and `/auth/saml/info` return 200 instead of 404 when SSO is disabled, eliminating browser console errors on login page
+
+### Changed
+- `enable_sso` and `enable_saml` feature flags downgraded from `RESTART` to `CACHE_CLEAR` risk level, enabling runtime toggling via admin UI without server restart
+
 ## [1.11.0] - 2026-03-14
 
 ### Added

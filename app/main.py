@@ -294,15 +294,13 @@ def create_app() -> FastAPI:
 
         application.include_router(gdrive_router, prefix="/api/v1")
 
-    if settings.enable_sso:
-        from app.auth.oidc_router import router as oidc_router
+    from app.auth.oidc_router import router as oidc_router
 
-        application.include_router(oidc_router, prefix="/api/v1")
+    application.include_router(oidc_router, prefix="/api/v1")
 
-    if settings.enable_saml:
-        from app.auth.saml_router import router as saml_router
+    from app.auth.saml_router import router as saml_router
 
-        application.include_router(saml_router, prefix="/api/v1")
+    application.include_router(saml_router, prefix="/api/v1")
 
     if settings.enable_memo_drafting:
         from app.memos.router import router as memos_router

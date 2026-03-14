@@ -176,9 +176,9 @@ class TestOIDCInfoEndpoint:
     async def test_info_when_sso_disabled(self, client: AsyncClient) -> None:
         """Returns enabled=False when SSO is off (default test settings)."""
         resp = await client.get("/api/v1/auth/oidc/info")
-        # SSO is disabled by default in test settings, router is not registered
-        # so this should be a 404
-        assert resp.status_code == 404
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["enabled"] is False
 
     @pytest.mark.asyncio
     async def test_info_when_sso_enabled(self, client: AsyncClient, sso_settings: Settings) -> None:
@@ -193,11 +193,6 @@ class TestOIDCInfoEndpoint:
         ):
             resp = await client.get("/api/v1/auth/oidc/info")
 
-        # Router may not be registered (feature-flagged at startup), so we
-        # test the endpoint logic directly if 404
-        if resp.status_code == 404:
-            # SSO router not registered — this is expected in default test app
-            return
         assert resp.status_code == 200
         data = resp.json()
         assert data["enabled"] is True
@@ -225,9 +220,6 @@ class TestOIDCCallbackEndpoint:
                 params={"code": "auth-code-123", "state": "random-state"},
             )
 
-        if resp.status_code == 404:
-            # SSO router not registered in test app — expected
-            return
         assert resp.status_code == 200
         data = resp.json()
         assert data["access_token"] == "test-access"
@@ -248,7 +240,6 @@ class TestOIDCCallbackEndpoint:
                 "/api/v1/auth/oidc/callback",
                 params={"code": "auth-code-123"},
             )
-        # Either 404 (router not registered) or 404 (SSO disabled check)
         assert resp.status_code == 404
 
     @pytest.mark.asyncio
@@ -266,8 +257,6 @@ class TestOIDCCallbackEndpoint:
                 params={"code": "auth-code-123"},
             )
 
-        if resp.status_code == 404:
-            return
         assert resp.status_code == 401
         assert "email" in resp.json()["detail"].lower()
 
@@ -286,8 +275,6 @@ class TestOIDCCallbackEndpoint:
                 params={"code": "auth-code-123"},
             )
 
-        if resp.status_code == 404:
-            return
         assert resp.status_code == 401
         assert "OIDC authentication failed" in resp.json()["detail"]
 
