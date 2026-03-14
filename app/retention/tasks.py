@@ -19,11 +19,12 @@ logger = structlog.get_logger(__name__)
 # ---------------------------------------------------------------------------
 
 
-def _get_sync_engine():
+def _get_sync_engine(settings=None):
     """Create a disposable sync SQLAlchemy engine for the current task."""
-    from app.config import Settings
+    if settings is None:
+        from app.config import Settings
 
-    settings = Settings()
+        settings = Settings()
     return create_engine(settings.postgres_url_sync, pool_pre_ping=True)
 
 
@@ -38,6 +39,14 @@ def execute_scheduled_purge(matter_id: str) -> dict:
 
     Runs as a Celery task with sync-to-async bridge.
     """
+    from app.config import Settings
+    from app.feature_flags.service import load_overrides_sync_safe
+
+    settings = Settings()
+    _engine = _get_sync_engine(settings)
+    load_overrides_sync_safe(settings, _engine)
+    _engine.dispose()
+
     logger.info("retention.task.purge_start", matter_id=matter_id)
 
     async def _run() -> dict:
@@ -91,9 +100,14 @@ def execute_scheduled_purge(matter_id: str) -> dict:
 @shared_task(name="app.retention.tasks.check_retention_expirations")
 def check_retention_expirations() -> dict:
     """Periodic task: find expired policies and schedule purge tasks."""
+    from app.config import Settings
+    from app.feature_flags.service import load_overrides_sync_safe
+
+    settings = Settings()
     logger.info("retention.task.check_expirations_start")
 
-    engine = _get_sync_engine()
+    engine = _get_sync_engine(settings)
+    load_overrides_sync_safe(settings, engine)
     try:
         with engine.connect() as conn:
             result = conn.execute(

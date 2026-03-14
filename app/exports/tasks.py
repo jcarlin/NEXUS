@@ -24,11 +24,12 @@ logger = structlog.get_logger(__name__)
 # ---------------------------------------------------------------------------
 
 
-def _get_sync_engine():
+def _get_sync_engine(settings=None):
     """Create a disposable sync SQLAlchemy engine for the current task."""
-    from app.config import Settings
+    if settings is None:
+        from app.config import Settings
 
-    settings = Settings()
+        settings = Settings()
     return create_engine(settings.postgres_url_sync, pool_pre_ping=True)
 
 
@@ -84,7 +85,12 @@ def _get_minio_client():
 @shared_task(bind=True, name="exports.run_export")
 def run_export(self, export_job_id: str) -> None:
     """Run an export job: read parameters, dispatch to generator, upload result."""
-    engine = _get_sync_engine()
+    from app.config import Settings
+    from app.feature_flags.service import load_overrides_sync_safe
+
+    settings = Settings()
+    engine = _get_sync_engine(settings)
+    load_overrides_sync_safe(settings, engine)
 
     try:
         # Read the export job

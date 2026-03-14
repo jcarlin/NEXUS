@@ -110,6 +110,15 @@ async def query(
         use_agentic = auto_tier != "fast"
         logger.info("query.auto_route", tier=auto_tier, use_agentic=use_agentic)
 
+    # Select the correct graph for the routing decision.
+    # Only use the dedicated V1 factory when auto-routing downgraded to V1
+    # while the default DI graph is agentic.
+    active_graph = graph
+    if settings.enable_auto_graph_routing and not use_agentic:
+        from app.dependencies import get_query_graph_v1
+
+        active_graph = get_query_graph_v1()
+
     if use_agentic:
         initial_state = QueryService.build_agentic_state(
             query=request.query,
@@ -139,7 +148,7 @@ async def query(
     tier = "standard"
     query_type = "factual"
     try:
-        final_state = await graph.ainvoke(initial_state, config)
+        final_state = await active_graph.ainvoke(initial_state, config)
         tier = final_state.get("_tier", "standard")
         query_type = final_state.get("_query_type", "factual") or "factual"
     except Exception:
@@ -345,6 +354,15 @@ async def query_stream(
         use_agentic = auto_tier != "fast"
         logger.info("query_stream.auto_route", tier=auto_tier, use_agentic=use_agentic)
 
+    # Select the correct graph for the routing decision.
+    # Only use the dedicated V1 factory when auto-routing downgraded to V1
+    # while the default DI graph is agentic.
+    active_graph = graph
+    if settings.enable_auto_graph_routing and not use_agentic:
+        from app.dependencies import get_query_graph_v1
+
+        active_graph = get_query_graph_v1()
+
     if use_agentic:
         initial_state = QueryService.build_agentic_state(
             query=request.query,
@@ -374,11 +392,11 @@ async def query_stream(
 
     if use_agentic:
         return EventSourceResponse(
-            _agentic_event_generator(graph, initial_state, config, db, thread_id, request.query, matter_id)
+            _agentic_event_generator(active_graph, initial_state, config, db, thread_id, request.query, matter_id)
         )
     else:
         return EventSourceResponse(
-            _v1_event_generator(graph, initial_state, config, db, thread_id, request.query, matter_id)
+            _v1_event_generator(active_graph, initial_state, config, db, thread_id, request.query, matter_id)
         )
 
 

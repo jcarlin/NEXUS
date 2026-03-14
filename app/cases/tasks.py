@@ -18,11 +18,12 @@ from workers.celery_app import celery_app  # noqa: F401 — ensures @shared_task
 logger = structlog.get_logger(__name__)
 
 
-def _get_sync_engine():
+def _get_sync_engine(settings=None):
     """Create a disposable sync SQLAlchemy engine for the current task."""
-    from app.config import Settings
+    if settings is None:
+        from app.config import Settings
 
-    settings = Settings()
+        settings = Settings()
     return create_engine(settings.postgres_url_sync, pool_pre_ping=True)
 
 
@@ -196,9 +197,11 @@ def run_case_setup(
     )
 
     from app.config import Settings
+    from app.feature_flags.service import load_overrides_sync_safe
 
     settings = Settings()
-    engine = _get_sync_engine()
+    engine = _get_sync_engine(settings)
+    load_overrides_sync_safe(settings, engine)
     _store_celery_task_id(engine, job_id, self.request.id)
 
     logger.info("case_setup.start", minio_path=minio_path)

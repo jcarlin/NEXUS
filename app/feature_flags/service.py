@@ -160,6 +160,34 @@ class FeatureFlagService:
         logger.info("feature_flags.overrides_loaded", count=len(rows))
 
 
+def load_overrides_sync(settings: object, engine: object) -> None:
+    """Load DB feature flag overrides into a Settings instance (sync).
+
+    Called by Celery tasks so each execution picks up the latest
+    admin-toggled values without a worker restart.
+    """
+    with engine.connect() as conn:
+        result = conn.execute(text("SELECT flag_name, enabled FROM feature_flag_overrides"))
+        rows = result.mappings().all()
+    if not rows:
+        return
+    for row in rows:
+        flag_name = row["flag_name"]
+        if flag_name in FLAG_REGISTRY and hasattr(settings, flag_name):
+            setattr(settings, flag_name, row["enabled"])
+
+
+def load_overrides_sync_safe(settings: object, engine: object) -> None:
+    """Like load_overrides_sync but logs and continues on failure.
+
+    Safe for Celery tasks where the overrides table may not exist yet.
+    """
+    try:
+        load_overrides_sync(settings, engine)
+    except Exception:
+        logger.warning("feature_flags.sync_load_failed", exc_info=True)
+
+
 def settings_env_default(flag_name: str) -> bool:
     """Get the env-file default for a flag by reading Settings model field defaults."""
     from app.config import Settings

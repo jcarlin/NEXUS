@@ -24,11 +24,12 @@ logger = structlog.get_logger(__name__)
 # ---------------------------------------------------------------------------
 
 
-def _get_sync_engine():
+def _get_sync_engine(settings=None):
     """Create a disposable sync SQLAlchemy engine for the current task."""
-    from app.config import Settings
+    if settings is None:
+        from app.config import Settings
 
-    settings = Settings()
+        settings = Settings()
     return create_engine(settings.postgres_url_sync, pool_pre_ping=True)
 
 
@@ -232,7 +233,12 @@ def resolve_entities(self, entity_type: str | None = None, matter_id: str | None
     """
     logger.info("task.resolve_entities.start", entity_type=entity_type, matter_id=matter_id)
 
-    engine = _get_sync_engine()
+    from app.config import Settings
+    from app.feature_flags.service import load_overrides_sync_safe
+
+    settings = Settings()
+    engine = _get_sync_engine(settings)
+    load_overrides_sync_safe(settings, engine)
     label = f"Entity resolution: {entity_type or 'all'}"
     job_id = _create_job_sync(engine, matter_id, "entity_resolution", label)
     _store_celery_task_id(engine, job_id, self.request.id)
@@ -337,7 +343,12 @@ def reprocess_entities_to_neo4j(self, document_ids: list[str]) -> dict:
     """
     logger.info("task.reprocess_neo4j.start", doc_count=len(document_ids))
 
-    engine = _get_sync_engine()
+    from app.config import Settings
+    from app.feature_flags.service import load_overrides_sync_safe
+
+    settings = Settings()
+    engine = _get_sync_engine(settings)
+    load_overrides_sync_safe(settings, engine)
     job_id = _create_job_sync(engine, None, "reprocess_neo4j", f"Neo4j reindex: {len(document_ids)} docs")
     _store_celery_task_id(engine, job_id, self.request.id)
 

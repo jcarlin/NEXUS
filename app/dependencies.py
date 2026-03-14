@@ -504,6 +504,23 @@ def get_query_graph():
     ).compile(checkpointer=get_checkpointer())
 
 
+@functools.cache
+def get_query_graph_v1():
+    """Return the compiled v1 (non-agentic) ``StateGraph`` singleton.
+
+    Used by auto-graph-routing to run fast-tier queries on the lightweight
+    V1 pipeline even when the default graph is agentic.
+    """
+    from app.query.graph import build_graph_v1
+
+    return build_graph_v1(
+        llm=get_llm(),
+        retriever=get_retriever(),
+        graph_service=get_graph_service(),
+        entity_extractor=get_entity_extractor(),
+    ).compile(checkpointer=get_checkpointer())
+
+
 # ---------------------------------------------------------------------------
 # All cached factory functions (for bulk cache_clear in close_all)
 # ---------------------------------------------------------------------------
@@ -533,6 +550,7 @@ _ALL_CACHED_FACTORIES = [
     _get_checkpointer_conn,
     get_checkpointer,
     get_query_graph,
+    get_query_graph_v1,
 ]
 
 

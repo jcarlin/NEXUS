@@ -38,11 +38,12 @@ logger = structlog.get_logger(__name__)
 # ---------------------------------------------------------------------------
 
 
-def _get_sync_engine():
+def _get_sync_engine(settings=None):
     """Create a disposable sync SQLAlchemy engine for the current task."""
-    from app.config import Settings
+    if settings is None:
+        from app.config import Settings
 
-    settings = Settings()
+        settings = Settings()
     return create_engine(settings.postgres_url_sync, pool_pre_ping=True)
 
 
@@ -1392,9 +1393,11 @@ def process_zip(self, job_id: str, minio_path: str) -> dict:
     structlog.contextvars.bind_contextvars(task_id=self.request.id, job_id=job_id)
 
     from app.config import Settings
+    from app.feature_flags.service import load_overrides_sync_safe
 
     settings = Settings()
-    engine = _get_sync_engine()
+    engine = _get_sync_engine(settings)
+    load_overrides_sync_safe(settings, engine)
     zip_matter_id = _get_job_matter_id(engine, job_id)
     structlog.contextvars.bind_contextvars(matter_id=zip_matter_id)
 
@@ -1505,9 +1508,11 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
     structlog.contextvars.bind_contextvars(task_id=self.request.id, job_id=job_id)
 
     from app.config import Settings
+    from app.feature_flags.service import load_overrides_sync_safe
 
     settings = Settings()
-    engine = _get_sync_engine()
+    engine = _get_sync_engine(settings)
+    load_overrides_sync_safe(settings, engine)
     _store_celery_task_id(engine, job_id, self.request.id)
     filename = minio_path.rsplit("/", 1)[-1]
 
@@ -1648,11 +1653,13 @@ def import_text_document(
     structlog.contextvars.bind_contextvars(task_id=self.request.id, job_id=job_id, matter_id=matter_id)
 
     from app.config import Settings
+    from app.feature_flags.service import load_overrides_sync_safe
 
     settings = Settings()
     from sqlalchemy import text as sa_text
 
-    engine = _get_sync_engine()
+    engine = _get_sync_engine(settings)
+    load_overrides_sync_safe(settings, engine)
 
     logger.info(
         "task.import_text.start",
@@ -1997,9 +2004,11 @@ def detect_duplicates(self, doc_id: str, text: str, matter_id: str) -> dict:
     structlog.contextvars.bind_contextvars(task_id=self.request.id, doc_id=doc_id, matter_id=matter_id)
 
     from app.config import Settings
+    from app.feature_flags.service import load_overrides_sync_safe
 
     settings = Settings()
-    engine = _get_sync_engine()
+    engine = _get_sync_engine(settings)
+    load_overrides_sync_safe(settings, engine)
 
     try:
         if not settings.enable_near_duplicate_detection:
@@ -2085,13 +2094,14 @@ def detect_inclusive_emails(self, matter_id: str | None = None) -> dict:
     structlog.contextvars.bind_contextvars(task_id=self.request.id)
 
     from app.config import Settings
+    from app.feature_flags.service import load_overrides_sync_safe
 
     settings = Settings()
+    engine = _get_sync_engine(settings)
+    load_overrides_sync_safe(settings, engine)
 
     if not settings.enable_email_threading:
         return {"status": "skipped", "reason": "threading disabled"}
-
-    engine = _get_sync_engine()
 
     try:
         from app.ingestion.threading import EmailThreader
@@ -2239,11 +2249,17 @@ def run_bulk_import(
         matter_id=matter_id,
     )
 
+    from app.config import Settings
+    from app.feature_flags.service import load_overrides_sync_safe
+
+    settings = Settings()
+
     resume = options.get("resume", False)
     limit = options.get("limit")
     disable_hnsw = options.get("disable_hnsw", False)
 
-    engine = _get_sync_engine()
+    engine = _get_sync_engine(settings)
+    load_overrides_sync_safe(settings, engine)
     qdrant_client = None
 
     try:
