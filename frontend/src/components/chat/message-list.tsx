@@ -6,6 +6,7 @@ import { UserMessage } from "./user-message";
 import { AssistantMessage } from "./assistant-message";
 import { StageIndicator } from "./stage-indicator";
 import { ErrorMessage } from "./error-message";
+import { ClarificationPrompt } from "./clarification-prompt";
 import { FollowUpChips } from "./follow-up-chips";
 import type {
   ChatMessage,
@@ -39,6 +40,9 @@ interface MessageListProps {
   onFollowUpSelect?: (query: string) => void;
   onExampleClick?: (query: string) => void;
   threadId?: string;
+  clarificationQuestion?: string | null;
+  onClarificationSubmit?: (answer: string) => void;
+  isResuming?: boolean;
 }
 
 const SCROLL_THRESHOLD = 80;
@@ -54,6 +58,9 @@ export function MessageList({
   onFollowUpSelect,
   onExampleClick,
   threadId,
+  clarificationQuestion,
+  onClarificationSubmit,
+  isResuming,
 }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLElement | null>(null);
@@ -150,6 +157,14 @@ export function MessageList({
           {pendingUserMessage && <UserMessage content={pendingUserMessage} />}
 
           {stage && !streaming?.text && <StageIndicator stage={stage} />}
+
+          {clarificationQuestion && onClarificationSubmit && (
+            <ClarificationPrompt
+              question={clarificationQuestion}
+              onSubmit={onClarificationSubmit}
+              isResuming={isResuming}
+            />
+          )}
 
           {streaming && streaming.text && (
             <AssistantMessage

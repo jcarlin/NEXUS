@@ -12,6 +12,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follo
 
 _Nothing yet._
 
+## [1.12.0] - 2026-03-14
+
+### Added
+- Agent clarification (human-in-the-loop): investigation agent can ask one clarifying question per query when it encounters ambiguity (multiple entity matches, unclear time ranges, etc.)
+- `ask_user` tool using LangGraph `interrupt()` primitive — graph pauses, streams question via SSE, resumes when user responds
+- `POST /query/resume` endpoint to continue a paused investigation after user answers clarification
+- `ENABLE_AGENT_CLARIFICATION` feature flag (default off, runtime-toggleable, QUERY category)
+- `ClarificationPrompt` frontend component with inline question/answer UI in the chat flow
+- `CLARIFICATION_ADDENDUM` system prompt injection guiding when to ask vs. proceed
+- 26 new tests (20 backend + 6 frontend) covering tool behavior, schema validation, prompt injection, and component rendering
+
 ## [1.11.1] - 2026-03-14
 
 ### Fixed

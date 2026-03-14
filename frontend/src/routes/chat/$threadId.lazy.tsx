@@ -38,9 +38,11 @@ function ChatThreadPage() {
     followUps,
     pendingUserMessage,
     error,
+    clarificationQuestion,
     lastQuery,
     send,
     cancel,
+    resume,
   } = useStreamQuery(threadId);
 
   const handleSend = useCallback(
@@ -97,6 +99,9 @@ function ChatThreadPage() {
           followUps={streamDone ? followUps : undefined}
           onFollowUpSelect={handleSend}
           threadId={threadId}
+          clarificationQuestion={clarificationQuestion}
+          onClarificationSubmit={resume}
+          isResuming={isStreaming && stage === "resuming"}
         />
 
         <FindingsBar />

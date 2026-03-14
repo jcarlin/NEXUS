@@ -30,6 +30,7 @@ export function useStreamQuery(threadId?: string) {
 
   const startStream = useStreamStore((s) => s.startStream);
   const cancelStreamAction = useStreamStore((s) => s.cancelStream);
+  const resumeStreamAction = useStreamStore((s) => s.resumeStream);
 
   const state: StreamState = streamEntry?.state ?? initialStreamState;
 
@@ -54,9 +55,17 @@ export function useStreamQuery(threadId?: string) {
     if (activeKey) cancelStreamAction(activeKey);
   }, [activeKey, cancelStreamAction]);
 
+  const resume = useCallback(
+    (answer: string) => {
+      const key = activeKey ?? state.threadId;
+      if (key) resumeStreamAction(key, answer);
+    },
+    [activeKey, state.threadId, resumeStreamAction],
+  );
+
   // NO useEffect cleanup that aborts on unmount — stream survives navigation
 
-  return { ...state, send, cancel };
+  return { ...state, send, cancel, resume };
 }
 
 export type { StreamState };

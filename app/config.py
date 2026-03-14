@@ -128,6 +128,7 @@ class FeatureFlags(BaseModel):
     document_comparison: bool
     graphrag_communities: bool
     service_operations: bool
+    agent_clarification: bool
 
 
 class Settings(BaseSettings):
@@ -412,6 +413,7 @@ class Settings(BaseSettings):
     enable_agentic_pipeline: bool = True
     enable_citation_verification: bool = True
     # --- Automatic Graph Routing (T3-12) ---
+    enable_agent_clarification: bool = False
     enable_auto_graph_routing: bool = False
     agentic_recursion_limit_fast: int = 24
     agentic_recursion_limit_standard: int = 40
@@ -579,5 +581,6 @@ class Settings(BaseSettings):
                 document_comparison=self.enable_document_comparison,
                 graphrag_communities=self.enable_graphrag_communities,
                 service_operations=self.enable_service_operations,
+                agent_clarification=self.enable_agent_clarification,
             )
         return self

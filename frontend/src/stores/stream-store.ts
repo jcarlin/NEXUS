@@ -20,6 +20,7 @@ export interface StreamState {
   followUps: string[];
   threadId: string | null;
   error: string | null;
+  clarificationQuestion: string | null;
   pendingUserMessage: string | null;
   lastQuery: string | null;
 }
@@ -34,6 +35,7 @@ export const initialStreamState: StreamState = {
   followUps: [],
   threadId: null,
   error: null,
+  clarificationQuestion: null,
   pendingUserMessage: null,
   lastQuery: null,
 };
@@ -51,6 +53,8 @@ interface StreamStore {
   startStream: (query: string, threadId?: string) => string;
   /** Explicitly cancel a stream. */
   cancelStream: (streamKey: string) => void;
+  /** Resume a paused stream after clarification. */
+  resumeStream: (threadId: string, answer: string) => void;
   /** Get the active stream for a key. */
   getStream: (streamKey: string) => ActiveStream | undefined;
   /** Find the active new-chat stream key (temp keys start with `_new_`). */
@@ -160,6 +164,24 @@ export const useStreamStore = create<StreamStore>()((set, get) => ({
                 stage: "investigating",
               });
               break;
+            case "interrupt": {
+              get()._updateStreamState(currentKey, {
+                isStreaming: false,
+                stage: "awaiting_clarification",
+                clarificationQuestion: parsed.question,
+              });
+              // Re-key temp → real threadId (same as done)
+              const intThreadId = parsed.thread_id;
+              if (
+                currentKey.startsWith("_new_") &&
+                intThreadId &&
+                currentKey !== intThreadId
+              ) {
+                get()._rekey(currentKey, intThreadId);
+              }
+              // Do NOT schedule cleanup — stream will resume after clarification
+              break;
+            }
             case "error":
               get()._updateStreamState(currentKey, {
                 isStreaming: false,
@@ -257,6 +279,160 @@ export const useStreamStore = create<StreamStore>()((set, get) => ({
       isStreaming: false,
       stage: null,
       pendingUserMessage: null,
+    });
+  },
+
+  resumeStream: (threadId: string, answer: string) => {
+    // Reset clarification state
+    get()._updateStreamState(threadId, {
+      isStreaming: true,
+      stage: "resuming",
+      clarificationQuestion: null,
+      error: null,
+    });
+
+    const ctrl = new AbortController();
+    // Update the abort controller
+    const existing = get().streams.get(threadId);
+    if (existing) {
+      existing.abortController.abort();
+      set((prev) => {
+        const next = new Map(prev.streams);
+        const entry = next.get(threadId);
+        if (entry) {
+          next.set(threadId, { ...entry, abortController: ctrl });
+        }
+        return { streams: next };
+      });
+    }
+
+    const accessToken = useAuthStore.getState().accessToken;
+    const matterId = useAppStore.getState().matterId;
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
+    if (matterId) headers["X-Matter-ID"] = matterId;
+
+    fetchEventSource(`${API_BASE}/api/v1/query/resume`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        thread_id: threadId,
+        answer,
+      }),
+      signal: ctrl.signal,
+
+      onopen: async (response) => {
+        if (!response.ok) {
+          throw new Error(`Resume stream failed: ${response.status}`);
+        }
+      },
+
+      onmessage: (event) => {
+        if (!event.data) return;
+
+        try {
+          const parsed = JSON.parse(event.data);
+          const currentKey = get().streams.has(threadId)
+            ? threadId
+            : undefined;
+          if (!currentKey) return;
+
+          switch (event.event) {
+            case "status":
+              get()._updateStreamState(currentKey, { stage: parsed.stage });
+              break;
+            case "sources":
+              get()._updateStreamState(currentKey, {
+                sources: parsed.documents,
+              });
+              break;
+            case "token":
+              get()._updateStreamState(currentKey, {
+                streamingText:
+                  (get().streams.get(currentKey)?.state.streamingText ?? "") +
+                  parsed.text,
+                stage: "generating",
+              });
+              break;
+            case "clear":
+              get()._updateStreamState(currentKey, {
+                streamingText: "",
+                stage: "investigating",
+              });
+              break;
+            case "interrupt": {
+              get()._updateStreamState(currentKey, {
+                isStreaming: false,
+                stage: "awaiting_clarification",
+                clarificationQuestion: parsed.question,
+              });
+              break;
+            }
+            case "error":
+              get()._updateStreamState(currentKey, {
+                isStreaming: false,
+                stage: null,
+                error: parsed.message || "Something went wrong",
+                clarificationQuestion: null,
+              });
+              get()._scheduleCleanup(currentKey);
+              break;
+            case "done": {
+              const realThreadId = parsed.thread_id;
+              get()._updateStreamState(currentKey, {
+                isStreaming: false,
+                stage: null,
+                threadId: realThreadId,
+                followUps: parsed.follow_ups ?? [],
+                entities: parsed.entities ?? [],
+                citedClaims: parsed.cited_claims ?? [],
+                pendingUserMessage: null,
+                clarificationQuestion: null,
+              });
+
+              void queryClient.invalidateQueries({
+                queryKey: ["chat-thread", realThreadId],
+              });
+              void queryClient.invalidateQueries({
+                queryKey: ["chat-threads"],
+              });
+
+              if (realThreadId) {
+                get()._scheduleCleanup(realThreadId);
+              }
+              if (currentKey !== realThreadId) {
+                get()._scheduleCleanup(currentKey);
+              }
+              break;
+            }
+          }
+        } catch (err) {
+          console.error("Resume stream: malformed SSE event", event.event, err);
+        }
+      },
+
+      onerror: (err) => {
+        if (ctrl.signal.aborted) return;
+        get()._updateStreamState(threadId, {
+          isStreaming: false,
+          stage: null,
+          error:
+            err instanceof Error
+              ? err.message
+              : "Resume stream connection failed",
+          clarificationQuestion: null,
+        });
+        throw err;
+      },
+
+      openWhenHidden: true,
+    }).catch((err) => {
+      if (!ctrl.signal.aborted) {
+        console.error("Resume stream connection error:", err);
+      }
     });
   },
 

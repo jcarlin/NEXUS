@@ -165,6 +165,7 @@ export type SSEEvent =
   | { type: "status"; stage: string }
   | { type: "sources"; documents: SourceDocument[] }
   | { type: "token"; text: string }
+  | { type: "interrupt"; question: string; thread_id: string }
   | {
       type: "done";
       thread_id: string;

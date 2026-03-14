@@ -2,6 +2,7 @@
 
 POST /query             -- single query (returns full response)
 POST /query/stream      -- streaming query (SSE)
+POST /query/resume      -- resume after agent clarification
 GET  /chats             -- list chat threads
 GET  /chats/{thread_id} -- get full chat history
 DELETE /chats/{thread_id} -- delete chat thread
@@ -31,6 +32,7 @@ from app.query.schemas import (
     ChatMessage,
     ChatThread,
     CitedClaim,
+    ClarificationResponse,
     EntityGrounding,
     EntityMention,
     QueryRequest,
@@ -481,6 +483,7 @@ async def _agentic_event_generator(graph, initial_state, config, db, thread_id, 
     """
     final_state: dict[str, Any] = {}
     sources_emitted = False
+    interrupt_pending = False
     client_disconnected = False
     graph_error = False
     stream_completed = False
@@ -498,6 +501,19 @@ async def _agentic_event_generator(graph, initial_state, config, db, thread_id, 
             if stream_mode == "updates":
                 for node_name, update in chunk.items():
                     if update is None:
+                        continue
+                    # Detect interrupt from ask_user tool
+                    if node_name == "__interrupt__":
+                        interrupts = update  # tuple of Interrupt objects
+                        question = ""
+                        if interrupts and hasattr(interrupts[0], "value"):
+                            val = interrupts[0].value
+                            question = val.get("question", "") if isinstance(val, dict) else str(val)
+                        yield {
+                            "event": "interrupt",
+                            "data": json.dumps({"question": question, "thread_id": thread_id}),
+                        }
+                        interrupt_pending = True
                         continue
                     stage = _STAGE_MAP.get(node_name, node_name)
                     yield {"event": "status", "data": json.dumps({"stage": stage})}
@@ -565,6 +581,16 @@ async def _agentic_event_generator(graph, initial_state, config, db, thread_id, 
         logger.error("query_stream.graph_error", thread_id=thread_id, exc_info=True)
         graph_error = True
 
+    # If interrupted, save user message only and return (no "done" event)
+    if interrupt_pending:
+        try:
+            if query_text:
+                await ChatService.save_message(db, thread_id, "user", query_text, matter_id=matter_id)
+                await db.commit()
+        except Exception:
+            logger.error("query_stream.save_failed", thread_id=thread_id, exc_info=True)
+        return
+
     # Extract response
     try:
         from app.dependencies import get_settings
@@ -617,6 +643,43 @@ async def _agentic_event_generator(graph, initial_state, config, db, thread_id, 
             }
         ),
     }
+
+
+# ------------------------------------------------------------------
+# POST /query/resume — resume after clarification
+# ------------------------------------------------------------------
+
+
+@router.post("/query/resume")
+async def query_resume(
+    request: ClarificationResponse,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserRecord = Depends(get_current_user),
+    matter_id: UUID = Depends(get_matter_id),
+    graph=Depends(get_query_graph),
+    _rate_limit=Depends(rate_limit_queries),
+):
+    """Resume a paused investigation after the user answers a clarification question."""
+    from langgraph.types import Command
+
+    from app.dependencies import get_settings
+
+    settings = get_settings()
+    thread_id = str(request.thread_id)
+    config = QueryService.build_graph_config(thread_id, settings)
+    resume_input = Command(resume=request.answer)
+
+    return EventSourceResponse(
+        _agentic_event_generator(
+            graph,
+            resume_input,
+            config,
+            db,
+            thread_id,
+            query_text="",
+            matter_id=matter_id,
+        )
+    )
 
 
 # ------------------------------------------------------------------

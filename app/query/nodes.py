@@ -556,6 +556,15 @@ def build_system_prompt(state: dict) -> list:
     if query_type and query_type in PROMPT_ROUTING_MAP:
         system_text += PROMPT_ROUTING_MAP[query_type]
 
+    # Clarification addendum (agent clarification)
+    from app.dependencies import get_settings as _get_settings
+
+    _settings = _get_settings()
+    if _settings.enable_agent_clarification:
+        from app.query.prompts import CLARIFICATION_ADDENDUM
+
+        system_text += CLARIFICATION_ADDENDUM
+
     messages = state.get("messages", [])
     return [SystemMessage(content=system_text)] + messages
 

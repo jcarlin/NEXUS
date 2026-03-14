@@ -172,6 +172,7 @@ describe("useStreamQuery with global stream store", () => {
               error: null,
               pendingUserMessage: null,
               lastQuery: "test",
+              clarificationQuestion: null,
             },
             abortController: ctrl as unknown as AbortController,
           },

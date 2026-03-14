@@ -111,3 +111,10 @@ class ChatHistoryResponse(BaseModel):
 
     thread_id: UUID
     messages: list[ChatMessage]
+
+
+class ClarificationResponse(BaseModel):
+    """User's answer to an agent clarification question."""
+
+    thread_id: UUID
+    answer: str = Field(..., min_length=1, max_length=4000)

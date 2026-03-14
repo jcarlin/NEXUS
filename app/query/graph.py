@@ -318,6 +318,12 @@ def build_agentic_graph(settings: Settings, checkpointer: Any) -> Any:
     )
     from app.query.tools import INVESTIGATION_TOOLS
 
+    tools = list(INVESTIGATION_TOOLS)
+    if settings.enable_agent_clarification:
+        from app.query.tools import CLARIFICATION_TOOLS
+
+        tools.extend(CLARIFICATION_TOOLS)
+
     try:
         from sqlalchemy import create_engine
 
@@ -341,7 +347,7 @@ def build_agentic_graph(settings: Settings, checkpointer: Any) -> Any:
     # 2. Create the agent subgraph
     agent = create_react_agent(
         model=model,
-        tools=INVESTIGATION_TOOLS,
+        tools=tools,
         prompt=build_system_prompt,
         state_schema=AgentState,
         post_model_hook=audit_log_hook,

@@ -923,6 +923,41 @@ async def get_community_context(
 # Tool lists
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Agent clarification (human-in-the-loop)
+# ---------------------------------------------------------------------------
+
+
+@tool
+async def ask_user(
+    question: str,
+    state: Annotated[dict, InjectedState] = {},  # noqa: B006
+) -> str:
+    """Ask the user a clarifying question when the investigation hits ambiguity.
+
+    Use this when you encounter: multiple entity matches for a name, unclear
+    time ranges, too many results to narrow without guidance, or ambiguous
+    references. You may only ask ONE question per investigation.
+    """
+    from langgraph.types import interrupt
+
+    # Enforce at-most-one: count prior ask_user tool calls in messages.
+    prior_asks = sum(
+        1
+        for m in state.get("messages", [])
+        if hasattr(m, "tool_calls")
+        for tc in (m.tool_calls or [])
+        if tc.get("name") == "ask_user"
+    )
+    if prior_asks > 1:
+        return "You have already asked a clarification question. Work with the information you have."
+
+    answer = interrupt({"question": question})
+    return f"User clarification: {answer}"
+
+
+CLARIFICATION_TOOLS = [ask_user]
+
 INVESTIGATION_TOOLS = [
     vector_search,
     graph_query,

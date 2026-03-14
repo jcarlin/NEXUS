@@ -1,7 +1,7 @@
 import { Loader2 } from "lucide-react";
 
 const PHASES = [
-  { label: "Understanding your question", stages: ["connecting", "resolving_context", "classifying", "planning", "rewriting"] },
+  { label: "Understanding your question", stages: ["connecting", "resolving_context", "classifying", "planning", "rewriting", "awaiting_clarification", "resuming"] },
   { label: "Searching documents", stages: ["retrieving", "reranking", "checking_relevance", "graph_lookup", "reformulating"] },
   { label: "Analyzing sources", stages: ["investigating", "analyzing", "verifying_citations", "assessing"] },
   { label: "Writing response", stages: ["generating", "synthesizing", "generating_follow_ups"] },

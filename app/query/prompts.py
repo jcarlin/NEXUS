@@ -254,6 +254,28 @@ Provide a corrected response with better-supported citations. Focus on \
 finding source documents that directly support or refute these claims."""
 
 # ---------------------------------------------------------------------------
+# Agent Clarification (Human-in-the-Loop)
+# ---------------------------------------------------------------------------
+
+CLARIFICATION_ADDENDUM = """
+
+## Clarification
+You have access to an `ask_user` tool. Use it when you encounter genuine ambiguity
+that would significantly change your investigation direction:
+- Multiple people/entities match a name in the query
+- The time period is ambiguous and spans different events
+- The query references a deal/event that could mean multiple things
+- You retrieved 30+ documents and need the user to narrow scope
+
+You may ask at most ONE clarification question per investigation. Make it count —
+ask a specific, actionable question with concrete options when possible.
+
+Do NOT ask for clarification when:
+- You can reasonably infer the answer from context
+- The ambiguity is minor and wouldn't change the investigation
+- You're just being cautious — prefer action over asking"""
+
+# ---------------------------------------------------------------------------
 # T2-10: Text-to-SQL safe schema description
 # ---------------------------------------------------------------------------
 
