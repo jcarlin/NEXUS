@@ -81,7 +81,15 @@ async def vector_search(
                     matter_context=state.get("_case_context", ""),
                 )
                 embedder = get_embedder()
-                hyde_vector = await embedder.embed_query(hypothetical)
+                raw_hyde_vector = await embedder.embed_query(hypothetical)
+                # Blend HyDE embedding with original query embedding to reduce
+                # semantic drift from the hypothetical document.
+                blend = settings.hyde_blend_ratio
+                if blend < 1.0:
+                    query_vector = await embedder.embed_query(query)
+                    hyde_vector = [blend * h + (1.0 - blend) * q for h, q in zip(raw_hyde_vector, query_vector)]
+                else:
+                    hyde_vector = raw_hyde_vector
             except Exception:
                 logger.warning("tool.vector_search.hyde_failed", exc_info=True)
 
@@ -115,15 +123,19 @@ async def vector_search(
                 ]
                 all_results = await asyncio.gather(*coros, return_exceptions=True)
 
-                # Merge and deduplicate by chunk ID, keep highest score
+                # Merge and deduplicate by chunk ID, keep highest score.
+                # Weight original query results higher than variants to prevent
+                # off-topic variant results from polluting the merged set.
                 seen: dict[str, dict] = {}
-                for batch in all_results:
+                for idx, batch in enumerate(all_results):
                     if isinstance(batch, BaseException):
                         continue
+                    weight = 1.0 if idx == 0 else 0.7  # Original=1.0x, variants=0.7x
                     for r in batch:
                         rid = r.get("id", "")
-                        if rid not in seen or r.get("score", 0) > seen[rid].get("score", 0):
-                            seen[rid] = r
+                        weighted_score = r.get("score", 0) * weight
+                        if rid not in seen or weighted_score > seen[rid].get("score", 0):
+                            seen[rid] = {**r, "score": weighted_score}
                 results = sorted(seen.values(), key=lambda r: r.get("score", 0), reverse=True)[:limit]
             else:
                 results = await retriever.retrieve_text(
@@ -784,11 +796,15 @@ async def structured_query(
     question: str,
     state: Annotated[dict, InjectedState] = {},  # noqa: B006
 ) -> str:
-    """Query the structured database for document counts, entity statistics, date ranges, and other factual data.
+    """Query the structured database for document metadata, counts, statistics, and date ranges.
 
-    Use for questions like "How many documents were ingested?", "What document
-    types are present?", "Show document counts by type", or any question about
-    aggregate statistics and metadata.
+    Use ONLY for metadata and aggregate questions like "How many documents were
+    ingested?", "What document types are present?", "Show document counts by type",
+    "When was the earliest document filed?", or "List documents by date range".
+
+    Do NOT use this tool for questions about document content, what someone said
+    or wrote, semantic meaning, or evidence about events. Use vector_search for
+    those questions instead.
     """
     from app.dependencies import get_settings
 

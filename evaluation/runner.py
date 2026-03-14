@@ -58,12 +58,15 @@ def _check_gates(
             failures.append(f"faithfulness={generation.faithfulness:.3f} < 0.95")
 
     if citation is not None:
-        if citation.citation_accuracy < 0.90:
-            failures.append(f"citation_accuracy={citation.citation_accuracy:.3f} < 0.90")
-        if citation.hallucination_rate >= 0.05:
-            failures.append(f"hallucination_rate={citation.hallucination_rate:.3f} >= 0.05")
-        if citation.post_rationalization_rate >= 0.10:
-            failures.append(f"post_rationalization_rate={citation.post_rationalization_rate:.3f} >= 0.10")
+        # Only check citation gates when claims exist — 0 claims means
+        # the pipeline didn't extract claims, not that they're all wrong.
+        if citation.total_claims > 0:
+            if citation.citation_accuracy < 0.90:
+                failures.append(f"citation_accuracy={citation.citation_accuracy:.3f} < 0.90")
+            if citation.hallucination_rate >= 0.05:
+                failures.append(f"hallucination_rate={citation.hallucination_rate:.3f} >= 0.05")
+            if citation.post_rationalization_rate >= 0.10:
+                failures.append(f"post_rationalization_rate={citation.post_rationalization_rate:.3f} >= 0.10")
 
     return failures
 
@@ -377,6 +380,8 @@ async def _evaluate_single_query(
         judge_score=judge_score,
         mrr_at_10=r_metrics["mrr_at_k"],
         recall_at_10=r_metrics["recall_at_k"],
+        ndcg_at_10=r_metrics["ndcg_at_k"],
+        precision_at_10=r_metrics["precision_at_k"],
         citation_count=len(cited_claims),
         citation_verified_pct=citation_verified_pct,
         source_relevance_avg=source_relevance_avg,
@@ -411,28 +416,32 @@ def _aggregate_query_results(
     # Retrieval: average across all queries
     avg_mrr = statistics.mean(r.mrr_at_10 for r in functional_results)
     avg_recall = statistics.mean(r.recall_at_10 for r in functional_results)
-    avg_ndcg = 0.0  # Not computed per-query currently
+    avg_ndcg = statistics.mean(r.ndcg_at_10 for r in functional_results)
+    avg_precision = statistics.mean(r.precision_at_10 for r in functional_results)
 
     retrieval = RetrievalMetrics(
         mode=RetrievalMode.HYBRID,
         mrr_at_10=avg_mrr,
         recall_at_10=avg_recall,
         ndcg_at_10=avg_ndcg,
-        precision_at_10=0.0,
+        precision_at_10=avg_precision,
         num_queries=len(functional_results),
     )
 
     # Citation from cited_claims
     total_claims = sum(r.citation_count for r in functional_results)
     verified_claims = sum(int(r.citation_verified_pct * r.citation_count) for r in functional_results)
+    queries_with_claims = sum(1 for r in functional_results if r.citation_count > 0)
+    claim_extraction_rate = queries_with_claims / len(functional_results) if functional_results else 0.0
     citation = CitationMetrics(
-        citation_accuracy=verified_claims / total_claims if total_claims else 1.0,
+        citation_accuracy=verified_claims / total_claims if total_claims else 0.0,
         hallucination_rate=0.0,
         post_rationalization_rate=0.0,
         total_claims=total_claims,
         supported_claims=verified_claims,
         unsupported_claims=total_claims - verified_claims,
         post_rationalized_claims=0,
+        claim_extraction_rate=claim_extraction_rate,
     )
 
     # Generation: use judge scores if available
@@ -488,28 +497,31 @@ async def evaluate_queries(
     if functional:
         avg_mrr = statistics.mean(r.mrr_at_10 for r in functional)
         avg_recall = statistics.mean(r.recall_at_10 for r in functional)
+        avg_ndcg = statistics.mean(r.ndcg_at_10 for r in functional)
+        avg_precision = statistics.mean(r.precision_at_10 for r in functional)
         retrieval = RetrievalMetrics(
             mode=RetrievalMode.HYBRID,
             mrr_at_10=avg_mrr,
             recall_at_10=avg_recall,
-            ndcg_at_10=0.0,
-            precision_at_10=0.0,
+            ndcg_at_10=avg_ndcg,
+            precision_at_10=avg_precision,
             num_queries=len(functional),
         )
 
     total_claims = sum(r.citation_count for r in functional)
     verified = sum(int(r.citation_verified_pct * r.citation_count) for r in functional)
-    citation = None
-    if total_claims:
-        citation = CitationMetrics(
-            citation_accuracy=verified / total_claims if total_claims else 1.0,
-            hallucination_rate=0.0,
-            post_rationalization_rate=0.0,
-            total_claims=total_claims,
-            supported_claims=verified,
-            unsupported_claims=total_claims - verified,
-            post_rationalized_claims=0,
-        )
+    queries_with_claims = sum(1 for r in functional if r.citation_count > 0)
+    claim_extraction_rate = queries_with_claims / len(functional) if functional else 0.0
+    citation = CitationMetrics(
+        citation_accuracy=verified / total_claims if total_claims else 0.0,
+        hallucination_rate=0.0,
+        post_rationalization_rate=0.0,
+        total_claims=total_claims,
+        supported_claims=verified,
+        unsupported_claims=total_claims - verified,
+        post_rationalized_claims=0,
+        claim_extraction_rate=claim_extraction_rate,
+    )
 
     gate_failures = _check_gates(None, citation)
 

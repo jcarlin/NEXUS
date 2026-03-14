@@ -101,6 +101,7 @@ def _add_metrics_table(lines: list[str], label: str, metrics: FlagRunMetrics) ->
         lines.append(f"| Citation Accuracy | {metrics.citation.citation_accuracy:.4f} |")
         lines.append(f"| Hallucination Rate | {metrics.citation.hallucination_rate:.4f} |")
         lines.append(f"| Total Claims | {metrics.citation.total_claims} |")
+        lines.append(f"| Claim Extraction Rate | {metrics.citation.claim_extraction_rate:.2%} |")
     lines.append(f"| Queries | {metrics.num_queries} |")
     lines.append(f"| Gates Passed | {'Yes' if metrics.quality_gates_passed else 'No'} |")
     lines.append("")
@@ -162,8 +163,8 @@ def _add_individual_matrix(
 def _add_combo_matrix(lines: list[str], combos: list[ComboEvalResult]) -> None:
     lines.append("## Curated Combination Results")
     lines.append("")
-    lines.append("| Combo | Latency p50 | MRR@10 | Recall@10 | NDCG@10 " "| Judge Composite | Queries |")
-    lines.append("|-------|-------------|--------|-----------|--------" "|-----------------|---------|")
+    lines.append("| Combo | Latency p50 | MRR@10 | Recall@10 | NDCG@10 | Judge Composite | Queries |")
+    lines.append("|-------|-------------|--------|-----------|--------|-----------------|---------|")
     for combo in combos:
         m = combo.metrics
         mrr = m.retrieval.mrr_at_10 if m.retrieval else 0.0
@@ -189,7 +190,7 @@ def _add_standalone_section(lines: list[str], tests: list[StandaloneFeatureTest]
     for t in tests:
         status = "PASS" if t.functional else "FAIL"
         error = t.error or "-"
-        lines.append(f"| `{t.flag_name}` | `{t.endpoint}` | {status} " f"| {t.latency_ms:.0f} ms | {error} |")
+        lines.append(f"| `{t.flag_name}` | `{t.endpoint}` | {status} | {t.latency_ms:.0f} ms | {error} |")
     lines.append("")
     for t in tests:
         if t.notes:
@@ -204,7 +205,7 @@ def _add_ingestion_section(lines: list[str], tests: list[IngestionFeatureTest]) 
     lines.append("|------|---------------|----------------|-------|")
     for t in tests:
         error = t.error or "-"
-        lines.append(f"| `{t.flag_name}` | {t.docs_ingested} " f"| {t.ingestion_latency_ms:.0f} ms | {error} |")
+        lines.append(f"| `{t.flag_name}` | {t.docs_ingested} | {t.ingestion_latency_ms:.0f} ms | {error} |")
     lines.append("")
 
 

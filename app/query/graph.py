@@ -252,6 +252,11 @@ def _route_after_verification(state: dict) -> str:
     reflection_count = state.get("_reflection_count", 0)
     max_retries = settings.self_reflection_max_retries
     threshold = settings.self_reflection_faithfulness_threshold
+    min_claims = settings.self_reflection_min_claims
+
+    # Don't trigger reflection if too few claims to judge faithfulness reliably
+    if total < min_claims:
+        return "end"
 
     if faithfulness < threshold and reflection_count < max_retries:
         import structlog as _sl

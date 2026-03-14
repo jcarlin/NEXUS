@@ -23,8 +23,9 @@ formulations of the following query to improve document retrieval coverage.
 Each reformulation should:
 - Use different legal vocabulary (formal vs. informal, abbreviation vs. full name)
 - Capture synonyms and related legal terms (e.g., "agreement" ↔ "contract" ↔ "deal")
-- Vary the phrasing while preserving the original intent
+- Vary the phrasing while preserving the original query's scope, entities, and intent
 - Consider both technical legal language and plain language
+- NOT broaden the scope — stay focused on the same entities, events, and topics as the original
 
 {term_map_context}Original query: {query}
 

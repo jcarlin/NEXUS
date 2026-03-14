@@ -48,7 +48,12 @@ def heuristic_relevance(query: str, chunk_text: str, qdrant_score: float = 0.0) 
 
     # 2. Blend keyword overlap with Qdrant semantic score
     # Qdrant score is the primary signal; keyword overlap supplements it.
-    combined = 0.6 * qdrant_score + 0.4 * keyword_score
+    # Use configurable weight — legal documents use synonym-rich vocabulary
+    # where keyword overlap penalizes semantically correct results.
+    from app.dependencies import get_settings
+
+    kw_weight = get_settings().retrieval_grading_keyword_weight
+    combined = (1.0 - kw_weight) * qdrant_score + kw_weight * keyword_score
 
     return min(max(combined, 0.0), 1.0)
 

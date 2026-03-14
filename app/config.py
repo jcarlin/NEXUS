@@ -327,6 +327,7 @@ class Settings(BaseSettings):
 
     # --- Retrieval Grading (CRAG) ---
     enable_retrieval_grading: bool = False
+    retrieval_grading_keyword_weight: float = 0.2  # Keyword overlap weight in heuristic blend (0.0-1.0)
 
     # --- Multi-Query Expansion (T1-1) ---
     enable_multi_query_expansion: bool = False
@@ -380,11 +381,13 @@ class Settings(BaseSettings):
     # --- HyDE (Hypothetical Document Embeddings) (T2-6) ---
     enable_hyde: bool = False
     hyde_model: str = ""  # Falls back to llm_model if empty
+    hyde_blend_ratio: float = 0.5  # Blend factor: 0.0 = query only, 1.0 = HyDE only
 
     # --- Self-Reflection Loop (T2-8) ---
     enable_self_reflection: bool = False
-    self_reflection_faithfulness_threshold: float = 0.8
+    self_reflection_faithfulness_threshold: float = 0.6
     self_reflection_max_retries: int = 1
+    self_reflection_min_claims: int = 3  # Minimum claims before reflection triggers
 
     # --- RRF Per-Modality Prefetch Multipliers (T2-9) ---
     retrieval_dense_prefetch_multiplier: int = 2

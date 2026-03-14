@@ -10,7 +10,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follo
 
 ## [Unreleased]
 
-_Nothing yet._
+### Fixed
+- Wire up NDCG@10 and Precision@10 in evaluation runner — metrics were computed per-query but dropped before aggregation (`avg_ndcg = 0.0` hardcoded)
+- Fix citation accuracy default from `1.0` to `0.0` when `total_claims=0` — perfect score was masking claim extraction failures
+- Skip citation quality gates when `total_claims=0` — gates only fire when claims exist to evaluate
+- Fix self-reflection false triggers — lower faithfulness threshold from 0.8 to 0.6, add `SELF_REFLECTION_MIN_CLAIMS=3` to skip reflection when too few claims exist
+- Fix question decomposition over-classification — tighten prompt to require 2+ distinct sub-questions, add short query bypass (< 15 words)
+- Fix multi-query expansion score pollution — weight original query results 1.0x vs variant results 0.7x during merge
+- Improve `structured_query` tool description to prevent agent confusion with `vector_search` — explicitly state metadata-only use and add negative examples
+
+### Changed
+- Tune retrieval grading keyword weight from 0.4 to 0.2 (configurable via `RETRIEVAL_GRADING_KEYWORD_WEIGHT`) — legal documents use synonym-rich vocabulary where keyword overlap penalizes semantically correct results
+- Add HyDE embedding blending — blend hypothetical doc embedding with original query embedding (configurable via `HYDE_BLEND_RATIO=0.5`) to reduce semantic drift
+- Add `claim_extraction_rate` field to `CitationMetrics` — surfaces "claims extracted in N/M queries" instead of silent 100% accuracy
+- Add multi-query expansion prompt constraint to preserve original query scope and entities
+- Add LangSmith trace inspection section to `docs/evaluation-guide.md`
 
 ## [1.12.2] - 2026-03-14
 

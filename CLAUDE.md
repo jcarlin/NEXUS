@@ -112,6 +112,13 @@ This project uses [Semantic Versioning](https://semver.org/) with `v`-prefixed g
 30. **All config from environment variables.** `app/config.py` (Pydantic Settings) is the single source. No hardcoded connection strings, API keys, or model names in code. New config → add to `Settings` class AND `.env.example`.
 31. **DI via `app/dependencies.py`.** All service clients (LLM, Qdrant, Neo4j, MinIO, Redis) are singletons created through factory functions. Register new dependencies here, not in routers or services.
 32. **Feature flags for new capabilities.** Anything experimental or optional gets an `ENABLE_*` flag in config, defaulting to `false`. Check the flag before initializing expensive resources.
+   Adding a new flag:
+   1. `app/config.py` → add `enable_foo: bool = False` to `Settings`
+   2. `.env.example` → add `ENABLE_FOO=false`
+   3. `app/feature_flags/registry.py` → add `FlagMeta` entry (display name, description, category, risk level, DI caches to clear). The admin UI auto-discovers from this registry — no frontend changes needed.
+   4. Gate the feature in the relevant module (check `settings.enable_foo`)
+   5. If DI-gated: add a factory in `app/dependencies.py` returning `None` when disabled
+   6. `docs/feature-flags.md` → document the flag
 
 ### Error Handling & Logging
 

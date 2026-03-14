@@ -272,7 +272,7 @@ Celery workers run in separate processes with their own Settings singleton. They
 - **Description**: Enables CRAG-style retrieval relevance grading in the V1 query pipeline. Uses a two-tier approach: (1) fast heuristic scoring of keyword/entity overlap + Qdrant similarity score for all chunks, and (2) conditional LLM grading when the median heuristic score falls below a configurable threshold. Adds a `grade_retrieval` node between `retrieve` and `rerank` in the V1 graph.
 - **Resources gated**: No DI singleton. Uses the existing `LLMClient` for Tier 2 grading. Heuristic scoring is pure Python.
 - **Runtime impact**: Tier 1 (heuristic): ~10ms. Tier 2 (LLM): +0.5-2s, only triggered for low-confidence retrievals (median score < threshold). High-confidence queries skip LLM grading entirely.
-- **Related settings**: `GRADING_MODEL`, `GRADING_CONFIDENCE_THRESHOLD`
+- **Related settings**: `GRADING_MODEL`, `GRADING_CONFIDENCE_THRESHOLD`, `RETRIEVAL_GRADING_KEYWORD_WEIGHT`
 
 ### Tier 1 Maturity
 
@@ -318,7 +318,7 @@ Celery workers run in separate processes with their own Settings singleton. They
 - **Description**: Hypothetical Document Embeddings (HyDE). Generates a hypothetical answer passage and embeds it instead of the raw query for dense retrieval. Bridges vocabulary gap between user questions and legal document language. Sparse/BM42 retrieval still uses the raw query for exact term matching.
 - **Resources gated**: No DI singleton. Checked inline in `HybridRetriever.retrieve_text()`. Uses existing `LLMClient`.
 - **Runtime impact**: Adds one LLM call per retrieval to generate the hypothetical document (~100-200 tokens). Increases retrieval latency by ~0.5-1s.
-- **Related settings**: `HYDE_MODEL` (override model, empty = use default LLM)
+- **Related settings**: `HYDE_MODEL` (override model, empty = use default LLM), `HYDE_BLEND_RATIO` (blend factor: 0.0 = query only, 1.0 = HyDE only, default 0.5)
 
 #### `ENABLE_SELF_REFLECTION`
 - **Default**: `false`
@@ -327,7 +327,7 @@ Celery workers run in separate processes with their own Settings singleton. They
 - **Description**: Self-RAG reflection loop. After citation verification, if faithfulness ratio falls below the configured threshold, routes back to the investigation agent with flagged claims highlighted. Maximum 1 retry to prevent infinite loops.
 - **Resources gated**: No DI singleton. Adds a conditional edge and `reflect` node to the agentic query graph.
 - **Runtime impact**: When triggered, adds one full agent loop iteration (retrieval + synthesis + verification). Only fires when faithfulness < threshold.
-- **Related settings**: `SELF_REFLECTION_FAITHFULNESS_THRESHOLD` (default 0.8), `SELF_REFLECTION_MAX_RETRIES` (default 1)
+- **Related settings**: `SELF_REFLECTION_FAITHFULNESS_THRESHOLD` (default 0.6), `SELF_REFLECTION_MAX_RETRIES` (default 1), `SELF_REFLECTION_MIN_CLAIMS` (default 3, minimum claims before reflection triggers)
 
 #### `ENABLE_TEXT_TO_SQL`
 - **Default**: `false`

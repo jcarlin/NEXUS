@@ -75,6 +75,7 @@ def generate_synthetic_citation_metrics() -> CitationMetrics:
         supported_claims=19,
         unsupported_claims=1,
         post_rationalized_claims=1,
+        claim_extraction_rate=0.90,
     )
 
 

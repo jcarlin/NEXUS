@@ -48,6 +48,7 @@ class TestRouteAfterVerification:
             mock_settings.return_value.enable_self_reflection = True
             mock_settings.return_value.self_reflection_faithfulness_threshold = 0.8
             mock_settings.return_value.self_reflection_max_retries = 1
+            mock_settings.return_value.self_reflection_min_claims = 3
             result = _route_after_verification(state)
         assert result == "end"
 
@@ -65,6 +66,7 @@ class TestRouteAfterVerification:
             mock_settings.return_value.enable_self_reflection = True
             mock_settings.return_value.self_reflection_faithfulness_threshold = 0.8
             mock_settings.return_value.self_reflection_max_retries = 1
+            mock_settings.return_value.self_reflection_min_claims = 3
             result = _route_after_verification(state)
         assert result == "reflect"
 
@@ -74,6 +76,7 @@ class TestRouteAfterVerification:
             "cited_claims": [
                 {"verification_status": "flagged"},
                 {"verification_status": "flagged"},
+                {"verification_status": "flagged"},
             ],
             "_reflection_count": 1,
         }
@@ -81,6 +84,7 @@ class TestRouteAfterVerification:
             mock_settings.return_value.enable_self_reflection = True
             mock_settings.return_value.self_reflection_faithfulness_threshold = 0.8
             mock_settings.return_value.self_reflection_max_retries = 1
+            mock_settings.return_value.self_reflection_min_claims = 3
             result = _route_after_verification(state)
         assert result == "end"
 
@@ -100,11 +104,30 @@ class TestRouteAfterVerification:
             mock_settings.return_value.enable_self_reflection = True
             mock_settings.return_value.self_reflection_faithfulness_threshold = 0.8
             mock_settings.return_value.self_reflection_max_retries = 1
+            mock_settings.return_value.self_reflection_min_claims = 3
             result = _route_after_verification(state)
         assert result == "end"
 
     def test_zero_verified_routes_to_reflect(self):
-        """0 verified = faithfulness 0.0 < 0.8 -> reflect."""
+        """0/3 verified = faithfulness 0.0 < 0.8 -> reflect."""
+        state = {
+            "cited_claims": [
+                {"verification_status": "flagged"},
+                {"verification_status": "flagged"},
+                {"verification_status": "flagged"},
+            ],
+            "_reflection_count": 0,
+        }
+        with patch("app.dependencies.get_settings") as mock_settings:
+            mock_settings.return_value.enable_self_reflection = True
+            mock_settings.return_value.self_reflection_faithfulness_threshold = 0.8
+            mock_settings.return_value.self_reflection_max_retries = 1
+            mock_settings.return_value.self_reflection_min_claims = 3
+            result = _route_after_verification(state)
+        assert result == "reflect"
+
+    def test_routes_to_end_when_below_min_claims(self):
+        """Too few claims to judge reliably -> END (skip reflection)."""
         state = {
             "cited_claims": [
                 {"verification_status": "flagged"},
@@ -115,8 +138,9 @@ class TestRouteAfterVerification:
             mock_settings.return_value.enable_self_reflection = True
             mock_settings.return_value.self_reflection_faithfulness_threshold = 0.8
             mock_settings.return_value.self_reflection_max_retries = 1
+            mock_settings.return_value.self_reflection_min_claims = 3
             result = _route_after_verification(state)
-        assert result == "reflect"
+        assert result == "end"
 
 
 class TestReflectNode:

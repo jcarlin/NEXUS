@@ -156,6 +156,12 @@ class CitationMetrics(BaseModel):
     supported_claims: int = Field(..., ge=0)
     unsupported_claims: int = Field(..., ge=0)
     post_rationalized_claims: int = Field(..., ge=0)
+    claim_extraction_rate: float = Field(
+        0.0,
+        ge=0.0,
+        le=1.0,
+        description="Fraction of functional queries that produced at least 1 claim",
+    )
 
 
 class AdversarialSummary(BaseModel):
@@ -353,6 +359,8 @@ class QueryEvalResult(BaseModel):
     judge_score: JudgeScore | None = None
     mrr_at_10: float = 0.0
     recall_at_10: float = 0.0
+    ndcg_at_10: float = 0.0
+    precision_at_10: float = 0.0
     citation_count: int = 0
     citation_verified_pct: float = 0.0
     source_relevance_avg: float = 0.0

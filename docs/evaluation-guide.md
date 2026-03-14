@@ -144,6 +144,56 @@ pytest tests/test_evaluation/ -v
 pytest tests/test_evaluation/test_judge.py tests/test_evaluation/test_report.py tests/test_evaluation/test_runner_full.py -v
 ```
 
+## LangSmith Trace Inspection
+
+Use the LangSmith MCP tools to inspect pipeline-internal issues during and after evaluation runs. The `nexus` project logs all LangGraph runs.
+
+### Finding Errored Traces
+
+After a flag sweep, fetch errored runs to find pipeline-internal failures that the eval script can't detect (e.g., nodes that swallow errors and return degraded results):
+
+```
+mcp__langsmith__fetch_runs(project_name="nexus", limit=20, error="true")
+```
+
+### Finding Slow Runs
+
+Identify nodes causing p95 latency spikes:
+
+```
+mcp__langsmith__fetch_runs(project_name="nexus", limit=10, filter='gt(latency, "10s")')
+```
+
+### Correlating Traces with Eval Results
+
+Match eval failures to specific LangSmith traces using timestamps:
+
+1. Note the timestamp range of your eval run
+2. Fetch runs from that window: `mcp__langsmith__fetch_runs(project_name="nexus", limit=50)`
+3. Cross-reference `query_id` from the eval report with trace inputs to identify the failing query's full execution path
+
+### Tracing a Conversation
+
+For thread-level debugging (e.g., tracing a multi-turn query through the graph):
+
+```
+mcp__langsmith__get_thread_history(project_name="nexus", thread_id="...")
+```
+
+### Example Workflow: Post-Flag-Sweep Debugging
+
+1. Run a flag sweep: `python scripts/evaluate.py --flag-sweep --flags enable_hyde --output reports/hyde.md`
+2. Check the report for regressions or errors
+3. Fetch errored runs from the last hour in the `nexus` project
+4. For each errored run, inspect the trace to see which node raised, what the LLM input/output was, and whether the issue is in retrieval, generation, or post-processing
+5. Compare baseline traces vs flag-enabled traces for the same query to pinpoint where the regression occurs
+
+### Verifying Project Exists
+
+```
+mcp__langsmith__list_projects()
+```
+
 ## Updating Ground-Truth
 
 When the corpus changes (new documents ingested), update `evaluation/data/ground_truth.json`:

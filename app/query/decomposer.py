@@ -37,16 +37,22 @@ class DecompositionResult(BaseModel):
 
 DECOMPOSE_QUESTION_PROMPT = """\
 You are a legal investigation analyst. Determine whether the following \
-question is complex (multi-part) and, if so, break it into 2-4 independent \
+question is complex (multi-part) and, if so, break it into 2-3 independent \
 sub-questions that can be researched separately.
 
-A question is complex if it:
-- Asks about multiple distinct aspects (who, what, when, why)
-- Combines questions about different entities or events
-- Requires evidence from different document types or time periods
+A question is complex ONLY if it:
+- Contains 2 or more distinct sub-questions joined by conjunctions ("and", "or")
+- Asks about 2 or more independent topics, entities, or time periods in a single question
+- Requires evidence from fundamentally different document categories to answer different parts
 
-If the question is simple (single aspect, single entity), set is_complex to false \
-and return an empty sub_questions list.
+A question is NOT complex if it:
+- Asks a single question even if the answer requires multiple documents
+- Uses multiple clauses to describe one topic (e.g., "describe the timeline of X including Y and Z")
+- Is a straightforward factual or analytical question about one event, entity, or topic
+
+When in doubt, classify as NOT complex. Over-decomposition fragments retrieval.
+
+If the question is simple, set is_complex to false and return an empty sub_questions list.
 
 Question: {query}
 
@@ -68,6 +74,11 @@ async def decompose_question(
     Returns a ``DecompositionResult`` with ``is_complex=False`` for simple
     queries (no decomposition needed).
     """
+    # Short queries are almost never complex enough to decompose
+    if len(query.split()) < 15:
+        logger.debug("decomposer.short_query_bypass", word_count=len(query.split()))
+        return DecompositionResult(is_complex=False)
+
     prompt = DECOMPOSE_QUESTION_PROMPT.format(query=query)
 
     try:
