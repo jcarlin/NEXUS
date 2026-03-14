@@ -109,8 +109,10 @@ def test_process_document_disposes_engine_on_success():
         patch("app.ingestion.tasks._get_job_matter_id", return_value=None),
         patch("app.ingestion.tasks._is_job_cancelled", return_value=False),
         patch("app.ingestion.tasks._stage_parse"),
+        patch("app.ingestion.tasks._stage_ocr_correct"),
         patch("app.ingestion.tasks._stage_chunk"),
         patch("app.ingestion.tasks._stage_contextualize"),
+        patch("app.ingestion.tasks._stage_summarize"),
         patch("app.ingestion.tasks._stage_embed"),
         patch("app.ingestion.tasks._stage_extract"),
         patch("app.ingestion.tasks._stage_index"),
@@ -141,6 +143,7 @@ def test_stage_function_error_propagates_to_task():
         patch("app.ingestion.tasks._get_job_matter_id", return_value=None),
         patch("app.ingestion.tasks._is_job_cancelled", return_value=False),
         patch("app.ingestion.tasks._stage_parse"),  # succeeds
+        patch("app.ingestion.tasks._stage_ocr_correct"),  # succeeds
         patch("app.ingestion.tasks._stage_chunk", side_effect=ValueError("chunk error")),
         patch("app.ingestion.tasks._update_stage"),
     ):

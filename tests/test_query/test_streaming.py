@@ -96,6 +96,7 @@ def _mock_settings(**overrides):
     s = MagicMock()
     s.enable_agentic_pipeline = overrides.get("enable_agentic_pipeline", False)
     s.enable_case_setup_agent = False
+    s.enable_auto_graph_routing = overrides.get("enable_auto_graph_routing", False)
     return s
 
 
