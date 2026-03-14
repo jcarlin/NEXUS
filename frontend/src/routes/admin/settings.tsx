@@ -65,8 +65,8 @@ const CATEGORY_ORDER = [
   "retrieval",
   "adaptive_depth",
   "query",
-  "agent",
   "ingestion",
+  "agent",
   "visual",
   "auth",
 ];
@@ -227,9 +227,9 @@ function SettingsPage() {
   })).filter((g) => g.settings.length > 0);
 
   return (
-    <div className="space-y-6 animate-page-in max-w-4xl">
+    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 animate-page-in">
       {/* Header */}
-      <div>
+      <div className="col-span-full">
         <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
         <p className="text-sm text-muted-foreground">
           Tune numeric parameters at runtime. Changes to &quot;Safe&quot; and
@@ -241,7 +241,7 @@ function SettingsPage() {
 
       {/* Setting cards by category */}
       {isLoading ? (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="col-span-full flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
           Loading settings...
         </div>
@@ -265,14 +265,14 @@ function SettingsPage() {
                 return (
                   <div
                     key={setting.setting_name}
-                    className={`flex items-center justify-between px-3 py-3 transition-colors ${
+                    className={`grid grid-cols-[1fr_auto] items-center px-3 py-3 gap-x-3 transition-colors ${
                       isDisabledByFlag
                         ? "opacity-50"
                         : "hover:bg-muted/40"
                     }`}
                   >
                     {/* Left: name + description */}
-                    <div className="flex-1 min-w-0 pr-4">
+                    <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-medium">
                           {setting.display_name}
@@ -318,8 +318,8 @@ function SettingsPage() {
                       </p>
                     </div>
 
-                    {/* Right: input + actions */}
-                    <div className="flex items-center gap-2 shrink-0">
+                    {/* Right: reset + input + unit + save */}
+                    <div className="flex items-center gap-2">
                       {setting.is_override && (
                         <Button
                           size="sm"
@@ -336,54 +336,52 @@ function SettingsPage() {
                           Reset
                         </Button>
                       )}
-                      <div className="flex items-center gap-1.5">
-                        <Input
-                          type={
-                            setting.setting_type === "string"
-                              ? "text"
-                              : "number"
-                          }
-                          className="h-8 w-24 text-sm tabular-nums"
-                          value={
-                            pendingRaw ?? String(setting.value)
-                          }
-                          min={setting.min_value ?? undefined}
-                          max={setting.max_value ?? undefined}
-                          step={
-                            setting.step ??
-                            (setting.setting_type === "float"
-                              ? 0.01
-                              : 1)
-                          }
-                          disabled={isDisabledByFlag}
-                          onChange={(e) =>
-                            setPendingValues((prev) => ({
-                              ...prev,
-                              [setting.setting_name]: e.target.value,
-                            }))
-                          }
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") handleSave(setting);
-                          }}
-                        />
-                        {setting.unit && (
-                          <span className="text-xs text-muted-foreground whitespace-nowrap">
-                            {setting.unit}
-                          </span>
+                      <Input
+                        type={
+                          setting.setting_type === "string"
+                            ? "text"
+                            : "number"
+                        }
+                        className="h-8 w-24 text-sm tabular-nums"
+                        value={
+                          pendingRaw ?? String(setting.value)
+                        }
+                        min={setting.min_value ?? undefined}
+                        max={setting.max_value ?? undefined}
+                        step={
+                          setting.step ??
+                          (setting.setting_type === "float"
+                            ? 0.01
+                            : 1)
+                        }
+                        disabled={isDisabledByFlag}
+                        onChange={(e) =>
+                          setPendingValues((prev) => ({
+                            ...prev,
+                            [setting.setting_name]: e.target.value,
+                          }))
+                        }
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleSave(setting);
+                        }}
+                      />
+                      <span className="text-xs text-muted-foreground w-16 whitespace-nowrap">
+                        {setting.unit ?? ""}
+                      </span>
+                      <div className="w-14">
+                        {hasChanged && (
+                          <Button
+                            size="sm"
+                            className="h-7 text-xs"
+                            disabled={
+                              updateMutation.isPending || isDisabledByFlag
+                            }
+                            onClick={() => handleSave(setting)}
+                          >
+                            Save
+                          </Button>
                         )}
                       </div>
-                      {hasChanged && (
-                        <Button
-                          size="sm"
-                          className="h-7 text-xs"
-                          disabled={
-                            updateMutation.isPending || isDisabledByFlag
-                          }
-                          onClick={() => handleSave(setting)}
-                        >
-                          Save
-                        </Button>
-                      )}
                     </div>
                   </div>
                 );
