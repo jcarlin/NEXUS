@@ -173,7 +173,20 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         except Exception as exc:
             logger.error("startup.feature_flags.failed", error=str(exc))
 
-    await asyncio.gather(_init_checkpointer(), _init_feature_flags())
+    async def _init_setting_overrides() -> None:
+        try:
+            from app.dependencies import get_session_factory
+            from app.settings_registry.service import SettingsRegistryService
+
+            factory = get_session_factory()
+            async with factory() as session:
+                await SettingsRegistryService.load_overrides_into_settings(session)
+                await session.commit()
+            logger.info("startup.setting_overrides.ok")
+        except Exception as exc:
+            logger.error("startup.setting_overrides.failed", error=str(exc))
+
+    await asyncio.gather(_init_checkpointer(), _init_feature_flags(), _init_setting_overrides())
 
     # --- Group 3: Model warmup (independent, can be CPU-bound) ---
     async def _warmup_embedder() -> None:
@@ -274,10 +287,12 @@ def create_app() -> FastAPI:
         from sqlalchemy import create_engine
 
         from app.feature_flags.service import load_overrides_sync_safe
+        from app.settings_registry.service import load_setting_overrides_sync_safe
 
         _sync_engine = create_engine(settings.postgres_url_sync, pool_pre_ping=True)
         try:
             load_overrides_sync_safe(settings, _sync_engine)
+            load_setting_overrides_sync_safe(settings, _sync_engine)
         finally:
             _sync_engine.dispose()
     except Exception:
@@ -332,6 +347,11 @@ def create_app() -> FastAPI:
     from app.feature_flags.router import router as feature_flags_router
 
     application.include_router(feature_flags_router, prefix="/api/v1")
+
+    # Settings registry runtime management (always enabled — admin-only access enforced in router)
+    from app.settings_registry.router import router as settings_registry_router
+
+    application.include_router(settings_registry_router, prefix="/api/v1")
 
     # --- Health endpoint ---
     @application.get("/api/v1/health", tags=["system"])

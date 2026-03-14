@@ -26,6 +26,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follo
 - Add multi-query expansion prompt constraint to preserve original query scope and entities
 - Add LangSmith trace inspection section to `docs/evaluation-guide.md`
 
+## [1.13.0] - 2026-03-14
+
+### Added
+- Runtime tuning settings admin UI (`/admin/settings`) — 48 numeric/float settings (retrieval limits, thresholds, batch sizes, agent recursion limits, etc.) now configurable at runtime via admin page with DB persistence, same pattern as feature flags
+- `setting_overrides` DB table (migration 028) for persisting admin-configured setting values across restarts
+- `app/settings_registry/` module: registry (48 settings with type/range/unit metadata), service (CRUD + Settings mutation + DI cache clearing), router (admin-only REST endpoints)
+- Settings grouped by category (Retrieval, Adaptive Depth, Query Pipeline, Agent, Ingestion, Visual Reranking, Auth & Limits) with risk level badges (Safe/Cache Clear/Restart)
+- Feature flag gating: settings whose parent feature flag is disabled appear muted with "Flag Off" badge
+- DB overrides loaded at startup (both early sync load in `create_app()` and async load in lifespan) alongside feature flag overrides
+- Sidebar nav entry "Settings" with `SlidersHorizontal` icon in admin section
+- 48 tests covering registry validation, service CRUD/load/coerce/range, and router endpoints
+
 ## [1.12.2] - 2026-03-14
 
 ### Fixed

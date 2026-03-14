@@ -28,6 +28,7 @@ import { Route as ChatThreadIdRouteImport } from './routes/chat/$threadId'
 import { Route as AnalyticsTimelineRouteImport } from './routes/analytics/timeline'
 import { Route as AnalyticsCommsRouteImport } from './routes/analytics/comms'
 import { Route as AdminUsersRouteImport } from './routes/admin/users'
+import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
 import { Route as AdminOperationsRouteImport } from './routes/admin/operations'
 import { Route as AdminLlmSettingsRouteImport } from './routes/admin/llm-settings'
 import { Route as AdminKnowledgeGraphRouteImport } from './routes/admin/knowledge-graph'
@@ -139,6 +140,11 @@ const AdminUsersRoute = AdminUsersRouteImport.update({
   path: '/admin/users',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminSettingsRoute = AdminSettingsRouteImport.update({
+  id: '/admin/settings',
+  path: '/admin/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminOperationsRoute = AdminOperationsRouteImport.update({
   id: '/admin/operations',
   path: '/admin/operations',
@@ -185,6 +191,7 @@ export interface FileRoutesByFullPath {
   '/admin/knowledge-graph': typeof AdminKnowledgeGraphRoute
   '/admin/llm-settings': typeof AdminLlmSettingsRoute
   '/admin/operations': typeof AdminOperationsRoute
+  '/admin/settings': typeof AdminSettingsRoute
   '/admin/users': typeof AdminUsersRoute
   '/analytics/comms': typeof AnalyticsCommsRoute
   '/analytics/timeline': typeof AnalyticsTimelineRoute
@@ -213,6 +220,7 @@ export interface FileRoutesByTo {
   '/admin/knowledge-graph': typeof AdminKnowledgeGraphRoute
   '/admin/llm-settings': typeof AdminLlmSettingsRoute
   '/admin/operations': typeof AdminOperationsRoute
+  '/admin/settings': typeof AdminSettingsRoute
   '/admin/users': typeof AdminUsersRoute
   '/analytics/comms': typeof AnalyticsCommsRoute
   '/analytics/timeline': typeof AnalyticsTimelineRoute
@@ -242,6 +250,7 @@ export interface FileRoutesById {
   '/admin/knowledge-graph': typeof AdminKnowledgeGraphRoute
   '/admin/llm-settings': typeof AdminLlmSettingsRoute
   '/admin/operations': typeof AdminOperationsRoute
+  '/admin/settings': typeof AdminSettingsRoute
   '/admin/users': typeof AdminUsersRoute
   '/analytics/comms': typeof AnalyticsCommsRoute
   '/analytics/timeline': typeof AnalyticsTimelineRoute
@@ -272,6 +281,7 @@ export interface FileRouteTypes {
     | '/admin/knowledge-graph'
     | '/admin/llm-settings'
     | '/admin/operations'
+    | '/admin/settings'
     | '/admin/users'
     | '/analytics/comms'
     | '/analytics/timeline'
@@ -300,6 +310,7 @@ export interface FileRouteTypes {
     | '/admin/knowledge-graph'
     | '/admin/llm-settings'
     | '/admin/operations'
+    | '/admin/settings'
     | '/admin/users'
     | '/analytics/comms'
     | '/analytics/timeline'
@@ -328,6 +339,7 @@ export interface FileRouteTypes {
     | '/admin/knowledge-graph'
     | '/admin/llm-settings'
     | '/admin/operations'
+    | '/admin/settings'
     | '/admin/users'
     | '/analytics/comms'
     | '/analytics/timeline'
@@ -357,6 +369,7 @@ export interface RootRouteChildren {
   AdminKnowledgeGraphRoute: typeof AdminKnowledgeGraphRoute
   AdminLlmSettingsRoute: typeof AdminLlmSettingsRoute
   AdminOperationsRoute: typeof AdminOperationsRoute
+  AdminSettingsRoute: typeof AdminSettingsRoute
   AdminUsersRoute: typeof AdminUsersRoute
   AnalyticsCommsRoute: typeof AnalyticsCommsRoute
   AnalyticsTimelineRoute: typeof AnalyticsTimelineRoute
@@ -511,6 +524,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminUsersRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/settings': {
+      id: '/admin/settings'
+      path: '/admin/settings'
+      fullPath: '/admin/settings'
+      preLoaderRoute: typeof AdminSettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/operations': {
       id: '/admin/operations'
       path: '/admin/operations'
@@ -573,6 +593,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminKnowledgeGraphRoute: AdminKnowledgeGraphRoute,
   AdminLlmSettingsRoute: AdminLlmSettingsRoute,
   AdminOperationsRoute: AdminOperationsRoute,
+  AdminSettingsRoute: AdminSettingsRoute,
   AdminUsersRoute: AdminUsersRoute,
   AnalyticsCommsRoute: AnalyticsCommsRoute,
   AnalyticsTimelineRoute: AnalyticsTimelineRoute,
