@@ -16,6 +16,7 @@ _Nothing yet._
 
 ### Fixed
 - Fix `Settings()` → `get_settings()` in 6 agent tools (`topic_cluster`, `network_analysis`, `decompose_query`, `cypher_query`, `structured_query`, `get_community_context`) — runtime feature flag toggles were invisible to these tools because `Settings()` reads env vars only, not DB overrides
+- Preserve `messages` field in `case_context_resolve` node — missing field caused LangGraph state merge to lose the user query, triggering `ValueError('contents are required')` on every chat query
 - Replace bare `raise` with structured `HTTPException` in query router error handler — graph exceptions now return actionable error detail instead of opaque "Internal Server Error"
 - Improve evaluation runner error capture: extract JSON `detail` field from structured error responses, increase error text capture from 200 to 500 chars
 
