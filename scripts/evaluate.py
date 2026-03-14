@@ -8,6 +8,16 @@ Usage:
     python scripts/evaluate.py --verbose           # Extra logging
     python scripts/evaluate.py --dry-run --config-override RETRIEVAL_TEXT_LIMIT=30
     python scripts/evaluate.py --dry-run --tune    # Run predefined tuning sweep
+
+    # Flag sweep modes (requires running NEXUS instance)
+    python scripts/evaluate.py --flag-sweep                          # Quick (individual ablation)
+    python scripts/evaluate.py --flag-sweep --full                   # Full (all groups + combos)
+    python scripts/evaluate.py --flag-sweep --curated-combos         # With curated combinations
+    python scripts/evaluate.py --flag-sweep --include-standalone     # With standalone features
+    python scripts/evaluate.py --flag-sweep --include-ingestion      # With ingestion features
+    python scripts/evaluate.py --flag-sweep --baseline-only          # Baseline metrics only
+    python scripts/evaluate.py --flag-sweep --skip-judge             # Skip LLM-as-judge
+    python scripts/evaluate.py --flag-sweep --flags enable_hyde      # Single flag
 """
 
 from __future__ import annotations
@@ -99,7 +109,8 @@ def _run_tuning_sweep(verbose: bool = False) -> int:
     print(f"  Baseline Recall@10: {baseline_metrics.recall_at_10:.4f}")
     for comp in threshold_report.comparisons:
         print(
-            f"  {comp.config_name:20s}  Recall@10: {comp.metrics.recall_at_10:.4f}  (delta: {comp.delta_recall:+.4f})"
+            f"  {comp.config_name:20s}  Recall@10: {comp.metrics.recall_at_10:.4f}  "
+            f"(delta: {comp.delta_recall:+.4f})"
         )
     print(f"  Best: {threshold_report.best_config}")
     print(f"  {threshold_report.recommendation}\n")
@@ -139,6 +150,21 @@ def _run_flag_sweep(args) -> int:
         matter_id=args.matter_id,
     )
 
+    # Check if we're using the extended QA sweep or basic sweep
+    use_qa_sweep = any(
+        [
+            args.full,
+            args.curated_combos,
+            args.include_standalone,
+            args.include_ingestion,
+            args.baseline_only,
+            args.skip_judge is not None,
+        ]
+    )
+
+    if use_qa_sweep:
+        return _run_qa_sweep(args, config)
+
     print(f"Running feature flag sweep against {config.api_url}...")
     print(f"  Flags: {config.flags or 'all query-time flags'}")
     print(f"  Combinations: {config.combinations}")
@@ -162,6 +188,69 @@ def _run_flag_sweep(args) -> int:
     return 0
 
 
+def _run_qa_sweep(args, config: FlagSweepConfig) -> int:
+    """Run the extended QA evaluation sweep with judge, combos, etc."""
+    import asyncio
+
+    from evaluation.flag_sweep import run_full_qa_sweep
+    from evaluation.report import generate_qa_report
+
+    include_combos = args.full or args.curated_combos
+    include_standalone = args.full or args.include_standalone
+    include_ingestion = args.full or args.include_ingestion
+    skip_judge = getattr(args, "skip_judge", False) or False
+    baseline_only = getattr(args, "baseline_only", False)
+
+    print(f"Running QA feature flag sweep against {config.api_url}...")
+    print(f"  Flags: {config.flags or 'all query-time flags'}")
+    print(f"  Judge: {'disabled' if skip_judge else 'enabled'}")
+    print(f"  Combos: {include_combos}")
+    print(f"  Standalone: {include_standalone}")
+    print(f"  Ingestion: {include_ingestion}")
+    print(f"  Baseline only: {baseline_only}")
+    print()
+
+    try:
+        report = asyncio.run(
+            run_full_qa_sweep(
+                config,
+                include_combos=include_combos,
+                include_standalone=include_standalone,
+                include_ingestion=include_ingestion,
+                skip_judge=skip_judge,
+                baseline_only=baseline_only,
+                verbose=args.verbose,
+            )
+        )
+    except Exception as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        import traceback
+
+        traceback.print_exc()
+        return 1
+
+    # Generate markdown report
+    md_report = generate_qa_report(report)
+
+    # Output
+    if args.output:
+        output_path = Path(args.output)
+        if output_path.suffix == ".md":
+            output_path.write_text(md_report)
+            print(f"Markdown report written to {output_path}")
+        else:
+            output_path.write_text(report.model_dump_json(indent=2))
+            print(f"JSON results written to {output_path}")
+            # Also write markdown if it's not .json
+            md_path = output_path.with_suffix(".md")
+            md_path.write_text(md_report)
+            print(f"Markdown report written to {md_path}")
+    else:
+        print(md_report)
+
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="NEXUS Evaluation Framework",
@@ -176,7 +265,7 @@ def main() -> int:
         "--output",
         type=str,
         default=None,
-        help="Path to write JSON results",
+        help="Path to write results (JSON or .md for markdown report)",
     )
     parser.add_argument(
         "--skip-ragas",
@@ -232,6 +321,38 @@ def main() -> int:
         "--combinations",
         action="store_true",
         help="Test pairwise flag combinations (flag-sweep mode; exponential)",
+    )
+    # Extended QA sweep options
+    parser.add_argument(
+        "--full",
+        action="store_true",
+        help="Full QA sweep: individual + combos + standalone + ingestion",
+    )
+    parser.add_argument(
+        "--curated-combos",
+        action="store_true",
+        help="Include curated flag combination tests",
+    )
+    parser.add_argument(
+        "--include-standalone",
+        action="store_true",
+        help="Include standalone feature endpoint tests (Group C)",
+    )
+    parser.add_argument(
+        "--include-ingestion",
+        action="store_true",
+        help="Include ingestion-time feature tests (Group B, requires re-ingestion)",
+    )
+    parser.add_argument(
+        "--baseline-only",
+        action="store_true",
+        help="Run baseline evaluation only (no flag toggling)",
+    )
+    parser.add_argument(
+        "--skip-judge",
+        action="store_true",
+        default=None,
+        help="Skip LLM-as-judge scoring (faster, retrieval metrics only)",
     )
 
     args = parser.parse_args()

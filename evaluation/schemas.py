@@ -236,6 +236,13 @@ class TuningReport(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+class QARecommendation(StrEnum):
+    ENABLE = "enable"
+    FIX_FIRST = "fix_first"
+    SKIP = "skip"
+    NEUTRAL = "neutral"
+
+
 class FlagRecommendation(StrEnum):
     KEEP_ENABLED = "keep_enabled"
     KEEP_DISABLED = "keep_disabled"
@@ -317,3 +324,96 @@ class FlagSweepReport(BaseModel):
     impact_summary: list[FlagImpactSummary] = Field(default_factory=list)
     total_queries_run: int = Field(0, ge=0)
     total_duration_s: float = Field(0.0, ge=0.0)
+
+
+# ---------------------------------------------------------------------------
+# QA evaluation schemas (LLM-as-judge, standalone, ingestion, full report)
+# ---------------------------------------------------------------------------
+
+
+class JudgeScore(BaseModel):
+    """LLM-as-judge quality score across 5 dimensions."""
+
+    relevance: float = Field(..., ge=0.0, le=5.0, description="How relevant is the answer to the question?")
+    completeness: float = Field(..., ge=0.0, le=5.0, description="Does the answer cover all aspects of the question?")
+    accuracy: float = Field(..., ge=0.0, le=5.0, description="Is the information factually correct?")
+    citation_support: float = Field(..., ge=0.0, le=5.0, description="Are claims supported by cited sources?")
+    conciseness: float = Field(..., ge=0.0, le=5.0, description="Is the answer concise without unnecessary info?")
+    composite: float = Field(..., ge=0.0, le=5.0, description="Weighted average of all dimensions")
+    rationale: str = Field(default="", description="Brief rationale for the scores")
+
+
+class QueryEvalResult(BaseModel):
+    """Per-query evaluation result."""
+
+    query_id: str
+    question: str
+    functional: bool = Field(True, description="HTTP 200 with valid response structure")
+    latency_ms: float = 0.0
+    judge_score: JudgeScore | None = None
+    mrr_at_10: float = 0.0
+    recall_at_10: float = 0.0
+    citation_count: int = 0
+    citation_verified_pct: float = 0.0
+    source_relevance_avg: float = 0.0
+    sources_count: int = 0
+    error: str | None = None
+    response_text: str = ""
+
+
+class StandaloneFeatureTest(BaseModel):
+    """Result of testing a standalone feature endpoint."""
+
+    flag_name: str
+    endpoint: str
+    functional: bool = False
+    latency_ms: float = 0.0
+    status_code: int = 0
+    error: str | None = None
+    notes: str = ""
+
+
+class IngestionFeatureTest(BaseModel):
+    """Result of testing an ingestion-time feature."""
+
+    flag_name: str
+    docs_ingested: int = 0
+    ingestion_latency_ms: float = 0.0
+    post_ingestion_query_results: list[QueryEvalResult] = Field(default_factory=list)
+    error: str | None = None
+    notes: str = ""
+
+
+class ComboEvalResult(BaseModel):
+    """Result of evaluating a curated flag combination."""
+
+    name: str
+    flags_enabled: dict[str, bool] = Field(default_factory=dict)
+    metrics: FlagRunMetrics = Field(default_factory=FlagRunMetrics)
+    query_results: list[QueryEvalResult] = Field(default_factory=list)
+    judge_composite: float = 0.0
+
+
+class FeatureFinding(BaseModel):
+    """A bug, issue, or notable finding from feature evaluation."""
+
+    flag_name: str
+    severity: str = Field(..., description="critical | high | medium | low | info")
+    category: str = Field(..., description="bug | regression | improvement | note")
+    description: str
+    evidence: str = ""
+
+
+class QAReport(BaseModel):
+    """Top-level QA evaluation report."""
+
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    environment: dict[str, str] = Field(default_factory=dict)
+    baseline: ComboEvalResult | None = None
+    individual_results: list[FlagImpactSummary] = Field(default_factory=list)
+    individual_query_details: dict[str, list[QueryEvalResult]] = Field(default_factory=dict)
+    combo_results: list[ComboEvalResult] = Field(default_factory=list)
+    standalone_results: list[StandaloneFeatureTest] = Field(default_factory=list)
+    ingestion_results: list[IngestionFeatureTest] = Field(default_factory=list)
+    findings: list[FeatureFinding] = Field(default_factory=list)
+    recommendations: dict[str, QARecommendation] = Field(default_factory=dict)

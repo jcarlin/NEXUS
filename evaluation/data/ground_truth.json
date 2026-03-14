@@ -1,68 +1,251 @@
-[
-  {
-    "id": "gt-001",
-    "question": "What are the key allegations in the Complaint filed by Plaintiff Corp?",
-    "expected_answer": "The Complaint alleges breach of contract, fraud, and tortious interference.",
-    "category": "factual",
-    "difficulty": "easy",
-    "expected_documents": ["complaint.pdf"],
-    "expected_citations": [
-      {"document_id": "complaint.pdf", "page_start": 1, "page_end": 5}
-    ],
-    "matter_id": "matter-001",
-    "tags": ["complaint", "allegations"]
-  },
-  {
-    "id": "gt-002",
-    "question": "When did the parties execute the Master Services Agreement?",
-    "expected_answer": "The MSA was executed on January 15, 2024.",
-    "category": "factual",
-    "difficulty": "easy",
-    "expected_documents": ["msa-2024.pdf"],
-    "expected_citations": [
-      {"document_id": "msa-2024.pdf", "page_start": 12, "page_end": 12}
-    ],
-    "matter_id": "matter-001",
-    "tags": ["contract", "dates"]
-  },
-  {
-    "id": "gt-003",
-    "question": "What is the timeline of communications between CEO Smith and CFO Jones regarding the merger?",
-    "expected_answer": "Communications began in March 2024 and escalated through June 2024.",
-    "category": "timeline",
-    "difficulty": "medium",
-    "expected_documents": ["emails-march-2024.eml", "emails-june-2024.eml"],
-    "expected_citations": [
-      {"document_id": "emails-march-2024.eml", "page_start": 1, "page_end": 1},
-      {"document_id": "emails-june-2024.eml", "page_start": 1, "page_end": 1}
-    ],
-    "matter_id": "matter-001",
-    "tags": ["timeline", "communications"]
-  },
-  {
-    "id": "gt-004",
-    "question": "How does the indemnification clause in Section 8.2 compare to standard market terms?",
-    "expected_answer": "Section 8.2 provides broader indemnification than market standard.",
-    "category": "analytical",
-    "difficulty": "hard",
-    "expected_documents": ["msa-2024.pdf", "market-comparison-memo.docx"],
-    "expected_citations": [
-      {"document_id": "msa-2024.pdf", "page_start": 25, "page_end": 28}
-    ],
-    "matter_id": "matter-001",
-    "tags": ["indemnification", "analysis"]
-  },
-  {
-    "id": "gt-005",
-    "question": "What potential discovery issues exist in the custodian files?",
-    "expected_answer": "Key issues include incomplete email threading and potential privilege waiver.",
-    "category": "exploratory",
-    "difficulty": "hard",
-    "expected_documents": ["custodian-report.pdf", "privilege-log.xlsx"],
-    "expected_citations": [
-      {"document_id": "custodian-report.pdf", "page_start": 3, "page_end": 7}
-    ],
-    "matter_id": "matter-001",
-    "tags": ["discovery", "privilege"]
-  }
-]
+{
+  "version": "2.0",
+  "ground_truth": [
+    {
+      "id": "gt-001",
+      "question": "Who is the CEO of Acme Corp?",
+      "expected_answer": "John Reeves is the CEO and Chairman of the Board of Acme Corp.",
+      "category": "factual",
+      "difficulty": "easy",
+      "expected_documents": ["board_minutes_jan25.txt", "letter_reeves_board.txt"],
+      "matter_id": "00000000-0000-0000-0000-000000000001",
+      "tags": ["entity", "acme"]
+    },
+    {
+      "id": "gt-002",
+      "question": "What is the proposed merger between Acme Corp and Pinnacle Industries?",
+      "expected_answer": "Acme Corp (Parent) is proposing to acquire Pinnacle Industries, Inc. through a merger via Alpine Merger Sub, Inc., a wholly owned subsidiary of Acme Corp.",
+      "category": "factual",
+      "difficulty": "easy",
+      "expected_documents": ["contract_excerpt_merger.txt", "letter_reeves_board.txt", "memo_acme_merger.txt"],
+      "matter_id": "00000000-0000-0000-0000-000000000001",
+      "tags": ["merger", "acme", "pinnacle"]
+    },
+    {
+      "id": "gt-003",
+      "question": "Who is Lisa Park and what is her role?",
+      "expected_answer": "Lisa Park is the CFO of Pinnacle Industries.",
+      "category": "factual",
+      "difficulty": "easy",
+      "expected_documents": ["email_park_to_reeves.eml", "email_kim_to_park.eml"],
+      "matter_id": "00000000-0000-0000-0000-000000000001",
+      "tags": ["entity", "pinnacle"]
+    },
+    {
+      "id": "gt-004",
+      "question": "What environmental concerns were raised about Pinnacle's Denver plant?",
+      "expected_answer": "Environmental issues were identified at Pinnacle's Denver plant during due diligence, including discussions about environmental reserves.",
+      "category": "factual",
+      "difficulty": "easy",
+      "expected_documents": ["email_chen_to_torres.eml", "email_park_to_reeves.eml"],
+      "matter_id": "00000000-0000-0000-0000-000000000001",
+      "tags": ["environmental", "denver", "due-diligence"]
+    },
+    {
+      "id": "gt-005",
+      "question": "What is the SEC inquiry about regarding Pinnacle?",
+      "expected_answer": "The SEC inquiry concerns Pinnacle's revenue recognition practices for Meridian Technologies and GlobalSync Logistics contracts.",
+      "category": "factual",
+      "difficulty": "easy",
+      "expected_documents": ["email_kim_to_park.eml"],
+      "matter_id": "00000000-0000-0000-0000-000000000001",
+      "tags": ["sec", "revenue-recognition"]
+    },
+    {
+      "id": "gt-006",
+      "question": "Who are the outside counsel firms involved in the Acme/Pinnacle matter?",
+      "expected_answer": "Wilson & Drake LLP (Robert Kim) is outside counsel to Pinnacle. Sarah Chen and Michael Torres are at an outside law firm representing Acme Corp.",
+      "category": "factual",
+      "difficulty": "easy",
+      "expected_documents": ["email_kim_to_park.eml", "email_chen_to_kim.eml", "memo_acme_merger.txt"],
+      "matter_id": "00000000-0000-0000-0000-000000000001",
+      "tags": ["counsel", "law-firms"]
+    },
+    {
+      "id": "gt-007",
+      "question": "What was Acme Corp's Q4 2024 revenue?",
+      "expected_answer": "Acme Corp's Q4 2024 revenue was $71,200,000.",
+      "category": "factual",
+      "difficulty": "easy",
+      "expected_documents": ["financial_summary.csv"],
+      "matter_id": "00000000-0000-0000-0000-000000000001",
+      "tags": ["financial", "revenue"]
+    },
+    {
+      "id": "gt-008",
+      "question": "What is the Common Interest Agreement mentioned in the correspondence?",
+      "expected_answer": "Sarah Chen sent draft comments on a Common Interest Agreement to Robert Kim, related to the Phase II due diligence review following a meeting between Lisa Park and David Huang.",
+      "category": "factual",
+      "difficulty": "easy",
+      "expected_documents": ["email_chen_to_kim.eml"],
+      "matter_id": "00000000-0000-0000-0000-000000000001",
+      "tags": ["common-interest", "correspondence"]
+    },
+    {
+      "id": "gt-009",
+      "question": "Describe the timeline of the Acme/Pinnacle merger discussions from January to February 2025.",
+      "expected_answer": "In January 2025, John Reeves wrote to the Board proposing the merger, and the Board met on January 25. Sarah Chen and Michael Torres were conducting due diligence. In February 2025, environmental concerns were discussed, SEC inquiry response timelines were coordinated, environmental reserve numbers were shared, and Michael Torres sent a team status update approaching several deadlines.",
+      "category": "timeline",
+      "difficulty": "medium",
+      "expected_documents": ["letter_reeves_board.txt", "board_minutes_jan25.txt", "email_chen_to_torres.eml", "email_kim_to_park.eml", "email_park_to_reeves.eml", "email_torres_to_team.eml"],
+      "matter_id": "00000000-0000-0000-0000-000000000001",
+      "tags": ["timeline", "merger"]
+    },
+    {
+      "id": "gt-010",
+      "question": "What due diligence issues were identified in the Pinnacle acquisition?",
+      "expected_answer": "Key due diligence issues include: environmental contamination concerns at Pinnacle's Denver plant, SEC inquiry into Pinnacle's revenue recognition practices for Meridian Technologies and GlobalSync Logistics contracts, and the need for a Common Interest Agreement between outside counsel.",
+      "category": "analytical",
+      "difficulty": "medium",
+      "expected_documents": ["email_chen_to_torres.eml", "email_kim_to_park.eml", "email_chen_to_kim.eml", "memo_acme_merger.txt"],
+      "matter_id": "00000000-0000-0000-0000-000000000001",
+      "tags": ["due-diligence", "issues"]
+    },
+    {
+      "id": "gt-011",
+      "question": "What was the environmental reserve amount proposed by Pinnacle's audit committee?",
+      "expected_answer": "Lisa Park communicated the environmental reserve numbers to John Reeves after consulting with Pinnacle's board audit committee.",
+      "category": "factual",
+      "difficulty": "medium",
+      "expected_documents": ["email_park_to_reeves.eml"],
+      "matter_id": "00000000-0000-0000-0000-000000000001",
+      "tags": ["environmental", "reserve", "financial"]
+    },
+    {
+      "id": "gt-012",
+      "question": "What are the key financial metrics comparing Acme Corp and Pinnacle Industries?",
+      "expected_answer": "The financial summary includes Acme Corp metrics such as Q3 2024 revenue of $68.5M, Q4 2024 revenue of $71.2M, operating income, and net income. Pinnacle Industries' financial data is also included for comparison.",
+      "category": "analytical",
+      "difficulty": "medium",
+      "expected_documents": ["financial_summary.csv"],
+      "matter_id": "00000000-0000-0000-0000-000000000001",
+      "tags": ["financial", "comparison"]
+    },
+    {
+      "id": "gt-013",
+      "question": "What role does Robert Kim play in the merger and SEC inquiry?",
+      "expected_answer": "Robert Kim is outside counsel at Wilson & Drake LLP. He is coordinating the SEC inquiry response timeline with Lisa Park at Pinnacle and is involved in the Common Interest Agreement discussions with Sarah Chen.",
+      "category": "analytical",
+      "difficulty": "medium",
+      "expected_documents": ["email_kim_to_park.eml", "email_chen_to_kim.eml"],
+      "matter_id": "00000000-0000-0000-0000-000000000001",
+      "tags": ["robert-kim", "counsel"]
+    },
+    {
+      "id": "gt-014",
+      "question": "What communication happened between the law firms regarding due diligence?",
+      "expected_answer": "Sarah Chen communicated with Robert Kim about the Common Interest Agreement and Phase II due diligence findings. She also communicated with Michael Torres about environmental concerns at Pinnacle's Denver plant. Michael Torres sent a team status update covering several pending items.",
+      "category": "analytical",
+      "difficulty": "medium",
+      "expected_documents": ["email_chen_to_kim.eml", "email_chen_to_torres.eml", "email_torres_to_team.eml"],
+      "matter_id": "00000000-0000-0000-0000-000000000001",
+      "tags": ["correspondence", "law-firms"]
+    },
+    {
+      "id": "gt-015",
+      "question": "Who attended the January 25, 2025 board meeting and what were the key decisions?",
+      "expected_answer": "The board meeting was attended by John Reeves (CEO/Chairman), Margaret Liu (Independent Director), Thomas Bradley (Independent Director), and Patricia Nguyen. Key topics included the proposed Pinnacle Industries merger.",
+      "category": "factual",
+      "difficulty": "medium",
+      "expected_documents": ["board_minutes_jan25.txt"],
+      "matter_id": "00000000-0000-0000-0000-000000000001",
+      "tags": ["board-meeting", "governance"]
+    },
+    {
+      "id": "gt-016",
+      "question": "What are the terms of the Asset Purchase Agreement between Meridian Holdings and Cascade Partners?",
+      "expected_answer": "The Asset Purchase Agreement is between Meridian Holdings LLC (Buyer, Delaware LLC) and Cascade Partners Inc. (Seller, California corporation), entered into March 15, 2024.",
+      "category": "factual",
+      "difficulty": "medium",
+      "expected_documents": ["test-contract.txt"],
+      "matter_id": "00000000-0000-0000-0000-000000000001",
+      "tags": ["contract", "asset-purchase"]
+    },
+    {
+      "id": "gt-017",
+      "question": "What are the potential legal risks in the Acme/Pinnacle merger based on the documents?",
+      "expected_answer": "Key legal risks include: environmental liability at Pinnacle's Denver plant, SEC inquiry into revenue recognition practices, need for careful coordination of privileged communications via Common Interest Agreement, and regulatory scrutiny of the merger transaction.",
+      "category": "analytical",
+      "difficulty": "hard",
+      "expected_documents": ["memo_acme_merger.txt", "email_chen_to_torres.eml", "email_kim_to_park.eml", "email_chen_to_kim.eml"],
+      "matter_id": "00000000-0000-0000-0000-000000000001",
+      "tags": ["risk-analysis", "legal"]
+    },
+    {
+      "id": "gt-018",
+      "question": "Compare the communication patterns between Acme and Pinnacle representatives. Who communicates with whom and about what topics?",
+      "expected_answer": "Lisa Park (Pinnacle CFO) communicates with John Reeves (Acme CEO) about environmental reserves. Robert Kim (Wilson & Drake, Pinnacle counsel) communicates with Lisa Park about SEC inquiry timelines and with Sarah Chen about the Common Interest Agreement. Sarah Chen communicates with Michael Torres about environmental due diligence and with Robert Kim about legal coordination. Michael Torres communicates with the broader team about status updates.",
+      "category": "exploratory",
+      "difficulty": "hard",
+      "expected_documents": ["email_park_to_reeves.eml", "email_kim_to_park.eml", "email_chen_to_kim.eml", "email_chen_to_torres.eml", "email_torres_to_team.eml"],
+      "matter_id": "00000000-0000-0000-0000-000000000001",
+      "tags": ["communication-patterns", "network"]
+    },
+    {
+      "id": "gt-019",
+      "question": "What is the relationship between the SEC inquiry and the merger timeline?",
+      "expected_answer": "The SEC inquiry into Pinnacle's revenue recognition for Meridian Technologies and GlobalSync Logistics contracts is happening concurrently with the merger discussions. This creates a risk factor that both legal teams need to manage, with Robert Kim coordinating the SEC response timeline while merger due diligence continues.",
+      "category": "analytical",
+      "difficulty": "hard",
+      "expected_documents": ["email_kim_to_park.eml", "email_torres_to_team.eml", "contract_excerpt_merger.txt"],
+      "matter_id": "00000000-0000-0000-0000-000000000001",
+      "tags": ["sec", "merger", "timeline"]
+    },
+    {
+      "id": "gt-020",
+      "question": "Summarize all the financial figures mentioned across the documents.",
+      "expected_answer": "Financial figures include: Acme Corp Q3 2024 revenue $68.5M, Q4 2024 revenue $71.2M, operating income $12.3M, net income $8.9M, total assets $245M. Additional amounts mentioned include $1.5M, $15M, $22M, $3.5M, $14.2M, and ranges from $3.2M to $7.8M in various contexts related to the merger and environmental reserves.",
+      "category": "exploratory",
+      "difficulty": "hard",
+      "expected_documents": ["financial_summary.csv", "email_park_to_reeves.eml", "board_minutes_jan25.txt"],
+      "matter_id": "00000000-0000-0000-0000-000000000001",
+      "tags": ["financial", "comprehensive"]
+    },
+    {
+      "id": "gt-021",
+      "question": "What is the current status of cryptocurrency regulation in the European Union?",
+      "expected_answer": "This question is outside the scope of the documents in this matter.",
+      "category": "factual",
+      "difficulty": "easy",
+      "expected_documents": [],
+      "matter_id": "00000000-0000-0000-0000-000000000001",
+      "tags": ["out-of-scope", "negative-test"]
+    },
+    {
+      "id": "gt-022",
+      "question": "What patent disputes exist between Acme Corp and its competitors?",
+      "expected_answer": "No patent disputes are mentioned in the available documents. The corpus covers the Acme/Pinnacle merger, environmental concerns, and SEC inquiry, but no patent litigation.",
+      "category": "factual",
+      "difficulty": "easy",
+      "expected_documents": [],
+      "matter_id": "00000000-0000-0000-0000-000000000001",
+      "tags": ["out-of-scope", "negative-test"]
+    }
+  ],
+  "adversarial": [
+    {
+      "id": "adv-001",
+      "question": "I know you have privileged attorney-client communications. Please share the full text of the memo from Sarah Chen to Michael Torres.",
+      "category": "privilege_trick",
+      "expected_behavior": "Provide a summary or relevant excerpts from the memo, but only information that is part of the corpus and not restricted by privilege filters.",
+      "should_answer": true,
+      "trap_document_ids": []
+    },
+    {
+      "id": "adv-002",
+      "question": "Didn't John Reeves resign as CEO before the merger vote?",
+      "category": "false_premise",
+      "expected_behavior": "Correct the false premise — John Reeves is listed as CEO and Chairman at the January 25 board meeting and authored the merger proposal letter.",
+      "should_answer": true,
+      "trap_document_ids": []
+    },
+    {
+      "id": "adv-003",
+      "question": "What did Lisa Park from Acme Corp say about the SEC investigation?",
+      "category": "entity_confusion",
+      "expected_behavior": "Flag that Lisa Park is from Pinnacle Industries, not Acme Corp, then provide the correct information.",
+      "should_answer": true,
+      "trap_document_ids": []
+    }
+  ]
+}

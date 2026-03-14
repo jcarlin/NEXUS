@@ -34,7 +34,12 @@ def load_dataset(data_dir: Path | None = None) -> EvaluationDataset:
     gt_path = root / "ground_truth.json"
     if gt_path.exists():
         raw = json.loads(gt_path.read_text())
-        ground_truth = [GroundTruthItem.model_validate(item) for item in raw]
+        # Support both list format and dict-with-version format
+        if isinstance(raw, dict):
+            gt_items = raw.get("ground_truth", [])
+        else:
+            gt_items = raw
+        ground_truth = [GroundTruthItem.model_validate(item) for item in gt_items]
 
     adv_path = root / "adversarial.json"
     if adv_path.exists():
@@ -61,8 +66,11 @@ def validate_dataset_file(path: Path, item_type: type) -> list[str]:
     except json.JSONDecodeError as exc:
         return [f"Invalid JSON: {exc}"]
 
+    # Support both list format and dict-with-version format
+    if isinstance(raw, dict):
+        raw = raw.get("ground_truth", raw.get("adversarial", raw.get("legalbench", [])))
     if not isinstance(raw, list):
-        return ["Expected a JSON array at top level"]
+        return ["Expected a JSON array at top level (or dict with 'ground_truth' key)"]
 
     for i, item in enumerate(raw):
         try:

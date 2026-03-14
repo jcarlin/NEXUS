@@ -4,7 +4,7 @@ Multimodal RAG investigation platform for legal document intelligence. Ingests, 
 
 *See `ARCHITECTURE.md` for full system design, tech stack, and data flow diagrams.*
 
-**Status**: All 22 milestones complete (M0–M21) + Tier 2 Maturity + Tier 3 (all 15 items). ~1478 backend + 77 frontend tests passing.
+**Status**: All 22 milestones complete (M0–M21) + Tier 2 Maturity + Tier 3 (all 15 items). ~1528 backend + 77 frontend tests passing.
 20 domain modules, 23 DI factories, 47 feature flags (44 runtime-toggleable), 6 autonomous LangGraph agents, 17 agent tools.
 Full local deployment with zero cloud API dependency.
 
@@ -258,6 +258,10 @@ The report has four sections:
 - `docker-compose.yml` / `docker-compose.prod.yml` / `docker-compose.cloud.yml` / `docker-compose.local.yml`
 - `deploy/nexus.service` — Systemd unit for auto-start on GCP VM
 - `.github/workflows/` — CI/CD (backend tests, frontend tests, evaluation, GCP deploy)
+
+### Evaluation & Quality
+- `docs/evaluation-guide.md` — Feature flag QA evaluation framework (how to run, architecture, ground-truth)
+- `docs/qa-evaluation-report.md` — Latest feature flag evaluation results and recommendations
 
 ### Historical Reference (completed milestone specs)
 - `docs/M13-FRONTEND-SPEC.md` — React frontend specification
