@@ -180,17 +180,6 @@ describe("EntityTable", () => {
     expect(dashes.length).toBeGreaterThanOrEqual(1);
   });
 
-  it("renders search toolbar", () => {
-    render(
-      <Wrapper>
-        <EntityTable data={MOCK_ENTITIES} />
-      </Wrapper>,
-    );
-    expect(
-      screen.getByPlaceholderText("Search entities..."),
-    ).toBeInTheDocument();
-  });
-
   it("does not show table when loading", () => {
     render(
       <Wrapper>

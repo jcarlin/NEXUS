@@ -1,16 +1,16 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useDocumentPreview } from "@/hooks/use-document-preview";
 
 vi.mock("@/api/client", () => ({
-  apiClient: vi.fn(),
+  apiFetchRaw: vi.fn(),
 }));
 
-import { apiClient } from "@/api/client";
+import { apiFetchRaw } from "@/api/client";
 
-const mockApiClient = vi.mocked(apiClient);
+const mockApiFetchRaw = vi.mocked(apiFetchRaw);
 
 function createWrapper() {
   const queryClient = new QueryClient({
@@ -26,8 +26,21 @@ function createWrapper() {
 }
 
 describe("useDocumentPreview", () => {
+  const fakeObjectUrl = "blob:http://localhost/fake-url";
+
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubGlobal(
+      "URL",
+      Object.assign({}, globalThis.URL, {
+        createObjectURL: vi.fn(() => fakeObjectUrl),
+        revokeObjectURL: vi.fn(),
+      }),
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("returns null previewUrl when docId is null", () => {
@@ -36,11 +49,13 @@ describe("useDocumentPreview", () => {
     });
     expect(result.current.previewUrl).toBeNull();
     expect(result.current.isLoading).toBe(false);
-    expect(mockApiClient).not.toHaveBeenCalled();
+    expect(mockApiFetchRaw).not.toHaveBeenCalled();
   });
 
-  it("fetches preview URL for a valid docId", async () => {
-    mockApiClient.mockResolvedValueOnce({ preview_url: "https://example.com/preview.png" });
+  it("fetches preview and creates object URL for a valid docId", async () => {
+    mockApiFetchRaw.mockResolvedValueOnce({
+      blob: () => Promise.resolve(new Blob(["fake-image"], { type: "image/png" })),
+    } as unknown as Response);
 
     const { result } = renderHook(() => useDocumentPreview("doc-1", 3), {
       wrapper: createWrapper(),
@@ -48,16 +63,17 @@ describe("useDocumentPreview", () => {
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-    expect(result.current.previewUrl).toBe("https://example.com/preview.png");
-    expect(mockApiClient).toHaveBeenCalledWith({
-      url: "/api/v1/documents/doc-1/preview",
-      method: "GET",
-      params: { page: 3 },
-    });
+    expect(result.current.previewUrl).toBe(fakeObjectUrl);
+    expect(mockApiFetchRaw).toHaveBeenCalledWith(
+      "/api/v1/documents/doc-1/preview?page=3",
+      expect.anything(),
+    );
   });
 
   it("defaults to page 1 when page is null", async () => {
-    mockApiClient.mockResolvedValueOnce({ preview_url: "https://example.com/p1.png" });
+    mockApiFetchRaw.mockResolvedValueOnce({
+      blob: () => Promise.resolve(new Blob()),
+    } as unknown as Response);
 
     const { result } = renderHook(() => useDocumentPreview("doc-1", null), {
       wrapper: createWrapper(),
@@ -65,13 +81,14 @@ describe("useDocumentPreview", () => {
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-    expect(mockApiClient).toHaveBeenCalledWith(
-      expect.objectContaining({ params: { page: 1 } }),
+    expect(mockApiFetchRaw).toHaveBeenCalledWith(
+      "/api/v1/documents/doc-1/preview?page=1",
+      expect.anything(),
     );
   });
 
   it("returns error when fetch fails", async () => {
-    mockApiClient.mockRejectedValueOnce(new Error("Not found"));
+    mockApiFetchRaw.mockRejectedValueOnce(new Error("Not found"));
 
     const { result } = renderHook(() => useDocumentPreview("doc-bad"), {
       wrapper: createWrapper(),

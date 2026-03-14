@@ -144,11 +144,11 @@ describe("useStreamStore", () => {
     expect(useStreamStore.getState().streams.size).toBe(sizeBefore);
   });
 
-  it("_rekey moves a stream from old key to new key", () => {
+  it("_rekey copies a stream to new key (keeps old as alias)", () => {
     const oldKey = useStreamStore.getState().startStream("query");
     useStreamStore.getState()._rekey(oldKey, "thread-real");
 
-    expect(useStreamStore.getState().streams.has(oldKey)).toBe(false);
+    expect(useStreamStore.getState().streams.has(oldKey)).toBe(true); // kept as alias
     expect(useStreamStore.getState().streams.has("thread-real")).toBe(true);
     expect(
       useStreamStore.getState().streams.get("thread-real")?.state.lastQuery,

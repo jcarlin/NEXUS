@@ -114,7 +114,7 @@ dev = [
 ]
 coreference = [
     "coreferee>=1.4",
-    "spacy>=3.0,<3.6",  # coreferee requires spacy <3.6
+    "spacy>=3.8",
 ]
 visual = [
     "colpali-engine>=0.3.1",
