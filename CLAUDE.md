@@ -28,14 +28,13 @@ Full local deployment with zero cloud API dependency.
 
 ### Concurrent Sessions & Git Safety
 
-**Multiple Claude sessions often run in parallel on this repo.** One session finishing and committing must NEVER destroy uncommitted work from other sessions. These rules are non-negotiable:
+**Multiple Claude sessions often run in parallel on this repo.** A session committing its work must not destroy uncommitted changes from other sessions. Before any git operation that affects the working tree, **check `git status` first** and verify which files are yours.
 
-- **NEVER `git stash`.** Stash silently reverts every uncommitted change in the working tree — including files written by other active sessions. This has destroyed hours of parallel agent work. There is no acceptable use of `git stash` in this project.
-- **NEVER `git checkout .`, `git restore .`, `git reset --hard`, or `git clean -f`.** Same problem — these wipe uncommitted changes indiscriminately.
-- **Stage only your own files by name.** Use `git add path/to/file1 path/to/file2`, never `git add -A` or `git add .`. If you didn't create or modify a file, don't touch it.
-- **Check `git status` before committing.** If you see modified/untracked files you didn't touch, **leave them alone** — another session is working on them. Only stage files you intentionally changed.
-- **If the working tree is dirty with others' changes, commit yours and only yours.** List your changed files explicitly in `git add`. The other session's uncommitted files will remain in the working tree undisturbed.
-- **Never resolve merge conflicts automatically.** If `git commit` or `git pull` hits a conflict involving files you didn't edit, stop and ask the user. Don't guess which version to keep.
+- **Check before you act.** Run `git status` before committing, stashing, or restoring. If every dirty/untracked file is one you created or modified, blanket commands (`git stash`, `git add .`, `git restore .`) are safe. If you see files you didn't touch, another session is working on them — use targeted commands instead.
+- **Stage by name when others are active.** If `git status` shows files you don't recognize, use `git add path/to/file1 path/to/file2` for only your files. Don't `git add -A` or `git add .` when the working tree contains other sessions' uncommitted work.
+- **Never stash or restore when the tree has others' changes.** `git stash` and `git restore .` revert the entire working tree — including other sessions' files. Only use these when you've confirmed all dirty files are yours.
+- **Destructive commands need extra care.** `git reset --hard`, `git clean -f`, and `git checkout .` are high-blast-radius. Even if you believe you're the only session, prefer targeted alternatives (`git restore <specific-file>`) or ask the user first.
+- **Don't auto-resolve conflicts on others' files.** If a merge/rebase conflict involves files you didn't edit, stop and ask the user which version to keep.
 
 ### Code Quality — Library-First, Not Custom Code
 
