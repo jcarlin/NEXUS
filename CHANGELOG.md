@@ -12,6 +12,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follo
 
 _Nothing yet._
 
+## [1.12.1] - 2026-03-14
+
+### Fixed
+- Fix `ValueError('contents are required')` when using Gemini as LLM provider — `build_system_prompt` now falls back to `HumanMessage(original_query)` when messages list is empty (V1 state routed to agentic graph)
+- Translate `max_tokens` → `max_output_tokens` for Gemini provider in `_build_chat_model` (Gemini silently ignored the OpenAI-style parameter)
+
 ## [1.12.0] - 2026-03-14
 
 ### Added
