@@ -224,6 +224,59 @@ class TestListContainers:
         assert data["containers"][1]["service_name"] == "redis"
 
 
+class TestDockerUnavailable:
+    async def test_list_containers_docker_unavailable(self, ops_client: AsyncClient):
+        """GET /containers returns 503 when Docker daemon is not running."""
+        with patch(
+            "app.operations.router.DockerService.list_containers",
+            new_callable=AsyncMock,
+            side_effect=Exception("Cannot connect to Docker daemon"),
+        ):
+            resp = await ops_client.get(f"{_API_PREFIX}/containers")
+
+        assert resp.status_code == 503
+        assert "Docker daemon is unavailable" in resp.json()["detail"]
+
+    async def test_dependency_graph_docker_unavailable(self, ops_client: AsyncClient):
+        """GET /dependencies returns 503 when Docker daemon is not running."""
+        with patch(
+            "app.operations.router.DockerService.get_dependency_graph",
+            new_callable=AsyncMock,
+            side_effect=Exception("Cannot connect to Docker daemon"),
+        ):
+            resp = await ops_client.get(f"{_API_PREFIX}/dependencies")
+
+        assert resp.status_code == 503
+        assert "Docker daemon is unavailable" in resp.json()["detail"]
+
+    async def test_container_action_docker_unavailable(self, ops_client: AsyncClient):
+        """POST /containers/{name}/action returns 503 when Docker is down."""
+        with patch(
+            "app.operations.router.DockerService.restart_container",
+            new_callable=AsyncMock,
+            side_effect=Exception("Cannot connect to Docker daemon"),
+        ):
+            resp = await ops_client.post(
+                f"{_API_PREFIX}/containers/nexus-api-1/action",
+                json={"action": "restart"},
+            )
+
+        assert resp.status_code == 503
+        assert "Docker daemon is unavailable" in resp.json()["detail"]
+
+    async def test_container_logs_docker_unavailable(self, ops_client: AsyncClient):
+        """GET /containers/{name}/logs returns 503 when Docker is down."""
+        with patch(
+            "app.operations.router.DockerService.get_container_logs",
+            new_callable=AsyncMock,
+            side_effect=Exception("Cannot connect to Docker daemon"),
+        ):
+            resp = await ops_client.get(f"{_API_PREFIX}/containers/nexus-api-1/logs")
+
+        assert resp.status_code == 503
+        assert "Docker daemon is unavailable" in resp.json()["detail"]
+
+
 class TestContainerActions:
     async def test_container_restart(self, ops_client: AsyncClient):
         """POST /containers/{name}/action with restart succeeds."""

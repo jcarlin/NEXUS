@@ -1,10 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
+import { AlertCircle, Loader2 } from "lucide-react";
 import { apiClient } from "@/api/client";
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from "@/components/ui/alert";
 import { ContainerCard, type ContainerInfo } from "./container-card";
 
 export function ContainerGrid() {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ["admin-containers"],
     queryFn: () =>
       apiClient<{ containers: ContainerInfo[] }>({
@@ -12,6 +17,7 @@ export function ContainerGrid() {
         method: "GET",
       }),
     refetchInterval: 10_000,
+    retry: 1,
   });
 
   if (isLoading)
@@ -20,6 +26,19 @@ export function ContainerGrid() {
         <Loader2 className="h-4 w-4 animate-spin" />
         Loading containers...
       </div>
+    );
+
+  if (isError)
+    return (
+      <Alert variant="destructive">
+        <AlertCircle className="h-4 w-4" />
+        <AlertTitle>Docker unavailable</AlertTitle>
+        <AlertDescription>
+          {error instanceof Error
+            ? error.message
+            : "Could not connect to the Docker daemon. Ensure Docker is running."}
+        </AlertDescription>
+      </Alert>
     );
 
   const containers = data?.containers ?? [];

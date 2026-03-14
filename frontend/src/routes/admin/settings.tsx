@@ -227,7 +227,7 @@ function SettingsPage() {
   })).filter((g) => g.settings.length > 0);
 
   return (
-    <div className="space-y-6 animate-page-in">
+    <div className="space-y-6 animate-page-in max-w-4xl">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
@@ -248,10 +248,10 @@ function SettingsPage() {
       ) : (
         grouped.map((group) => (
           <Card key={group.category}>
-            <CardHeader>
+            <CardHeader className="border-b">
               <CardTitle className="text-base">{group.label}</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-1">
+            <CardContent className="divide-y divide-border">
               {group.settings.map((setting) => {
                 const isDisabledByFlag =
                   setting.requires_flag !== null &&
@@ -265,7 +265,7 @@ function SettingsPage() {
                 return (
                   <div
                     key={setting.setting_name}
-                    className={`flex items-center justify-between rounded-md px-3 py-3 transition-colors ${
+                    className={`flex items-center justify-between px-3 py-3 transition-colors ${
                       isDisabledByFlag
                         ? "opacity-50"
                         : "hover:bg-muted/40"
