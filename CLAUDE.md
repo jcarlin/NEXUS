@@ -26,6 +26,17 @@ Full local deployment with zero cloud API dependency.
 8. **When unsure about a library API, look it up.** Do not guess at method signatures, parameter names, or return types from memory. Libraries in this project (LangGraph, Qdrant client, Instructor, Docling, FastEmbed, GLiNER, etc.) evolve rapidly and your training data may be stale. Search the web for current official documentation, read the actual installed source in `.venv/`, or ask. Confidently writing an outdated or incorrect API call wastes more time than checking.
 9. **High-blast-radius changes need confirmation.** Docker configs, Alembic migrations that drop/rename columns, dependency version changes, and anything touching auth middleware — always flag these and get explicit approval before applying.
 
+### Concurrent Sessions & Git Safety
+
+**Multiple Claude sessions often run in parallel on this repo.** One session finishing and committing must NEVER destroy uncommitted work from other sessions. These rules are non-negotiable:
+
+- **NEVER `git stash`.** Stash silently reverts every uncommitted change in the working tree — including files written by other active sessions. This has destroyed hours of parallel agent work. There is no acceptable use of `git stash` in this project.
+- **NEVER `git checkout .`, `git restore .`, `git reset --hard`, or `git clean -f`.** Same problem — these wipe uncommitted changes indiscriminately.
+- **Stage only your own files by name.** Use `git add path/to/file1 path/to/file2`, never `git add -A` or `git add .`. If you didn't create or modify a file, don't touch it.
+- **Check `git status` before committing.** If you see modified/untracked files you didn't touch, **leave them alone** — another session is working on them. Only stage files you intentionally changed.
+- **If the working tree is dirty with others' changes, commit yours and only yours.** List your changed files explicitly in `git add`. The other session's uncommitted files will remain in the working tree undisturbed.
+- **Never resolve merge conflicts automatically.** If `git commit` or `git pull` hits a conflict involving files you didn't edit, stop and ask the user. Don't guess which version to keep.
+
 ### Code Quality — Library-First, Not Custom Code
 
 **This is an integration project.** We stitch together well-maintained libraries and APIs — FastAPI, LangGraph, Qdrant client, Neo4j driver, Instructor, Docling, GLiNER, etc. We do NOT write custom implementations of things these libraries already do.
