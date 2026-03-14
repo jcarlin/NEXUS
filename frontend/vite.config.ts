@@ -11,6 +11,23 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          "vendor-router": ["@tanstack/react-router", "@tanstack/react-query"],
+          "vendor-d3": ["d3"],
+          "vendor-pdf": ["react-pdf"],
+          "vendor-markdown": ["react-markdown", "react-syntax-highlighter", "remark-gfm"],
+          "vendor-uppy": [
+            "@uppy/core", "@uppy/dashboard", "@uppy/drag-drop",
+            "@uppy/file-input", "@uppy/progress-bar", "@uppy/react",
+            "@uppy/status-bar", "@uppy/xhr-upload",
+          ],
+        },
+      },
+    },
+  },
   server: {
     port: 5173,
     proxy: {

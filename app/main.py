@@ -74,6 +74,8 @@ for _noisy_logger in (
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """Initialise shared resources on startup; tear them down on shutdown."""
+    import asyncio
+
     settings: Settings = get_settings()
 
     # --- LangSmith tracing (env vars consumed by LangGraph / ChatAnthropic) ---
@@ -87,97 +89,117 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
     logger.info("startup.begin", llm_provider=settings.llm_provider, embedding_provider=settings.embedding_provider)
 
-    # --- Qdrant collections ---
-    try:
-        qdrant = get_qdrant()
-        await qdrant.ensure_collections()
-        logger.info("startup.qdrant.ok")
-    except Exception as exc:
-        logger.error("startup.qdrant.failed", error=str(exc))
+    # --- Group 1: Infrastructure init (all independent) ---
+    async def _init_qdrant() -> None:
+        try:
+            qdrant = get_qdrant()
+            await qdrant.ensure_collections()
+            logger.info("startup.qdrant.ok")
+        except Exception as exc:
+            logger.error("startup.qdrant.failed", error=str(exc))
 
-    # --- MinIO bucket ---
-    try:
-        storage = get_minio()
-        await storage.ensure_bucket()
-        logger.info("startup.minio.ok")
-    except Exception as exc:
-        logger.error("startup.minio.failed", error=str(exc))
+    async def _init_minio() -> None:
+        try:
+            storage = get_minio()
+            await storage.ensure_bucket()
+            logger.info("startup.minio.ok")
+        except Exception as exc:
+            logger.error("startup.minio.failed", error=str(exc))
 
-    # --- Neo4j connectivity + schema ---
-    try:
-        driver = get_neo4j()
-        async with driver.session() as session:
-            result = await session.run("RETURN 1 AS n")
-            await result.consume()
-        logger.info("startup.neo4j.ok")
+    async def _init_neo4j() -> None:
+        try:
+            driver = get_neo4j()
+            async with driver.session() as session:
+                result = await session.run("RETURN 1 AS n")
+                await result.consume()
+            logger.info("startup.neo4j.ok")
 
-        # Ensure M11 graph schema (constraints + indexes)
-        from app.entities.schema import ensure_schema
+            from app.entities.schema import ensure_schema
 
-        await ensure_schema(driver)
-        logger.info("startup.neo4j.schema.ok")
-    except Exception as exc:
-        logger.error("startup.neo4j.failed", error=str(exc))
+            await ensure_schema(driver)
+            logger.info("startup.neo4j.schema.ok")
+        except Exception as exc:
+            logger.error("startup.neo4j.failed", error=str(exc))
 
-    # --- Redis ping ---
-    try:
-        redis = get_redis()
-        await redis.ping()
-        logger.info("startup.redis.ok")
-    except Exception as exc:
-        logger.error("startup.redis.failed", error=str(exc))
+    async def _init_redis() -> None:
+        try:
+            redis = get_redis()
+            await redis.ping()
+            logger.info("startup.redis.ok")
+        except Exception as exc:
+            logger.error("startup.redis.failed", error=str(exc))
 
-    # --- LangGraph Checkpointer (PostgresSaver) ---
-    try:
-        from app.dependencies import get_checkpointer
+    async def _init_postgres() -> None:
+        try:
+            from sqlalchemy import text as sa_text
 
-        get_checkpointer()  # Creates tables if needed (idempotent)
-        logger.info("startup.checkpointer.ok")
-    except Exception as exc:
-        logger.error("startup.checkpointer.failed", error=str(exc))
+            from app.dependencies import _get_engine
 
-    # --- PostgreSQL connectivity (via SQLAlchemy engine) ---
-    try:
-        from sqlalchemy import text as sa_text
+            engine = _get_engine()
+            async with engine.connect() as conn:
+                await conn.execute(sa_text("SELECT 1"))
+            logger.info("startup.postgres.ok")
+        except Exception as exc:
+            logger.error("startup.postgres.failed", error=str(exc))
 
-        from app.dependencies import _get_engine
+    await asyncio.gather(
+        _init_qdrant(),
+        _init_minio(),
+        _init_neo4j(),
+        _init_redis(),
+        _init_postgres(),
+    )
 
-        engine = _get_engine()
-        async with engine.connect() as conn:
-            await conn.execute(sa_text("SELECT 1"))
-        logger.info("startup.postgres.ok")
-    except Exception as exc:
-        logger.error("startup.postgres.failed", error=str(exc))
+    # --- Group 2: Depends on postgres being ready ---
+    async def _init_checkpointer() -> None:
+        try:
+            from app.dependencies import get_checkpointer
 
-    # --- Load feature flag DB overrides into Settings singleton ---
-    try:
-        from app.dependencies import get_session_factory
-        from app.feature_flags.service import FeatureFlagService
+            get_checkpointer()
+            logger.info("startup.checkpointer.ok")
+        except Exception as exc:
+            logger.error("startup.checkpointer.failed", error=str(exc))
 
-        factory = get_session_factory()
-        async with factory() as session:
-            await FeatureFlagService.load_overrides_into_settings(session)
-            await session.commit()
-        logger.info("startup.feature_flags.ok")
-    except Exception as exc:
-        logger.error("startup.feature_flags.failed", error=str(exc))
+    async def _init_feature_flags() -> None:
+        try:
+            from app.dependencies import get_session_factory
+            from app.feature_flags.service import FeatureFlagService
 
-    # --- Eager model warmup (eliminates cold-start penalty on first query) ---
-    try:
-        embedder = get_embedder()
-        await embedder.embed_query("warmup")
-        logger.info("startup.embedder.ok")
-    except Exception as exc:
-        logger.error("startup.embedder.failed", error=str(exc))
+            factory = get_session_factory()
+            async with factory() as session:
+                await FeatureFlagService.load_overrides_into_settings(session)
+                await session.commit()
+            logger.info("startup.feature_flags.ok")
+        except Exception as exc:
+            logger.error("startup.feature_flags.failed", error=str(exc))
 
-    try:
-        from app.dependencies import get_entity_extractor
+    await asyncio.gather(_init_checkpointer(), _init_feature_flags())
 
-        extractor = get_entity_extractor()
-        extractor.extract("warmup", entity_types=["person"], threshold=0.99)
-        logger.info("startup.gliner.ok")
-    except Exception as exc:
-        logger.error("startup.gliner.failed", error=str(exc))
+    # --- Group 3: Model warmup (independent, can be CPU-bound) ---
+    async def _warmup_embedder() -> None:
+        try:
+            embedder = get_embedder()
+            await embedder.embed_query("warmup")
+            logger.info("startup.embedder.ok")
+        except Exception as exc:
+            logger.error("startup.embedder.failed", error=str(exc))
+
+    async def _warmup_gliner() -> None:
+        try:
+            from app.dependencies import get_entity_extractor
+
+            extractor = get_entity_extractor()
+            await asyncio.to_thread(
+                extractor.extract,
+                "warmup",
+                entity_types=["person"],
+                threshold=0.99,
+            )
+            logger.info("startup.gliner.ok")
+        except Exception as exc:
+            logger.error("startup.gliner.failed", error=str(exc))
+
+    await asyncio.gather(_warmup_embedder(), _warmup_gliner())
 
     logger.info("startup.complete")
 
@@ -316,55 +338,64 @@ def create_app() -> FastAPI:
     # --- Health endpoint ---
     @application.get("/api/v1/health", tags=["system"])
     async def health(request: Request) -> JSONResponse:
-        """Ping all five backing services and report their status."""
-        status: dict[str, str] = {}
+        """Ping all five backing services in parallel and report their status."""
+        import asyncio
 
-        # Qdrant
-        try:
-            qdrant = get_qdrant()
-            qdrant.client.get_collections()
-            status["qdrant"] = "ok"
-        except Exception as exc:
-            status["qdrant"] = f"error: {exc}"
+        async def _check_qdrant() -> tuple[str, str]:
+            try:
+                qdrant = get_qdrant()
+                await asyncio.to_thread(qdrant.client.get_collections)
+                return ("qdrant", "ok")
+            except Exception as exc:
+                return ("qdrant", f"error: {exc}")
 
-        # MinIO
-        try:
-            storage = get_minio()
-            await storage.list_objects(prefix="")
-            status["minio"] = "ok"
-        except Exception as exc:
-            status["minio"] = f"error: {exc}"
+        async def _check_minio() -> tuple[str, str]:
+            try:
+                storage = get_minio()
+                await storage.list_objects(prefix="")
+                return ("minio", "ok")
+            except Exception as exc:
+                return ("minio", f"error: {exc}")
 
-        # Neo4j
-        try:
-            driver = get_neo4j()
-            async with driver.session() as session:
-                result = await session.run("RETURN 1 AS n")
-                await result.consume()
-            status["neo4j"] = "ok"
-        except Exception as exc:
-            status["neo4j"] = f"error: {exc}"
+        async def _check_neo4j() -> tuple[str, str]:
+            try:
+                driver = get_neo4j()
+                async with driver.session() as session:
+                    result = await session.run("RETURN 1 AS n")
+                    await result.consume()
+                return ("neo4j", "ok")
+            except Exception as exc:
+                return ("neo4j", f"error: {exc}")
 
-        # Redis
-        try:
-            redis = get_redis()
-            await redis.ping()
-            status["redis"] = "ok"
-        except Exception as exc:
-            status["redis"] = f"error: {exc}"
+        async def _check_redis() -> tuple[str, str]:
+            try:
+                redis = get_redis()
+                await redis.ping()
+                return ("redis", "ok")
+            except Exception as exc:
+                return ("redis", f"error: {exc}")
 
-        # PostgreSQL
-        try:
-            from sqlalchemy import text as sa_text
+        async def _check_postgres() -> tuple[str, str]:
+            try:
+                from sqlalchemy import text as sa_text
 
-            from app.dependencies import _get_engine
+                from app.dependencies import _get_engine
 
-            engine = _get_engine()
-            async with engine.connect() as conn:
-                await conn.execute(sa_text("SELECT 1"))
-            status["postgres"] = "ok"
-        except Exception as exc:
-            status["postgres"] = f"error: {exc}"
+                engine = _get_engine()
+                async with engine.connect() as conn:
+                    await conn.execute(sa_text("SELECT 1"))
+                return ("postgres", "ok")
+            except Exception as exc:
+                return ("postgres", f"error: {exc}")
+
+        results = await asyncio.gather(
+            _check_qdrant(),
+            _check_minio(),
+            _check_neo4j(),
+            _check_redis(),
+            _check_postgres(),
+        )
+        status = dict(results)
 
         all_ok = all(v == "ok" for v in status.values())
         return JSONResponse(

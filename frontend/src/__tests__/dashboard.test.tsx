@@ -36,8 +36,8 @@ vi.mock("@/components/dashboard/pipeline-status", () => ({
   PipelineStatus: () => <div data-testid="pipeline-status">Pipeline Status</div>,
 }));
 
-vi.mock("@/components/dashboard/graph-overview", () => ({
-  GraphOverview: () => <div data-testid="graph-overview">Graph Overview</div>,
+vi.mock("@/components/dashboard/service-health", () => ({
+  ServiceHealth: () => <div data-testid="service-health">Service Health</div>,
 }));
 
 // Track useQuery calls
@@ -106,7 +106,8 @@ describe("DashboardPage", () => {
 
     render(<Component />);
     expect(screen.getByText("42")).toBeInTheDocument();
-    expect(screen.getByText("135")).toBeInTheDocument();
+    // "135" appears in both the Entities stat card and the Knowledge Graph card
+    expect(screen.getAllByText("135").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("7")).toBeInTheDocument();
     expect(screen.getByText("3")).toBeInTheDocument();
   });
@@ -115,7 +116,7 @@ describe("DashboardPage", () => {
     render(<Component />);
     expect(screen.getByTestId("recent-activity")).toBeInTheDocument();
     expect(screen.getByTestId("pipeline-status")).toBeInTheDocument();
-    expect(screen.getByTestId("graph-overview")).toBeInTheDocument();
+    expect(screen.getByText("Knowledge Graph")).toBeInTheDocument();
   });
 
   it("shows descriptions for each stat card", () => {
@@ -126,9 +127,9 @@ describe("DashboardPage", () => {
     expect(screen.getByText("Active pipeline jobs")).toBeInTheDocument();
   });
 
-  it("makes 5 useQuery calls (stats + service health)", () => {
+  it("makes 4 useQuery calls (doc-count, graph-stats, active-jobs, hot-docs)", () => {
     render(<Component />);
-    expect(mockUseQuery).toHaveBeenCalledTimes(5);
+    expect(mockUseQuery).toHaveBeenCalledTimes(4);
   });
 
   it("passes matterId-based query keys", () => {

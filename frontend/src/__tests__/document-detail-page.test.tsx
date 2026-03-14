@@ -9,6 +9,10 @@ vi.mock("@tanstack/react-router", () => ({
     routeOptions._useParams = () => ({ id: "doc-123" });
     return routeOptions;
   },
+  createLazyFileRoute: () => (routeOptions: Record<string, unknown>) => {
+    routeOptions._useParams = () => ({ id: "doc-123" });
+    return routeOptions;
+  },
   Link: ({
     children,
     ...props
@@ -59,7 +63,7 @@ vi.mock("@/components/documents/redaction-panel", () => ({
   RedactionPanel: () => <div data-testid="redaction-panel">Redaction</div>,
 }));
 
-import { Route } from "@/routes/documents/$id";
+import { Route } from "@/routes/documents/$id.lazy";
 
 // The route uses Route.useParams() and Route.useSearch() — we need to mock them
 const routeObj = Route as unknown as {

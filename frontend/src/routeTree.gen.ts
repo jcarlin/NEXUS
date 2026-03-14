@@ -90,7 +90,9 @@ const EntitiesNetworkRoute = EntitiesNetworkRouteImport.update({
   id: '/entities/network',
   path: '/entities/network',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() =>
+  import('./routes/entities/network.lazy').then((d) => d.Route),
+)
 const EntitiesIdRoute = EntitiesIdRouteImport.update({
   id: '/entities/$id',
   path: '/entities/$id',
@@ -100,7 +102,9 @@ const DocumentsImportRoute = DocumentsImportRouteImport.update({
   id: '/documents/import',
   path: '/documents/import',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() =>
+  import('./routes/documents/import.lazy').then((d) => d.Route),
+)
 const DocumentsCompareRoute = DocumentsCompareRouteImport.update({
   id: '/documents/compare',
   path: '/documents/compare',
@@ -110,12 +114,14 @@ const DocumentsIdRoute = DocumentsIdRouteImport.update({
   id: '/documents/$id',
   path: '/documents/$id',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() => import('./routes/documents/$id.lazy').then((d) => d.Route))
 const ChatThreadIdRoute = ChatThreadIdRouteImport.update({
   id: '/chat/$threadId',
   path: '/chat/$threadId',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() =>
+  import('./routes/chat/$threadId.lazy').then((d) => d.Route),
+)
 const AnalyticsTimelineRoute = AnalyticsTimelineRouteImport.update({
   id: '/analytics/timeline',
   path: '/analytics/timeline',
@@ -125,7 +131,9 @@ const AnalyticsCommsRoute = AnalyticsCommsRouteImport.update({
   id: '/analytics/comms',
   path: '/analytics/comms',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() =>
+  import('./routes/analytics/comms.lazy').then((d) => d.Route),
+)
 const AdminUsersRoute = AdminUsersRouteImport.update({
   id: '/admin/users',
   path: '/admin/users',
