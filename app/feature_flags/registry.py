@@ -246,7 +246,8 @@ FLAG_REGISTRY: dict[str, FlagMeta] = {
         display_name="Automatic Graph Routing",
         description="Route simple factual queries to V1 (faster) and complex queries to agentic graph automatically.",
         category=FlagCategory.QUERY,
-        risk_level=FlagRiskLevel.SAFE,
+        risk_level=FlagRiskLevel.CACHE_CLEAR,
+        di_caches=["get_query_graph_v1"],
     ),
     "enable_ocr_correction": FlagMeta(
         display_name="OCR Error Correction",
@@ -302,7 +303,6 @@ FLAG_REGISTRY: dict[str, FlagMeta] = {
         description="Docker container management, Celery worker control, and uptime monitoring admin panel.",
         category=FlagCategory.INTEGRATIONS,
         risk_level=FlagRiskLevel.RESTART,
-        di_caches=["get_docker"],
     ),
 }
 

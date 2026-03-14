@@ -8,7 +8,12 @@ from uuid import UUID
 import pytest
 
 from app.feature_flags.registry import FLAG_REGISTRY
-from app.feature_flags.service import FeatureFlagService, settings_env_default
+from app.feature_flags.service import (
+    FeatureFlagService,
+    load_overrides_sync,
+    load_overrides_sync_safe,
+    settings_env_default,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -259,3 +264,108 @@ class TestLoadOverrides:
         with patch(_PATCH_GET_SETTINGS, return_value=settings):
             # Should not raise
             await FeatureFlagService.load_overrides_into_settings(db)
+
+
+# ---------------------------------------------------------------------------
+# load_overrides_sync / load_overrides_sync_safe
+# ---------------------------------------------------------------------------
+
+
+def _mock_sync_engine(rows: list[dict] | None = None):
+    """Create a mock sync engine that returns the given rows."""
+    engine = MagicMock()
+    conn = MagicMock()
+    result = MagicMock()
+    result.mappings.return_value.all.return_value = rows or []
+    conn.execute.return_value = result
+    conn.__enter__ = MagicMock(return_value=conn)
+    conn.__exit__ = MagicMock(return_value=False)
+    engine.connect.return_value = conn
+    return engine
+
+
+class TestLoadOverridesSync:
+    def test_no_overrides(self):
+        settings = _make_settings_mock()
+        settings.enable_reranker = True
+        engine = _mock_sync_engine(rows=[])
+        load_overrides_sync(settings, engine)
+        # Settings unchanged
+        assert settings.enable_reranker is True
+
+    def test_applies_overrides(self):
+        settings = _make_settings_mock()
+        settings.enable_reranker = True
+        settings.enable_sparse_embeddings = False
+        engine = _mock_sync_engine(
+            rows=[
+                {"flag_name": "enable_reranker", "enabled": False},
+                {"flag_name": "enable_sparse_embeddings", "enabled": True},
+            ]
+        )
+        load_overrides_sync(settings, engine)
+        assert settings.enable_reranker is False
+        assert settings.enable_sparse_embeddings is True
+
+    def test_skips_unknown_flags(self):
+        settings = _make_settings_mock()
+        engine = _mock_sync_engine(rows=[{"flag_name": "enable_nonexistent_flag", "enabled": True}])
+        # Should not raise
+        load_overrides_sync(settings, engine)
+
+    def test_db_error_propagates(self):
+        settings = _make_settings_mock()
+        engine = MagicMock()
+        conn = MagicMock()
+        conn.execute.side_effect = RuntimeError("connection refused")
+        conn.__enter__ = MagicMock(return_value=conn)
+        conn.__exit__ = MagicMock(return_value=False)
+        engine.connect.return_value = conn
+        with pytest.raises(RuntimeError, match="connection refused"):
+            load_overrides_sync(settings, engine)
+
+
+class TestLoadOverridesSyncSafe:
+    def test_suppresses_db_error(self):
+        settings = _make_settings_mock()
+        engine = MagicMock()
+        conn = MagicMock()
+        conn.execute.side_effect = RuntimeError("connection refused")
+        conn.__enter__ = MagicMock(return_value=conn)
+        conn.__exit__ = MagicMock(return_value=False)
+        engine.connect.return_value = conn
+        # Should not raise
+        load_overrides_sync_safe(settings, engine)
+
+
+# ---------------------------------------------------------------------------
+# Early sync load in create_app()
+# ---------------------------------------------------------------------------
+
+
+class TestEarlySyncLoad:
+    """Verify the early DB override load in create_app() is resilient."""
+
+    def test_early_sync_load_survives_db_failure(self):
+        """create_app() must succeed even when the DB is unreachable."""
+        from app.main import create_app
+
+        with patch("sqlalchemy.create_engine", side_effect=RuntimeError("connection refused")):
+            app = create_app()
+        # App should still be created
+        assert app is not None
+
+    def test_early_sync_load_disposes_engine(self):
+        """Engine is disposed even when load_overrides_sync_safe fails."""
+        from app.main import create_app
+
+        mock_engine = MagicMock()
+        with (
+            patch("sqlalchemy.create_engine", return_value=mock_engine),
+            patch(
+                "app.feature_flags.service.load_overrides_sync_safe",
+                side_effect=RuntimeError("table missing"),
+            ),
+        ):
+            create_app()
+        mock_engine.dispose.assert_called_once()

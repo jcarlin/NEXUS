@@ -243,6 +243,24 @@ def create_app() -> FastAPI:
 
     # --- Feature-flagged middleware ---
     settings = get_settings()
+
+    # Load DB feature flag overrides before conditional router registration.
+    # Restart-level flags gate router mounting below. Without this early sync
+    # load, DB overrides set via the admin UI would never take effect because
+    # lifespan() runs after create_app().
+    try:
+        from sqlalchemy import create_engine
+
+        from app.feature_flags.service import load_overrides_sync_safe
+
+        _sync_engine = create_engine(settings.postgres_url_sync, pool_pre_ping=True)
+        try:
+            load_overrides_sync_safe(settings, _sync_engine)
+        finally:
+            _sync_engine.dispose()
+    except Exception:
+        logger.warning("startup.feature_flags.early_load.failed", exc_info=True)
+
     if settings.enable_prometheus_metrics:
         from prometheus_fastapi_instrumentator import Instrumentator
 
