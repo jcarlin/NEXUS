@@ -505,6 +505,12 @@ async def evaluate_queries(
 
     gate_failures = _check_gates(None, citation)
 
+    # Judge composite (unused for now — available for future reporting)
+    # judge_composite = 0.0
+    # judge_scores = [r.judge_score for r in functional if r.judge_score]
+    # if judge_scores:
+    #     judge_composite = statistics.mean(s.composite for s in judge_scores)
+
     metrics = FlagRunMetrics(
         retrieval=retrieval,
         citation=citation,
