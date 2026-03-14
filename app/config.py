@@ -420,7 +420,7 @@ class Settings(BaseSettings):
     enable_auto_graph_routing: bool = False
     agentic_recursion_limit_fast: int = 24
     agentic_recursion_limit_standard: int = 40
-    agentic_recursion_limit_deep: int = 60
+    agentic_recursion_limit_deep: int = 40
 
     # --- LangSmith Tracing ---
     langchain_tracing_v2: bool = False

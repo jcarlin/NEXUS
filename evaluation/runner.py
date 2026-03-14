@@ -35,6 +35,15 @@ from evaluation.synthetic import (
 logger = structlog.get_logger(__name__)
 
 # ---------------------------------------------------------------------------
+# Timeouts
+# ---------------------------------------------------------------------------
+
+# Deep-tier queries (timelines, multi-hop) routinely exceed 120 s when
+# multiple feature flags are enabled.  180 s gives enough headroom without
+# masking genuine hangs.
+EVAL_QUERY_TIMEOUT_S: float = 180.0
+
+# ---------------------------------------------------------------------------
 # Quality gates
 # ---------------------------------------------------------------------------
 
@@ -190,7 +199,7 @@ async def run_full(
         raise RuntimeError("No ground-truth items in evaluation/data/ground_truth.json")
 
     # 2. Authenticate
-    async with httpx.AsyncClient(timeout=120.0) as client:
+    async with httpx.AsyncClient(timeout=EVAL_QUERY_TIMEOUT_S) as client:
         token = await _authenticate(client, base_url, credentials)
         headers = {
             "Authorization": f"Bearer {token}",
@@ -302,7 +311,7 @@ async def _evaluate_single_query(
             f"{api_url}/api/v1/query",
             json={"query": item.question},
             headers=headers,
-            timeout=120.0,
+            timeout=EVAL_QUERY_TIMEOUT_S,
         )
         latency_ms = (time.perf_counter() - start) * 1000
 

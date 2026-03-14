@@ -10,6 +10,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follo
 
 ## [Unreleased]
 
+## [1.13.1] - 2026-03-14
+
 ### Fixed
 - Wire up NDCG@10 and Precision@10 in evaluation runner — metrics were computed per-query but dropped before aggregation (`avg_ndcg = 0.0` hardcoded)
 - Fix citation accuracy default from `1.0` to `0.0` when `total_claims=0` — perfect score was masking claim extraction failures
@@ -18,6 +20,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follo
 - Fix question decomposition over-classification — tighten prompt to require 2+ distinct sub-questions, add short query bypass (< 15 words)
 - Fix multi-query expansion score pollution — weight original query results 1.0x vs variant results 0.7x during merge
 - Improve `structured_query` tool description to prevent agent confusion with `vector_search` — explicitly state metadata-only use and add negative examples
+- Fix gt-009 cross-cutting HTTP 500 — deep-tier timeline queries exceeded 120s eval timeout when flags enabled; resolved via recursion limit reduction and timeout increase
+- Fix header layout overflow on mobile — matter/dataset selectors now use min-w-0/max-w constraints instead of fixed widths
+- Move mobile nav trigger into header for proper responsive layout
+
+### Performance
+- Reduce `agentic_recursion_limit_deep` default from 60 to 40 — deep-tier timeline queries were exceeding eval timeouts when multiple flags enabled; 40 aligns with standard tier and prevents runaway agent loops
+- Increase evaluation client timeout from 120s to 180s (`EVAL_QUERY_TIMEOUT_S` constant) — deep-tier queries with flag overhead legitimately need >120s; extracted hardcoded timeouts into single constant shared by `runner.py` and `flag_sweep.py`
 
 ### Changed
 - Tune retrieval grading keyword weight from 0.4 to 0.2 (configurable via `RETRIEVAL_GRADING_KEYWORD_WEIGHT`) — legal documents use synonym-rich vocabulary where keyword overlap penalizes semantically correct results
@@ -25,6 +34,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follo
 - Add `claim_extraction_rate` field to `CitationMetrics` — surfaces "claims extracted in N/M queries" instead of silent 100% accuracy
 - Add multi-query expansion prompt constraint to preserve original query scope and entities
 - Add LangSmith trace inspection section to `docs/evaluation-guide.md`
+- Update QA evaluation report with gt-009 root cause analysis and verification results
 
 ## [1.13.0] - 2026-03-14
 

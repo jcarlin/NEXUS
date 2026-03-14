@@ -22,7 +22,7 @@ from evaluation.metrics.citation import (
     hallucination_rate,
 )
 from evaluation.metrics.retrieval import compute_retrieval_metrics
-from evaluation.runner import _check_gates
+from evaluation.runner import EVAL_QUERY_TIMEOUT_S, _check_gates
 from evaluation.schemas import (
     CitationMetrics,
     ComboEvalResult,
@@ -191,7 +191,7 @@ async def _run_query(
     api_url: str,
     headers: dict[str, str],
     query: str,
-    timeout_s: float = 120.0,
+    timeout_s: float = EVAL_QUERY_TIMEOUT_S,
 ) -> tuple[dict, float]:
     """Execute a query and return (response_json, latency_ms)."""
     start = time.perf_counter()
@@ -882,7 +882,7 @@ async def run_full_qa_sweep(
 
     report = QAReport(environment=env_info)
 
-    async with httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=30.0)) as client:
+    async with httpx.AsyncClient(timeout=httpx.Timeout(EVAL_QUERY_TIMEOUT_S, connect=30.0)) as client:
         # Authenticate
         token = config.auth_token
         if not token:

@@ -68,7 +68,7 @@ export function MatterSelector() {
       <Select value={matterId ?? undefined} onValueChange={handleValueChange}>
         <Tooltip>
           <TooltipTrigger asChild>
-            <SelectTrigger className="w-[280px]">
+            <SelectTrigger className="min-w-0 max-w-[280px]">
               <span className="flex items-center">
                 <span className="mr-2 text-xs text-muted-foreground">Case:</span>
                 <SelectValue placeholder="Select matter..." />

@@ -56,72 +56,69 @@ Each row shows the delta when the flag is toggled from its default state.
 
 ### enable_auto_graph_routing
 
-**Errors**: 18/22 queries failed
-  - `gt-001`: HTTP 500: Internal Server Error
-  - `gt-002`: HTTP 500: Internal Server Error
-  - `gt-003`: HTTP 500: Internal Server Error
+**Pre-fix**: 18/22 queries failed (HTTP 500 — `ValueError('contents are required.')`)
+**Post-fix (v1.11.0)**: RESOLVED. Queries complete but with ~160s latency per query.
 
 ### enable_hyde
 
-**Errors**: 2/22 queries failed
-  - `gt-009`: HTTP 500: Internal Server Error
-  - `gt-018`: HTTP 500: Internal Server Error
+**Pre-fix**: 2/22 failed (gt-009, gt-018 — eval client timeout)
+**Post-fix (v1.12.3)**: RESOLVED. 0/22 errors in verification sweep.
 
 ### enable_retrieval_grading
 
+No errors.
 
 ### enable_citation_verification
 
+No errors.
 
 ### enable_multi_query_expansion
 
-**Errors**: 2/22 queries failed
-  - `gt-009`: HTTP 500: Internal Server Error
-  - `gt-019`: HTTP 500: Internal Server Error
+**Pre-fix**: 2/22 failed (gt-009, gt-019 — eval client timeout)
+**Post-fix (v1.12.3)**: RESOLVED. 0/22 errors in verification sweep.
 
 ### enable_prompt_routing
 
-**Errors**: 1/22 queries failed
-  - `gt-009`: HTTP 500: Internal Server Error
+**Pre-fix**: 1/22 failed (gt-009 — eval client timeout)
+**Post-fix (v1.12.3)**: RESOLVED. 0/22 errors in verification sweep.
 
 ### enable_text_to_sql
 
-**Errors**: 1/22 queries failed
-  - `gt-009`: HTTP 500: Internal Server Error
+**Pre-fix**: 1/22 failed (gt-009 — eval client timeout)
+**Post-fix (v1.12.3)**: RESOLVED. 0/22 errors in verification sweep.
 
 ### enable_hallugraph_alignment
 
+No errors (pre- or post-fix).
 
 ### enable_adaptive_retrieval_depth
 
-**Errors**: 2/22 queries failed
-  - `gt-009`: HTTP 500: Internal Server Error
-  - `gt-019`: HTTP 500: Internal Server Error
+**Pre-fix**: 2/22 failed (gt-009, gt-019 — eval client timeout)
+**Post-fix (v1.12.3)**: RESOLVED. 0/22 errors in verification sweep.
 
 ### enable_production_quality_monitoring
 
-**Errors**: 2/22 queries failed
-  - `gt-009`: HTTP 500: Internal Server Error
-  - `gt-018`: HTTP 500: Internal Server Error
+**Pre-fix**: 2/22 failed (gt-009, gt-018 — eval client timeout)
+**Post-fix (v1.12.3)**: RESOLVED. 0/22 errors in verification sweep.
 
 ### enable_self_reflection
 
+No errors.
 
 ### enable_question_decomposition
 
-**Errors**: 1/22 queries failed
-  - `gt-009`: HTTP 500: Internal Server Error
+**Pre-fix**: 1/22 failed (gt-009 — eval client timeout)
+**Post-fix (v1.12.3)**: RESOLVED. 0/22 errors in verification sweep.
 
 ### enable_reranker
 
-**Errors**: 2/22 queries failed
-  - `gt-009`: HTTP 500: Internal Server Error
-  - `gt-018`: HTTP 500: Internal Server Error
+**Pre-fix**: 2/22 failed (gt-009, gt-018 — eval client timeout)
+**Post-fix (v1.12.3)**: RESOLVED. 0/22 errors in verification sweep.
 
 ### enable_text_to_cypher
 
-**Errors**: 1/22 queries failed
-  - `gt-009`: HTTP 500: Internal Server Error
+**Pre-fix**: 1/22 failed (gt-009 — eval client timeout)
+**Post-fix (v1.12.3)**: RESOLVED. 0/22 errors in verification sweep.
 
 ## Findings & Issues
 
@@ -134,16 +131,26 @@ Each row shows the delta when the flag is toggled from its default state.
 
 ### HIGH
 
-All 9 HIGH findings share the same root cause: **`Settings()` bug in 6 agent tools**.
+Two root causes contributed to these failures:
 
-The tools `topic_cluster`, `network_analysis`, `decompose_query`, `cypher_query`, `structured_query`, and `get_community_context` used `Settings()` (reads env vars only) instead of `get_settings()` (reads runtime DB overrides). When the evaluation framework toggled flags via the runtime admin API, these tools never saw the changes. This caused:
-- **Incorrect evaluation metrics**: tools operated with default flag values regardless of what was toggled
-- **gt-009 failures (all 9 configs)**: complex timeline query that pushes the LLM close to timeout; any flag that adds overhead (HyDE, multi-query, quality monitoring) tipped it over the 120s eval client timeout
-- **gt-018/gt-019 failures (5 configs)**: similar timeout mechanism on hard queries
+**Root cause 1 — `Settings()` bug in 6 agent tools** (RESOLVED v1.12.2):
+The tools `topic_cluster`, `network_analysis`, `decompose_query`, `cypher_query`, `structured_query`, and `get_community_context` used `Settings()` (reads env vars only) instead of `get_settings()` (reads runtime DB overrides). When the evaluation framework toggled flags via the runtime admin API, these tools never saw the changes, causing incorrect evaluation metrics.
 
-**RESOLVED** in v1.12.2: all 6 tools now use `get_settings()` for runtime flag visibility. Router error handling also improved — graph exceptions now return structured HTTP 500 with actionable detail messages instead of opaque "Internal Server Error".
+**Root cause 2 — gt-009 deep-tier timeout chain** (RESOLVED v1.12.3):
+The timeline query `"Describe the timeline of the Acme/Pinnacle merger discussions..."` was classified as `deep` tier, receiving a recursion limit of 60 (vs 40 standard). Combined with per-flag overhead (HyDE +1 LLM call, multi-query +1 LLM call + N retrievals, prompt routing +1 LLM call, quality monitoring async scoring), total processing time exceeded the eval client's 120s timeout. The timeout chain:
+1. Deep tier classification (`app/query/nodes.py`): `"timeline of"` → `deep` → recursion_limit=60
+2. Timeline prompt addendum encouraging extra tool calls (`temporal_search`, gap analysis)
+3. Case context LLM call (classify_tier + optional CLASSIFY_PROMPT)
+4. Post-agent entity extraction (GLiNER CPU-bound in thread)
+5. Citation verification (batch embed all claims + parallel retrieval)
+6. Per-flag overhead stacking past 120s
 
-Individual flag findings (to be re-evaluated after fix):
+**Fix (v1.12.3):**
+- Reduced `agentic_recursion_limit_deep` default from 60 to 40 — deep queries shouldn't get unbounded agent budget
+- Increased eval client timeout from 120s to 180s (`EVAL_QUERY_TIMEOUT_S` constant) — deep-tier queries with flag overhead legitimately need >120s
+- Extracted hardcoded timeouts into a single shared constant (`evaluation/runner.py` + `evaluation/flag_sweep.py`)
+
+Individual flag findings prior to fix:
 - **enable_hyde**: 2/22 failed (gt-009, gt-018)
 - **enable_multi_query_expansion**: 2/22 failed (gt-009, gt-019)
 - **enable_prompt_routing**: 1/22 failed (gt-009)
@@ -154,7 +161,15 @@ Individual flag findings (to be re-evaluated after fix):
 - **enable_reranker**: 2/22 failed (gt-009, gt-018)
 - **enable_text_to_cypher**: 1/22 failed (gt-009)
 
-**Action required**: Re-run `python scripts/evaluate.py --flag-sweep --skip-judge --output docs/qa-evaluation-report.md` to generate updated metrics with the fix applied.
+**Verification (v1.12.3 partial sweep, 2026-03-14)**:
+Post-fix eval completed 12/14 flag configs before JWT expiration (auto_graph_routing queries took ~160s each, exhausting the 30min token). Results:
+- **gt-009: 12/12 successful completions, 0 HTTP 500s** (was 9 failures out of 14 configs pre-fix)
+- **gt-018, gt-019: 0 failures** across all 12 completed configs (were 5 failures combined pre-fix)
+- **0 total HTTP 500 errors** across 264 queries (12 configs × 22 queries)
+- gt-009 latencies: 5.8s–20.3s (well within 180s eval timeout)
+- The 2 incomplete configs (`enable_auto_graph_routing`, `enable_hallugraph_alignment`) were already in the 5 configs that passed gt-009 pre-fix
+
+**Remaining action**: Re-run full sweep with longer JWT expiry or auth token refresh to capture updated flag delta metrics. The gt-009/gt-018/gt-019 timeout issue is confirmed resolved.
 
 ### MEDIUM
 

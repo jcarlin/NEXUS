@@ -17,7 +17,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "./theme-toggle";
 
-export function Header() {
+export function Header({ mobileNavTrigger }: { mobileNavTrigger?: React.ReactNode }) {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const startTour = useOnboarding((s) => s.startTour);
@@ -37,7 +37,8 @@ export function Header() {
 
   return (
     <header className="flex h-14 items-center justify-between border-b bg-background px-4">
-      <div className="flex items-center gap-2" data-tour="matter-selector">
+      <div className="flex min-w-0 flex-1 items-center gap-2" data-tour="matter-selector">
+        {mobileNavTrigger}
         <MatterSelector />
         <DatasetSelector />
       </div>
