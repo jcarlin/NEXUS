@@ -13,17 +13,20 @@ export const dashboardSteps: Step[] = [
     content:
       "Select the active matter (case) to scope all data. Every query, document list, and entity view is filtered to the selected matter.",
     placement: "bottom",
+    disableBeacon: true,
   },
   {
     target: "[data-tour='stat-cards']",
     content:
       "At-a-glance metrics for your investigation: total documents, extracted entities, flagged hot docs, and active processing jobs.",
     placement: "bottom",
+    disableBeacon: true,
   },
   {
     target: "[data-tour='recent-activity']",
     content:
       "Recent activity, pipeline status, and knowledge graph overview. Monitor ingestion progress and explore entity relationships.",
     placement: "top",
+    disableBeacon: true,
   },
 ];
