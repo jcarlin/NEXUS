@@ -67,6 +67,11 @@ COMPOSE="sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml -f
 git fetch origin main
 git checkout origin/main
 
+# Prune dangling images + build cache to free disk before build
+echo "Pruning stale Docker artifacts..."
+sudo docker image prune -f
+sudo docker builder prune -f
+
 # Rebuild and restart API + worker only
 $COMPOSE up -d --build api worker
 
@@ -119,3 +124,4 @@ Cost reminder: VM costs ~$60-80/mo running. Stop it when done:
 - **API startup takes ~45s normally**, but cold boots (first start after image rebuild, or GLiNER model download) can take up to 2-3 minutes. The 180s health check timeout accounts for this.
 - **Static IP:** `34.70.34.2` is a reserved static IP — it persists across VM stop/start cycles. No need to update `vercel.json` after restarts.
 - **If deploy fails**, check logs: `gcloud compute ssh nexus-demo --zone=us-central1-a --project=vault-ai-487703 --command="cd ~/nexus && sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.cloud.yml logs --tail=100 api"`
+- **FLOWER_USER/FLOWER_PASSWORD warnings** are cosmetic. To suppress: `echo -e "FLOWER_USER=admin\nFLOWER_PASSWORD=<password>" >> ~/nexus/.env` on the VM.
