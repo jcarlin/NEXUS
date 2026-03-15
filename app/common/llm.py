@@ -395,7 +395,7 @@ class LLMClient:
 
         input_tokens = getattr(response.usage_metadata, "prompt_token_count", None)
         output_tokens = getattr(response.usage_metadata, "candidates_token_count", None)
-        return response.text, input_tokens, output_tokens
+        return response.text or "", input_tokens, output_tokens
 
     async def _stream_gemini(self, messages: list[dict[str, str]], **kwargs: Any) -> AsyncIterator[str]:
         """Gemini streaming via google.genai async API."""
