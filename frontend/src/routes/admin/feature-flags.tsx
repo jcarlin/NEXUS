@@ -187,7 +187,10 @@ function FeatureFlagsPage() {
     setConfirmFlag(null);
   }
 
-  const flags = data?.items ?? [];
+  const flags = (data?.items ?? []).map((f) => ({
+    ...f,
+    depends_on: f.depends_on ?? [],
+  }));
 
   // Group by category
   const grouped = CATEGORY_ORDER.map((cat) => ({
