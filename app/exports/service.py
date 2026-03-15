@@ -418,18 +418,17 @@ class ExportService:
         limit: int = 50,
     ) -> tuple[list[dict], int]:
         """Return (items, total) for export jobs in a matter."""
-        where_clauses = ["matter_id = :matter_id"]
-        params: dict = {"matter_id": matter_id, "offset": offset, "limit": limit}
+        from app.common.db_utils import build_where_clause
 
-        if export_type is not None:
-            where_clauses.append("export_type = :export_type")
-            params["export_type"] = export_type
-
-        if status is not None:
-            where_clauses.append("status = :status")
-            params["status"] = status
-
-        where_sql = "WHERE " + " AND ".join(where_clauses)
+        where_sql, params = build_where_clause(
+            {
+                "matter_id": ("matter_id = :matter_id", matter_id),
+                "export_type": ("export_type = :export_type", export_type),
+                "status": ("status = :status", status),
+            }
+        )
+        params["offset"] = offset
+        params["limit"] = limit
 
         count_result = await db.execute(
             text(f"SELECT count(*) FROM export_jobs {where_sql}"),
