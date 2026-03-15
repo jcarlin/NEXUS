@@ -1,6 +1,8 @@
 """Application configuration loaded from environment variables via Pydantic Settings."""
 
-from pydantic import BaseModel, model_validator
+import os
+
+from pydantic import BaseModel, Field, model_validator
 from pydantic_settings import BaseSettings
 
 # --- Nested config groups (read-only views over flat fields) ---
@@ -129,6 +131,14 @@ class FeatureFlags(BaseModel):
     graphrag_communities: bool
     service_operations: bool
     agent_clarification: bool
+
+
+def _detect_docker_socket() -> str:
+    """Return the Docker socket path, preferring DOCKER_HOST env, then common paths."""
+    for path in ["/var/run/docker.sock", os.path.expanduser("~/.docker/run/docker.sock")]:
+        if os.path.exists(path):
+            return path
+    return "/var/run/docker.sock"  # fallback
 
 
 class Settings(BaseSettings):
@@ -375,7 +385,7 @@ class Settings(BaseSettings):
 
     # --- Service Operations ---
     enable_service_operations: bool = False
-    docker_socket_path: str = "/var/run/docker.sock"
+    docker_socket_path: str = Field(default_factory=_detect_docker_socket)
     docker_compose_project: str = "nexus"
 
     # --- HyDE (Hypothetical Document Embeddings) (T2-6) ---

@@ -16,7 +16,7 @@ export function ContainerGrid() {
         url: "/api/v1/admin/operations/containers",
         method: "GET",
       }),
-    refetchInterval: 10_000,
+    refetchInterval: (query) => (query.state.status === "error" ? false : 10_000),
     retry: 1,
   });
 
