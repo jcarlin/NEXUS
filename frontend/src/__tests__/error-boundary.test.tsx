@@ -84,4 +84,49 @@ describe("ErrorBoundary", () => {
     );
     expect(screen.getByText("Something went wrong")).toBeInTheDocument();
   });
+
+  it("shows Reload Page button for chunk load errors", () => {
+    const error = new TypeError(
+      "Failed to fetch dynamically imported module: /assets/network.lazy-abc123.js",
+    );
+    render(
+      <ErrorBoundary>
+        <ThrowingChild error={error} />
+      </ErrorBoundary>,
+    );
+    expect(screen.getByText("A new version is available")).toBeInTheDocument();
+    expect(screen.getByText("Reload Page")).toBeInTheDocument();
+    expect(screen.queryByText("Try Again")).not.toBeInTheDocument();
+  });
+
+  it("calls window.location.reload when Reload Page is clicked", () => {
+    const reloadMock = vi.fn();
+    Object.defineProperty(window, "location", {
+      value: { ...window.location, reload: reloadMock },
+      writable: true,
+    });
+
+    const error = new TypeError(
+      "Failed to fetch dynamically imported module: /assets/foo.js",
+    );
+    render(
+      <ErrorBoundary>
+        <ThrowingChild error={error} />
+      </ErrorBoundary>,
+    );
+    fireEvent.click(screen.getByText("Reload Page"));
+    expect(reloadMock).toHaveBeenCalled();
+  });
+
+  it("shows Try Again for non-chunk TypeError", () => {
+    const error = new TypeError("Cannot read properties of undefined");
+    render(
+      <ErrorBoundary>
+        <ThrowingChild error={error} />
+      </ErrorBoundary>,
+    );
+    expect(screen.getByText("Something went wrong")).toBeInTheDocument();
+    expect(screen.getByText("Try Again")).toBeInTheDocument();
+    expect(screen.queryByText("Reload Page")).not.toBeInTheDocument();
+  });
 });

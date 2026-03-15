@@ -6,6 +6,17 @@ import { Toaster } from "sonner";
 import { routeTree } from "./routeTree.gen";
 import "./index.css";
 
+// Auto-reload on stale chunk 404 after deployments
+window.addEventListener("vite:preloadError", (event) => {
+  event.preventDefault();
+  const key = "nexus:chunk-reload";
+  if (!sessionStorage.getItem(key)) {
+    sessionStorage.setItem(key, "1");
+    window.location.reload();
+  }
+});
+sessionStorage.removeItem("nexus:chunk-reload");
+
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
