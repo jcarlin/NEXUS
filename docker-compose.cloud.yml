@@ -30,9 +30,8 @@ services:
     restart: unless-stopped
     logging: *default-logging
 
-  # --- Port overrides: remove host bindings for all internal services ---
+  # --- Port overrides: keep API on 8000 (Vercel rewrites), remove all others ---
   api:
-    ports: !override []
     logging: *default-logging
     healthcheck:
       start_period: 180s
