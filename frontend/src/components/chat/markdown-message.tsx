@@ -190,7 +190,8 @@ export function MarkdownMessage({ content, sources, onCitationClick }: MarkdownM
             {inject(children)}
           </a>
         ),
-        linkReference: ({ children }) => {
+        // @ts-expect-error — linkReference is a valid mdast node; react-markdown types omit it
+        linkReference: ({ children }: { children: React.ReactNode }) => {
           // react-markdown parses [N] as linkReference nodes.
           // Match numeric labels against our sources array.
           const label = String(
