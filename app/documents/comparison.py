@@ -76,6 +76,7 @@ async def extract_document_text(
             data = await storage.download_bytes(key)
             return data.decode("utf-8", errors="replace")
         except Exception:
+            logger.debug("comparison.text_variant_unavailable", key=key, exc_info=True)
             continue
 
     raise FileNotFoundError(f"No parsed text found for job {job_id}")

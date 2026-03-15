@@ -7,6 +7,30 @@ Four templates matching CLAUDE.md Section 6.3:
   * FOLLOWUP_PROMPT   — generate 3 follow-up investigation questions
 """
 
+# ---------------------------------------------------------------------------
+# Prompt versioning — log alongside AI audit entries for reproducibility
+# ---------------------------------------------------------------------------
+
+PROMPT_VERSIONS: dict[str, str] = {
+    "classify": "1.0.0",
+    "rewrite": "1.0.0",
+    "synthesis": "1.0.0",
+    "followup": "1.0.0",
+    "investigation_system": "1.0.0",
+    "verify_claims": "1.0.0",
+    "verify_judgment": "1.0.0",
+    "factual_addendum": "1.0.0",
+    "analytical_addendum": "1.0.0",
+    "exploratory_addendum": "1.0.0",
+    "timeline_addendum": "1.0.0",
+    "hyde": "1.0.0",
+    "self_reflection": "1.0.0",
+    "clarification_addendum": "1.0.0",
+    "text_to_sql": "1.0.0",
+    "grading": "1.0.0",
+}
+
+
 CLASSIFY_PROMPT = """\
 Classify the following user question into exactly one category.
 Reply with a single word — one of: factual, analytical, exploratory, timeline

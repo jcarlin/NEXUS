@@ -184,40 +184,21 @@ class AuditService:
         limit: int = 50,
     ) -> tuple[list[dict[str, Any]], int]:
         """Return paginated AI audit log entries with optional filters."""
-        where_clauses: list[str] = []
-        params: dict[str, Any] = {"offset": offset, "limit": limit}
+        from app.common.db_utils import build_where_clause
 
-        if session_id is not None:
-            where_clauses.append("session_id = :session_id")
-            params["session_id"] = session_id
-
-        if node_name is not None:
-            where_clauses.append("node_name = :node_name")
-            params["node_name"] = node_name
-
-        if provider is not None:
-            where_clauses.append("provider = :provider")
-            params["provider"] = provider
-
-        if user_id is not None:
-            where_clauses.append("user_id = :user_id")
-            params["user_id"] = user_id
-
-        if matter_id is not None:
-            where_clauses.append("matter_id = :matter_id")
-            params["matter_id"] = matter_id
-
-        if date_from is not None:
-            where_clauses.append("created_at >= :date_from")
-            params["date_from"] = date_from
-
-        if date_to is not None:
-            where_clauses.append("created_at <= :date_to")
-            params["date_to"] = date_to
-
-        where_sql = ""
-        if where_clauses:
-            where_sql = "WHERE " + " AND ".join(where_clauses)
+        where_sql, params = build_where_clause(
+            {
+                "session_id": ("session_id = :session_id", session_id),
+                "node_name": ("node_name = :node_name", node_name),
+                "provider": ("provider = :provider", provider),
+                "user_id": ("user_id = :user_id", user_id),
+                "matter_id": ("matter_id = :matter_id", matter_id),
+                "date_from": ("created_at >= :date_from", date_from),
+                "date_to": ("created_at <= :date_to", date_to),
+            }
+        )
+        params["offset"] = offset
+        params["limit"] = limit
 
         count_result = await db.execute(
             text(f"SELECT count(*) FROM ai_audit_log {where_sql}"),
@@ -252,23 +233,17 @@ class AuditService:
         export_format: str = "csv",
     ) -> str:
         """Export audit log entries as CSV or JSON string."""
+        from app.common.db_utils import build_where_clause
+
         if table not in ("ai_audit_log", "agent_audit_log", "audit_log"):
             raise ValueError(f"Invalid table: {table}")
 
-        where_clauses: list[str] = []
-        params: dict[str, Any] = {}
-
-        if date_from is not None:
-            where_clauses.append("created_at >= :date_from")
-            params["date_from"] = date_from
-
-        if date_to is not None:
-            where_clauses.append("created_at <= :date_to")
-            params["date_to"] = date_to
-
-        where_sql = ""
-        if where_clauses:
-            where_sql = "WHERE " + " AND ".join(where_clauses)
+        where_sql, params = build_where_clause(
+            {
+                "date_from": ("created_at >= :date_from", date_from),
+                "date_to": ("created_at <= :date_to", date_to),
+            }
+        )
 
         result = await db.execute(
             text(f"SELECT * FROM {table} {where_sql} ORDER BY created_at DESC"),

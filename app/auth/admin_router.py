@@ -54,40 +54,21 @@ async def list_audit_log(
     current_user: UserRecord = Depends(require_role("admin")),
 ):
     """Return a paginated, filterable audit log. Admin-only."""
-    where_clauses: list[str] = []
-    params: dict = {"offset": offset, "limit": limit}
+    from app.common.db_utils import build_where_clause
 
-    if user_id is not None:
-        where_clauses.append("user_id = :user_id")
-        params["user_id"] = user_id
-
-    if action is not None:
-        where_clauses.append("action = :action")
-        params["action"] = action
-
-    if resource_type is not None:
-        where_clauses.append("resource_type = :resource_type")
-        params["resource_type"] = resource_type
-
-    if matter_id is not None:
-        where_clauses.append("matter_id = :matter_id")
-        params["matter_id"] = matter_id
-
-    if status_code is not None:
-        where_clauses.append("status_code = :status_code")
-        params["status_code"] = status_code
-
-    if date_from is not None:
-        where_clauses.append("created_at >= :date_from")
-        params["date_from"] = date_from
-
-    if date_to is not None:
-        where_clauses.append("created_at <= :date_to")
-        params["date_to"] = date_to
-
-    where_sql = ""
-    if where_clauses:
-        where_sql = "WHERE " + " AND ".join(where_clauses)
+    where_sql, params = build_where_clause(
+        {
+            "user_id": ("user_id = :user_id", user_id),
+            "action": ("action = :action", action),
+            "resource_type": ("resource_type = :resource_type", resource_type),
+            "matter_id": ("matter_id = :matter_id", matter_id),
+            "status_code": ("status_code = :status_code", status_code),
+            "date_from": ("created_at >= :date_from", date_from),
+            "date_to": ("created_at <= :date_to", date_to),
+        }
+    )
+    params["offset"] = offset
+    params["limit"] = limit
 
     count_result = await db.execute(
         text(f"SELECT count(*) FROM audit_log {where_sql}"),

@@ -11,6 +11,34 @@ from typing import Any
 from uuid import UUID
 
 
+def build_where_clause(
+    filters: dict[str, tuple[str, Any]],
+) -> tuple[str, dict[str, Any]]:
+    """Build a parameterized WHERE clause from optional filters.
+
+    Each entry in *filters* maps a parameter name to ``(sql_expr, value)``.
+    Entries with ``None`` values are silently skipped.
+
+    Returns ``(where_sql, params)`` where *where_sql* is either an empty
+    string (no active filters) or ``"WHERE <cond1> AND <cond2> ..."``.
+
+    Example::
+
+        where_sql, params = build_where_clause({
+            "user_id": ("user_id = :user_id", user_id),
+            "date_from": ("created_at >= :date_from", date_from),
+        })
+    """
+    clauses: list[str] = []
+    params: dict[str, Any] = {}
+    for param_name, (expr, value) in filters.items():
+        if value is not None:
+            clauses.append(expr)
+            params[param_name] = value
+    where_sql = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+    return where_sql, params
+
+
 def parse_jsonb(val: Any) -> list[Any]:
     """Safely parse a JSONB column that may be a string, list, or None."""
     if val is None:

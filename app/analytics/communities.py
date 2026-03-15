@@ -42,7 +42,7 @@ class CommunityDetector:
             try:
                 await session.run(f"CALL gds.graph.drop('{graph_name}', false)")
             except Exception:
-                pass
+                logger.warning("community.graph_drop_failed", graph_name=graph_name, exc_info=True)
 
             # Project the entity subgraph for this matter
             project_cypher = """
@@ -74,7 +74,7 @@ class CommunityDetector:
             try:
                 await session.run(f"CALL gds.graph.drop('{graph_name}', false)")
             except Exception:
-                pass
+                logger.warning("community.graph_cleanup_failed", graph_name=graph_name, exc_info=True)
 
         # Group by community
         communities: dict[int, dict] = {}
