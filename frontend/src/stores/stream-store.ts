@@ -3,7 +3,7 @@ import { fetchEventSource } from "@microsoft/fetch-event-source";
 import { useAuthStore } from "@/stores/auth-store";
 import { useAppStore } from "@/stores/app-store";
 import { queryClient } from "@/main";
-import type { SourceDocument, EntityMention, CitedClaim } from "@/types";
+import type { SourceDocument, EntityMention, CitedClaim, ToolCallEntry } from "@/types";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
@@ -18,6 +18,7 @@ export interface StreamState {
   citedClaims: CitedClaim[];
   entities: EntityMention[];
   followUps: string[];
+  toolCalls: ToolCallEntry[];
   threadId: string | null;
   error: string | null;
   clarificationQuestion: string | null;
@@ -33,6 +34,7 @@ export const initialStreamState: StreamState = {
   citedClaims: [],
   entities: [],
   followUps: [],
+  toolCalls: [],
   threadId: null,
   error: null,
   clarificationQuestion: null,
@@ -162,6 +164,14 @@ export const useStreamStore = create<StreamStore>()((set, get) => ({
               get()._updateStreamState(currentKey, {
                 streamingText: "",
                 stage: "investigating",
+              });
+              break;
+            case "tool_call":
+              get()._updateStreamState(currentKey, {
+                toolCalls: [
+                  ...(get().streams.get(currentKey)?.state.toolCalls ?? []),
+                  { tool: parsed.tool, label: parsed.label },
+                ],
               });
               break;
             case "interrupt": {
@@ -361,6 +371,14 @@ export const useStreamStore = create<StreamStore>()((set, get) => ({
               get()._updateStreamState(currentKey, {
                 streamingText: "",
                 stage: "investigating",
+              });
+              break;
+            case "tool_call":
+              get()._updateStreamState(currentKey, {
+                toolCalls: [
+                  ...(get().streams.get(currentKey)?.state.toolCalls ?? []),
+                  { tool: parsed.tool, label: parsed.label },
+                ],
               });
               break;
             case "interrupt": {

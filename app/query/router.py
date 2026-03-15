@@ -38,6 +38,7 @@ from app.query.schemas import (
     QueryRequest,
     QueryResponse,
     SourceDocument,
+    ToolCallEntry,
 )
 from app.query.service import ChatService, QueryService
 
@@ -62,6 +63,47 @@ _STAGE_MAP = {
     "post_agent_extract": "extracting_results",
     "verify_citations": "verifying_citations",
     "hallugraph_check": "checking_entity_grounding",
+}
+
+# Map agentic graph node names to user-friendly labels for the activity log.
+# Nodes not listed here are internal (e.g. subgraph nodes) and are skipped.
+_NODE_LABEL_MAP = {
+    "case_context_resolve": "Resolved case context",
+    "investigation_agent": "Investigation agent",
+    "post_agent_extract": "Extracted results",
+    "verify_citations": "Verified citations",
+    "hallugraph_check": "Checked entity grounding",
+    "reflect": "Self-reflection",
+    "generate_follow_ups": "Generated follow-ups",
+    # V1 nodes (for auto-routed fast queries)
+    "classify": "Classified query",
+    "rewrite": "Rewrote query",
+    "retrieve": "Retrieved chunks",
+    "rerank": "Reranked results",
+    "check_relevance": "Checked relevance",
+    "graph_lookup": "Graph lookup",
+    "reformulate": "Reformulated query",
+    "synthesize": "Synthesized response",
+}
+
+# Map agent tool function names to user-friendly labels for the activity log
+_TOOL_LABEL_MAP = {
+    "vector_search": "Searched documents",
+    "graph_query": "Queried knowledge graph",
+    "temporal_search": "Searched by date range",
+    "entity_lookup": "Looked up entity",
+    "document_retrieval": "Retrieved document",
+    "case_context": "Loaded case context",
+    "sentiment_search": "Analyzed sentiment",
+    "hot_doc_search": "Scanned hot documents",
+    "context_gap_search": "Checked context gaps",
+    "communication_matrix": "Analyzed communications",
+    "topic_cluster": "Clustered topics",
+    "network_analysis": "Analyzed network",
+    "decompose_query": "Decomposed query",
+    "cypher_query": "Ran graph query",
+    "structured_query": "Ran structured query",
+    "get_community_context": "Loaded community context",
 }
 
 
@@ -506,6 +548,7 @@ async def _agentic_event_generator(graph, initial_state, config, db, thread_id, 
     client_disconnected = False
     graph_error = False
     stream_completed = False
+    tool_calls_log: list[dict[str, str]] = []
     # Track current message ID to detect when a "thinking" message turns into
     # a tool call.  When that happens we emit a ``clear`` SSE event so the
     # frontend discards the tokens that were prematurely streamed.
@@ -536,6 +579,24 @@ async def _agentic_event_generator(graph, initial_state, config, db, thread_id, 
                         continue
                     stage = _STAGE_MAP.get(node_name, node_name)
                     yield {"event": "status", "data": json.dumps({"stage": stage})}
+
+                    # Emit pipeline step for the activity log
+                    node_label = _NODE_LABEL_MAP.get(node_name)
+                    if node_label:
+                        # Enrich labels with counts where available
+                        if node_name == "verify_citations" and update.get("cited_claims"):
+                            count = len(update["cited_claims"])
+                            node_label = f"Verified {count} citation{'s' if count != 1 else ''}"
+                        elif node_name == "post_agent_extract" and update.get("source_documents"):
+                            count = len(update["source_documents"])
+                            node_label = f"Extracted {count} source{'s' if count != 1 else ''}"
+
+                        step_entry = {"tool": node_name, "label": node_label, "kind": "step"}
+                        tool_calls_log.append(step_entry)
+                        yield {
+                            "event": "tool_call",
+                            "data": json.dumps(step_entry),
+                        }
 
                     # Emit sources when post_agent_extract populates source_documents
                     if not sources_emitted and update.get("source_documents"):
@@ -573,6 +634,18 @@ async def _agentic_event_generator(graph, initial_state, config, db, thread_id, 
                     if not _cur_msg_had_tool_calls and _emitted_tokens_for_cur_msg:
                         yield {"event": "clear", "data": "{}"}
                     _cur_msg_had_tool_calls = True
+
+                    # Emit tool_call SSE event for each new tool invocation
+                    for tc in msg_chunk.tool_call_chunks:
+                        tc_name = tc.get("name") if isinstance(tc, dict) else getattr(tc, "name", None)
+                        if tc_name:
+                            label = _TOOL_LABEL_MAP.get(tc_name, tc_name)
+                            entry = {"tool": tc_name, "label": label}
+                            tool_calls_log.append(entry)
+                            yield {
+                                "event": "tool_call",
+                                "data": json.dumps(entry),
+                            }
 
                 # Only emit content tokens from messages that haven't produced
                 # tool calls (i.e. the final answer, not intermediate "thinking").
@@ -637,6 +710,7 @@ async def _agentic_event_generator(graph, initial_state, config, db, thread_id, 
                 follow_up_questions=final_state.get("follow_up_questions", []),
                 matter_id=matter_id,
                 cited_claims=final_state.get("cited_claims", []),
+                tool_calls=tool_calls_log if tool_calls_log else None,
             )
         await db.commit()
     except Exception:
@@ -799,6 +873,13 @@ async def get_chat(
             except Exception:
                 logger.warning("chat.entity_mention_parse_failed", thread_id=thread_id)
 
+        safe_tool_calls: list[ToolCallEntry] = []
+        for tc in parse_jsonb(r.get("tool_calls")):
+            try:
+                safe_tool_calls.append(ToolCallEntry(**tc))
+            except Exception:
+                logger.warning("chat.tool_call_parse_failed", thread_id=thread_id)
+
         messages.append(
             ChatMessage(
                 role=r["role"],
@@ -807,6 +888,7 @@ async def get_chat(
                 entities_mentioned=safe_entities,
                 follow_up_questions=parse_jsonb(r.get("follow_up_questions")),
                 cited_claims=safe_claims,
+                tool_calls=safe_tool_calls,
                 timestamp=r["created_at"],
             )
         )

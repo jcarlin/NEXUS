@@ -183,6 +183,7 @@ class ChatService:
         follow_up_questions: list[str] | None = None,
         matter_id: UUID | None = None,
         cited_claims: list[dict] | None = None,
+        tool_calls: list[dict] | None = None,
     ) -> str:
         """Insert a message into ``chat_messages`` and return its id."""
         message_id = str(uuid.uuid4())
@@ -190,10 +191,10 @@ class ChatService:
             text("""
                 INSERT INTO chat_messages
                     (id, thread_id, role, content, source_documents, entities_mentioned,
-                     follow_up_questions, matter_id, cited_claims, created_at)
+                     follow_up_questions, matter_id, cited_claims, tool_calls, created_at)
                 VALUES
                     (:id, :thread_id, :role, :content, :source_documents, :entities_mentioned,
-                     :follow_up_questions, :matter_id, :cited_claims, :created_at)
+                     :follow_up_questions, :matter_id, :cited_claims, :tool_calls, :created_at)
             """),
             {
                 "id": message_id,
@@ -205,6 +206,7 @@ class ChatService:
                 "follow_up_questions": json.dumps(follow_up_questions or []),
                 "matter_id": matter_id,
                 "cited_claims": json.dumps(cited_claims or []),
+                "tool_calls": json.dumps(tool_calls or []),
                 "created_at": datetime.now(UTC),
             },
         )
@@ -228,7 +230,8 @@ class ChatService:
         result = await db.execute(
             text(f"""
                 SELECT id, thread_id, role, content, source_documents,
-                       entities_mentioned, follow_up_questions, cited_claims, created_at
+                       entities_mentioned, follow_up_questions, cited_claims,
+                       tool_calls, created_at
                 FROM chat_messages
                 {where}
                 ORDER BY created_at ASC

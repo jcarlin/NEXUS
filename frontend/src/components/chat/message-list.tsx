@@ -4,7 +4,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { UserMessage } from "./user-message";
 import { AssistantMessage } from "./assistant-message";
-import { StageIndicator } from "./stage-indicator";
+import { ActivityLog } from "./activity-log";
 import { ErrorMessage } from "./error-message";
 import { ClarificationPrompt } from "./clarification-prompt";
 import { FollowUpChips } from "./follow-up-chips";
@@ -13,6 +13,7 @@ import type {
   SourceDocument,
   EntityMention,
   CitedClaim,
+  ToolCallEntry,
 } from "@/types";
 
 const EXAMPLE_QUERIES = [
@@ -27,6 +28,7 @@ interface StreamingMessage {
   sources: SourceDocument[];
   entities: EntityMention[];
   citedClaims: CitedClaim[];
+  toolCalls: ToolCallEntry[];
 }
 
 interface MessageListProps {
@@ -143,20 +145,32 @@ export function MessageList({
             msg.role === "user" ? (
               <UserMessage key={idx} content={msg.content} />
             ) : (
-              <AssistantMessage
-                key={idx}
-                content={msg.content}
-                sources={msg.source_documents}
-                entities={msg.entities_mentioned}
-                citedClaims={msg.cited_claims}
-                threadId={threadId}
-              />
+              <div key={idx}>
+                {msg.tool_calls && msg.tool_calls.length > 0 && (
+                  <div className="mb-2">
+                    <ActivityLog toolCalls={msg.tool_calls} stage={null} isStreaming={false} />
+                  </div>
+                )}
+                <AssistantMessage
+                  content={msg.content}
+                  sources={msg.source_documents}
+                  entities={msg.entities_mentioned}
+                  citedClaims={msg.cited_claims}
+                  threadId={threadId}
+                />
+              </div>
             ),
           )}
 
           {pendingUserMessage && <UserMessage content={pendingUserMessage} />}
 
-          {stage && !streaming?.text && <StageIndicator stage={stage} />}
+          {(stage || (streaming?.toolCalls && streaming.toolCalls.length > 0)) && (
+            <ActivityLog
+              toolCalls={streaming?.toolCalls ?? []}
+              stage={stage ?? null}
+              isStreaming={!!stage}
+            />
+          )}
 
           {clarificationQuestion && onClarificationSubmit && (
             <ClarificationPrompt

@@ -337,3 +337,15 @@ async def test_query_graph_recursion_error_returns_budget_message(query_client):
     data = response.json()
     assert "detail" in data
     assert "processing budget" in data["detail"]
+
+
+def test_tool_label_map_covers_all_investigation_tools():
+    """Verify that _TOOL_LABEL_MAP has entries for all INVESTIGATION_TOOLS."""
+    from app.query.router import _TOOL_LABEL_MAP
+    from app.query.tools import INVESTIGATION_TOOLS
+
+    tool_names = {t.name for t in INVESTIGATION_TOOLS}
+    label_names = set(_TOOL_LABEL_MAP.keys())
+
+    missing = tool_names - label_names
+    assert not missing, f"_TOOL_LABEL_MAP is missing labels for: {missing}"

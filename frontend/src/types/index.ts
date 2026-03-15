@@ -140,6 +140,12 @@ export interface ChatThread {
   first_query: string;
 }
 
+export interface ToolCallEntry {
+  tool: string;
+  label: string;
+  kind?: "tool" | "step";
+}
+
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
@@ -147,6 +153,7 @@ export interface ChatMessage {
   entities_mentioned: _EntityMention[];
   follow_up_questions: string[];
   cited_claims: _CitedClaim[];
+  tool_calls?: ToolCallEntry[];
   timestamp: string;
 }
 

@@ -63,6 +63,14 @@ class QueryResponse(BaseModel):
     entity_grounding: list[EntityGrounding] = Field(default_factory=list)
 
 
+class ToolCallEntry(BaseModel):
+    """A single tool invocation or pipeline step logged during agent investigation."""
+
+    tool: str
+    label: str
+    kind: str = "tool"  # "tool" for agent tool calls, "step" for pipeline nodes
+
+
 class ChatMessage(BaseModel):
     """A single message in a conversation thread."""
 
@@ -72,6 +80,7 @@ class ChatMessage(BaseModel):
     entities_mentioned: list[EntityMention] = Field(default_factory=list)
     follow_up_questions: list[str] = Field(default_factory=list)
     cited_claims: list["CitedClaim"] = Field(default_factory=list)
+    tool_calls: list[ToolCallEntry] = Field(default_factory=list)
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
 

@@ -23,9 +23,25 @@ vi.mock("@/components/chat/user-message", () => ({
   ),
 }));
 
-vi.mock("@/components/chat/stage-indicator", () => ({
-  StageIndicator: ({ stage }: { stage: string }) => (
-    <div data-testid="stage-indicator">{stage}</div>
+vi.mock("@/components/chat/activity-log", () => ({
+  ActivityLog: ({
+    toolCalls,
+    stage,
+    isStreaming,
+  }: {
+    toolCalls: { tool: string; label: string }[];
+    stage: string | null;
+    isStreaming: boolean;
+  }) => (
+    <div
+      data-testid="activity-log"
+      data-stage={stage}
+      data-streaming={isStreaming}
+    >
+      {toolCalls.map((tc: { tool: string; label: string }, i: number) => (
+        <span key={i}>{tc.label}</span>
+      ))}
+    </div>
   ),
 }));
 
@@ -190,13 +206,14 @@ describe("MessageList", () => {
     expect(screen.getAllByTestId("assistant-message")).toHaveLength(1);
   });
 
-  it("shows StageIndicator when stage is set and no streaming text", () => {
+  it("shows ActivityLog when stage is set", () => {
     render(<MessageList messages={[]} stage="retrieving" />);
-    const indicator = screen.getByTestId("stage-indicator");
-    expect(indicator).toHaveTextContent("retrieving");
+    const log = screen.getByTestId("activity-log");
+    expect(log).toHaveAttribute("data-stage", "retrieving");
+    expect(log).toHaveAttribute("data-streaming", "true");
   });
 
-  it("does not show StageIndicator when streaming text is present", () => {
+  it("shows ActivityLog alongside streaming text", () => {
     render(
       <MessageList
         messages={[]}
@@ -206,10 +223,12 @@ describe("MessageList", () => {
           sources: [],
           entities: [],
           citedClaims: [],
+          toolCalls: [{ tool: "vector_search", label: "Searched documents" }],
         }}
       />,
     );
-    expect(screen.queryByTestId("stage-indicator")).not.toBeInTheDocument();
+    expect(screen.getByTestId("activity-log")).toBeInTheDocument();
+    expect(screen.getByText("Searched documents")).toBeInTheDocument();
   });
 
   it("shows streaming assistant message when streaming is set", () => {
@@ -221,6 +240,7 @@ describe("MessageList", () => {
           sources: [],
           entities: [],
           citedClaims: [],
+          toolCalls: [],
         }}
       />,
     );
@@ -274,6 +294,7 @@ describe("MessageList", () => {
           sources: [],
           entities: [],
           citedClaims: [],
+          toolCalls: [],
         }}
       />,
     );
@@ -296,5 +317,28 @@ describe("MessageList", () => {
     expect(screen.getByTestId("user-message")).toHaveTextContent(
       "Pending question",
     );
+  });
+
+  it("shows activity log for saved assistant messages with tool_calls", () => {
+    const msg: ChatMessage = {
+      ...makeAssistantMessage("Response with tools"),
+      tool_calls: [
+        { tool: "vector_search", label: "Searched documents" },
+        { tool: "graph_query", label: "Queried knowledge graph" },
+      ],
+    };
+    render(<MessageList messages={[msg]} />);
+    const log = screen.getByTestId("activity-log");
+    expect(log).toBeInTheDocument();
+    expect(log).toHaveAttribute("data-streaming", "false");
+    expect(screen.getByText("Searched documents")).toBeInTheDocument();
+    expect(screen.getByText("Queried knowledge graph")).toBeInTheDocument();
+  });
+
+  it("does not show activity log for saved messages without tool_calls", () => {
+    render(
+      <MessageList messages={[makeAssistantMessage("No tools used")]} />,
+    );
+    expect(screen.queryByTestId("activity-log")).not.toBeInTheDocument();
   });
 });
