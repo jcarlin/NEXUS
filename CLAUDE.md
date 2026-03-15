@@ -5,7 +5,7 @@ Multimodal RAG investigation platform for legal document intelligence. Ingests, 
 *See `ARCHITECTURE.md` for full system design, tech stack, and data flow diagrams.*
 
 **Status**: All 22 milestones complete (M0–M21) + Tier 2 Maturity + Tier 3 (all 15 items). ~1528 backend + 77 frontend tests passing.
-20 domain modules, 23 DI factories, 48 feature flags (45 runtime-toggleable), 6 autonomous LangGraph agents, 17 agent tools.
+24 domain modules, 23 DI factories, 48 feature flags (45 runtime-toggleable), 6 autonomous LangGraph agents, 17 agent tools.
 Full local deployment with zero cloud API dependency.
 
 ---
@@ -195,7 +195,7 @@ This project uses [Semantic Versioning](https://semver.org/) with `v`-prefixed g
 - **Audit logging** (`app/common/middleware.py`): Every API call → `audit_log` table (user, action, resource, matter, IP)
 - **AI audit logging** (`app/common/llm.py`): Every LLM call logged with prompt hash, tokens, latency → `ai_audit_log` table
 - **Structured logging**: `structlog` with contextvars (`request_id`, `task_id`, `job_id`)
-- **Feature flags**: 36 `ENABLE_*` flags, 34 runtime-toggleable via admin UI (see `docs/feature-flags.md` for full reference)
+- **Feature flags**: 48 `ENABLE_*` flags, 45 runtime-toggleable via admin UI (see `docs/feature-flags.md` for full reference)
 - **Runtime feature flags** (`app/feature_flags/`): Admin UI toggle, DB override persistence, DI cache clearing, risk-level gating
 - **LLM config management** (`app/llm_config/`): Runtime provider CRUD, tier assignment, auto-registration from env vars, model discovery, cost estimation
 - **RAG quality pipeline**: Chunk quality scoring → contextual enrichment → CRAG grading (heuristic + conditional LLM) → reranking (enabled by default)
@@ -297,12 +297,12 @@ Use the LangSmith MCP tools to debug pipeline internals. The `nexus` project log
 - `CHANGELOG.md` — Version history with grouped changes per release
 
 ### Module & API Reference (read when working on specific modules)
-- `docs/modules.md` — All 19 domain modules with files, schemas, endpoints, and full API reference
-- `docs/database-schema.md` — 36 tables, 24 migrations, full column reference
+- `docs/modules.md` — All 24 domain modules with files, schemas, endpoints, and full API reference
+- `docs/database-schema.md` — 39 tables, 30 migrations, full column reference
 - `docs/agents.md` — 6 LangGraph agents with state schemas, tools, flows
 
 ### System Configuration (read when adding features or debugging)
-- `docs/feature-flags.md` — All 29 `ENABLE_*` flags with defaults and resource impact
+- `docs/feature-flags.md` — All 48 `ENABLE_*` flags with defaults and resource impact
 - `.env.example` — All configuration variables and feature flags
 - `docs/testing-guide.md` — Test infrastructure, fixtures, CI/CD, patterns
 

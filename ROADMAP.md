@@ -43,11 +43,11 @@
 | M20 | Observability & Load Testing | — | Done | 23 | Regression | — | M17 |
 | M21 | RAG Quality Improvements | — | Done | 43 | Regression + eval non-regression | — | M8, M9, M15 |
 
-**Total tests: ~1478 backend + 77 frontend test files** (~1478 backend tests passing; frontend: 77 Vitest unit/component test files + 2 Playwright E2E specs)
+**Total tests: ~1528 backend + 77 frontend test files** (~1528 backend tests passing; frontend: 77 Vitest unit/component test files + 2 Playwright E2E specs)
 
 **6 autonomous LangGraph agents** across the pipeline (Case Setup, Investigation Orchestrator, Citation Verifier, Hot Doc Scanner, Contextual Completeness, Entity Resolution)
 
-**All milestones complete.** M0–M21 + Tier 2 Maturity + Tier 3 (all 15 items) — full local deployment with zero cloud API dependency. 47 feature flags (44 runtime-toggleable via admin UI), 17 agent tools. Tier 3 Phase 4 adds: deposition prep workflow (witness profiling + LLM question generation), document comparison/redline (difflib side-by-side diff), SPLADE v3 learned sparse retrieval (asymmetric doc/query encoding). Tier 3 Phase 5 adds: HalluGraph entity-graph alignment (post-generation KG verification), GraphRAG community summaries (Neo4j GDS Louvain + LLM summaries), Kubernetes/Helm charts (production-ready K8s deployment). RAG 9.5/10, Platform 9.7/10, RAG Arch ~97%.
+**All milestones complete.** M0–M21 + Tier 2 Maturity + Tier 3 (all 15 items) — full local deployment with zero cloud API dependency. 48 feature flags (45 runtime-toggleable via admin UI), 17 agent tools. Tier 3 Phase 4 adds: deposition prep workflow (witness profiling + LLM question generation), document comparison/redline (difflib side-by-side diff), SPLADE v3 learned sparse retrieval (asymmetric doc/query encoding). Tier 3 Phase 5 adds: HalluGraph entity-graph alignment (post-generation KG verification), GraphRAG community summaries (Neo4j GDS Louvain + LLM summaries), Kubernetes/Helm charts (production-ready K8s deployment). RAG 9.5/10, Platform 9.7/10, RAG Arch ~97%.
 
 **Cloud demo hosting:** GCP + Vercel deployment tested and working. Run `./scripts/cloud-deploy.sh` to deploy, `./scripts/cloud-teardown.sh` to tear down. See `docs/CLOUD-DEPLOY.md` for full guide. Config files: `Caddyfile`, `docker-compose.cloud.yml`, `.env.cloud.example`, `frontend/vercel.json`, `scripts/seed_admin.py`.
 

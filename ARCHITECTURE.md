@@ -84,7 +84,7 @@ React SPA ──── HTTPS ──── Nginx/Caddy ──── FastAPI ─�
 | Role | Implementation | Status |
 |---|---|---|
 | LLM (reasoning) | Claude Sonnet 4.5 (Anthropic), OpenAI, vLLM, Ollama | Active (4 providers) |
-| Text Embeddings | OpenAI `text-embedding-3-large` (1024d), Ollama, local, TEI, Gemini | Active (5 providers) |
+| Text Embeddings | OpenAI `text-embedding-3-large` (1024d), Ollama, local, TEI, Gemini, BGE-M3 | Active (6 providers) |
 | Sparse Embeddings | FastEmbed `Qdrant/bm42-all-minilm-l6-v2-attentions` | Implemented (`ENABLE_SPARSE_EMBEDDINGS`) |
 | Zero-shot NER | GLiNER (`gliner_multi_pii-v1`, CPU, ~50ms/chunk) | Active |
 | Structured Extract | Instructor + Claude | Implemented (`ENABLE_RELATIONSHIP_EXTRACTION`) |
@@ -183,7 +183,7 @@ Controlled by `ENABLE_AGENTIC_PIPELINE` (default `true`). When disabled, falls b
 4. **`verify_citations`** — Chain-of-Verification (CoVe): decomposes response into claims, independently retrieves evidence, judges each claim. Skipped for fast-tier
 5. **`generate_follow_ups`** — Generates 3 follow-up investigation questions
 
-### Tools (12)
+### Tools (17)
 
 | Tool | Description |
 |---|---|
@@ -199,6 +199,11 @@ Controlled by `ENABLE_AGENTIC_PIPELINE` (default `true`). When disabled, falls b
 | `communication_matrix` | Analyze sender-recipient communication patterns |
 | `topic_cluster` | Cluster retrieved documents by topic (BERTopic) |
 | `network_analysis` | Compute entity centrality metrics |
+| `cypher_query` | Text-to-Cypher generation with safety validation |
+| `sql_query` | Matter-scoped text-to-SQL for document metadata |
+| `community_search` | Search GraphRAG community summaries |
+| `document_compare` | Compare two documents for differences |
+| `ask_user` | Request clarification from the user (when enabled) |
 
 All tools use `InjectedState` for security context — the LLM never sees `matter_id`, privilege filters, or dataset scoping.
 
@@ -293,9 +298,24 @@ results = client.query_points(
 - Visual similarity scores blended with text scores
 - Behind `ENABLE_VISUAL_EMBEDDINGS` feature flag
 
-### 5. Query Expansion
+### 5. Query Expansion & Decomposition
 
-For analytical/exploratory queries: generate 3 alternative formulations, retrieve independently, merge + dedup by chunk ID, then rerank the unified set.
+- **Multi-query expansion** (behind `ENABLE_MULTI_QUERY_EXPANSION`): generate 3 legal vocabulary variants, retrieve independently, merge + dedup by chunk ID, then rerank the unified set
+- **Question decomposition** (behind `ENABLE_QUESTION_DECOMPOSITION`): decompose complex queries into sub-questions, retrieve for each in parallel, merge results
+- **HyDE** (behind `ENABLE_HYDE`): Hypothetical Document Embeddings — embed a hypothetical answer for dense retrieval while using raw query for sparse
+
+### 5b. SPLADE Sparse Retrieval
+
+`app/ingestion/splade_embedder.py` with SPLADE v3 asymmetric doc/query encoding. Behind `ENABLE_SPLADE_SPARSE` feature flag. Alternative to BM42 sparse vectors with learned term weights.
+
+### 5c. Multi-Representation Indexing
+
+Triple RRF fusion combining dense vectors, sparse vectors, and summary vectors (LLM-generated chunk summaries embedded separately). Behind `ENABLE_MULTI_REPRESENTATION`.
+
+### 5d. Post-Generation Verification
+
+- **HalluGraph** (behind `ENABLE_HALLUGRAPH_ALIGNMENT`): Post-generation entity-graph alignment — verifies generated claims against the Neo4j knowledge graph
+- **Self-reflection** (behind `ENABLE_SELF_REFLECTION`): Conditional retry loop after citation verification when faithfulness < threshold
 
 ### 6. Graph Retrieval
 
@@ -450,7 +470,7 @@ User notes, highlights, tags, and issue codes on documents. Stored in PostgreSQL
 
 ## Data Model
 
-### PostgreSQL (36 tables, 24 migrations)
+### PostgreSQL (39 tables, 30 migrations)
 
 ```
 Core:           jobs, documents, chat_messages
@@ -471,6 +491,9 @@ Memos:          memos
 LLM Config:     llm_providers, llm_tier_config
 Feature Flags:  feature_flag_overrides
 Retention:      retention_policies
+Monitoring:     query_quality_metrics, service_health_history
+Settings:       setting_overrides
+Communities:    community_summaries
 ```
 
 See `docs/database-schema.md` for full column reference, indexes, and constraints.
@@ -500,7 +523,7 @@ Entity, Document, Event, and Claim nodes with relationships as described in the 
 
 ## API Endpoints
 
-15 routers registered in `app/main.py`. See `docs/modules.md` for full endpoint reference.
+26 routers registered in `app/main.py` (17 always-on + 9 conditional/feature-flagged). See `docs/modules.md` for full endpoint reference.
 
 ```
 # Authentication
@@ -578,6 +601,42 @@ GET    /api/v1/admin/audit-log           # Filterable audit log (admin-only)
 GET    /api/v1/admin/users               # User management (admin-only)
 POST   /api/v1/admin/users               # Create user (admin-only)
 
+# LLM Config (runtime)
+GET    /api/v1/llm-config/providers      # List LLM providers
+POST   /api/v1/llm-config/providers      # Register LLM provider
+GET    /api/v1/llm-config/tiers          # List tier assignments
+
+# Feature Flags (runtime)
+GET    /api/v1/feature-flags             # List all flags with overrides
+PUT    /api/v1/feature-flags/{flag}      # Toggle a flag at runtime
+
+# Settings (runtime)
+GET    /api/v1/settings                  # List tunable settings
+PUT    /api/v1/settings/{key}            # Update a setting at runtime
+
+# Retention
+GET    /api/v1/retention/policies        # List retention policies
+POST   /api/v1/retention/policies        # Create retention policy
+POST   /api/v1/retention/apply           # Apply retention policy
+
+# Memos (feature-flagged)
+POST   /api/v1/memos                     # Generate legal memo
+GET    /api/v1/memos                     # List memos for matter
+GET    /api/v1/memos/{memo_id}           # Retrieve memo
+DELETE /api/v1/memos/{memo_id}           # Delete memo
+
+# Depositions (feature-flagged)
+POST   /api/v1/depositions/prepare       # Generate deposition prep
+GET    /api/v1/depositions               # List deposition preps
+
+# Operations (feature-flagged)
+GET    /api/v1/operations/services       # List service health
+POST   /api/v1/operations/services/{id}/restart # Restart service
+
+# Google Drive (feature-flagged)
+POST   /api/v1/gdrive/connect            # OAuth connect
+POST   /api/v1/gdrive/sync               # Sync files from Drive
+
 # System
 GET    /api/v1/health                    # Health check (all services)
 GET    /api/v1/health/deep               # Deep health check (LLM + embedding)
@@ -588,7 +647,7 @@ GET    /api/v1/health/deep               # Deep health check (LLM + embedding)
 ## Key Patterns
 
 - **LLM abstraction** (`app/common/llm.py`): Unified client for Anthropic/OpenAI/vLLM/Ollama. Cloud→local migration = change `LLM_PROVIDER` + base URL in `.env`
-- **Multi-provider embeddings** (`app/common/embedder.py`): `EmbeddingProvider` protocol with 5 implementations (OpenAI, Ollama, local, TEI, Gemini). Switch via `EMBEDDING_PROVIDER`
+- **Multi-provider embeddings** (`app/common/embedder.py`): `EmbeddingProvider` protocol with 6 implementations (OpenAI, Ollama, local, TEI, Gemini, BGE-M3). Switch via `EMBEDDING_PROVIDER`. BGE-M3 (`bgem3`) produces dense+sparse in a single forward pass
 - **DI singletons** (`app/dependencies.py`): All clients via `@functools.cache` factory functions (23 factories, see `_ALL_CACHED_FACTORIES`)
 - **Hybrid retrieval** (`app/query/retriever.py`): Qdrant dense+sparse with native RRF fusion + Neo4j multi-hop graph traversal + optional visual rerank
 - **Agentic query** (`app/query/graph.py`): `create_react_agent` with 16 tools (+1 `ask_user` when clarification enabled) → `case_context_resolve` → `investigation_agent` → `verify_citations` → `generate_follow_ups`
@@ -599,7 +658,15 @@ GET    /api/v1/health/deep               # Deep health check (LLM + embedding)
 - **Audit logging** (`app/common/middleware.py`): Every API call → `audit_log` table (user, action, resource, matter, IP)
 - **AI audit logging** (`app/common/llm.py`): Every LLM call logged with prompt hash, tokens, latency → `ai_audit_log` table
 - **Structured logging**: `structlog` with contextvars (`request_id`, `task_id`, `job_id`)
-- **Feature flags**: 25 `ENABLE_*` flags, 23 runtime-toggleable via admin UI (see `docs/feature-flags.md` for full reference)
+- **Feature flags**: 48 `ENABLE_*` flags, 45 runtime-toggleable via admin UI (see `docs/feature-flags.md` for full reference)
+- **Runtime feature flags** (`app/feature_flags/`): Admin UI toggle, DB override persistence, DI cache clearing, risk-level gating
+- **LLM config management** (`app/llm_config/`): Runtime provider CRUD, tier assignment, auto-registration from env vars, model discovery, cost estimation
+- **RAG quality pipeline**: Chunk quality scoring → contextual enrichment → CRAG grading (heuristic + conditional LLM) → reranking (enabled by default)
+- **HyDE** (`app/query/hyde.py`): Hypothetical Document Embeddings — embed hypothetical answer for dense retrieval, raw query for sparse
+- **Self-reflection** (`app/query/graph.py`): Conditional retry loop after citation verification when faithfulness < threshold
+- **Multi-representation** (`app/ingestion/chunk_summarizer.py`, `app/common/vector_store.py`): Triple RRF fusion (dense + sparse + summary vectors)
+- **Text-to-SQL** (`app/query/sql_generator.py`): Matter-scoped read-only SQL from natural language with safety validation
+- **Production quality monitoring** (`app/query/quality_monitor.py`): Sampled scoring of retrieval relevance + faithfulness + alerting
 - **Privilege at data layer**: Qdrant filter + SQL WHERE + Neo4j Cypher — never API-layer-only
 - **Frontend** (`frontend/`): React 19 + TanStack Router + orval (OpenAPI → TanStack Query hooks) + shadcn/ui + Zustand
 - **Evaluation** (`app/evaluation/`, `scripts/evaluate.py`): Ground-truth Q&A dataset, retrieval metrics, faithfulness scoring, citation accuracy
@@ -646,6 +713,20 @@ GET    /api/v1/health/deep               # Deep health check (LLM + embedding)
 - EDRM interop (`app/edrm/`) with load file import/export
 - Dataset/collection management (`app/datasets/`)
 - Entity Resolution Agent (`app/entities/resolution_agent.py`)
+- Runtime feature flag management (`app/feature_flags/`)
+- Runtime LLM config management (`app/llm_config/`)
+- Runtime settings registry (`app/settings_registry/`)
+- Data retention policies (`app/retention/`)
+- Service operations admin (`app/operations/`)
+- Google Drive connector (`app/gdrive/`)
+- Deposition prep workflow (`app/depositions/`)
+- Document comparison/redline (`app/documents/comparison.py`)
+- SPLADE v3 sparse retrieval (`app/ingestion/splade_embedder.py`)
+- HalluGraph entity-graph alignment (`app/query/hallugraph.py`)
+- GraphRAG community summaries (`app/analytics/communities.py`)
+- Kubernetes Helm charts (`helm/nexus/`)
+- HyDE, self-reflection, text-to-SQL, multi-representation indexing, production quality monitoring
+- Multi-query expansion, text-to-Cypher, prompt routing, question decomposition
 
 ### Avoided (explicitly rejected)
 - **Don't remove Neo4j** — multi-hop traversal requires a graph DB
@@ -663,7 +744,7 @@ GET    /api/v1/health/deep               # Deep health check (LLM + embedding)
 
 All configuration via environment variables. See `.env.example` for the complete list.
 
-### Feature Flags (25)
+### Feature Flags (48, 45 runtime-toggleable)
 
 | Flag | Default | Description |
 |---|---|---|
@@ -671,17 +752,19 @@ All configuration via environment variables. See `.env.example` for the complete
 | `ENABLE_CITATION_VERIFICATION` | `true` | CoVe citation verification in query synthesis |
 | `ENABLE_EMAIL_THREADING` | `true` | Email conversation thread reconstruction |
 | `ENABLE_AI_AUDIT_LOGGING` | `true` | Log LLM calls to ai_audit_log table |
-| `ENABLE_SPARSE_EMBEDDINGS` | `false` | BM42 sparse vectors for hybrid retrieval |
 | `ENABLE_RERANKER` | `true` | Cross-encoder reranking of retrieval results |
+| `ENABLE_NEAR_DUPLICATE_DETECTION` | `true` | MinHash near-duplicate and version detection |
+| `ENABLE_PROMETHEUS_METRICS` | `true` | Prometheus `/metrics` endpoint + custom business metrics |
+| `ENABLE_SPARSE_EMBEDDINGS` | `false` | BM42 sparse vectors for hybrid retrieval |
+| `ENABLE_SPLADE_SPARSE` | `false` | SPLADE v3 learned sparse retrieval |
 | `ENABLE_VISUAL_EMBEDDINGS` | `false` | ColQwen2.5 visual embedding and reranking |
 | `ENABLE_RELATIONSHIP_EXTRACTION` | `false` | LLM-based relationship extraction |
-| `ENABLE_NEAR_DUPLICATE_DETECTION` | `false` | MinHash near-duplicate and version detection |
 | `ENABLE_HOT_DOC_DETECTION` | `false` | Sentiment scoring and hot doc flagging |
 | `ENABLE_TOPIC_CLUSTERING` | `false` | BERTopic topic clustering |
 | `ENABLE_CASE_SETUP_AGENT` | `false` | Case context pre-population |
 | `ENABLE_COREFERENCE_RESOLUTION` | `false` | spaCy + coreferee pronoun resolution |
 | `ENABLE_GRAPH_CENTRALITY` | `false` | Neo4j GDS centrality metrics |
-| `ENABLE_BATCH_EMBEDDINGS` | `false` | Async batch embedding API (stub) |
+| `ENABLE_BATCH_EMBEDDINGS` | `false` | Async batch embedding API |
 | `ENABLE_REDACTION` | `false` | PII detection and document redaction |
 | `ENABLE_CHUNK_QUALITY_SCORING` | `false` | Heuristic chunk quality scoring at ingestion |
 | `ENABLE_CONTEXTUAL_CHUNKS` | `false` | LLM context prefix enrichment at ingestion |
@@ -689,9 +772,27 @@ All configuration via environment variables. See `.env.example` for the complete
 | `ENABLE_SSO` | `false` | OIDC single sign-on authentication |
 | `ENABLE_SAML` | `false` | SAML 2.0 SSO authentication |
 | `ENABLE_GOOGLE_DRIVE` | `false` | Google Drive OAuth connector |
-| `ENABLE_PROMETHEUS_METRICS` | `false` | Prometheus metrics endpoint |
 | `ENABLE_MEMO_DRAFTING` | `false` | Legal memo drafting pipeline |
 | `ENABLE_DATA_RETENTION` | `false` | Data retention policy enforcement |
+| `ENABLE_MULTI_QUERY_EXPANSION` | `false` | Multi-query expansion with legal vocabulary variants |
+| `ENABLE_TEXT_TO_CYPHER` | `false` | Natural language to Cypher query generation |
+| `ENABLE_PROMPT_ROUTING` | `false` | Semantic prompt routing by query type |
+| `ENABLE_QUESTION_DECOMPOSITION` | `false` | Explicit question decomposition for complex queries |
+| `ENABLE_HYDE` | `false` | Hypothetical Document Embeddings for retrieval |
+| `ENABLE_SELF_REFLECTION` | `false` | Self-reflection retry after citation verification |
+| `ENABLE_TEXT_TO_SQL` | `false` | Matter-scoped natural language to SQL |
+| `ENABLE_DOCUMENT_SUMMARIZATION` | `false` | LLM document summarization at ingestion |
+| `ENABLE_MULTI_REPRESENTATION` | `false` | Triple RRF fusion (dense + sparse + summary vectors) |
+| `ENABLE_PRODUCTION_QUALITY_MONITORING` | `false` | Sampled scoring of retrieval quality |
+| `ENABLE_ADAPTIVE_RETRIEVAL_DEPTH` | `false` | Dynamic retrieval depth by query complexity |
+| `ENABLE_OCR_CORRECTION` | `false` | LLM-based OCR error correction |
+| `ENABLE_DEPOSITION_PREP` | `false` | Deposition prep workflow |
+| `ENABLE_DOCUMENT_COMPARISON` | `false` | Document comparison / redline |
+| `ENABLE_HALLUGRAPH_ALIGNMENT` | `false` | HalluGraph entity-graph alignment |
+| `ENABLE_GRAPHRAG_COMMUNITIES` | `false` | GraphRAG community summaries |
+| `ENABLE_SERVICE_OPERATIONS` | `false` | Docker/Celery service management UI |
+| `ENABLE_AGENT_CLARIFICATION` | `false` | Agent ask_user tool for clarification |
+| `ENABLE_AUTO_GRAPH_ROUTING` | `false` | Auto graph routing for entity-rich queries |
 
 See `docs/feature-flags.md` for full details including resource impact and related settings.
 
@@ -736,9 +837,9 @@ make test   # run test suite
 - `ROADMAP.md` — Milestone tracker with status and dependencies
 
 ### Reference Documentation (in `docs/`)
-- `docs/modules.md` — All 19 domain modules with files, schemas, endpoints, and full API reference
-- `docs/database-schema.md` — 36 tables, 24 migrations, full column reference
-- `docs/feature-flags.md` — All 25 `ENABLE_*` flags with defaults and resource impact
+- `docs/modules.md` — All 24 domain modules with files, schemas, endpoints, and full API reference
+- `docs/database-schema.md` — 39 tables, 30 migrations, full column reference
+- `docs/feature-flags.md` — All 48 `ENABLE_*` flags with defaults and resource impact
 - `docs/testing-guide.md` — Test infrastructure, fixtures, CI/CD, patterns
 - `docs/agents.md` — 6 LangGraph agents with state schemas, tools, flows
 
