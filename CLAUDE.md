@@ -135,11 +135,11 @@ This project uses [Semantic Versioning](https://semver.org/) with `v`-prefixed g
 40. **Every new feature or bug fix needs tests.** Tests mirror the module structure: `tests/test_{domain}/`. Use the existing `conftest.py` fixtures (mock services, AsyncClient, patched lifespan).
 41. **Mock external services, test your logic.** Tests should not require running infrastructure. Mock Qdrant, Neo4j, MinIO, Redis, LLM APIs. Test that your code calls them correctly with the right parameters.
 42. **Celery task `.delay()` is sync.** Mock it with `MagicMock`, not `AsyncMock`.
-43. **Parallel test execution.** When running the full test suite, use the Agent tool to split across 4 parallel agents by module group. Each agent runs in a worktree for isolation. This cuts wall-clock time from ~2min to ~30s. Use this grouping (balanced by test count):
-    - **Agent 1** (~177 tests): `tests/test_query/`
-    - **Agent 2** (~183 tests): `tests/test_ingestion/ tests/test_entities/`
-    - **Agent 3** (~166 tests): `tests/test_common/ tests/test_documents/ tests/test_datasets/`
-    - **Agent 4** (~218 tests): `tests/test_auth/ tests/test_cases/ tests/test_analytics/ tests/test_edrm/ tests/test_analysis/ tests/test_annotations/ tests/test_audit/ tests/test_evaluation/ tests/test_exports/ tests/test_redaction/ tests/test_scripts/ tests/test_gdrive/`
+43. **Parallel test execution.** When running the full test suite, use the Agent tool to split across 4 parallel agents by module group (mirrors CI matrix shards in `.github/workflows/ci.yml`). Each agent runs in a worktree for isolation. This cuts wall-clock time from ~2min to ~30s. Use this grouping (balanced by test count):
+    - **Agent 1 — query** (~408 tests): `tests/test_query/`
+    - **Agent 2 — ingestion** (~408 tests): `tests/test_ingestion/ tests/test_entities/ tests/test_feature_flags/ tests/test_operations/`
+    - **Agent 3 — core** (~430 tests): `tests/test_common/ tests/test_documents/ tests/test_llm_config/ tests/test_settings_registry/ tests/test_retention/ tests/test_health.py`
+    - **Agent 4 — modules** (~424 tests): `tests/test_auth/ tests/test_cases/ tests/test_analytics/ tests/test_edrm/ tests/test_analysis/ tests/test_annotations/ tests/test_audit/ tests/test_evaluation/ tests/test_exports/ tests/test_redaction/ tests/test_scripts/ tests/test_gdrive/ tests/test_datasets/ tests/test_depositions/ tests/test_memos/`
 
     Each agent runs: `.venv/bin/python3 -m pytest <dirs> -v -x --tb=short`
     Exclude `tests/test_e2e/` and `tests/test_integration/` from parallel runs (they need the full stack).

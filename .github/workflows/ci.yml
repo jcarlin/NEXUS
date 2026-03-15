@@ -12,8 +12,21 @@ concurrency:
 
 jobs:
   backend:
-    name: Backend Tests
+    name: Backend Tests (${{ matrix.name }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: query
+            paths: tests/test_query
+          - name: ingestion
+            paths: tests/test_ingestion tests/test_entities tests/test_feature_flags tests/test_operations
+          - name: core
+            paths: tests/test_common tests/test_documents tests/test_llm_config tests/test_settings_registry tests/test_retention tests/test_health.py
+          - name: modules
+            paths: tests/test_auth tests/test_cases tests/test_analytics tests/test_edrm tests/test_analysis tests/test_annotations tests/test_audit tests/test_evaluation tests/test_exports tests/test_redaction tests/test_scripts tests/test_gdrive tests/test_datasets tests/test_depositions tests/test_memos
+          # NOTE: When adding a new test module, add it to one of the shards above
 
     steps:
       - uses: actions/checkout@v4
@@ -31,7 +44,7 @@ jobs:
         run: uv sync --extra dev
 
       - name: Run tests
-        run: uv run pytest tests/ -v -n auto --tb=short --ignore=tests/test_integration --ignore=tests/test_e2e -k "not test_rerank_takes_top_10 and not test_resume_endpoint_exists"
+        run: uv run pytest ${{ matrix.paths }} -v -n auto --tb=short -k "not test_rerank_takes_top_10 and not test_resume_endpoint_exists"
 
   frontend:
     name: Frontend Tests
