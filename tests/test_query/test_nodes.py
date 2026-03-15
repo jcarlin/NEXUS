@@ -511,7 +511,7 @@ def test_build_system_prompt_returns_message_list():
 
 def test_build_system_prompt_includes_case_context():
     """Case context should be injected into the system message."""
-    state = {"messages": [], "_case_context": "Key parties: Alice, Bob"}
+    state = {"messages": [], "_case_context": "Key parties: Alice, Bob", "original_query": "test"}
 
     result = build_system_prompt(state)
 
@@ -519,14 +519,14 @@ def test_build_system_prompt_includes_case_context():
     assert "Key parties: Alice, Bob" in result[0].content
 
 
-def test_build_system_prompt_empty_messages():
-    """With no messages, result should be [SystemMessage] only."""
+def test_build_system_prompt_empty_messages_raises():
+    """With no messages and no original_query, should raise ValueError."""
     state = {"messages": [], "_case_context": ""}
 
-    result = build_system_prompt(state)
+    import pytest
 
-    assert len(result) == 1
-    assert isinstance(result[0], SystemMessage)
+    with pytest.raises(ValueError, match="Cannot invoke investigation agent"):
+        build_system_prompt(state)
 
 
 # ---------------------------------------------------------------------------

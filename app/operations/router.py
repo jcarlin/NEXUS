@@ -49,7 +49,7 @@ async def _docker_call(coro):
 
 
 async def get_docker_client(settings: Settings = Depends(get_settings)) -> Any:
-    """Return an aiodocker.Docker client for the current request."""
+    """Yield an aiodocker.Docker client, closing it after the request."""
     try:
         import aiodocker
     except ImportError:
@@ -57,13 +57,20 @@ async def get_docker_client(settings: Settings = Depends(get_settings)) -> Any:
             status_code=503,
             detail="Docker management unavailable (aiodocker not installed).",
         )
+    client = None
     try:
-        return aiodocker.Docker(url=f"unix://{settings.docker_socket_path}")
+        client = aiodocker.Docker(url=f"unix://{settings.docker_socket_path}")
+        yield client
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(
             status_code=503,
             detail="Docker daemon is unavailable. Ensure Docker is running.",
         ) from exc
+    finally:
+        if client:
+            await client.close()
 
 
 def get_celery_app() -> Any:

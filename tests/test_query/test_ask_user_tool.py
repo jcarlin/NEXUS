@@ -344,6 +344,7 @@ def test_system_prompt_with_query_type_and_clarification():
         "_case_context": "",
         "_query_type": "analytical",
         "messages": [],
+        "original_query": "test query",
     }
 
     mock_settings = MagicMock()

@@ -575,6 +575,11 @@ def build_system_prompt(state: dict) -> list:
         original_query = state.get("original_query", "")
         if original_query:
             messages = [HumanMessage(content=original_query)]
+        else:
+            raise ValueError(
+                "Cannot invoke investigation agent: no messages and no original_query in state. "
+                "Ensure the query endpoint populates at least one of these fields."
+            )
     return [SystemMessage(content=system_text)] + messages
 
 

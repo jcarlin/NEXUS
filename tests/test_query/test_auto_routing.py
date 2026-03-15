@@ -80,18 +80,17 @@ class TestBuildSystemPrompt:
         assert result[1].content == "existing question"
 
     @patch("app.dependencies.get_settings")
-    def test_empty_messages_no_original_query(self, mock_settings):
-        """When both messages and original_query are empty, only SystemMessage is returned."""
-        from langchain_core.messages import SystemMessage
+    def test_empty_messages_no_original_query_raises(self, mock_settings):
+        """When both messages and original_query are empty, should raise ValueError."""
+        import pytest
 
         from app.query.nodes import build_system_prompt
 
         mock_settings.return_value = MagicMock(enable_agent_clarification=False)
         state = self._make_state(messages=[], original_query="")
-        result = build_system_prompt(state)
 
-        assert len(result) == 1
-        assert isinstance(result[0], SystemMessage)
+        with pytest.raises(ValueError, match="Cannot invoke investigation agent"):
+            build_system_prompt(state)
 
 
 class TestBuildChatModelGemini:

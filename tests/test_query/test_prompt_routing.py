@@ -33,7 +33,7 @@ class TestBuildSystemPrompt:
     def test_routes_factual_correctly(self):
         from app.query.nodes import build_system_prompt
 
-        state = {"_case_context": "", "_query_type": "factual", "messages": []}
+        state = {"_case_context": "", "_query_type": "factual", "messages": [], "original_query": "test"}
         result = build_system_prompt(state)
         system_text = result[0].content
         assert "Factual Lookup" in system_text
@@ -41,7 +41,7 @@ class TestBuildSystemPrompt:
     def test_routes_analytical_correctly(self):
         from app.query.nodes import build_system_prompt
 
-        state = {"_case_context": "", "_query_type": "analytical", "messages": []}
+        state = {"_case_context": "", "_query_type": "analytical", "messages": [], "original_query": "test"}
         result = build_system_prompt(state)
         system_text = result[0].content
         assert "Analytical" in system_text
@@ -49,7 +49,7 @@ class TestBuildSystemPrompt:
     def test_routes_timeline_correctly(self):
         from app.query.nodes import build_system_prompt
 
-        state = {"_case_context": "", "_query_type": "timeline", "messages": []}
+        state = {"_case_context": "", "_query_type": "timeline", "messages": [], "original_query": "test"}
         result = build_system_prompt(state)
         system_text = result[0].content
         assert "Timeline" in system_text
@@ -57,7 +57,7 @@ class TestBuildSystemPrompt:
     def test_routes_exploratory_correctly(self):
         from app.query.nodes import build_system_prompt
 
-        state = {"_case_context": "", "_query_type": "exploratory", "messages": []}
+        state = {"_case_context": "", "_query_type": "exploratory", "messages": [], "original_query": "test"}
         result = build_system_prompt(state)
         system_text = result[0].content
         assert "Exploratory" in system_text
@@ -66,7 +66,7 @@ class TestBuildSystemPrompt:
         """When no query type is set, base prompt is used without addendum."""
         from app.query.nodes import build_system_prompt
 
-        state = {"_case_context": "", "messages": []}
+        state = {"_case_context": "", "messages": [], "original_query": "test"}
         result = build_system_prompt(state)
         system_text = result[0].content
         # Should not contain any addendum markers
@@ -76,7 +76,7 @@ class TestBuildSystemPrompt:
         """Unknown query type should use base prompt only."""
         from app.query.nodes import build_system_prompt
 
-        state = {"_case_context": "", "_query_type": "unknown_type", "messages": []}
+        state = {"_case_context": "", "_query_type": "unknown_type", "messages": [], "original_query": "test"}
         result = build_system_prompt(state)
         system_text = result[0].content
         assert "Query Type:" not in system_text
@@ -89,6 +89,7 @@ class TestBuildSystemPrompt:
             "_case_context": "## Case: Smith v. Jones",
             "_query_type": "factual",
             "messages": [],
+            "original_query": "test",
         }
         result = build_system_prompt(state)
         system_text = result[0].content
