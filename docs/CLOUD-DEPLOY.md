@@ -14,6 +14,7 @@ Vercel (CDN)                    GCP Compute Engine VM
                                 │ Docker Compose                  │
                                 │   ├── api (FastAPI)             │
                                 │   ├── worker (Celery)           │
+                                │   ├── ollama (embeddings, CPU)  │
                                 │   ├── postgres (16-alpine)      │
                                 │   ├── redis (7-alpine)          │
                                 │   ├── qdrant (v1.13.2)          │
@@ -22,9 +23,8 @@ Vercel (CDN)                    GCP Compute Engine VM
                                 │   └── caddy (TLS termination)   │
                                 └─────────────────────────────────┘
 
-External APIs (unchanged):
-  ├── Anthropic (Claude Sonnet 4.5) — reasoning
-  └── OpenAI (text-embedding-3-large) — embeddings
+External APIs:
+  └── Gemini (reasoning — query, analysis, ingestion tiers)
 ```
 
 ## Cost
@@ -172,6 +172,32 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compos
 | `VITE_API_BASE_URL` | Frontend → backend URL (Vercel env) | `https://api.nexus-demo.com` |
 | `MINIO_PUBLIC_ENDPOINT` | Public endpoint for presigned URLs | `api.nexus-demo.com/storage` |
 | `CORS_ALLOWED_ORIGINS` | Allowed frontend origins | `https://nexus.vercel.app` |
+
+---
+
+## Ollama (Local Embeddings)
+
+The cloud overlay includes an Ollama service for on-VM embedding inference. This eliminates the OpenAI API dependency for embeddings and keeps document content on-machine.
+
+### First-time setup
+
+After the stack is running, pull the embedding model (one-time — persisted in `ollama_models` volume):
+
+```bash
+docker compose exec ollama ollama pull nomic-embed-text
+```
+
+### Switching the embedding provider
+
+Switch to Ollama embeddings via the **Admin UI** (Settings → LLM Configuration → Embedding Provider). No `.env` changes needed — the `OLLAMA_BASE_URL` is already configured in the cloud compose overlay.
+
+**Important:** Switching embedding providers changes the vector space. Existing Qdrant vectors (e.g., OpenAI `text-embedding-3-large` at 3072d) are incompatible with `nomic-embed-text` (768d). A wipe + re-ingest is required after switching providers.
+
+### Resource usage
+
+- **Model:** `nomic-embed-text` (~274MB download, ~500MB loaded)
+- **Memory limit:** 2GB (set in compose)
+- **CPU inference:** ~25-30ms per chunk (no GPU required)
 
 ---
 
