@@ -1,19 +1,21 @@
 import { useEffect, useRef } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import * as d3 from "d3";
+import { select } from "d3-selection";
+import { forceSimulation, forceLink, forceManyBody, forceCenter, forceCollide, type SimulationNodeDatum, type SimulationLinkDatum } from "d3-force";
+import { drag } from "d3-drag";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { entityColor } from "@/lib/colors";
 import { useContainerSize } from "@/hooks/use-container-size";
 import type { EntityResponse, EntityConnection } from "@/types";
 
-interface GraphNode extends d3.SimulationNodeDatum {
+interface GraphNode extends SimulationNodeDatum {
   id: string;
   name: string;
   type: string;
   isCenter: boolean;
 }
 
-interface GraphLink extends d3.SimulationLinkDatum<GraphNode> {
+interface GraphLink extends SimulationLinkDatum<GraphNode> {
   relationship_type: string;
   weight: number;
 }
@@ -72,7 +74,7 @@ export function ConnectionsGraph({ entity, connections }: ConnectionsGraphProps)
     }));
 
     // Clear previous render
-    const sel = d3.select(svg);
+    const sel = select(svg);
     sel.selectAll("*").remove();
 
     const g = sel
@@ -80,18 +82,16 @@ export function ConnectionsGraph({ entity, connections }: ConnectionsGraphProps)
       .attr("height", height)
       .append("g");
 
-    const simulation = d3
-      .forceSimulation<GraphNode>(nodes)
+    const simulation = forceSimulation<GraphNode>(nodes)
       .force(
         "link",
-        d3
-          .forceLink<GraphNode, GraphLink>(links)
+        forceLink<GraphNode, GraphLink>(links)
           .id((d) => d.name)
           .distance(100),
       )
-      .force("charge", d3.forceManyBody().strength(-200))
-      .force("center", d3.forceCenter(width / 2, height / 2))
-      .force("collide", d3.forceCollide(30));
+      .force("charge", forceManyBody().strength(-200))
+      .force("center", forceCenter(width / 2, height / 2))
+      .force("collide", forceCollide(30));
 
     const link = g
       .selectAll<SVGLineElement, GraphLink>("line")
@@ -108,8 +108,7 @@ export function ConnectionsGraph({ entity, connections }: ConnectionsGraphProps)
       .attr("class", "node")
       .style("cursor", "pointer")
       .call(
-        d3
-          .drag<SVGGElement, GraphNode>()
+        drag<SVGGElement, GraphNode>()
           .on("start", (event, d) => {
             if (!event.active) simulation.alphaTarget(0.3).restart();
             d.fx = d.x;

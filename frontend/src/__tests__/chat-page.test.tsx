@@ -6,6 +6,7 @@ const mockNavigate = vi.fn();
 
 vi.mock("@tanstack/react-router", () => ({
   createFileRoute: () => (routeOptions: Record<string, unknown>) => routeOptions,
+  createLazyFileRoute: () => (routeOptions: Record<string, unknown>) => routeOptions,
   useNavigate: () => mockNavigate,
 }));
 
@@ -68,7 +69,7 @@ vi.mock("@/components/chat/findings-bar", () => ({
   FindingsBar: () => <div data-testid="findings-bar">Findings</div>,
 }));
 
-import { Route } from "@/routes/chat/index";
+import { Route } from "@/routes/chat/index.lazy";
 
 const Component = (Route as unknown as { component: React.ComponentType }).component;
 

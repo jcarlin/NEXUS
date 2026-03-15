@@ -7,6 +7,7 @@ const mockUseMutation = vi.fn();
 
 vi.mock("@tanstack/react-router", () => ({
   createFileRoute: () => (routeOptions: Record<string, unknown>) => routeOptions,
+  createLazyFileRoute: () => (routeOptions: Record<string, unknown>) => routeOptions,
 }));
 
 vi.mock("@/stores/app-store", () => ({
@@ -67,7 +68,7 @@ vi.mock("@/components/ui/scroll-area", () => ({
   ScrollArea: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 
-import { Route } from "@/routes/datasets/index";
+import { Route } from "@/routes/datasets/index.lazy";
 
 const Component = (Route as unknown as { component: React.ComponentType }).component;
 

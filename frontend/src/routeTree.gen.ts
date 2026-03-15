@@ -46,7 +46,7 @@ const CaseSetupRoute = CaseSetupRouteImport.update({
   id: '/case-setup',
   path: '/case-setup',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() => import('./routes/case-setup.lazy').then((d) => d.Route))
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -56,37 +56,49 @@ const EntitiesIndexRoute = EntitiesIndexRouteImport.update({
   id: '/entities/',
   path: '/entities/',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() =>
+  import('./routes/entities/index.lazy').then((d) => d.Route),
+)
 const DocumentsIndexRoute = DocumentsIndexRouteImport.update({
   id: '/documents/',
   path: '/documents/',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() =>
+  import('./routes/documents/index.lazy').then((d) => d.Route),
+)
 const DatasetsIndexRoute = DatasetsIndexRouteImport.update({
   id: '/datasets/',
   path: '/datasets/',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() =>
+  import('./routes/datasets/index.lazy').then((d) => d.Route),
+)
 const ChatIndexRoute = ChatIndexRouteImport.update({
   id: '/chat/',
   path: '/chat/',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() => import('./routes/chat/index.lazy').then((d) => d.Route))
 const ReviewResultSetRoute = ReviewResultSetRouteImport.update({
   id: '/review/result-set',
   path: '/review/result-set',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() =>
+  import('./routes/review/result-set.lazy').then((d) => d.Route),
+)
 const ReviewHotDocsRoute = ReviewHotDocsRouteImport.update({
   id: '/review/hot-docs',
   path: '/review/hot-docs',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() =>
+  import('./routes/review/hot-docs.lazy').then((d) => d.Route),
+)
 const ReviewExportsRoute = ReviewExportsRouteImport.update({
   id: '/review/exports',
   path: '/review/exports',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() =>
+  import('./routes/review/exports.lazy').then((d) => d.Route),
+)
 const EntitiesNetworkRoute = EntitiesNetworkRouteImport.update({
   id: '/entities/network',
   path: '/entities/network',
@@ -98,7 +110,7 @@ const EntitiesIdRoute = EntitiesIdRouteImport.update({
   id: '/entities/$id',
   path: '/entities/$id',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() => import('./routes/entities/$id.lazy').then((d) => d.Route))
 const DocumentsImportRoute = DocumentsImportRouteImport.update({
   id: '/documents/import',
   path: '/documents/import',
@@ -110,7 +122,9 @@ const DocumentsCompareRoute = DocumentsCompareRouteImport.update({
   id: '/documents/compare',
   path: '/documents/compare',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() =>
+  import('./routes/documents/compare.lazy').then((d) => d.Route),
+)
 const DocumentsIdRoute = DocumentsIdRouteImport.update({
   id: '/documents/$id',
   path: '/documents/$id',
@@ -127,7 +141,9 @@ const AnalyticsTimelineRoute = AnalyticsTimelineRouteImport.update({
   id: '/analytics/timeline',
   path: '/analytics/timeline',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() =>
+  import('./routes/analytics/timeline.lazy').then((d) => d.Route),
+)
 const AnalyticsCommsRoute = AnalyticsCommsRouteImport.update({
   id: '/analytics/comms',
   path: '/analytics/comms',
@@ -139,42 +155,56 @@ const AdminUsersRoute = AdminUsersRouteImport.update({
   id: '/admin/users',
   path: '/admin/users',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() => import('./routes/admin/users.lazy').then((d) => d.Route))
 const AdminSettingsRoute = AdminSettingsRouteImport.update({
   id: '/admin/settings',
   path: '/admin/settings',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() =>
+  import('./routes/admin/settings.lazy').then((d) => d.Route),
+)
 const AdminOperationsRoute = AdminOperationsRouteImport.update({
   id: '/admin/operations',
   path: '/admin/operations',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() =>
+  import('./routes/admin/operations.lazy').then((d) => d.Route),
+)
 const AdminLlmSettingsRoute = AdminLlmSettingsRouteImport.update({
   id: '/admin/llm-settings',
   path: '/admin/llm-settings',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() =>
+  import('./routes/admin/llm-settings.lazy').then((d) => d.Route),
+)
 const AdminKnowledgeGraphRoute = AdminKnowledgeGraphRouteImport.update({
   id: '/admin/knowledge-graph',
   path: '/admin/knowledge-graph',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() =>
+  import('./routes/admin/knowledge-graph.lazy').then((d) => d.Route),
+)
 const AdminFeatureFlagsRoute = AdminFeatureFlagsRouteImport.update({
   id: '/admin/feature-flags',
   path: '/admin/feature-flags',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() =>
+  import('./routes/admin/feature-flags.lazy').then((d) => d.Route),
+)
 const AdminEvaluationRoute = AdminEvaluationRouteImport.update({
   id: '/admin/evaluation',
   path: '/admin/evaluation',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() =>
+  import('./routes/admin/evaluation.lazy').then((d) => d.Route),
+)
 const AdminAuditLogRoute = AdminAuditLogRouteImport.update({
   id: '/admin/audit-log',
   path: '/admin/audit-log',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() =>
+  import('./routes/admin/audit-log.lazy').then((d) => d.Route),
+)
 const AuthOidcCallbackRoute = AuthOidcCallbackRouteImport.update({
   id: '/auth/oidc/callback',
   path: '/auth/oidc/callback',

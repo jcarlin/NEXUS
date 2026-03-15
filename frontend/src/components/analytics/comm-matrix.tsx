@@ -1,5 +1,6 @@
 import { useMemo } from "react";
-import * as d3 from "d3";
+import { scaleSequential } from "d3-scale";
+import { interpolateYlOrRd } from "d3-scale-chromatic";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useContainerSize } from "@/hooks/use-container-size";
 
@@ -35,7 +36,7 @@ export function CommMatrix({ matrix, entities, loading, onCellClick }: CommMatri
   }, [matrix]);
 
   const colorScale = useMemo(
-    () => d3.scaleSequential(d3.interpolateYlOrRd).domain([0, maxCount || 1]),
+    () => scaleSequential(interpolateYlOrRd).domain([0, maxCount || 1]),
     [maxCount],
   );
 

@@ -9,6 +9,10 @@ vi.mock("@tanstack/react-router", () => ({
     routeOptions._useParams = () => ({ id: "John%20Smith" });
     return routeOptions;
   },
+  createLazyFileRoute: () => (routeOptions: Record<string, unknown>) => {
+    routeOptions._useParams = () => ({ id: "John%20Smith" });
+    return routeOptions;
+  },
   Link: ({
     children,
     ...props
@@ -60,7 +64,7 @@ vi.mock("@/components/entities/reporting-chain", () => ({
   ReportingChain: () => <div data-testid="reporting-chain">Chain</div>,
 }));
 
-import { Route } from "@/routes/entities/$id";
+import { Route } from "@/routes/entities/$id.lazy";
 
 const routeObj = Route as unknown as {
   component: React.ComponentType;

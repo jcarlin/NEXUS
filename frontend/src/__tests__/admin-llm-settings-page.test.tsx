@@ -7,6 +7,7 @@ const mockUseMutation = vi.fn();
 
 vi.mock("@tanstack/react-router", () => ({
   createFileRoute: () => (routeOptions: Record<string, unknown>) => routeOptions,
+  createLazyFileRoute: () => (routeOptions: Record<string, unknown>) => routeOptions,
 }));
 
 vi.mock("@/api/client", () => ({
@@ -37,7 +38,7 @@ vi.mock("@/components/admin/model-combobox", () => ({
   ModelCombobox: () => <input data-testid="model-combobox" />,
 }));
 
-import { Route } from "@/routes/admin/llm-settings";
+import { Route } from "@/routes/admin/llm-settings.lazy";
 
 const Component = (Route as unknown as { component: React.ComponentType }).component;
 

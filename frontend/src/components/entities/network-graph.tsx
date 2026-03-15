@@ -1,18 +1,23 @@
 import { useEffect, useRef, useCallback, useImperativeHandle, forwardRef } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import * as d3 from "d3";
+import { select } from "d3-selection";
+import { forceSimulation, forceLink, forceManyBody, forceCenter, forceCollide, type SimulationNodeDatum, type SimulationLinkDatum } from "d3-force";
+import { scaleSqrt } from "d3-scale";
+import { zoom, zoomIdentity, type D3ZoomEvent, type ZoomBehavior } from "d3-zoom";
+import { drag } from "d3-drag";
+import "d3-transition";
 import { ENTITY_COLORS, entityColor } from "@/lib/colors";
 import { useContainerSize } from "@/hooks/use-container-size";
 import type { EntityResponse, EntityConnection } from "@/types";
 
-interface GraphNode extends d3.SimulationNodeDatum {
+interface GraphNode extends SimulationNodeDatum {
   id: string;
   name: string;
   type: string;
   mention_count: number;
 }
 
-interface GraphLink extends d3.SimulationLinkDatum<GraphNode> {
+interface GraphLink extends SimulationLinkDatum<GraphNode> {
   relationship_type: string;
   weight: number;
 }
@@ -33,14 +38,14 @@ interface NetworkGraphProps {
 export const NetworkGraph = forwardRef<NetworkGraphHandle, NetworkGraphProps>(
   function NetworkGraph({ entities, connections, activeTypes, onNodeContextMenu }, ref) {
     const svgRef = useRef<SVGSVGElement>(null);
-    const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
+    const zoomRef = useRef<ZoomBehavior<SVGSVGElement, unknown> | null>(null);
     const navigate = useNavigate({});
     const { ref: containerRef, width: containerWidth, height: containerHeight } = useContainerSize();
 
     const zoomIn = useCallback(() => {
       const svg = svgRef.current;
       if (!svg || !zoomRef.current) return;
-      d3.select(svg)
+      select(svg)
         .transition()
         .duration(300)
         .call(zoomRef.current.scaleBy, 1.4);
@@ -49,7 +54,7 @@ export const NetworkGraph = forwardRef<NetworkGraphHandle, NetworkGraphProps>(
     const zoomOut = useCallback(() => {
       const svg = svgRef.current;
       if (!svg || !zoomRef.current) return;
-      d3.select(svg)
+      select(svg)
         .transition()
         .duration(300)
         .call(zoomRef.current.scaleBy, 0.7);
@@ -58,10 +63,10 @@ export const NetworkGraph = forwardRef<NetworkGraphHandle, NetworkGraphProps>(
     const fitView = useCallback(() => {
       const svg = svgRef.current;
       if (!svg || !zoomRef.current) return;
-      d3.select(svg)
+      select(svg)
         .transition()
         .duration(500)
-        .call(zoomRef.current.transform, d3.zoomIdentity);
+        .call(zoomRef.current.transform, zoomIdentity);
     }, []);
 
     useImperativeHandle(ref, () => ({ zoomIn, zoomOut, fitView }), [
@@ -108,43 +113,39 @@ export const NetworkGraph = forwardRef<NetworkGraphHandle, NetworkGraphProps>(
       }));
 
       // Clear previous render
-      const sel = d3.select(svg);
+      const sel = select(svg);
       sel.selectAll("*").remove();
 
       // Size scale for nodes
       const maxMentions = Math.max(...nodes.map((n) => n.mention_count), 1);
-      const radiusScale = d3
-        .scaleSqrt()
+      const radiusScale = scaleSqrt()
         .domain([0, maxMentions])
         .range([5, 24]);
 
       // Zoom behavior
-      const zoom = d3
-        .zoom<SVGSVGElement, unknown>()
+      const zoomBehavior = zoom<SVGSVGElement, unknown>()
         .scaleExtent([0.1, 8])
-        .on("zoom", (event: d3.D3ZoomEvent<SVGSVGElement, unknown>) => {
+        .on("zoom", (event: D3ZoomEvent<SVGSVGElement, unknown>) => {
           g.attr("transform", event.transform.toString());
         });
-      zoomRef.current = zoom;
-      sel.attr("width", width).attr("height", height).call(zoom);
+      zoomRef.current = zoomBehavior;
+      sel.attr("width", width).attr("height", height).call(zoomBehavior);
 
       const g = sel.append("g");
 
       // Simulation
-      const simulation = d3
-        .forceSimulation<GraphNode>(nodes)
+      const simulation = forceSimulation<GraphNode>(nodes)
         .force(
           "link",
-          d3
-            .forceLink<GraphNode, GraphLink>(links)
+          forceLink<GraphNode, GraphLink>(links)
             .id((d) => d.name)
             .distance(120),
         )
-        .force("charge", d3.forceManyBody().strength(-300))
-        .force("center", d3.forceCenter(width / 2, height / 2))
+        .force("charge", forceManyBody().strength(-300))
+        .force("center", forceCenter(width / 2, height / 2))
         .force(
           "collide",
-          d3.forceCollide<GraphNode>((d) => radiusScale(d.mention_count) + 4),
+          forceCollide<GraphNode>((d) => radiusScale(d.mention_count) + 4),
         );
 
       // Links
@@ -166,8 +167,7 @@ export const NetworkGraph = forwardRef<NetworkGraphHandle, NetworkGraphProps>(
         .attr("class", "node")
         .style("cursor", "pointer")
         .call(
-          d3
-            .drag<SVGGElement, GraphNode>()
+          drag<SVGGElement, GraphNode>()
             .on("start", (event, d) => {
               if (!event.active) simulation.alphaTarget(0.3).restart();
               d.fx = d.x;
@@ -219,7 +219,7 @@ export const NetworkGraph = forwardRef<NetworkGraphHandle, NetworkGraphProps>(
       // Hover highlight
       node
         .on("mouseenter", function (_event, d) {
-          d3.select(this)
+          select(this)
             .select("circle")
             .attr("stroke-width", 5)
             .attr("stroke-opacity", 0.8);
@@ -238,7 +238,7 @@ export const NetworkGraph = forwardRef<NetworkGraphHandle, NetworkGraphProps>(
             );
         })
         .on("mouseleave", function () {
-          d3.select(this)
+          select(this)
             .select("circle")
             .attr("stroke-width", 3)
             .attr("stroke-opacity", 0.4);

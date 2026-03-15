@@ -7,6 +7,7 @@ const mockUseMutation = vi.fn();
 
 vi.mock("@tanstack/react-router", () => ({
   createFileRoute: () => (routeOptions: Record<string, unknown>) => routeOptions,
+  createLazyFileRoute: () => (routeOptions: Record<string, unknown>) => routeOptions,
 }));
 
 vi.mock("@/stores/app-store", () => ({
@@ -90,7 +91,7 @@ vi.mock("@/components/case-setup/context-summary", () => ({
   ),
 }));
 
-import { Route } from "@/routes/case-setup";
+import { Route } from "@/routes/case-setup.lazy";
 
 const Component = (Route as unknown as { component: React.ComponentType }).component;
 

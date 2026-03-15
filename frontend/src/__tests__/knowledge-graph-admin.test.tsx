@@ -24,12 +24,17 @@ vi.mock("sonner", () => ({
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
 }));
 
-vi.mock("@tanstack/react-router", () => ({
-  createFileRoute: () => () => ({ component: () => null }),
-  Link: ({ children, ...props }: { children: React.ReactNode; to: string }) => (
-    <a href={props.to}>{children}</a>
-  ),
-}));
+vi.mock("@tanstack/react-router", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@tanstack/react-router")>();
+  return {
+    ...actual,
+    createFileRoute: () => () => ({ component: () => null }),
+    createLazyFileRoute: () => (routeOptions: Record<string, unknown>) => routeOptions,
+    Link: ({ children, ...props }: { children: React.ReactNode; to: string }) => (
+      <a href={props.to}>{children}</a>
+    ),
+  };
+});
 
 const mockUseQuery = vi.fn();
 const mockUseMutation = vi.fn();
@@ -54,7 +59,7 @@ beforeEach(() => {
 // ---- Helper to render the page component ---- //
 
 async function renderPage() {
-  const mod = await import("@/routes/admin/knowledge-graph");
+  const mod = await import("@/routes/admin/knowledge-graph.lazy");
   // The component is the default export from createFileRoute; we need to get
   // the actual component function. Since we mock createFileRoute, we access it
   // via the module's Route.
@@ -116,7 +121,8 @@ describe("Knowledge Graph Admin Page", () => {
     // We need to re-mock createFileRoute to capture the component
     let CapturedComponent: React.ComponentType | null = null;
     vi.doMock("@tanstack/react-router", () => ({
-      createFileRoute: () => (opts: { component: React.ComponentType }) => {
+      createFileRoute: () => (opts: Record<string, unknown>) => opts,
+      createLazyFileRoute: () => (opts: { component: React.ComponentType }) => {
         CapturedComponent = opts.component;
         return opts;
       },
@@ -148,7 +154,7 @@ describe("Knowledge Graph Admin Page", () => {
     }));
     vi.doMock("@/api/client", () => ({ apiClient: vi.fn() }));
 
-    await import("@/routes/admin/knowledge-graph");
+    await import("@/routes/admin/knowledge-graph.lazy");
 
     expect(CapturedComponent).not.toBeNull();
     const Component = CapturedComponent as unknown as React.ComponentType;
@@ -182,7 +188,8 @@ describe("Knowledge Graph Admin Page", () => {
 
     vi.resetModules();
     vi.doMock("@tanstack/react-router", () => ({
-      createFileRoute: () => (opts: { component: React.ComponentType }) => {
+      createFileRoute: () => (opts: Record<string, unknown>) => opts,
+      createLazyFileRoute: () => (opts: { component: React.ComponentType }) => {
         CapturedComponent = opts.component;
         return opts;
       },
@@ -210,7 +217,7 @@ describe("Knowledge Graph Admin Page", () => {
     }));
     vi.doMock("@/api/client", () => ({ apiClient: vi.fn() }));
 
-    await import("@/routes/admin/knowledge-graph");
+    await import("@/routes/admin/knowledge-graph.lazy");
     expect(CapturedComponent).not.toBeNull();
     const Component = CapturedComponent as unknown as React.ComponentType;
     render(<Component />);
@@ -234,7 +241,8 @@ describe("Knowledge Graph Admin Page", () => {
 
     vi.resetModules();
     vi.doMock("@tanstack/react-router", () => ({
-      createFileRoute: () => (opts: { component: React.ComponentType }) => {
+      createFileRoute: () => (opts: Record<string, unknown>) => opts,
+      createLazyFileRoute: () => (opts: { component: React.ComponentType }) => {
         CapturedComponent = opts.component;
         return opts;
       },
@@ -262,7 +270,7 @@ describe("Knowledge Graph Admin Page", () => {
     }));
     vi.doMock("@/api/client", () => ({ apiClient: vi.fn() }));
 
-    await import("@/routes/admin/knowledge-graph");
+    await import("@/routes/admin/knowledge-graph.lazy");
     expect(CapturedComponent).not.toBeNull();
     const Component = CapturedComponent as unknown as React.ComponentType;
     render(<Component />);

@@ -6,6 +6,7 @@ const mockUseQuery = vi.fn();
 
 vi.mock("@tanstack/react-router", () => ({
   createFileRoute: () => (routeOptions: Record<string, unknown>) => routeOptions,
+  createLazyFileRoute: () => (routeOptions: Record<string, unknown>) => routeOptions,
 }));
 
 vi.mock("@/stores/app-store", () => ({
@@ -40,7 +41,7 @@ vi.mock("@/components/ui/pagination", () => ({
   ),
 }));
 
-import { Route } from "@/routes/review/result-set";
+import { Route } from "@/routes/review/result-set.lazy";
 
 const Component = (Route as unknown as { component: React.ComponentType }).component;
 

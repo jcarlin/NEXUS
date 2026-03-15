@@ -5,7 +5,14 @@ import { TanStackRouterVite } from "@tanstack/router-plugin/vite";
 import path from "path";
 
 export default defineConfig({
-  plugins: [TanStackRouterVite(), react(), tailwindcss()],
+  plugins: [
+    TanStackRouterVite(),
+    react(),
+    tailwindcss(),
+    ...(process.env.ANALYZE
+      ? [(await import("rollup-plugin-visualizer")).visualizer({ open: true, gzipSize: true })]
+      : []),
+  ],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
@@ -16,7 +23,6 @@ export default defineConfig({
       output: {
         manualChunks: {
           "vendor-router": ["@tanstack/react-router", "@tanstack/react-query"],
-          "vendor-d3": ["d3"],
           "vendor-pdf": ["react-pdf"],
           "vendor-markdown": ["react-markdown", "react-syntax-highlighter", "remark-gfm"],
           "vendor-uppy": [

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
 import { createRootRoute, Outlet, useMatches } from "@tanstack/react-router";
 import { Menu } from "lucide-react";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -11,7 +11,9 @@ import { AuthGuard } from "@/components/layout/auth-guard";
 import { CommandPalette } from "@/components/layout/command-palette";
 import { DefinedTermsSidebar } from "@/components/layout/defined-terms-sidebar";
 import { KeyboardShortcutsDialog } from "@/components/ui/keyboard-shortcuts-dialog";
-import { OnboardingTour } from "@/components/onboarding/tour";
+const OnboardingTour = lazy(() =>
+  import("@/components/onboarding/tour").then(m => ({ default: m.OnboardingTour }))
+);
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 
 export const Route = createRootRoute({
@@ -73,7 +75,7 @@ function RootLayout() {
         </div>
         <CommandPalette open={commandOpen} onOpenChange={setCommandOpen} />
         <KeyboardShortcutsDialog open={shortcutsHelpOpen} onOpenChange={setShortcutsHelpOpen} />
-        <OnboardingTour />
+        <Suspense fallback={null}><OnboardingTour /></Suspense>
       </AuthGuard>
     </TooltipProvider>
   );
