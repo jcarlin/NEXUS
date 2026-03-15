@@ -10,6 +10,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follo
 
 ## [Unreleased]
 
+## [1.13.2] - 2026-03-15
+
+### Fixed
+- Fix chat thread citations lost on reload — SSE-streamed sources from subgraph nodes were not persisted to `final_state`, causing empty `source_documents` in DB
+- Add defensive JSONB parsing in `GET /chats/{threadId}` — malformed source documents or cited claims now skip gracefully instead of crashing the entire endpoint with a Pydantic `ValidationError`
+- Add null guard for `relevance_score` in citation sidebar — prevents `NaN%` when score is missing
+- Regenerate orval frontend types — sync `CitedClaim.filename` as optional to match backend schema
+
 ## [1.13.1] - 2026-03-14
 
 ### Fixed

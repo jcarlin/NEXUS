@@ -5,9 +5,9 @@
  * Multimodal RAG Investigation Platform for Legal Document Intelligence
  * OpenAPI spec version: 0.1.0
  */
-import type { PrivilegeLogEntry } from './privilegeLogEntry';
+import type { AppExportsSchemasPrivilegeLogEntry } from './appExportsSchemasPrivilegeLogEntry';
 
 export interface PrivilegeLogPreviewResponse {
-  entries: PrivilegeLogEntry[];
+  entries: AppExportsSchemasPrivilegeLogEntry[];
   total: number;
 }

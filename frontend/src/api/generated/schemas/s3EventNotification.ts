@@ -12,4 +12,6 @@ import type { S3EventRecord } from './s3EventRecord';
  */
 export interface S3EventNotification {
   Records?: S3EventRecord[];
+  /** Matter ID to scope ingested documents */
+  matter_id: string;
 }

@@ -6,28 +6,38 @@
  * OpenAPI spec version: 0.1.0
  */
 import {
+  useMutation,
   useQuery
 } from '@tanstack/react-query';
 import type {
   DataTag,
   DefinedInitialDataOptions,
   DefinedUseQueryResult,
+  MutationFunction,
   QueryClient,
   QueryFunction,
   QueryKey,
   UndefinedInitialDataOptions,
+  UseMutationOptions,
+  UseMutationResult,
   UseQueryOptions,
   UseQueryResult
 } from '@tanstack/react-query';
 
 import type {
   CommunicationPairsApiV1GraphCommunicationPairsGetParams,
+  CommunicationPairsResponse,
+  EntityMergeRequest,
+  EntityRenameRequest,
+  EntityTypeUpdateRequest,
   GetEntityConnectionsApiV1EntitiesEntityIdConnectionsGetParams,
   GetEntityConnectionsByQueryApiV1EntitiesConnectionsGetParams,
   GraphExploreApiV1GraphExploreGetParams,
   GraphPathApiV1GraphPathGetParams,
   HTTPValidationError,
   ListEntitiesApiV1EntitiesGetParams,
+  RelationshipCreateRequest,
+  RelationshipDeleteRequest,
   ReportingChainApiV1GraphReportingChainPersonGetParams
 } from '.././schemas';
 
@@ -710,7 +720,7 @@ export const communicationPairsApiV1GraphCommunicationPairsGet = (
 ) => {
       
       
-      return apiClient<unknown>(
+      return apiClient<CommunicationPairsResponse>(
       {url: `/api/v1/graph/communication-pairs`, method: 'GET',
         params, signal
     },
@@ -986,3 +996,396 @@ export function useGraphPathApiV1GraphPathGet<TData = Awaited<ReturnType<typeof 
 
 
 
+/**
+ * Rename an entity node in the knowledge graph.
+ * @summary Rename Entity
+ */
+export const renameEntityApiV1MattersMatterIdEntitiesNameRenamePatch = (
+    matterId: string,
+    name: string,
+    entityRenameRequest: EntityRenameRequest,
+ ) => {
+      
+      
+      return apiClient<unknown>(
+      {url: `/api/v1/matters/${matterId}/entities/${name}/rename`, method: 'PATCH',
+      headers: {'Content-Type': 'application/json', },
+      data: entityRenameRequest
+    },
+      );
+    }
+  
+
+
+export const getRenameEntityApiV1MattersMatterIdEntitiesNameRenamePatchMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof renameEntityApiV1MattersMatterIdEntitiesNameRenamePatch>>, TError,{matterId: string;name: string;data: EntityRenameRequest}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof renameEntityApiV1MattersMatterIdEntitiesNameRenamePatch>>, TError,{matterId: string;name: string;data: EntityRenameRequest}, TContext> => {
+
+const mutationKey = ['renameEntityApiV1MattersMatterIdEntitiesNameRenamePatch'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof renameEntityApiV1MattersMatterIdEntitiesNameRenamePatch>>, {matterId: string;name: string;data: EntityRenameRequest}> = (props) => {
+          const {matterId,name,data} = props ?? {};
+
+          return  renameEntityApiV1MattersMatterIdEntitiesNameRenamePatch(matterId,name,data,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RenameEntityApiV1MattersMatterIdEntitiesNameRenamePatchMutationResult = NonNullable<Awaited<ReturnType<typeof renameEntityApiV1MattersMatterIdEntitiesNameRenamePatch>>>
+    export type RenameEntityApiV1MattersMatterIdEntitiesNameRenamePatchMutationBody = EntityRenameRequest
+    export type RenameEntityApiV1MattersMatterIdEntitiesNameRenamePatchMutationError = HTTPValidationError
+
+    /**
+ * @summary Rename Entity
+ */
+export const useRenameEntityApiV1MattersMatterIdEntitiesNameRenamePatch = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof renameEntityApiV1MattersMatterIdEntitiesNameRenamePatch>>, TError,{matterId: string;name: string;data: EntityRenameRequest}, TContext>, }
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof renameEntityApiV1MattersMatterIdEntitiesNameRenamePatch>>,
+        TError,
+        {matterId: string;name: string;data: EntityRenameRequest},
+        TContext
+      > => {
+
+      const mutationOptions = getRenameEntityApiV1MattersMatterIdEntitiesNameRenamePatchMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * Update the type of an entity node.
+ * @summary Update Entity Type
+ */
+export const updateEntityTypeApiV1MattersMatterIdEntitiesNameTypePatch = (
+    matterId: string,
+    name: string,
+    entityTypeUpdateRequest: EntityTypeUpdateRequest,
+ ) => {
+      
+      
+      return apiClient<unknown>(
+      {url: `/api/v1/matters/${matterId}/entities/${name}/type`, method: 'PATCH',
+      headers: {'Content-Type': 'application/json', },
+      data: entityTypeUpdateRequest
+    },
+      );
+    }
+  
+
+
+export const getUpdateEntityTypeApiV1MattersMatterIdEntitiesNameTypePatchMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateEntityTypeApiV1MattersMatterIdEntitiesNameTypePatch>>, TError,{matterId: string;name: string;data: EntityTypeUpdateRequest}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof updateEntityTypeApiV1MattersMatterIdEntitiesNameTypePatch>>, TError,{matterId: string;name: string;data: EntityTypeUpdateRequest}, TContext> => {
+
+const mutationKey = ['updateEntityTypeApiV1MattersMatterIdEntitiesNameTypePatch'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateEntityTypeApiV1MattersMatterIdEntitiesNameTypePatch>>, {matterId: string;name: string;data: EntityTypeUpdateRequest}> = (props) => {
+          const {matterId,name,data} = props ?? {};
+
+          return  updateEntityTypeApiV1MattersMatterIdEntitiesNameTypePatch(matterId,name,data,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateEntityTypeApiV1MattersMatterIdEntitiesNameTypePatchMutationResult = NonNullable<Awaited<ReturnType<typeof updateEntityTypeApiV1MattersMatterIdEntitiesNameTypePatch>>>
+    export type UpdateEntityTypeApiV1MattersMatterIdEntitiesNameTypePatchMutationBody = EntityTypeUpdateRequest
+    export type UpdateEntityTypeApiV1MattersMatterIdEntitiesNameTypePatchMutationError = HTTPValidationError
+
+    /**
+ * @summary Update Entity Type
+ */
+export const useUpdateEntityTypeApiV1MattersMatterIdEntitiesNameTypePatch = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateEntityTypeApiV1MattersMatterIdEntitiesNameTypePatch>>, TError,{matterId: string;name: string;data: EntityTypeUpdateRequest}, TContext>, }
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updateEntityTypeApiV1MattersMatterIdEntitiesNameTypePatch>>,
+        TError,
+        {matterId: string;name: string;data: EntityTypeUpdateRequest},
+        TContext
+      > => {
+
+      const mutationOptions = getUpdateEntityTypeApiV1MattersMatterIdEntitiesNameTypePatchMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * Delete an entity and all its relationships.
+ * @summary Delete Entity
+ */
+export const deleteEntityApiV1MattersMatterIdEntitiesNameDelete = (
+    matterId: string,
+    name: string,
+ ) => {
+      
+      
+      return apiClient<unknown>(
+      {url: `/api/v1/matters/${matterId}/entities/${name}`, method: 'DELETE'
+    },
+      );
+    }
+  
+
+
+export const getDeleteEntityApiV1MattersMatterIdEntitiesNameDeleteMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteEntityApiV1MattersMatterIdEntitiesNameDelete>>, TError,{matterId: string;name: string}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof deleteEntityApiV1MattersMatterIdEntitiesNameDelete>>, TError,{matterId: string;name: string}, TContext> => {
+
+const mutationKey = ['deleteEntityApiV1MattersMatterIdEntitiesNameDelete'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteEntityApiV1MattersMatterIdEntitiesNameDelete>>, {matterId: string;name: string}> = (props) => {
+          const {matterId,name} = props ?? {};
+
+          return  deleteEntityApiV1MattersMatterIdEntitiesNameDelete(matterId,name,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteEntityApiV1MattersMatterIdEntitiesNameDeleteMutationResult = NonNullable<Awaited<ReturnType<typeof deleteEntityApiV1MattersMatterIdEntitiesNameDelete>>>
+    
+    export type DeleteEntityApiV1MattersMatterIdEntitiesNameDeleteMutationError = HTTPValidationError
+
+    /**
+ * @summary Delete Entity
+ */
+export const useDeleteEntityApiV1MattersMatterIdEntitiesNameDelete = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteEntityApiV1MattersMatterIdEntitiesNameDelete>>, TError,{matterId: string;name: string}, TContext>, }
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deleteEntityApiV1MattersMatterIdEntitiesNameDelete>>,
+        TError,
+        {matterId: string;name: string},
+        TContext
+      > => {
+
+      const mutationOptions = getDeleteEntityApiV1MattersMatterIdEntitiesNameDeleteMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * Merge two entities (source is absorbed into target).
+ * @summary Merge Entities
+ */
+export const mergeEntitiesApiV1MattersMatterIdEntitiesMergePost = (
+    matterId: string,
+    entityMergeRequest: EntityMergeRequest,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiClient<unknown>(
+      {url: `/api/v1/matters/${matterId}/entities/merge`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: entityMergeRequest, signal
+    },
+      );
+    }
+  
+
+
+export const getMergeEntitiesApiV1MattersMatterIdEntitiesMergePostMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof mergeEntitiesApiV1MattersMatterIdEntitiesMergePost>>, TError,{matterId: string;data: EntityMergeRequest}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof mergeEntitiesApiV1MattersMatterIdEntitiesMergePost>>, TError,{matterId: string;data: EntityMergeRequest}, TContext> => {
+
+const mutationKey = ['mergeEntitiesApiV1MattersMatterIdEntitiesMergePost'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof mergeEntitiesApiV1MattersMatterIdEntitiesMergePost>>, {matterId: string;data: EntityMergeRequest}> = (props) => {
+          const {matterId,data} = props ?? {};
+
+          return  mergeEntitiesApiV1MattersMatterIdEntitiesMergePost(matterId,data,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MergeEntitiesApiV1MattersMatterIdEntitiesMergePostMutationResult = NonNullable<Awaited<ReturnType<typeof mergeEntitiesApiV1MattersMatterIdEntitiesMergePost>>>
+    export type MergeEntitiesApiV1MattersMatterIdEntitiesMergePostMutationBody = EntityMergeRequest
+    export type MergeEntitiesApiV1MattersMatterIdEntitiesMergePostMutationError = HTTPValidationError
+
+    /**
+ * @summary Merge Entities
+ */
+export const useMergeEntitiesApiV1MattersMatterIdEntitiesMergePost = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof mergeEntitiesApiV1MattersMatterIdEntitiesMergePost>>, TError,{matterId: string;data: EntityMergeRequest}, TContext>, }
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof mergeEntitiesApiV1MattersMatterIdEntitiesMergePost>>,
+        TError,
+        {matterId: string;data: EntityMergeRequest},
+        TContext
+      > => {
+
+      const mutationOptions = getMergeEntitiesApiV1MattersMatterIdEntitiesMergePostMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * Create a new relationship between two entities.
+ * @summary Create Relationship
+ */
+export const createRelationshipApiV1MattersMatterIdRelationshipsPost = (
+    matterId: string,
+    relationshipCreateRequest: RelationshipCreateRequest,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiClient<unknown>(
+      {url: `/api/v1/matters/${matterId}/relationships`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: relationshipCreateRequest, signal
+    },
+      );
+    }
+  
+
+
+export const getCreateRelationshipApiV1MattersMatterIdRelationshipsPostMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createRelationshipApiV1MattersMatterIdRelationshipsPost>>, TError,{matterId: string;data: RelationshipCreateRequest}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof createRelationshipApiV1MattersMatterIdRelationshipsPost>>, TError,{matterId: string;data: RelationshipCreateRequest}, TContext> => {
+
+const mutationKey = ['createRelationshipApiV1MattersMatterIdRelationshipsPost'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createRelationshipApiV1MattersMatterIdRelationshipsPost>>, {matterId: string;data: RelationshipCreateRequest}> = (props) => {
+          const {matterId,data} = props ?? {};
+
+          return  createRelationshipApiV1MattersMatterIdRelationshipsPost(matterId,data,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateRelationshipApiV1MattersMatterIdRelationshipsPostMutationResult = NonNullable<Awaited<ReturnType<typeof createRelationshipApiV1MattersMatterIdRelationshipsPost>>>
+    export type CreateRelationshipApiV1MattersMatterIdRelationshipsPostMutationBody = RelationshipCreateRequest
+    export type CreateRelationshipApiV1MattersMatterIdRelationshipsPostMutationError = HTTPValidationError
+
+    /**
+ * @summary Create Relationship
+ */
+export const useCreateRelationshipApiV1MattersMatterIdRelationshipsPost = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createRelationshipApiV1MattersMatterIdRelationshipsPost>>, TError,{matterId: string;data: RelationshipCreateRequest}, TContext>, }
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createRelationshipApiV1MattersMatterIdRelationshipsPost>>,
+        TError,
+        {matterId: string;data: RelationshipCreateRequest},
+        TContext
+      > => {
+
+      const mutationOptions = getCreateRelationshipApiV1MattersMatterIdRelationshipsPostMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * Delete a specific relationship between two entities.
+ * @summary Delete Relationship
+ */
+export const deleteRelationshipApiV1MattersMatterIdRelationshipsDelete = (
+    matterId: string,
+    relationshipDeleteRequest: RelationshipDeleteRequest,
+ ) => {
+      
+      
+      return apiClient<unknown>(
+      {url: `/api/v1/matters/${matterId}/relationships`, method: 'DELETE',
+      headers: {'Content-Type': 'application/json', },
+      data: relationshipDeleteRequest
+    },
+      );
+    }
+  
+
+
+export const getDeleteRelationshipApiV1MattersMatterIdRelationshipsDeleteMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteRelationshipApiV1MattersMatterIdRelationshipsDelete>>, TError,{matterId: string;data: RelationshipDeleteRequest}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof deleteRelationshipApiV1MattersMatterIdRelationshipsDelete>>, TError,{matterId: string;data: RelationshipDeleteRequest}, TContext> => {
+
+const mutationKey = ['deleteRelationshipApiV1MattersMatterIdRelationshipsDelete'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteRelationshipApiV1MattersMatterIdRelationshipsDelete>>, {matterId: string;data: RelationshipDeleteRequest}> = (props) => {
+          const {matterId,data} = props ?? {};
+
+          return  deleteRelationshipApiV1MattersMatterIdRelationshipsDelete(matterId,data,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteRelationshipApiV1MattersMatterIdRelationshipsDeleteMutationResult = NonNullable<Awaited<ReturnType<typeof deleteRelationshipApiV1MattersMatterIdRelationshipsDelete>>>
+    export type DeleteRelationshipApiV1MattersMatterIdRelationshipsDeleteMutationBody = RelationshipDeleteRequest
+    export type DeleteRelationshipApiV1MattersMatterIdRelationshipsDeleteMutationError = HTTPValidationError
+
+    /**
+ * @summary Delete Relationship
+ */
+export const useDeleteRelationshipApiV1MattersMatterIdRelationshipsDelete = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteRelationshipApiV1MattersMatterIdRelationshipsDelete>>, TError,{matterId: string;data: RelationshipDeleteRequest}, TContext>, }
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deleteRelationshipApiV1MattersMatterIdRelationshipsDelete>>,
+        TError,
+        {matterId: string;data: RelationshipDeleteRequest},
+        TContext
+      > => {
+
+      const mutationOptions = getDeleteRelationshipApiV1MattersMatterIdRelationshipsDeleteMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    

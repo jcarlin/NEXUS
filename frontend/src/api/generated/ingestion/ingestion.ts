@@ -636,6 +636,10 @@ export const useImportDryRunApiV1IngestImportDryRunPost = <TError = HTTPValidati
 
 Parses S3-style event records, filters for ``s3:ObjectCreated:*`` events,
 creates a job per object, and dispatches Celery tasks.
+
+Requires ``matter_id`` in the payload to scope ingested documents.
+Verifies the ``X-Webhook-Secret`` header against the configured
+``MINIO_WEBHOOK_SECRET`` when the secret is set.
  * @summary Ingest Webhook
  */
 export const ingestWebhookApiV1IngestWebhookPost = (

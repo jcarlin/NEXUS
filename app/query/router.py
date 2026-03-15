@@ -544,6 +544,9 @@ async def _agentic_event_generator(graph, initial_state, config, db, thread_id, 
                             "data": json.dumps({"documents": update["source_documents"]}),
                         }
                         sources_emitted = True
+                        # Persist even from subgraph nodes — SSE-emitted sources
+                        # must also be saved to DB via final_state.
+                        final_state["source_documents"] = update["source_documents"]
 
                     # Only update final_state from root-level nodes (not subgraph internals)
                     if not ns:
@@ -765,18 +768,48 @@ async def get_chat(
     if not rows:
         raise HTTPException(status_code=404, detail="Thread not found")
 
-    messages = [
-        ChatMessage(
-            role=r["role"],
-            content=r["content"],
-            source_documents=[SourceDocument(**doc) for doc in parse_jsonb(r.get("source_documents"))],
-            entities_mentioned=[EntityMention(**ent) for ent in parse_jsonb(r.get("entities_mentioned"))],
-            follow_up_questions=parse_jsonb(r.get("follow_up_questions")),
-            cited_claims=[CitedClaim(**c) for c in parse_jsonb(r.get("cited_claims")) if "claim_text" in c],
-            timestamp=r["created_at"],
+    messages = []
+    for r in rows:
+        # Defensive parsing: skip individual records that fail Pydantic validation
+        # rather than crashing the entire endpoint (e.g. stale JSONB with missing fields).
+        safe_sources: list[SourceDocument] = []
+        for doc in parse_jsonb(r.get("source_documents")):
+            try:
+                safe_sources.append(SourceDocument(**doc))
+            except Exception:
+                logger.warning(
+                    "chat.source_document_parse_failed",
+                    thread_id=thread_id,
+                    doc_keys=list(doc.keys()) if isinstance(doc, dict) else type(doc).__name__,
+                )
+
+        safe_claims: list[CitedClaim] = []
+        for c in parse_jsonb(r.get("cited_claims")):
+            if "claim_text" not in c:
+                continue
+            try:
+                safe_claims.append(CitedClaim(**c))
+            except Exception:
+                logger.warning("chat.cited_claim_parse_failed", thread_id=thread_id)
+
+        safe_entities: list[EntityMention] = []
+        for ent in parse_jsonb(r.get("entities_mentioned")):
+            try:
+                safe_entities.append(EntityMention(**ent))
+            except Exception:
+                logger.warning("chat.entity_mention_parse_failed", thread_id=thread_id)
+
+        messages.append(
+            ChatMessage(
+                role=r["role"],
+                content=r["content"],
+                source_documents=safe_sources,
+                entities_mentioned=safe_entities,
+                follow_up_questions=parse_jsonb(r.get("follow_up_questions")),
+                cited_claims=safe_claims,
+                timestamp=r["created_at"],
+            )
         )
-        for r in rows
-    ]
 
     return ChatHistoryResponse(
         thread_id=uuid.UUID(thread_id),

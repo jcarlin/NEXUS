@@ -25,6 +25,8 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  ClarificationResponse,
+  GetChatApiV1ChatsThreadIdGetParams,
   HTTPValidationError,
   ListChatsApiV1ChatsGetParams,
   QueryRequest,
@@ -171,6 +173,71 @@ export const useQueryStreamApiV1QueryStreamPost = <TError = HTTPValidationError,
       return useMutation(mutationOptions, queryClient);
     }
     /**
+ * Resume a paused investigation after the user answers a clarification question.
+ * @summary Query Resume
+ */
+export const queryResumeApiV1QueryResumePost = (
+    clarificationResponse: ClarificationResponse,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiClient<unknown>(
+      {url: `/api/v1/query/resume`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: clarificationResponse, signal
+    },
+      );
+    }
+  
+
+
+export const getQueryResumeApiV1QueryResumePostMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof queryResumeApiV1QueryResumePost>>, TError,{data: ClarificationResponse}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof queryResumeApiV1QueryResumePost>>, TError,{data: ClarificationResponse}, TContext> => {
+
+const mutationKey = ['queryResumeApiV1QueryResumePost'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof queryResumeApiV1QueryResumePost>>, {data: ClarificationResponse}> = (props) => {
+          const {data} = props ?? {};
+
+          return  queryResumeApiV1QueryResumePost(data,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type QueryResumeApiV1QueryResumePostMutationResult = NonNullable<Awaited<ReturnType<typeof queryResumeApiV1QueryResumePost>>>
+    export type QueryResumeApiV1QueryResumePostMutationBody = ClarificationResponse
+    export type QueryResumeApiV1QueryResumePostMutationError = HTTPValidationError
+
+    /**
+ * @summary Query Resume
+ */
+export const useQueryResumeApiV1QueryResumePost = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof queryResumeApiV1QueryResumePost>>, TError,{data: ClarificationResponse}, TContext>, }
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof queryResumeApiV1QueryResumePost>>,
+        TError,
+        {data: ClarificationResponse},
+        TContext
+      > => {
+
+      const mutationOptions = getQueryResumeApiV1QueryResumePostMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
  * List all chat threads with summary info.
  * @summary List Chats
  */
@@ -264,17 +331,19 @@ export function useListChatsApiV1ChatsGet<TData = Awaited<ReturnType<typeof list
 
 
 /**
- * Return the full message history for a chat thread.
+ * Return the message history for a chat thread with pagination.
  * @summary Get Chat
  */
 export const getChatApiV1ChatsThreadIdGet = (
     threadId: string,
+    params?: GetChatApiV1ChatsThreadIdGetParams,
  signal?: AbortSignal
 ) => {
       
       
       return apiClient<unknown>(
-      {url: `/api/v1/chats/${threadId}`, method: 'GET', signal
+      {url: `/api/v1/chats/${threadId}`, method: 'GET',
+        params, signal
     },
       );
     }
@@ -282,23 +351,25 @@ export const getChatApiV1ChatsThreadIdGet = (
 
 
 
-export const getGetChatApiV1ChatsThreadIdGetQueryKey = (threadId?: string,) => {
+export const getGetChatApiV1ChatsThreadIdGetQueryKey = (threadId?: string,
+    params?: GetChatApiV1ChatsThreadIdGetParams,) => {
     return [
-    `/api/v1/chats/${threadId}`
+    `/api/v1/chats/${threadId}`, ...(params ? [params]: [])
     ] as const;
     }
 
     
-export const getGetChatApiV1ChatsThreadIdGetQueryOptions = <TData = Awaited<ReturnType<typeof getChatApiV1ChatsThreadIdGet>>, TError = HTTPValidationError>(threadId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getChatApiV1ChatsThreadIdGet>>, TError, TData>>, }
+export const getGetChatApiV1ChatsThreadIdGetQueryOptions = <TData = Awaited<ReturnType<typeof getChatApiV1ChatsThreadIdGet>>, TError = HTTPValidationError>(threadId: string,
+    params?: GetChatApiV1ChatsThreadIdGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getChatApiV1ChatsThreadIdGet>>, TError, TData>>, }
 ) => {
 
 const {query: queryOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetChatApiV1ChatsThreadIdGetQueryKey(threadId);
+  const queryKey =  queryOptions?.queryKey ?? getGetChatApiV1ChatsThreadIdGetQueryKey(threadId,params);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getChatApiV1ChatsThreadIdGet>>> = ({ signal }) => getChatApiV1ChatsThreadIdGet(threadId, signal);
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getChatApiV1ChatsThreadIdGet>>> = ({ signal }) => getChatApiV1ChatsThreadIdGet(threadId,params, signal);
 
       
 
@@ -312,7 +383,8 @@ export type GetChatApiV1ChatsThreadIdGetQueryError = HTTPValidationError
 
 
 export function useGetChatApiV1ChatsThreadIdGet<TData = Awaited<ReturnType<typeof getChatApiV1ChatsThreadIdGet>>, TError = HTTPValidationError>(
- threadId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getChatApiV1ChatsThreadIdGet>>, TError, TData>> & Pick<
+ threadId: string,
+    params: undefined |  GetChatApiV1ChatsThreadIdGetParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getChatApiV1ChatsThreadIdGet>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof getChatApiV1ChatsThreadIdGet>>,
           TError,
@@ -322,7 +394,8 @@ export function useGetChatApiV1ChatsThreadIdGet<TData = Awaited<ReturnType<typeo
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 export function useGetChatApiV1ChatsThreadIdGet<TData = Awaited<ReturnType<typeof getChatApiV1ChatsThreadIdGet>>, TError = HTTPValidationError>(
- threadId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getChatApiV1ChatsThreadIdGet>>, TError, TData>> & Pick<
+ threadId: string,
+    params?: GetChatApiV1ChatsThreadIdGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getChatApiV1ChatsThreadIdGet>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof getChatApiV1ChatsThreadIdGet>>,
           TError,
@@ -332,7 +405,8 @@ export function useGetChatApiV1ChatsThreadIdGet<TData = Awaited<ReturnType<typeo
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 export function useGetChatApiV1ChatsThreadIdGet<TData = Awaited<ReturnType<typeof getChatApiV1ChatsThreadIdGet>>, TError = HTTPValidationError>(
- threadId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getChatApiV1ChatsThreadIdGet>>, TError, TData>>, }
+ threadId: string,
+    params?: GetChatApiV1ChatsThreadIdGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getChatApiV1ChatsThreadIdGet>>, TError, TData>>, }
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
@@ -340,11 +414,12 @@ export function useGetChatApiV1ChatsThreadIdGet<TData = Awaited<ReturnType<typeo
  */
 
 export function useGetChatApiV1ChatsThreadIdGet<TData = Awaited<ReturnType<typeof getChatApiV1ChatsThreadIdGet>>, TError = HTTPValidationError>(
- threadId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getChatApiV1ChatsThreadIdGet>>, TError, TData>>, }
+ threadId: string,
+    params?: GetChatApiV1ChatsThreadIdGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getChatApiV1ChatsThreadIdGet>>, TError, TData>>, }
  , queryClient?: QueryClient 
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
-  const queryOptions = getGetChatApiV1ChatsThreadIdGetQueryOptions(threadId,options)
+  const queryOptions = getGetChatApiV1ChatsThreadIdGetQueryOptions(threadId,params,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 

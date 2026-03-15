@@ -25,10 +25,16 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  BodySamlAcsApiV1AuthSamlAcsPost,
   HTTPValidationError,
   LoginRequest,
   MatterResponse,
+  OIDCCallbackResponse,
+  OIDCProviderInfo,
+  OidcCallbackApiV1AuthOidcCallbackGetParams,
   RefreshRequest,
+  SAMLCallbackResponse,
+  SAMLProviderInfo,
   TokenResponse,
   UserResponse
 } from '.././schemas';
@@ -345,6 +351,540 @@ export function useMyMattersApiV1AuthMeMattersGet<TData = Awaited<ReturnType<typ
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getMyMattersApiV1AuthMeMattersGetQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+/**
+ * Return OIDC provider info for frontend SSO button.
+ * @summary Oidc Info
+ */
+export const oidcInfoApiV1AuthOidcInfoGet = (
+    
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiClient<OIDCProviderInfo>(
+      {url: `/api/v1/auth/oidc/info`, method: 'GET', signal
+    },
+      );
+    }
+  
+
+
+
+export const getOidcInfoApiV1AuthOidcInfoGetQueryKey = () => {
+    return [
+    `/api/v1/auth/oidc/info`
+    ] as const;
+    }
+
+    
+export const getOidcInfoApiV1AuthOidcInfoGetQueryOptions = <TData = Awaited<ReturnType<typeof oidcInfoApiV1AuthOidcInfoGet>>, TError = unknown>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof oidcInfoApiV1AuthOidcInfoGet>>, TError, TData>>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getOidcInfoApiV1AuthOidcInfoGetQueryKey();
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof oidcInfoApiV1AuthOidcInfoGet>>> = ({ signal }) => oidcInfoApiV1AuthOidcInfoGet(signal);
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof oidcInfoApiV1AuthOidcInfoGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type OidcInfoApiV1AuthOidcInfoGetQueryResult = NonNullable<Awaited<ReturnType<typeof oidcInfoApiV1AuthOidcInfoGet>>>
+export type OidcInfoApiV1AuthOidcInfoGetQueryError = unknown
+
+
+export function useOidcInfoApiV1AuthOidcInfoGet<TData = Awaited<ReturnType<typeof oidcInfoApiV1AuthOidcInfoGet>>, TError = unknown>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof oidcInfoApiV1AuthOidcInfoGet>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof oidcInfoApiV1AuthOidcInfoGet>>,
+          TError,
+          Awaited<ReturnType<typeof oidcInfoApiV1AuthOidcInfoGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useOidcInfoApiV1AuthOidcInfoGet<TData = Awaited<ReturnType<typeof oidcInfoApiV1AuthOidcInfoGet>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof oidcInfoApiV1AuthOidcInfoGet>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof oidcInfoApiV1AuthOidcInfoGet>>,
+          TError,
+          Awaited<ReturnType<typeof oidcInfoApiV1AuthOidcInfoGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useOidcInfoApiV1AuthOidcInfoGet<TData = Awaited<ReturnType<typeof oidcInfoApiV1AuthOidcInfoGet>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof oidcInfoApiV1AuthOidcInfoGet>>, TError, TData>>, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Oidc Info
+ */
+
+export function useOidcInfoApiV1AuthOidcInfoGet<TData = Awaited<ReturnType<typeof oidcInfoApiV1AuthOidcInfoGet>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof oidcInfoApiV1AuthOidcInfoGet>>, TError, TData>>, }
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getOidcInfoApiV1AuthOidcInfoGetQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+/**
+ * Handle OIDC callback after provider authentication.
+ * @summary Oidc Callback
+ */
+export const oidcCallbackApiV1AuthOidcCallbackGet = (
+    params: OidcCallbackApiV1AuthOidcCallbackGetParams,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiClient<OIDCCallbackResponse>(
+      {url: `/api/v1/auth/oidc/callback`, method: 'GET',
+        params, signal
+    },
+      );
+    }
+  
+
+
+
+export const getOidcCallbackApiV1AuthOidcCallbackGetQueryKey = (params?: OidcCallbackApiV1AuthOidcCallbackGetParams,) => {
+    return [
+    `/api/v1/auth/oidc/callback`, ...(params ? [params]: [])
+    ] as const;
+    }
+
+    
+export const getOidcCallbackApiV1AuthOidcCallbackGetQueryOptions = <TData = Awaited<ReturnType<typeof oidcCallbackApiV1AuthOidcCallbackGet>>, TError = HTTPValidationError>(params: OidcCallbackApiV1AuthOidcCallbackGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof oidcCallbackApiV1AuthOidcCallbackGet>>, TError, TData>>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getOidcCallbackApiV1AuthOidcCallbackGetQueryKey(params);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof oidcCallbackApiV1AuthOidcCallbackGet>>> = ({ signal }) => oidcCallbackApiV1AuthOidcCallbackGet(params, signal);
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof oidcCallbackApiV1AuthOidcCallbackGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type OidcCallbackApiV1AuthOidcCallbackGetQueryResult = NonNullable<Awaited<ReturnType<typeof oidcCallbackApiV1AuthOidcCallbackGet>>>
+export type OidcCallbackApiV1AuthOidcCallbackGetQueryError = HTTPValidationError
+
+
+export function useOidcCallbackApiV1AuthOidcCallbackGet<TData = Awaited<ReturnType<typeof oidcCallbackApiV1AuthOidcCallbackGet>>, TError = HTTPValidationError>(
+ params: OidcCallbackApiV1AuthOidcCallbackGetParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof oidcCallbackApiV1AuthOidcCallbackGet>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof oidcCallbackApiV1AuthOidcCallbackGet>>,
+          TError,
+          Awaited<ReturnType<typeof oidcCallbackApiV1AuthOidcCallbackGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useOidcCallbackApiV1AuthOidcCallbackGet<TData = Awaited<ReturnType<typeof oidcCallbackApiV1AuthOidcCallbackGet>>, TError = HTTPValidationError>(
+ params: OidcCallbackApiV1AuthOidcCallbackGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof oidcCallbackApiV1AuthOidcCallbackGet>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof oidcCallbackApiV1AuthOidcCallbackGet>>,
+          TError,
+          Awaited<ReturnType<typeof oidcCallbackApiV1AuthOidcCallbackGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useOidcCallbackApiV1AuthOidcCallbackGet<TData = Awaited<ReturnType<typeof oidcCallbackApiV1AuthOidcCallbackGet>>, TError = HTTPValidationError>(
+ params: OidcCallbackApiV1AuthOidcCallbackGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof oidcCallbackApiV1AuthOidcCallbackGet>>, TError, TData>>, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Oidc Callback
+ */
+
+export function useOidcCallbackApiV1AuthOidcCallbackGet<TData = Awaited<ReturnType<typeof oidcCallbackApiV1AuthOidcCallbackGet>>, TError = HTTPValidationError>(
+ params: OidcCallbackApiV1AuthOidcCallbackGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof oidcCallbackApiV1AuthOidcCallbackGet>>, TError, TData>>, }
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getOidcCallbackApiV1AuthOidcCallbackGetQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+/**
+ * Return SAML provider info for frontend SSO button.
+ * @summary Saml Info
+ */
+export const samlInfoApiV1AuthSamlInfoGet = (
+    
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiClient<SAMLProviderInfo>(
+      {url: `/api/v1/auth/saml/info`, method: 'GET', signal
+    },
+      );
+    }
+  
+
+
+
+export const getSamlInfoApiV1AuthSamlInfoGetQueryKey = () => {
+    return [
+    `/api/v1/auth/saml/info`
+    ] as const;
+    }
+
+    
+export const getSamlInfoApiV1AuthSamlInfoGetQueryOptions = <TData = Awaited<ReturnType<typeof samlInfoApiV1AuthSamlInfoGet>>, TError = unknown>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof samlInfoApiV1AuthSamlInfoGet>>, TError, TData>>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getSamlInfoApiV1AuthSamlInfoGetQueryKey();
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof samlInfoApiV1AuthSamlInfoGet>>> = ({ signal }) => samlInfoApiV1AuthSamlInfoGet(signal);
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof samlInfoApiV1AuthSamlInfoGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type SamlInfoApiV1AuthSamlInfoGetQueryResult = NonNullable<Awaited<ReturnType<typeof samlInfoApiV1AuthSamlInfoGet>>>
+export type SamlInfoApiV1AuthSamlInfoGetQueryError = unknown
+
+
+export function useSamlInfoApiV1AuthSamlInfoGet<TData = Awaited<ReturnType<typeof samlInfoApiV1AuthSamlInfoGet>>, TError = unknown>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof samlInfoApiV1AuthSamlInfoGet>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof samlInfoApiV1AuthSamlInfoGet>>,
+          TError,
+          Awaited<ReturnType<typeof samlInfoApiV1AuthSamlInfoGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useSamlInfoApiV1AuthSamlInfoGet<TData = Awaited<ReturnType<typeof samlInfoApiV1AuthSamlInfoGet>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof samlInfoApiV1AuthSamlInfoGet>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof samlInfoApiV1AuthSamlInfoGet>>,
+          TError,
+          Awaited<ReturnType<typeof samlInfoApiV1AuthSamlInfoGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useSamlInfoApiV1AuthSamlInfoGet<TData = Awaited<ReturnType<typeof samlInfoApiV1AuthSamlInfoGet>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof samlInfoApiV1AuthSamlInfoGet>>, TError, TData>>, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Saml Info
+ */
+
+export function useSamlInfoApiV1AuthSamlInfoGet<TData = Awaited<ReturnType<typeof samlInfoApiV1AuthSamlInfoGet>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof samlInfoApiV1AuthSamlInfoGet>>, TError, TData>>, }
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getSamlInfoApiV1AuthSamlInfoGetQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+/**
+ * Redirect to IdP SSO URL with SAML AuthnRequest.
+ * @summary Saml Login
+ */
+export const samlLoginApiV1AuthSamlLoginGet = (
+    
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiClient<unknown>(
+      {url: `/api/v1/auth/saml/login`, method: 'GET', signal
+    },
+      );
+    }
+  
+
+
+
+export const getSamlLoginApiV1AuthSamlLoginGetQueryKey = () => {
+    return [
+    `/api/v1/auth/saml/login`
+    ] as const;
+    }
+
+    
+export const getSamlLoginApiV1AuthSamlLoginGetQueryOptions = <TData = Awaited<ReturnType<typeof samlLoginApiV1AuthSamlLoginGet>>, TError = unknown>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof samlLoginApiV1AuthSamlLoginGet>>, TError, TData>>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getSamlLoginApiV1AuthSamlLoginGetQueryKey();
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof samlLoginApiV1AuthSamlLoginGet>>> = ({ signal }) => samlLoginApiV1AuthSamlLoginGet(signal);
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof samlLoginApiV1AuthSamlLoginGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type SamlLoginApiV1AuthSamlLoginGetQueryResult = NonNullable<Awaited<ReturnType<typeof samlLoginApiV1AuthSamlLoginGet>>>
+export type SamlLoginApiV1AuthSamlLoginGetQueryError = unknown
+
+
+export function useSamlLoginApiV1AuthSamlLoginGet<TData = Awaited<ReturnType<typeof samlLoginApiV1AuthSamlLoginGet>>, TError = unknown>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof samlLoginApiV1AuthSamlLoginGet>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof samlLoginApiV1AuthSamlLoginGet>>,
+          TError,
+          Awaited<ReturnType<typeof samlLoginApiV1AuthSamlLoginGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useSamlLoginApiV1AuthSamlLoginGet<TData = Awaited<ReturnType<typeof samlLoginApiV1AuthSamlLoginGet>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof samlLoginApiV1AuthSamlLoginGet>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof samlLoginApiV1AuthSamlLoginGet>>,
+          TError,
+          Awaited<ReturnType<typeof samlLoginApiV1AuthSamlLoginGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useSamlLoginApiV1AuthSamlLoginGet<TData = Awaited<ReturnType<typeof samlLoginApiV1AuthSamlLoginGet>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof samlLoginApiV1AuthSamlLoginGet>>, TError, TData>>, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Saml Login
+ */
+
+export function useSamlLoginApiV1AuthSamlLoginGet<TData = Awaited<ReturnType<typeof samlLoginApiV1AuthSamlLoginGet>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof samlLoginApiV1AuthSamlLoginGet>>, TError, TData>>, }
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getSamlLoginApiV1AuthSamlLoginGetQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+/**
+ * Assertion Consumer Service — processes SAML response from IdP.
+
+The IdP sends a form POST with SAMLResponse (base64-encoded XML assertion)
+and optionally RelayState.
+ * @summary Saml Acs
+ */
+export const samlAcsApiV1AuthSamlAcsPost = (
+    bodySamlAcsApiV1AuthSamlAcsPost: BodySamlAcsApiV1AuthSamlAcsPost,
+ signal?: AbortSignal
+) => {
+      
+      const formUrlEncoded = new URLSearchParams();
+formUrlEncoded.append(`SAMLResponse`, bodySamlAcsApiV1AuthSamlAcsPost.SAMLResponse)
+if(bodySamlAcsApiV1AuthSamlAcsPost.RelayState !== undefined) {
+ formUrlEncoded.append(`RelayState`, bodySamlAcsApiV1AuthSamlAcsPost.RelayState)
+ }
+
+      return apiClient<SAMLCallbackResponse>(
+      {url: `/api/v1/auth/saml/acs`, method: 'POST',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded', },
+       data: formUrlEncoded, signal
+    },
+      );
+    }
+  
+
+
+export const getSamlAcsApiV1AuthSamlAcsPostMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof samlAcsApiV1AuthSamlAcsPost>>, TError,{data: BodySamlAcsApiV1AuthSamlAcsPost}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof samlAcsApiV1AuthSamlAcsPost>>, TError,{data: BodySamlAcsApiV1AuthSamlAcsPost}, TContext> => {
+
+const mutationKey = ['samlAcsApiV1AuthSamlAcsPost'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof samlAcsApiV1AuthSamlAcsPost>>, {data: BodySamlAcsApiV1AuthSamlAcsPost}> = (props) => {
+          const {data} = props ?? {};
+
+          return  samlAcsApiV1AuthSamlAcsPost(data,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SamlAcsApiV1AuthSamlAcsPostMutationResult = NonNullable<Awaited<ReturnType<typeof samlAcsApiV1AuthSamlAcsPost>>>
+    export type SamlAcsApiV1AuthSamlAcsPostMutationBody = BodySamlAcsApiV1AuthSamlAcsPost
+    export type SamlAcsApiV1AuthSamlAcsPostMutationError = HTTPValidationError
+
+    /**
+ * @summary Saml Acs
+ */
+export const useSamlAcsApiV1AuthSamlAcsPost = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof samlAcsApiV1AuthSamlAcsPost>>, TError,{data: BodySamlAcsApiV1AuthSamlAcsPost}, TContext>, }
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof samlAcsApiV1AuthSamlAcsPost>>,
+        TError,
+        {data: BodySamlAcsApiV1AuthSamlAcsPost},
+        TContext
+      > => {
+
+      const mutationOptions = getSamlAcsApiV1AuthSamlAcsPostMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * Return SP metadata XML for IdP configuration.
+ * @summary Saml Metadata
+ */
+export const samlMetadataApiV1AuthSamlMetadataXmlGet = (
+    
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiClient<unknown>(
+      {url: `/api/v1/auth/saml/metadata.xml`, method: 'GET', signal
+    },
+      );
+    }
+  
+
+
+
+export const getSamlMetadataApiV1AuthSamlMetadataXmlGetQueryKey = () => {
+    return [
+    `/api/v1/auth/saml/metadata.xml`
+    ] as const;
+    }
+
+    
+export const getSamlMetadataApiV1AuthSamlMetadataXmlGetQueryOptions = <TData = Awaited<ReturnType<typeof samlMetadataApiV1AuthSamlMetadataXmlGet>>, TError = unknown>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof samlMetadataApiV1AuthSamlMetadataXmlGet>>, TError, TData>>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getSamlMetadataApiV1AuthSamlMetadataXmlGetQueryKey();
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof samlMetadataApiV1AuthSamlMetadataXmlGet>>> = ({ signal }) => samlMetadataApiV1AuthSamlMetadataXmlGet(signal);
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof samlMetadataApiV1AuthSamlMetadataXmlGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type SamlMetadataApiV1AuthSamlMetadataXmlGetQueryResult = NonNullable<Awaited<ReturnType<typeof samlMetadataApiV1AuthSamlMetadataXmlGet>>>
+export type SamlMetadataApiV1AuthSamlMetadataXmlGetQueryError = unknown
+
+
+export function useSamlMetadataApiV1AuthSamlMetadataXmlGet<TData = Awaited<ReturnType<typeof samlMetadataApiV1AuthSamlMetadataXmlGet>>, TError = unknown>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof samlMetadataApiV1AuthSamlMetadataXmlGet>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof samlMetadataApiV1AuthSamlMetadataXmlGet>>,
+          TError,
+          Awaited<ReturnType<typeof samlMetadataApiV1AuthSamlMetadataXmlGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useSamlMetadataApiV1AuthSamlMetadataXmlGet<TData = Awaited<ReturnType<typeof samlMetadataApiV1AuthSamlMetadataXmlGet>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof samlMetadataApiV1AuthSamlMetadataXmlGet>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof samlMetadataApiV1AuthSamlMetadataXmlGet>>,
+          TError,
+          Awaited<ReturnType<typeof samlMetadataApiV1AuthSamlMetadataXmlGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useSamlMetadataApiV1AuthSamlMetadataXmlGet<TData = Awaited<ReturnType<typeof samlMetadataApiV1AuthSamlMetadataXmlGet>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof samlMetadataApiV1AuthSamlMetadataXmlGet>>, TError, TData>>, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Saml Metadata
+ */
+
+export function useSamlMetadataApiV1AuthSamlMetadataXmlGet<TData = Awaited<ReturnType<typeof samlMetadataApiV1AuthSamlMetadataXmlGet>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof samlMetadataApiV1AuthSamlMetadataXmlGet>>, TError, TData>>, }
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getSamlMetadataApiV1AuthSamlMetadataXmlGetQueryOptions(options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 

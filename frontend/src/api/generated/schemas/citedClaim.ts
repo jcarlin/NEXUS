@@ -5,6 +5,7 @@
  * Multimodal RAG Investigation Platform for Legal Document Intelligence
  * OpenAPI spec version: 0.1.0
  */
+import type { CitedClaimFilename } from './citedClaimFilename';
 import type { CitedClaimPageNumber } from './citedClaimPageNumber';
 import type { CitedClaimBatesRange } from './citedClaimBatesRange';
 
@@ -14,7 +15,7 @@ import type { CitedClaimBatesRange } from './citedClaimBatesRange';
 export interface CitedClaim {
   claim_text: string;
   document_id: string;
-  filename: string;
+  filename?: CitedClaimFilename;
   page_number?: CitedClaimPageNumber;
   bates_range?: CitedClaimBatesRange;
   /** @maxLength 500 */

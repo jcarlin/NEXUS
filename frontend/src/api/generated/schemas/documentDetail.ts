@@ -12,6 +12,7 @@ import type { DocumentDetailIsInclusive } from './documentDetailIsInclusive';
 import type { DocumentDetailDuplicateClusterId } from './documentDetailDuplicateClusterId';
 import type { DocumentDetailVersionGroupId } from './documentDetailVersionGroupId';
 import type { DocumentDetailHotDocScore } from './documentDetailHotDocScore';
+import type { DocumentDetailSummary } from './documentDetailSummary';
 import type { DocumentDetailMetadata } from './documentDetailMetadata';
 import type { DocumentDetailFileSizeBytes } from './documentDetailFileSizeBytes';
 import type { DocumentDetailContentHash } from './documentDetailContentHash';
@@ -55,6 +56,7 @@ export interface DocumentDetail {
   duplicate_cluster_id?: DocumentDetailDuplicateClusterId;
   version_group_id?: DocumentDetailVersionGroupId;
   hot_doc_score?: DocumentDetailHotDocScore;
+  summary?: DocumentDetailSummary;
   metadata_?: DocumentDetailMetadata;
   file_size_bytes?: DocumentDetailFileSizeBytes;
   content_hash?: DocumentDetailContentHash;
@@ -80,5 +82,4 @@ export interface DocumentDetail {
   anomaly_score?: DocumentDetailAnomalyScore;
   bates_begin?: DocumentDetailBatesBegin;
   bates_end?: DocumentDetailBatesEnd;
-  summary?: string | null;
 }

@@ -12,4 +12,8 @@ export type DocumentPreviewApiV1DocumentsDocIdPreviewGetParams = {
  * @minimum 1
  */
 page?: number;
+/**
+ * Filename fallback when doc_id is stale
+ */
+filename?: string | null;
 };

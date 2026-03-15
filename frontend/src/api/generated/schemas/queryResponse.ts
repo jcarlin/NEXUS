@@ -9,6 +9,7 @@ import type { SourceDocument } from './sourceDocument';
 import type { EntityMention } from './entityMention';
 import type { CitedClaim } from './citedClaim';
 import type { QueryResponseTier } from './queryResponseTier';
+import type { EntityGrounding } from './entityGrounding';
 
 /**
  * Full (non-streaming) response to a user query.
@@ -22,4 +23,5 @@ export interface QueryResponse {
   message_id: string;
   cited_claims?: CitedClaim[];
   tier?: QueryResponseTier;
+  entity_grounding?: EntityGrounding[];
 }

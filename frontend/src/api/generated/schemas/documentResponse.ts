@@ -12,6 +12,7 @@ import type { DocumentResponseIsInclusive } from './documentResponseIsInclusive'
 import type { DocumentResponseDuplicateClusterId } from './documentResponseDuplicateClusterId';
 import type { DocumentResponseVersionGroupId } from './documentResponseVersionGroupId';
 import type { DocumentResponseHotDocScore } from './documentResponseHotDocScore';
+import type { DocumentResponseSummary } from './documentResponseSummary';
 
 /**
  * Metadata for a single ingested document.
@@ -31,5 +32,5 @@ export interface DocumentResponse {
   duplicate_cluster_id?: DocumentResponseDuplicateClusterId;
   version_group_id?: DocumentResponseVersionGroupId;
   hot_doc_score?: DocumentResponseHotDocScore;
-  summary?: string | null;
+  summary?: DocumentResponseSummary;
 }

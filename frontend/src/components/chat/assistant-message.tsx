@@ -169,7 +169,7 @@ export function AssistantMessage({
                     </p>
                   </div>
                   <Badge variant="secondary" className="shrink-0 text-[10px]">
-                    {(src.relevance_score * 100).toFixed(0)}%
+                    {((src.relevance_score ?? 0) * 100).toFixed(0)}%
                   </Badge>
                 </button>
               ))}

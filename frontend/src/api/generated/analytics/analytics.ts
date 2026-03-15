@@ -6,16 +6,20 @@
  * OpenAPI spec version: 0.1.0
  */
 import {
+  useMutation,
   useQuery
 } from '@tanstack/react-query';
 import type {
   DataTag,
   DefinedInitialDataOptions,
   DefinedUseQueryResult,
+  MutationFunction,
   QueryClient,
   QueryFunction,
   QueryKey,
   UndefinedInitialDataOptions,
+  UseMutationOptions,
+  UseMutationResult,
   UseQueryOptions,
   UseQueryResult
 } from '@tanstack/react-query';
@@ -209,6 +213,253 @@ export function useGetNetworkCentralityApiV1AnalyticsNetworkCentralityGet<TData 
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getGetNetworkCentralityApiV1AnalyticsNetworkCentralityGetQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+/**
+ * Trigger community detection via Neo4j GDS Louvain.
+ * @summary Detect Communities
+ */
+export const detectCommunitiesApiV1AnalyticsCommunitiesDetectPost = (
+    
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiClient<unknown>(
+      {url: `/api/v1/analytics/communities/detect`, method: 'POST', signal
+    },
+      );
+    }
+  
+
+
+export const getDetectCommunitiesApiV1AnalyticsCommunitiesDetectPostMutationOptions = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof detectCommunitiesApiV1AnalyticsCommunitiesDetectPost>>, TError,void, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof detectCommunitiesApiV1AnalyticsCommunitiesDetectPost>>, TError,void, TContext> => {
+
+const mutationKey = ['detectCommunitiesApiV1AnalyticsCommunitiesDetectPost'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof detectCommunitiesApiV1AnalyticsCommunitiesDetectPost>>, void> = () => {
+          
+
+          return  detectCommunitiesApiV1AnalyticsCommunitiesDetectPost()
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DetectCommunitiesApiV1AnalyticsCommunitiesDetectPostMutationResult = NonNullable<Awaited<ReturnType<typeof detectCommunitiesApiV1AnalyticsCommunitiesDetectPost>>>
+    
+    export type DetectCommunitiesApiV1AnalyticsCommunitiesDetectPostMutationError = unknown
+
+    /**
+ * @summary Detect Communities
+ */
+export const useDetectCommunitiesApiV1AnalyticsCommunitiesDetectPost = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof detectCommunitiesApiV1AnalyticsCommunitiesDetectPost>>, TError,void, TContext>, }
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof detectCommunitiesApiV1AnalyticsCommunitiesDetectPost>>,
+        TError,
+        void,
+        TContext
+      > => {
+
+      const mutationOptions = getDetectCommunitiesApiV1AnalyticsCommunitiesDetectPostMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * List detected communities for the current matter.
+ * @summary List Communities
+ */
+export const listCommunitiesApiV1AnalyticsCommunitiesGet = (
+    
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiClient<unknown>(
+      {url: `/api/v1/analytics/communities`, method: 'GET', signal
+    },
+      );
+    }
+  
+
+
+
+export const getListCommunitiesApiV1AnalyticsCommunitiesGetQueryKey = () => {
+    return [
+    `/api/v1/analytics/communities`
+    ] as const;
+    }
+
+    
+export const getListCommunitiesApiV1AnalyticsCommunitiesGetQueryOptions = <TData = Awaited<ReturnType<typeof listCommunitiesApiV1AnalyticsCommunitiesGet>>, TError = unknown>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listCommunitiesApiV1AnalyticsCommunitiesGet>>, TError, TData>>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListCommunitiesApiV1AnalyticsCommunitiesGetQueryKey();
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCommunitiesApiV1AnalyticsCommunitiesGet>>> = ({ signal }) => listCommunitiesApiV1AnalyticsCommunitiesGet(signal);
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listCommunitiesApiV1AnalyticsCommunitiesGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListCommunitiesApiV1AnalyticsCommunitiesGetQueryResult = NonNullable<Awaited<ReturnType<typeof listCommunitiesApiV1AnalyticsCommunitiesGet>>>
+export type ListCommunitiesApiV1AnalyticsCommunitiesGetQueryError = unknown
+
+
+export function useListCommunitiesApiV1AnalyticsCommunitiesGet<TData = Awaited<ReturnType<typeof listCommunitiesApiV1AnalyticsCommunitiesGet>>, TError = unknown>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listCommunitiesApiV1AnalyticsCommunitiesGet>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listCommunitiesApiV1AnalyticsCommunitiesGet>>,
+          TError,
+          Awaited<ReturnType<typeof listCommunitiesApiV1AnalyticsCommunitiesGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListCommunitiesApiV1AnalyticsCommunitiesGet<TData = Awaited<ReturnType<typeof listCommunitiesApiV1AnalyticsCommunitiesGet>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listCommunitiesApiV1AnalyticsCommunitiesGet>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listCommunitiesApiV1AnalyticsCommunitiesGet>>,
+          TError,
+          Awaited<ReturnType<typeof listCommunitiesApiV1AnalyticsCommunitiesGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListCommunitiesApiV1AnalyticsCommunitiesGet<TData = Awaited<ReturnType<typeof listCommunitiesApiV1AnalyticsCommunitiesGet>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listCommunitiesApiV1AnalyticsCommunitiesGet>>, TError, TData>>, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List Communities
+ */
+
+export function useListCommunitiesApiV1AnalyticsCommunitiesGet<TData = Awaited<ReturnType<typeof listCommunitiesApiV1AnalyticsCommunitiesGet>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listCommunitiesApiV1AnalyticsCommunitiesGet>>, TError, TData>>, }
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListCommunitiesApiV1AnalyticsCommunitiesGetQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+/**
+ * Get a single community with related communities.
+ * @summary Get Community
+ */
+export const getCommunityApiV1AnalyticsCommunitiesCommunityIdGet = (
+    communityId: string,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiClient<unknown>(
+      {url: `/api/v1/analytics/communities/${communityId}`, method: 'GET', signal
+    },
+      );
+    }
+  
+
+
+
+export const getGetCommunityApiV1AnalyticsCommunitiesCommunityIdGetQueryKey = (communityId?: string,) => {
+    return [
+    `/api/v1/analytics/communities/${communityId}`
+    ] as const;
+    }
+
+    
+export const getGetCommunityApiV1AnalyticsCommunitiesCommunityIdGetQueryOptions = <TData = Awaited<ReturnType<typeof getCommunityApiV1AnalyticsCommunitiesCommunityIdGet>>, TError = HTTPValidationError>(communityId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCommunityApiV1AnalyticsCommunitiesCommunityIdGet>>, TError, TData>>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCommunityApiV1AnalyticsCommunitiesCommunityIdGetQueryKey(communityId);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCommunityApiV1AnalyticsCommunitiesCommunityIdGet>>> = ({ signal }) => getCommunityApiV1AnalyticsCommunitiesCommunityIdGet(communityId, signal);
+
+      
+
+      
+
+   return  { queryKey, queryFn, enabled: !!(communityId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCommunityApiV1AnalyticsCommunitiesCommunityIdGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetCommunityApiV1AnalyticsCommunitiesCommunityIdGetQueryResult = NonNullable<Awaited<ReturnType<typeof getCommunityApiV1AnalyticsCommunitiesCommunityIdGet>>>
+export type GetCommunityApiV1AnalyticsCommunitiesCommunityIdGetQueryError = HTTPValidationError
+
+
+export function useGetCommunityApiV1AnalyticsCommunitiesCommunityIdGet<TData = Awaited<ReturnType<typeof getCommunityApiV1AnalyticsCommunitiesCommunityIdGet>>, TError = HTTPValidationError>(
+ communityId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCommunityApiV1AnalyticsCommunitiesCommunityIdGet>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getCommunityApiV1AnalyticsCommunitiesCommunityIdGet>>,
+          TError,
+          Awaited<ReturnType<typeof getCommunityApiV1AnalyticsCommunitiesCommunityIdGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetCommunityApiV1AnalyticsCommunitiesCommunityIdGet<TData = Awaited<ReturnType<typeof getCommunityApiV1AnalyticsCommunitiesCommunityIdGet>>, TError = HTTPValidationError>(
+ communityId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCommunityApiV1AnalyticsCommunitiesCommunityIdGet>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getCommunityApiV1AnalyticsCommunitiesCommunityIdGet>>,
+          TError,
+          Awaited<ReturnType<typeof getCommunityApiV1AnalyticsCommunitiesCommunityIdGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetCommunityApiV1AnalyticsCommunitiesCommunityIdGet<TData = Awaited<ReturnType<typeof getCommunityApiV1AnalyticsCommunitiesCommunityIdGet>>, TError = HTTPValidationError>(
+ communityId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCommunityApiV1AnalyticsCommunitiesCommunityIdGet>>, TError, TData>>, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get Community
+ */
+
+export function useGetCommunityApiV1AnalyticsCommunitiesCommunityIdGet<TData = Awaited<ReturnType<typeof getCommunityApiV1AnalyticsCommunitiesCommunityIdGet>>, TError = HTTPValidationError>(
+ communityId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCommunityApiV1AnalyticsCommunitiesCommunityIdGet>>, TError, TData>>, }
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetCommunityApiV1AnalyticsCommunitiesCommunityIdGetQueryOptions(communityId,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 

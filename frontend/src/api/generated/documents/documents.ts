@@ -25,14 +25,22 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  CompareDocumentsApiV1DocumentsCompareGetParams,
   DocumentDetail,
+  DocumentDiffResponse,
+  DocumentDownloadApiV1DocumentsDocIdDownloadGetParams,
   DocumentHealthResponse,
   DocumentListResponse,
   DocumentPreviewApiV1DocumentsDocIdPreviewGetParams,
+  ExportPrivilegeLogApiV1PrivilegeLogExportGetParams,
+  GetPrivilegeLogApiV1PrivilegeLogGetParams,
   HTTPValidationError,
   ListDocumentsApiV1DocumentsGetParams,
+  PrivilegeBasisUpdate,
+  PrivilegeLogResponse,
   PrivilegeUpdateRequest,
-  PrivilegeUpdateResponse
+  PrivilegeUpdateResponse,
+  VersionGroupResponse
 } from '.././schemas';
 
 import { apiClient } from '../../client';
@@ -215,6 +223,191 @@ export function useListDocumentsApiV1DocumentsGet<TData = Awaited<ReturnType<typ
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getListDocumentsApiV1DocumentsGetQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+/**
+ * Compare two documents and return a text diff.
+ * @summary Compare Documents
+ */
+export const compareDocumentsApiV1DocumentsCompareGet = (
+    params: CompareDocumentsApiV1DocumentsCompareGetParams,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiClient<DocumentDiffResponse>(
+      {url: `/api/v1/documents/compare`, method: 'GET',
+        params, signal
+    },
+      );
+    }
+  
+
+
+
+export const getCompareDocumentsApiV1DocumentsCompareGetQueryKey = (params?: CompareDocumentsApiV1DocumentsCompareGetParams,) => {
+    return [
+    `/api/v1/documents/compare`, ...(params ? [params]: [])
+    ] as const;
+    }
+
+    
+export const getCompareDocumentsApiV1DocumentsCompareGetQueryOptions = <TData = Awaited<ReturnType<typeof compareDocumentsApiV1DocumentsCompareGet>>, TError = HTTPValidationError>(params: CompareDocumentsApiV1DocumentsCompareGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof compareDocumentsApiV1DocumentsCompareGet>>, TError, TData>>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getCompareDocumentsApiV1DocumentsCompareGetQueryKey(params);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof compareDocumentsApiV1DocumentsCompareGet>>> = ({ signal }) => compareDocumentsApiV1DocumentsCompareGet(params, signal);
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof compareDocumentsApiV1DocumentsCompareGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type CompareDocumentsApiV1DocumentsCompareGetQueryResult = NonNullable<Awaited<ReturnType<typeof compareDocumentsApiV1DocumentsCompareGet>>>
+export type CompareDocumentsApiV1DocumentsCompareGetQueryError = HTTPValidationError
+
+
+export function useCompareDocumentsApiV1DocumentsCompareGet<TData = Awaited<ReturnType<typeof compareDocumentsApiV1DocumentsCompareGet>>, TError = HTTPValidationError>(
+ params: CompareDocumentsApiV1DocumentsCompareGetParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof compareDocumentsApiV1DocumentsCompareGet>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof compareDocumentsApiV1DocumentsCompareGet>>,
+          TError,
+          Awaited<ReturnType<typeof compareDocumentsApiV1DocumentsCompareGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useCompareDocumentsApiV1DocumentsCompareGet<TData = Awaited<ReturnType<typeof compareDocumentsApiV1DocumentsCompareGet>>, TError = HTTPValidationError>(
+ params: CompareDocumentsApiV1DocumentsCompareGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof compareDocumentsApiV1DocumentsCompareGet>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof compareDocumentsApiV1DocumentsCompareGet>>,
+          TError,
+          Awaited<ReturnType<typeof compareDocumentsApiV1DocumentsCompareGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useCompareDocumentsApiV1DocumentsCompareGet<TData = Awaited<ReturnType<typeof compareDocumentsApiV1DocumentsCompareGet>>, TError = HTTPValidationError>(
+ params: CompareDocumentsApiV1DocumentsCompareGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof compareDocumentsApiV1DocumentsCompareGet>>, TError, TData>>, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Compare Documents
+ */
+
+export function useCompareDocumentsApiV1DocumentsCompareGet<TData = Awaited<ReturnType<typeof compareDocumentsApiV1DocumentsCompareGet>>, TError = HTTPValidationError>(
+ params: CompareDocumentsApiV1DocumentsCompareGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof compareDocumentsApiV1DocumentsCompareGet>>, TError, TData>>, }
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getCompareDocumentsApiV1DocumentsCompareGetQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+/**
+ * Get all document versions in a group.
+ * @summary Get Version Group
+ */
+export const getVersionGroupApiV1DocumentsVersionsVersionGroupIdGet = (
+    versionGroupId: string,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiClient<VersionGroupResponse>(
+      {url: `/api/v1/documents/versions/${versionGroupId}`, method: 'GET', signal
+    },
+      );
+    }
+  
+
+
+
+export const getGetVersionGroupApiV1DocumentsVersionsVersionGroupIdGetQueryKey = (versionGroupId?: string,) => {
+    return [
+    `/api/v1/documents/versions/${versionGroupId}`
+    ] as const;
+    }
+
+    
+export const getGetVersionGroupApiV1DocumentsVersionsVersionGroupIdGetQueryOptions = <TData = Awaited<ReturnType<typeof getVersionGroupApiV1DocumentsVersionsVersionGroupIdGet>>, TError = HTTPValidationError>(versionGroupId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getVersionGroupApiV1DocumentsVersionsVersionGroupIdGet>>, TError, TData>>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetVersionGroupApiV1DocumentsVersionsVersionGroupIdGetQueryKey(versionGroupId);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getVersionGroupApiV1DocumentsVersionsVersionGroupIdGet>>> = ({ signal }) => getVersionGroupApiV1DocumentsVersionsVersionGroupIdGet(versionGroupId, signal);
+
+      
+
+      
+
+   return  { queryKey, queryFn, enabled: !!(versionGroupId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getVersionGroupApiV1DocumentsVersionsVersionGroupIdGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetVersionGroupApiV1DocumentsVersionsVersionGroupIdGetQueryResult = NonNullable<Awaited<ReturnType<typeof getVersionGroupApiV1DocumentsVersionsVersionGroupIdGet>>>
+export type GetVersionGroupApiV1DocumentsVersionsVersionGroupIdGetQueryError = HTTPValidationError
+
+
+export function useGetVersionGroupApiV1DocumentsVersionsVersionGroupIdGet<TData = Awaited<ReturnType<typeof getVersionGroupApiV1DocumentsVersionsVersionGroupIdGet>>, TError = HTTPValidationError>(
+ versionGroupId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getVersionGroupApiV1DocumentsVersionsVersionGroupIdGet>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getVersionGroupApiV1DocumentsVersionsVersionGroupIdGet>>,
+          TError,
+          Awaited<ReturnType<typeof getVersionGroupApiV1DocumentsVersionsVersionGroupIdGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetVersionGroupApiV1DocumentsVersionsVersionGroupIdGet<TData = Awaited<ReturnType<typeof getVersionGroupApiV1DocumentsVersionsVersionGroupIdGet>>, TError = HTTPValidationError>(
+ versionGroupId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getVersionGroupApiV1DocumentsVersionsVersionGroupIdGet>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getVersionGroupApiV1DocumentsVersionsVersionGroupIdGet>>,
+          TError,
+          Awaited<ReturnType<typeof getVersionGroupApiV1DocumentsVersionsVersionGroupIdGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetVersionGroupApiV1DocumentsVersionsVersionGroupIdGet<TData = Awaited<ReturnType<typeof getVersionGroupApiV1DocumentsVersionsVersionGroupIdGet>>, TError = HTTPValidationError>(
+ versionGroupId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getVersionGroupApiV1DocumentsVersionsVersionGroupIdGet>>, TError, TData>>, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get Version Group
+ */
+
+export function useGetVersionGroupApiV1DocumentsVersionsVersionGroupIdGet<TData = Awaited<ReturnType<typeof getVersionGroupApiV1DocumentsVersionsVersionGroupIdGet>>, TError = HTTPValidationError>(
+ versionGroupId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getVersionGroupApiV1DocumentsVersionsVersionGroupIdGet>>, TError, TData>>, }
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetVersionGroupApiV1DocumentsVersionsVersionGroupIdGetQueryOptions(versionGroupId,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
@@ -423,12 +616,14 @@ export function useDocumentPreviewApiV1DocumentsDocIdPreviewGet<TData = Awaited<
  */
 export const documentDownloadApiV1DocumentsDocIdDownloadGet = (
     docId: string,
+    params?: DocumentDownloadApiV1DocumentsDocIdDownloadGetParams,
  signal?: AbortSignal
 ) => {
       
       
       return apiClient<unknown>(
-      {url: `/api/v1/documents/${docId}/download`, method: 'GET', signal
+      {url: `/api/v1/documents/${docId}/download`, method: 'GET',
+        params, signal
     },
       );
     }
@@ -436,23 +631,25 @@ export const documentDownloadApiV1DocumentsDocIdDownloadGet = (
 
 
 
-export const getDocumentDownloadApiV1DocumentsDocIdDownloadGetQueryKey = (docId?: string,) => {
+export const getDocumentDownloadApiV1DocumentsDocIdDownloadGetQueryKey = (docId?: string,
+    params?: DocumentDownloadApiV1DocumentsDocIdDownloadGetParams,) => {
     return [
-    `/api/v1/documents/${docId}/download`
+    `/api/v1/documents/${docId}/download`, ...(params ? [params]: [])
     ] as const;
     }
 
     
-export const getDocumentDownloadApiV1DocumentsDocIdDownloadGetQueryOptions = <TData = Awaited<ReturnType<typeof documentDownloadApiV1DocumentsDocIdDownloadGet>>, TError = HTTPValidationError>(docId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof documentDownloadApiV1DocumentsDocIdDownloadGet>>, TError, TData>>, }
+export const getDocumentDownloadApiV1DocumentsDocIdDownloadGetQueryOptions = <TData = Awaited<ReturnType<typeof documentDownloadApiV1DocumentsDocIdDownloadGet>>, TError = HTTPValidationError>(docId: string,
+    params?: DocumentDownloadApiV1DocumentsDocIdDownloadGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof documentDownloadApiV1DocumentsDocIdDownloadGet>>, TError, TData>>, }
 ) => {
 
 const {query: queryOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getDocumentDownloadApiV1DocumentsDocIdDownloadGetQueryKey(docId);
+  const queryKey =  queryOptions?.queryKey ?? getDocumentDownloadApiV1DocumentsDocIdDownloadGetQueryKey(docId,params);
 
   
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof documentDownloadApiV1DocumentsDocIdDownloadGet>>> = ({ signal }) => documentDownloadApiV1DocumentsDocIdDownloadGet(docId, signal);
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof documentDownloadApiV1DocumentsDocIdDownloadGet>>> = ({ signal }) => documentDownloadApiV1DocumentsDocIdDownloadGet(docId,params, signal);
 
       
 
@@ -466,7 +663,8 @@ export type DocumentDownloadApiV1DocumentsDocIdDownloadGetQueryError = HTTPValid
 
 
 export function useDocumentDownloadApiV1DocumentsDocIdDownloadGet<TData = Awaited<ReturnType<typeof documentDownloadApiV1DocumentsDocIdDownloadGet>>, TError = HTTPValidationError>(
- docId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof documentDownloadApiV1DocumentsDocIdDownloadGet>>, TError, TData>> & Pick<
+ docId: string,
+    params: undefined |  DocumentDownloadApiV1DocumentsDocIdDownloadGetParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof documentDownloadApiV1DocumentsDocIdDownloadGet>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof documentDownloadApiV1DocumentsDocIdDownloadGet>>,
           TError,
@@ -476,7 +674,8 @@ export function useDocumentDownloadApiV1DocumentsDocIdDownloadGet<TData = Awaite
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 export function useDocumentDownloadApiV1DocumentsDocIdDownloadGet<TData = Awaited<ReturnType<typeof documentDownloadApiV1DocumentsDocIdDownloadGet>>, TError = HTTPValidationError>(
- docId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof documentDownloadApiV1DocumentsDocIdDownloadGet>>, TError, TData>> & Pick<
+ docId: string,
+    params?: DocumentDownloadApiV1DocumentsDocIdDownloadGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof documentDownloadApiV1DocumentsDocIdDownloadGet>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof documentDownloadApiV1DocumentsDocIdDownloadGet>>,
           TError,
@@ -486,7 +685,8 @@ export function useDocumentDownloadApiV1DocumentsDocIdDownloadGet<TData = Awaite
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 export function useDocumentDownloadApiV1DocumentsDocIdDownloadGet<TData = Awaited<ReturnType<typeof documentDownloadApiV1DocumentsDocIdDownloadGet>>, TError = HTTPValidationError>(
- docId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof documentDownloadApiV1DocumentsDocIdDownloadGet>>, TError, TData>>, }
+ docId: string,
+    params?: DocumentDownloadApiV1DocumentsDocIdDownloadGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof documentDownloadApiV1DocumentsDocIdDownloadGet>>, TError, TData>>, }
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
@@ -494,11 +694,12 @@ export function useDocumentDownloadApiV1DocumentsDocIdDownloadGet<TData = Awaite
  */
 
 export function useDocumentDownloadApiV1DocumentsDocIdDownloadGet<TData = Awaited<ReturnType<typeof documentDownloadApiV1DocumentsDocIdDownloadGet>>, TError = HTTPValidationError>(
- docId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof documentDownloadApiV1DocumentsDocIdDownloadGet>>, TError, TData>>, }
+ docId: string,
+    params?: DocumentDownloadApiV1DocumentsDocIdDownloadGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof documentDownloadApiV1DocumentsDocIdDownloadGet>>, TError, TData>>, }
  , queryClient?: QueryClient 
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
-  const queryOptions = getDocumentDownloadApiV1DocumentsDocIdDownloadGetQueryOptions(docId,options)
+  const queryOptions = getDocumentDownloadApiV1DocumentsDocIdDownloadGetQueryOptions(docId,params,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
@@ -571,6 +772,257 @@ export const useUpdateDocumentPrivilegeApiV1DocumentsDocIdPrivilegePatch = <TErr
       > => {
 
       const mutationOptions = getUpdateDocumentPrivilegeApiV1DocumentsDocIdPrivilegePatchMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * Return the privilege log as JSON for the current matter.
+ * @summary Get Privilege Log
+ */
+export const getPrivilegeLogApiV1PrivilegeLogGet = (
+    params?: GetPrivilegeLogApiV1PrivilegeLogGetParams,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiClient<PrivilegeLogResponse>(
+      {url: `/api/v1/privilege-log`, method: 'GET',
+        params, signal
+    },
+      );
+    }
+  
+
+
+
+export const getGetPrivilegeLogApiV1PrivilegeLogGetQueryKey = (params?: GetPrivilegeLogApiV1PrivilegeLogGetParams,) => {
+    return [
+    `/api/v1/privilege-log`, ...(params ? [params]: [])
+    ] as const;
+    }
+
+    
+export const getGetPrivilegeLogApiV1PrivilegeLogGetQueryOptions = <TData = Awaited<ReturnType<typeof getPrivilegeLogApiV1PrivilegeLogGet>>, TError = HTTPValidationError>(params?: GetPrivilegeLogApiV1PrivilegeLogGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPrivilegeLogApiV1PrivilegeLogGet>>, TError, TData>>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPrivilegeLogApiV1PrivilegeLogGetQueryKey(params);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPrivilegeLogApiV1PrivilegeLogGet>>> = ({ signal }) => getPrivilegeLogApiV1PrivilegeLogGet(params, signal);
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPrivilegeLogApiV1PrivilegeLogGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetPrivilegeLogApiV1PrivilegeLogGetQueryResult = NonNullable<Awaited<ReturnType<typeof getPrivilegeLogApiV1PrivilegeLogGet>>>
+export type GetPrivilegeLogApiV1PrivilegeLogGetQueryError = HTTPValidationError
+
+
+export function useGetPrivilegeLogApiV1PrivilegeLogGet<TData = Awaited<ReturnType<typeof getPrivilegeLogApiV1PrivilegeLogGet>>, TError = HTTPValidationError>(
+ params: undefined |  GetPrivilegeLogApiV1PrivilegeLogGetParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPrivilegeLogApiV1PrivilegeLogGet>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getPrivilegeLogApiV1PrivilegeLogGet>>,
+          TError,
+          Awaited<ReturnType<typeof getPrivilegeLogApiV1PrivilegeLogGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetPrivilegeLogApiV1PrivilegeLogGet<TData = Awaited<ReturnType<typeof getPrivilegeLogApiV1PrivilegeLogGet>>, TError = HTTPValidationError>(
+ params?: GetPrivilegeLogApiV1PrivilegeLogGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPrivilegeLogApiV1PrivilegeLogGet>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getPrivilegeLogApiV1PrivilegeLogGet>>,
+          TError,
+          Awaited<ReturnType<typeof getPrivilegeLogApiV1PrivilegeLogGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetPrivilegeLogApiV1PrivilegeLogGet<TData = Awaited<ReturnType<typeof getPrivilegeLogApiV1PrivilegeLogGet>>, TError = HTTPValidationError>(
+ params?: GetPrivilegeLogApiV1PrivilegeLogGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPrivilegeLogApiV1PrivilegeLogGet>>, TError, TData>>, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get Privilege Log
+ */
+
+export function useGetPrivilegeLogApiV1PrivilegeLogGet<TData = Awaited<ReturnType<typeof getPrivilegeLogApiV1PrivilegeLogGet>>, TError = HTTPValidationError>(
+ params?: GetPrivilegeLogApiV1PrivilegeLogGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPrivilegeLogApiV1PrivilegeLogGet>>, TError, TData>>, }
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetPrivilegeLogApiV1PrivilegeLogGetQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+/**
+ * Download the privilege log as CSV or XLSX.
+ * @summary Export Privilege Log
+ */
+export const exportPrivilegeLogApiV1PrivilegeLogExportGet = (
+    params: ExportPrivilegeLogApiV1PrivilegeLogExportGetParams,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiClient<unknown>(
+      {url: `/api/v1/privilege-log/export`, method: 'GET',
+        params, signal
+    },
+      );
+    }
+  
+
+
+
+export const getExportPrivilegeLogApiV1PrivilegeLogExportGetQueryKey = (params?: ExportPrivilegeLogApiV1PrivilegeLogExportGetParams,) => {
+    return [
+    `/api/v1/privilege-log/export`, ...(params ? [params]: [])
+    ] as const;
+    }
+
+    
+export const getExportPrivilegeLogApiV1PrivilegeLogExportGetQueryOptions = <TData = Awaited<ReturnType<typeof exportPrivilegeLogApiV1PrivilegeLogExportGet>>, TError = HTTPValidationError>(params: ExportPrivilegeLogApiV1PrivilegeLogExportGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof exportPrivilegeLogApiV1PrivilegeLogExportGet>>, TError, TData>>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getExportPrivilegeLogApiV1PrivilegeLogExportGetQueryKey(params);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof exportPrivilegeLogApiV1PrivilegeLogExportGet>>> = ({ signal }) => exportPrivilegeLogApiV1PrivilegeLogExportGet(params, signal);
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof exportPrivilegeLogApiV1PrivilegeLogExportGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ExportPrivilegeLogApiV1PrivilegeLogExportGetQueryResult = NonNullable<Awaited<ReturnType<typeof exportPrivilegeLogApiV1PrivilegeLogExportGet>>>
+export type ExportPrivilegeLogApiV1PrivilegeLogExportGetQueryError = HTTPValidationError
+
+
+export function useExportPrivilegeLogApiV1PrivilegeLogExportGet<TData = Awaited<ReturnType<typeof exportPrivilegeLogApiV1PrivilegeLogExportGet>>, TError = HTTPValidationError>(
+ params: ExportPrivilegeLogApiV1PrivilegeLogExportGetParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof exportPrivilegeLogApiV1PrivilegeLogExportGet>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof exportPrivilegeLogApiV1PrivilegeLogExportGet>>,
+          TError,
+          Awaited<ReturnType<typeof exportPrivilegeLogApiV1PrivilegeLogExportGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useExportPrivilegeLogApiV1PrivilegeLogExportGet<TData = Awaited<ReturnType<typeof exportPrivilegeLogApiV1PrivilegeLogExportGet>>, TError = HTTPValidationError>(
+ params: ExportPrivilegeLogApiV1PrivilegeLogExportGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof exportPrivilegeLogApiV1PrivilegeLogExportGet>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof exportPrivilegeLogApiV1PrivilegeLogExportGet>>,
+          TError,
+          Awaited<ReturnType<typeof exportPrivilegeLogApiV1PrivilegeLogExportGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useExportPrivilegeLogApiV1PrivilegeLogExportGet<TData = Awaited<ReturnType<typeof exportPrivilegeLogApiV1PrivilegeLogExportGet>>, TError = HTTPValidationError>(
+ params: ExportPrivilegeLogApiV1PrivilegeLogExportGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof exportPrivilegeLogApiV1PrivilegeLogExportGet>>, TError, TData>>, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Export Privilege Log
+ */
+
+export function useExportPrivilegeLogApiV1PrivilegeLogExportGet<TData = Awaited<ReturnType<typeof exportPrivilegeLogApiV1PrivilegeLogExportGet>>, TError = HTTPValidationError>(
+ params: ExportPrivilegeLogApiV1PrivilegeLogExportGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof exportPrivilegeLogApiV1PrivilegeLogExportGet>>, TError, TData>>, }
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getExportPrivilegeLogApiV1PrivilegeLogExportGetQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+/**
+ * Update the privilege basis and log exclusion for a document.
+ * @summary Update Privilege Basis
+ */
+export const updatePrivilegeBasisApiV1DocumentsDocIdPrivilegeBasisPatch = (
+    docId: string,
+    privilegeBasisUpdate: PrivilegeBasisUpdate,
+ ) => {
+      
+      
+      return apiClient<unknown>(
+      {url: `/api/v1/documents/${docId}/privilege-basis`, method: 'PATCH',
+      headers: {'Content-Type': 'application/json', },
+      data: privilegeBasisUpdate
+    },
+      );
+    }
+  
+
+
+export const getUpdatePrivilegeBasisApiV1DocumentsDocIdPrivilegeBasisPatchMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePrivilegeBasisApiV1DocumentsDocIdPrivilegeBasisPatch>>, TError,{docId: string;data: PrivilegeBasisUpdate}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof updatePrivilegeBasisApiV1DocumentsDocIdPrivilegeBasisPatch>>, TError,{docId: string;data: PrivilegeBasisUpdate}, TContext> => {
+
+const mutationKey = ['updatePrivilegeBasisApiV1DocumentsDocIdPrivilegeBasisPatch'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updatePrivilegeBasisApiV1DocumentsDocIdPrivilegeBasisPatch>>, {docId: string;data: PrivilegeBasisUpdate}> = (props) => {
+          const {docId,data} = props ?? {};
+
+          return  updatePrivilegeBasisApiV1DocumentsDocIdPrivilegeBasisPatch(docId,data,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdatePrivilegeBasisApiV1DocumentsDocIdPrivilegeBasisPatchMutationResult = NonNullable<Awaited<ReturnType<typeof updatePrivilegeBasisApiV1DocumentsDocIdPrivilegeBasisPatch>>>
+    export type UpdatePrivilegeBasisApiV1DocumentsDocIdPrivilegeBasisPatchMutationBody = PrivilegeBasisUpdate
+    export type UpdatePrivilegeBasisApiV1DocumentsDocIdPrivilegeBasisPatchMutationError = HTTPValidationError
+
+    /**
+ * @summary Update Privilege Basis
+ */
+export const useUpdatePrivilegeBasisApiV1DocumentsDocIdPrivilegeBasisPatch = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePrivilegeBasisApiV1DocumentsDocIdPrivilegeBasisPatch>>, TError,{docId: string;data: PrivilegeBasisUpdate}, TContext>, }
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updatePrivilegeBasisApiV1DocumentsDocIdPrivilegeBasisPatch>>,
+        TError,
+        {docId: string;data: PrivilegeBasisUpdate},
+        TContext
+      > => {
+
+      const mutationOptions = getUpdatePrivilegeBasisApiV1DocumentsDocIdPrivilegeBasisPatchMutationOptions(options);
 
       return useMutation(mutationOptions, queryClient);
     }

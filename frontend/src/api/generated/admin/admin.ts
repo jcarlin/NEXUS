@@ -31,10 +31,20 @@ import type {
   ApplyRetentionApiV1AdminAuditRetentionPost200,
   AuditLogListResponse,
   AvailableModelListResponse,
+  CeleryOverview,
+  ContainerActionRequest,
+  ContainerActionResponse,
+  ContainerListResponse,
+  ContainerLogsResponse,
   CostEstimateResponse,
+  DependencyGraphResponse,
   DiscoverOllamaModelsApiV1AdminLlmConfigOllamaModelsGetParams,
   ExportAuditLogsApiV1AdminAuditExportGetParams,
+  FeatureFlagListResponse,
+  FeatureFlagUpdateRequest,
+  FeatureFlagUpdateResponse,
   GetAgentSummaryApiV1AdminAuditAgentsSummaryGetParams,
+  GetContainerLogsApiV1AdminOperationsContainersNameLogsGetParams,
   GetCostEstimateApiV1AdminLlmConfigCostEstimateGetParams,
   GetToolDistributionApiV1AdminAuditAgentsToolsGetParams,
   HTTPValidationError,
@@ -55,9 +65,19 @@ import type {
   ListAuditLogApiV1AdminAuditLogGetParams,
   ListUsersApiV1AdminUsersGetParams,
   OllamaModelListResponse,
+  PurgeQueueApiV1AdminOperationsCeleryQueuesNamePurgePost200,
+  RestartWorkerApiV1AdminOperationsCeleryWorkersHostnameRestartPost200,
   RetentionConfig,
+  RevokeTaskApiV1AdminOperationsCeleryTasksTaskIdRevokePost200,
+  RevokeTaskApiV1AdminOperationsCeleryTasksTaskIdRevokePostParams,
+  SettingListResponse,
+  SettingUpdateRequest,
+  SettingUpdateResponse,
+  ShutdownWorkerApiV1AdminOperationsCeleryWorkersHostnameShutdownPost200,
+  StreamContainerLogsApiV1AdminOperationsContainersNameLogsStreamGetParams,
   TestConnectionResponse,
   ToolDistributionResponse,
+  UptimeListResponse,
   UserCreateRequest,
   UserListResponse,
   UserResponse,
@@ -1290,6 +1310,894 @@ export const useApplyRetentionApiV1AdminAuditRetentionPost = <TError = unknown,
       return useMutation(mutationOptions, queryClient);
     }
     /**
+ * List all Docker containers in the NEXUS compose project.
+ * @summary List Containers
+ */
+export const listContainersApiV1AdminOperationsContainersGet = (
+    
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiClient<ContainerListResponse>(
+      {url: `/api/v1/admin/operations/containers`, method: 'GET', signal
+    },
+      );
+    }
+  
+
+
+
+export const getListContainersApiV1AdminOperationsContainersGetQueryKey = () => {
+    return [
+    `/api/v1/admin/operations/containers`
+    ] as const;
+    }
+
+    
+export const getListContainersApiV1AdminOperationsContainersGetQueryOptions = <TData = Awaited<ReturnType<typeof listContainersApiV1AdminOperationsContainersGet>>, TError = unknown>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listContainersApiV1AdminOperationsContainersGet>>, TError, TData>>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListContainersApiV1AdminOperationsContainersGetQueryKey();
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listContainersApiV1AdminOperationsContainersGet>>> = ({ signal }) => listContainersApiV1AdminOperationsContainersGet(signal);
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listContainersApiV1AdminOperationsContainersGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListContainersApiV1AdminOperationsContainersGetQueryResult = NonNullable<Awaited<ReturnType<typeof listContainersApiV1AdminOperationsContainersGet>>>
+export type ListContainersApiV1AdminOperationsContainersGetQueryError = unknown
+
+
+export function useListContainersApiV1AdminOperationsContainersGet<TData = Awaited<ReturnType<typeof listContainersApiV1AdminOperationsContainersGet>>, TError = unknown>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listContainersApiV1AdminOperationsContainersGet>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listContainersApiV1AdminOperationsContainersGet>>,
+          TError,
+          Awaited<ReturnType<typeof listContainersApiV1AdminOperationsContainersGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListContainersApiV1AdminOperationsContainersGet<TData = Awaited<ReturnType<typeof listContainersApiV1AdminOperationsContainersGet>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listContainersApiV1AdminOperationsContainersGet>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listContainersApiV1AdminOperationsContainersGet>>,
+          TError,
+          Awaited<ReturnType<typeof listContainersApiV1AdminOperationsContainersGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListContainersApiV1AdminOperationsContainersGet<TData = Awaited<ReturnType<typeof listContainersApiV1AdminOperationsContainersGet>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listContainersApiV1AdminOperationsContainersGet>>, TError, TData>>, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List Containers
+ */
+
+export function useListContainersApiV1AdminOperationsContainersGet<TData = Awaited<ReturnType<typeof listContainersApiV1AdminOperationsContainersGet>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listContainersApiV1AdminOperationsContainersGet>>, TError, TData>>, }
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListContainersApiV1AdminOperationsContainersGetQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+/**
+ * Perform an action (restart/stop/start) on a Docker container.
+ * @summary Container Action
+ */
+export const containerActionApiV1AdminOperationsContainersNameActionPost = (
+    name: string,
+    containerActionRequest: ContainerActionRequest,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiClient<ContainerActionResponse>(
+      {url: `/api/v1/admin/operations/containers/${name}/action`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: containerActionRequest, signal
+    },
+      );
+    }
+  
+
+
+export const getContainerActionApiV1AdminOperationsContainersNameActionPostMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof containerActionApiV1AdminOperationsContainersNameActionPost>>, TError,{name: string;data: ContainerActionRequest}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof containerActionApiV1AdminOperationsContainersNameActionPost>>, TError,{name: string;data: ContainerActionRequest}, TContext> => {
+
+const mutationKey = ['containerActionApiV1AdminOperationsContainersNameActionPost'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof containerActionApiV1AdminOperationsContainersNameActionPost>>, {name: string;data: ContainerActionRequest}> = (props) => {
+          const {name,data} = props ?? {};
+
+          return  containerActionApiV1AdminOperationsContainersNameActionPost(name,data,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ContainerActionApiV1AdminOperationsContainersNameActionPostMutationResult = NonNullable<Awaited<ReturnType<typeof containerActionApiV1AdminOperationsContainersNameActionPost>>>
+    export type ContainerActionApiV1AdminOperationsContainersNameActionPostMutationBody = ContainerActionRequest
+    export type ContainerActionApiV1AdminOperationsContainersNameActionPostMutationError = HTTPValidationError
+
+    /**
+ * @summary Container Action
+ */
+export const useContainerActionApiV1AdminOperationsContainersNameActionPost = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof containerActionApiV1AdminOperationsContainersNameActionPost>>, TError,{name: string;data: ContainerActionRequest}, TContext>, }
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof containerActionApiV1AdminOperationsContainersNameActionPost>>,
+        TError,
+        {name: string;data: ContainerActionRequest},
+        TContext
+      > => {
+
+      const mutationOptions = getContainerActionApiV1AdminOperationsContainersNameActionPostMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * Get recent log lines from a Docker container.
+ * @summary Get Container Logs
+ */
+export const getContainerLogsApiV1AdminOperationsContainersNameLogsGet = (
+    name: string,
+    params?: GetContainerLogsApiV1AdminOperationsContainersNameLogsGetParams,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiClient<ContainerLogsResponse>(
+      {url: `/api/v1/admin/operations/containers/${name}/logs`, method: 'GET',
+        params, signal
+    },
+      );
+    }
+  
+
+
+
+export const getGetContainerLogsApiV1AdminOperationsContainersNameLogsGetQueryKey = (name?: string,
+    params?: GetContainerLogsApiV1AdminOperationsContainersNameLogsGetParams,) => {
+    return [
+    `/api/v1/admin/operations/containers/${name}/logs`, ...(params ? [params]: [])
+    ] as const;
+    }
+
+    
+export const getGetContainerLogsApiV1AdminOperationsContainersNameLogsGetQueryOptions = <TData = Awaited<ReturnType<typeof getContainerLogsApiV1AdminOperationsContainersNameLogsGet>>, TError = HTTPValidationError>(name: string,
+    params?: GetContainerLogsApiV1AdminOperationsContainersNameLogsGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getContainerLogsApiV1AdminOperationsContainersNameLogsGet>>, TError, TData>>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetContainerLogsApiV1AdminOperationsContainersNameLogsGetQueryKey(name,params);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getContainerLogsApiV1AdminOperationsContainersNameLogsGet>>> = ({ signal }) => getContainerLogsApiV1AdminOperationsContainersNameLogsGet(name,params, signal);
+
+      
+
+      
+
+   return  { queryKey, queryFn, enabled: !!(name), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getContainerLogsApiV1AdminOperationsContainersNameLogsGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetContainerLogsApiV1AdminOperationsContainersNameLogsGetQueryResult = NonNullable<Awaited<ReturnType<typeof getContainerLogsApiV1AdminOperationsContainersNameLogsGet>>>
+export type GetContainerLogsApiV1AdminOperationsContainersNameLogsGetQueryError = HTTPValidationError
+
+
+export function useGetContainerLogsApiV1AdminOperationsContainersNameLogsGet<TData = Awaited<ReturnType<typeof getContainerLogsApiV1AdminOperationsContainersNameLogsGet>>, TError = HTTPValidationError>(
+ name: string,
+    params: undefined |  GetContainerLogsApiV1AdminOperationsContainersNameLogsGetParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getContainerLogsApiV1AdminOperationsContainersNameLogsGet>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getContainerLogsApiV1AdminOperationsContainersNameLogsGet>>,
+          TError,
+          Awaited<ReturnType<typeof getContainerLogsApiV1AdminOperationsContainersNameLogsGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetContainerLogsApiV1AdminOperationsContainersNameLogsGet<TData = Awaited<ReturnType<typeof getContainerLogsApiV1AdminOperationsContainersNameLogsGet>>, TError = HTTPValidationError>(
+ name: string,
+    params?: GetContainerLogsApiV1AdminOperationsContainersNameLogsGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getContainerLogsApiV1AdminOperationsContainersNameLogsGet>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getContainerLogsApiV1AdminOperationsContainersNameLogsGet>>,
+          TError,
+          Awaited<ReturnType<typeof getContainerLogsApiV1AdminOperationsContainersNameLogsGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetContainerLogsApiV1AdminOperationsContainersNameLogsGet<TData = Awaited<ReturnType<typeof getContainerLogsApiV1AdminOperationsContainersNameLogsGet>>, TError = HTTPValidationError>(
+ name: string,
+    params?: GetContainerLogsApiV1AdminOperationsContainersNameLogsGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getContainerLogsApiV1AdminOperationsContainersNameLogsGet>>, TError, TData>>, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get Container Logs
+ */
+
+export function useGetContainerLogsApiV1AdminOperationsContainersNameLogsGet<TData = Awaited<ReturnType<typeof getContainerLogsApiV1AdminOperationsContainersNameLogsGet>>, TError = HTTPValidationError>(
+ name: string,
+    params?: GetContainerLogsApiV1AdminOperationsContainersNameLogsGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getContainerLogsApiV1AdminOperationsContainersNameLogsGet>>, TError, TData>>, }
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetContainerLogsApiV1AdminOperationsContainersNameLogsGetQueryOptions(name,params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+/**
+ * Stream container logs via Server-Sent Events.
+ * @summary Stream Container Logs
+ */
+export const streamContainerLogsApiV1AdminOperationsContainersNameLogsStreamGet = (
+    name: string,
+    params?: StreamContainerLogsApiV1AdminOperationsContainersNameLogsStreamGetParams,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiClient<unknown>(
+      {url: `/api/v1/admin/operations/containers/${name}/logs/stream`, method: 'GET',
+        params, signal
+    },
+      );
+    }
+  
+
+
+
+export const getStreamContainerLogsApiV1AdminOperationsContainersNameLogsStreamGetQueryKey = (name?: string,
+    params?: StreamContainerLogsApiV1AdminOperationsContainersNameLogsStreamGetParams,) => {
+    return [
+    `/api/v1/admin/operations/containers/${name}/logs/stream`, ...(params ? [params]: [])
+    ] as const;
+    }
+
+    
+export const getStreamContainerLogsApiV1AdminOperationsContainersNameLogsStreamGetQueryOptions = <TData = Awaited<ReturnType<typeof streamContainerLogsApiV1AdminOperationsContainersNameLogsStreamGet>>, TError = HTTPValidationError>(name: string,
+    params?: StreamContainerLogsApiV1AdminOperationsContainersNameLogsStreamGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof streamContainerLogsApiV1AdminOperationsContainersNameLogsStreamGet>>, TError, TData>>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getStreamContainerLogsApiV1AdminOperationsContainersNameLogsStreamGetQueryKey(name,params);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof streamContainerLogsApiV1AdminOperationsContainersNameLogsStreamGet>>> = ({ signal }) => streamContainerLogsApiV1AdminOperationsContainersNameLogsStreamGet(name,params, signal);
+
+      
+
+      
+
+   return  { queryKey, queryFn, enabled: !!(name), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof streamContainerLogsApiV1AdminOperationsContainersNameLogsStreamGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type StreamContainerLogsApiV1AdminOperationsContainersNameLogsStreamGetQueryResult = NonNullable<Awaited<ReturnType<typeof streamContainerLogsApiV1AdminOperationsContainersNameLogsStreamGet>>>
+export type StreamContainerLogsApiV1AdminOperationsContainersNameLogsStreamGetQueryError = HTTPValidationError
+
+
+export function useStreamContainerLogsApiV1AdminOperationsContainersNameLogsStreamGet<TData = Awaited<ReturnType<typeof streamContainerLogsApiV1AdminOperationsContainersNameLogsStreamGet>>, TError = HTTPValidationError>(
+ name: string,
+    params: undefined |  StreamContainerLogsApiV1AdminOperationsContainersNameLogsStreamGetParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof streamContainerLogsApiV1AdminOperationsContainersNameLogsStreamGet>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof streamContainerLogsApiV1AdminOperationsContainersNameLogsStreamGet>>,
+          TError,
+          Awaited<ReturnType<typeof streamContainerLogsApiV1AdminOperationsContainersNameLogsStreamGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useStreamContainerLogsApiV1AdminOperationsContainersNameLogsStreamGet<TData = Awaited<ReturnType<typeof streamContainerLogsApiV1AdminOperationsContainersNameLogsStreamGet>>, TError = HTTPValidationError>(
+ name: string,
+    params?: StreamContainerLogsApiV1AdminOperationsContainersNameLogsStreamGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof streamContainerLogsApiV1AdminOperationsContainersNameLogsStreamGet>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof streamContainerLogsApiV1AdminOperationsContainersNameLogsStreamGet>>,
+          TError,
+          Awaited<ReturnType<typeof streamContainerLogsApiV1AdminOperationsContainersNameLogsStreamGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useStreamContainerLogsApiV1AdminOperationsContainersNameLogsStreamGet<TData = Awaited<ReturnType<typeof streamContainerLogsApiV1AdminOperationsContainersNameLogsStreamGet>>, TError = HTTPValidationError>(
+ name: string,
+    params?: StreamContainerLogsApiV1AdminOperationsContainersNameLogsStreamGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof streamContainerLogsApiV1AdminOperationsContainersNameLogsStreamGet>>, TError, TData>>, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Stream Container Logs
+ */
+
+export function useStreamContainerLogsApiV1AdminOperationsContainersNameLogsStreamGet<TData = Awaited<ReturnType<typeof streamContainerLogsApiV1AdminOperationsContainersNameLogsStreamGet>>, TError = HTTPValidationError>(
+ name: string,
+    params?: StreamContainerLogsApiV1AdminOperationsContainersNameLogsStreamGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof streamContainerLogsApiV1AdminOperationsContainersNameLogsStreamGet>>, TError, TData>>, }
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getStreamContainerLogsApiV1AdminOperationsContainersNameLogsStreamGetQueryOptions(name,params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+/**
+ * Get an overview of Celery workers, queues, and active tasks.
+ * @summary Celery Overview
+ */
+export const celeryOverviewApiV1AdminOperationsCeleryGet = (
+    
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiClient<CeleryOverview>(
+      {url: `/api/v1/admin/operations/celery`, method: 'GET', signal
+    },
+      );
+    }
+  
+
+
+
+export const getCeleryOverviewApiV1AdminOperationsCeleryGetQueryKey = () => {
+    return [
+    `/api/v1/admin/operations/celery`
+    ] as const;
+    }
+
+    
+export const getCeleryOverviewApiV1AdminOperationsCeleryGetQueryOptions = <TData = Awaited<ReturnType<typeof celeryOverviewApiV1AdminOperationsCeleryGet>>, TError = unknown>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof celeryOverviewApiV1AdminOperationsCeleryGet>>, TError, TData>>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getCeleryOverviewApiV1AdminOperationsCeleryGetQueryKey();
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof celeryOverviewApiV1AdminOperationsCeleryGet>>> = ({ signal }) => celeryOverviewApiV1AdminOperationsCeleryGet(signal);
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof celeryOverviewApiV1AdminOperationsCeleryGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type CeleryOverviewApiV1AdminOperationsCeleryGetQueryResult = NonNullable<Awaited<ReturnType<typeof celeryOverviewApiV1AdminOperationsCeleryGet>>>
+export type CeleryOverviewApiV1AdminOperationsCeleryGetQueryError = unknown
+
+
+export function useCeleryOverviewApiV1AdminOperationsCeleryGet<TData = Awaited<ReturnType<typeof celeryOverviewApiV1AdminOperationsCeleryGet>>, TError = unknown>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof celeryOverviewApiV1AdminOperationsCeleryGet>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof celeryOverviewApiV1AdminOperationsCeleryGet>>,
+          TError,
+          Awaited<ReturnType<typeof celeryOverviewApiV1AdminOperationsCeleryGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useCeleryOverviewApiV1AdminOperationsCeleryGet<TData = Awaited<ReturnType<typeof celeryOverviewApiV1AdminOperationsCeleryGet>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof celeryOverviewApiV1AdminOperationsCeleryGet>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof celeryOverviewApiV1AdminOperationsCeleryGet>>,
+          TError,
+          Awaited<ReturnType<typeof celeryOverviewApiV1AdminOperationsCeleryGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useCeleryOverviewApiV1AdminOperationsCeleryGet<TData = Awaited<ReturnType<typeof celeryOverviewApiV1AdminOperationsCeleryGet>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof celeryOverviewApiV1AdminOperationsCeleryGet>>, TError, TData>>, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Celery Overview
+ */
+
+export function useCeleryOverviewApiV1AdminOperationsCeleryGet<TData = Awaited<ReturnType<typeof celeryOverviewApiV1AdminOperationsCeleryGet>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof celeryOverviewApiV1AdminOperationsCeleryGet>>, TError, TData>>, }
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getCeleryOverviewApiV1AdminOperationsCeleryGetQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+/**
+ * Restart the worker pool for a given hostname.
+ * @summary Restart Worker
+ */
+export const restartWorkerApiV1AdminOperationsCeleryWorkersHostnameRestartPost = (
+    hostname: string,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiClient<RestartWorkerApiV1AdminOperationsCeleryWorkersHostnameRestartPost200>(
+      {url: `/api/v1/admin/operations/celery/workers/${hostname}/restart`, method: 'POST', signal
+    },
+      );
+    }
+  
+
+
+export const getRestartWorkerApiV1AdminOperationsCeleryWorkersHostnameRestartPostMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof restartWorkerApiV1AdminOperationsCeleryWorkersHostnameRestartPost>>, TError,{hostname: string}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof restartWorkerApiV1AdminOperationsCeleryWorkersHostnameRestartPost>>, TError,{hostname: string}, TContext> => {
+
+const mutationKey = ['restartWorkerApiV1AdminOperationsCeleryWorkersHostnameRestartPost'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof restartWorkerApiV1AdminOperationsCeleryWorkersHostnameRestartPost>>, {hostname: string}> = (props) => {
+          const {hostname} = props ?? {};
+
+          return  restartWorkerApiV1AdminOperationsCeleryWorkersHostnameRestartPost(hostname,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RestartWorkerApiV1AdminOperationsCeleryWorkersHostnameRestartPostMutationResult = NonNullable<Awaited<ReturnType<typeof restartWorkerApiV1AdminOperationsCeleryWorkersHostnameRestartPost>>>
+    
+    export type RestartWorkerApiV1AdminOperationsCeleryWorkersHostnameRestartPostMutationError = HTTPValidationError
+
+    /**
+ * @summary Restart Worker
+ */
+export const useRestartWorkerApiV1AdminOperationsCeleryWorkersHostnameRestartPost = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof restartWorkerApiV1AdminOperationsCeleryWorkersHostnameRestartPost>>, TError,{hostname: string}, TContext>, }
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof restartWorkerApiV1AdminOperationsCeleryWorkersHostnameRestartPost>>,
+        TError,
+        {hostname: string},
+        TContext
+      > => {
+
+      const mutationOptions = getRestartWorkerApiV1AdminOperationsCeleryWorkersHostnameRestartPostMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * Shutdown a Celery worker by hostname.
+ * @summary Shutdown Worker
+ */
+export const shutdownWorkerApiV1AdminOperationsCeleryWorkersHostnameShutdownPost = (
+    hostname: string,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiClient<ShutdownWorkerApiV1AdminOperationsCeleryWorkersHostnameShutdownPost200>(
+      {url: `/api/v1/admin/operations/celery/workers/${hostname}/shutdown`, method: 'POST', signal
+    },
+      );
+    }
+  
+
+
+export const getShutdownWorkerApiV1AdminOperationsCeleryWorkersHostnameShutdownPostMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof shutdownWorkerApiV1AdminOperationsCeleryWorkersHostnameShutdownPost>>, TError,{hostname: string}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof shutdownWorkerApiV1AdminOperationsCeleryWorkersHostnameShutdownPost>>, TError,{hostname: string}, TContext> => {
+
+const mutationKey = ['shutdownWorkerApiV1AdminOperationsCeleryWorkersHostnameShutdownPost'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof shutdownWorkerApiV1AdminOperationsCeleryWorkersHostnameShutdownPost>>, {hostname: string}> = (props) => {
+          const {hostname} = props ?? {};
+
+          return  shutdownWorkerApiV1AdminOperationsCeleryWorkersHostnameShutdownPost(hostname,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ShutdownWorkerApiV1AdminOperationsCeleryWorkersHostnameShutdownPostMutationResult = NonNullable<Awaited<ReturnType<typeof shutdownWorkerApiV1AdminOperationsCeleryWorkersHostnameShutdownPost>>>
+    
+    export type ShutdownWorkerApiV1AdminOperationsCeleryWorkersHostnameShutdownPostMutationError = HTTPValidationError
+
+    /**
+ * @summary Shutdown Worker
+ */
+export const useShutdownWorkerApiV1AdminOperationsCeleryWorkersHostnameShutdownPost = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof shutdownWorkerApiV1AdminOperationsCeleryWorkersHostnameShutdownPost>>, TError,{hostname: string}, TContext>, }
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof shutdownWorkerApiV1AdminOperationsCeleryWorkersHostnameShutdownPost>>,
+        TError,
+        {hostname: string},
+        TContext
+      > => {
+
+      const mutationOptions = getShutdownWorkerApiV1AdminOperationsCeleryWorkersHostnameShutdownPostMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * Purge all messages from a Celery queue.
+ * @summary Purge Queue
+ */
+export const purgeQueueApiV1AdminOperationsCeleryQueuesNamePurgePost = (
+    name: string,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiClient<PurgeQueueApiV1AdminOperationsCeleryQueuesNamePurgePost200>(
+      {url: `/api/v1/admin/operations/celery/queues/${name}/purge`, method: 'POST', signal
+    },
+      );
+    }
+  
+
+
+export const getPurgeQueueApiV1AdminOperationsCeleryQueuesNamePurgePostMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof purgeQueueApiV1AdminOperationsCeleryQueuesNamePurgePost>>, TError,{name: string}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof purgeQueueApiV1AdminOperationsCeleryQueuesNamePurgePost>>, TError,{name: string}, TContext> => {
+
+const mutationKey = ['purgeQueueApiV1AdminOperationsCeleryQueuesNamePurgePost'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof purgeQueueApiV1AdminOperationsCeleryQueuesNamePurgePost>>, {name: string}> = (props) => {
+          const {name} = props ?? {};
+
+          return  purgeQueueApiV1AdminOperationsCeleryQueuesNamePurgePost(name,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PurgeQueueApiV1AdminOperationsCeleryQueuesNamePurgePostMutationResult = NonNullable<Awaited<ReturnType<typeof purgeQueueApiV1AdminOperationsCeleryQueuesNamePurgePost>>>
+    
+    export type PurgeQueueApiV1AdminOperationsCeleryQueuesNamePurgePostMutationError = HTTPValidationError
+
+    /**
+ * @summary Purge Queue
+ */
+export const usePurgeQueueApiV1AdminOperationsCeleryQueuesNamePurgePost = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof purgeQueueApiV1AdminOperationsCeleryQueuesNamePurgePost>>, TError,{name: string}, TContext>, }
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof purgeQueueApiV1AdminOperationsCeleryQueuesNamePurgePost>>,
+        TError,
+        {name: string},
+        TContext
+      > => {
+
+      const mutationOptions = getPurgeQueueApiV1AdminOperationsCeleryQueuesNamePurgePostMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * Revoke (and optionally terminate) a Celery task.
+ * @summary Revoke Task
+ */
+export const revokeTaskApiV1AdminOperationsCeleryTasksTaskIdRevokePost = (
+    taskId: string,
+    params?: RevokeTaskApiV1AdminOperationsCeleryTasksTaskIdRevokePostParams,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiClient<RevokeTaskApiV1AdminOperationsCeleryTasksTaskIdRevokePost200>(
+      {url: `/api/v1/admin/operations/celery/tasks/${taskId}/revoke`, method: 'POST',
+        params, signal
+    },
+      );
+    }
+  
+
+
+export const getRevokeTaskApiV1AdminOperationsCeleryTasksTaskIdRevokePostMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeTaskApiV1AdminOperationsCeleryTasksTaskIdRevokePost>>, TError,{taskId: string;params?: RevokeTaskApiV1AdminOperationsCeleryTasksTaskIdRevokePostParams}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof revokeTaskApiV1AdminOperationsCeleryTasksTaskIdRevokePost>>, TError,{taskId: string;params?: RevokeTaskApiV1AdminOperationsCeleryTasksTaskIdRevokePostParams}, TContext> => {
+
+const mutationKey = ['revokeTaskApiV1AdminOperationsCeleryTasksTaskIdRevokePost'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof revokeTaskApiV1AdminOperationsCeleryTasksTaskIdRevokePost>>, {taskId: string;params?: RevokeTaskApiV1AdminOperationsCeleryTasksTaskIdRevokePostParams}> = (props) => {
+          const {taskId,params} = props ?? {};
+
+          return  revokeTaskApiV1AdminOperationsCeleryTasksTaskIdRevokePost(taskId,params,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RevokeTaskApiV1AdminOperationsCeleryTasksTaskIdRevokePostMutationResult = NonNullable<Awaited<ReturnType<typeof revokeTaskApiV1AdminOperationsCeleryTasksTaskIdRevokePost>>>
+    
+    export type RevokeTaskApiV1AdminOperationsCeleryTasksTaskIdRevokePostMutationError = HTTPValidationError
+
+    /**
+ * @summary Revoke Task
+ */
+export const useRevokeTaskApiV1AdminOperationsCeleryTasksTaskIdRevokePost = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeTaskApiV1AdminOperationsCeleryTasksTaskIdRevokePost>>, TError,{taskId: string;params?: RevokeTaskApiV1AdminOperationsCeleryTasksTaskIdRevokePostParams}, TContext>, }
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof revokeTaskApiV1AdminOperationsCeleryTasksTaskIdRevokePost>>,
+        TError,
+        {taskId: string;params?: RevokeTaskApiV1AdminOperationsCeleryTasksTaskIdRevokePostParams},
+        TContext
+      > => {
+
+      const mutationOptions = getRevokeTaskApiV1AdminOperationsCeleryTasksTaskIdRevokePostMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * Get the Docker Compose service dependency graph.
+ * @summary Dependency Graph
+ */
+export const dependencyGraphApiV1AdminOperationsDependenciesGet = (
+    
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiClient<DependencyGraphResponse>(
+      {url: `/api/v1/admin/operations/dependencies`, method: 'GET', signal
+    },
+      );
+    }
+  
+
+
+
+export const getDependencyGraphApiV1AdminOperationsDependenciesGetQueryKey = () => {
+    return [
+    `/api/v1/admin/operations/dependencies`
+    ] as const;
+    }
+
+    
+export const getDependencyGraphApiV1AdminOperationsDependenciesGetQueryOptions = <TData = Awaited<ReturnType<typeof dependencyGraphApiV1AdminOperationsDependenciesGet>>, TError = unknown>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof dependencyGraphApiV1AdminOperationsDependenciesGet>>, TError, TData>>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getDependencyGraphApiV1AdminOperationsDependenciesGetQueryKey();
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof dependencyGraphApiV1AdminOperationsDependenciesGet>>> = ({ signal }) => dependencyGraphApiV1AdminOperationsDependenciesGet(signal);
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof dependencyGraphApiV1AdminOperationsDependenciesGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type DependencyGraphApiV1AdminOperationsDependenciesGetQueryResult = NonNullable<Awaited<ReturnType<typeof dependencyGraphApiV1AdminOperationsDependenciesGet>>>
+export type DependencyGraphApiV1AdminOperationsDependenciesGetQueryError = unknown
+
+
+export function useDependencyGraphApiV1AdminOperationsDependenciesGet<TData = Awaited<ReturnType<typeof dependencyGraphApiV1AdminOperationsDependenciesGet>>, TError = unknown>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof dependencyGraphApiV1AdminOperationsDependenciesGet>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof dependencyGraphApiV1AdminOperationsDependenciesGet>>,
+          TError,
+          Awaited<ReturnType<typeof dependencyGraphApiV1AdminOperationsDependenciesGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useDependencyGraphApiV1AdminOperationsDependenciesGet<TData = Awaited<ReturnType<typeof dependencyGraphApiV1AdminOperationsDependenciesGet>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof dependencyGraphApiV1AdminOperationsDependenciesGet>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof dependencyGraphApiV1AdminOperationsDependenciesGet>>,
+          TError,
+          Awaited<ReturnType<typeof dependencyGraphApiV1AdminOperationsDependenciesGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useDependencyGraphApiV1AdminOperationsDependenciesGet<TData = Awaited<ReturnType<typeof dependencyGraphApiV1AdminOperationsDependenciesGet>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof dependencyGraphApiV1AdminOperationsDependenciesGet>>, TError, TData>>, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Dependency Graph
+ */
+
+export function useDependencyGraphApiV1AdminOperationsDependenciesGet<TData = Awaited<ReturnType<typeof dependencyGraphApiV1AdminOperationsDependenciesGet>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof dependencyGraphApiV1AdminOperationsDependenciesGet>>, TError, TData>>, }
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getDependencyGraphApiV1AdminOperationsDependenciesGetQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+/**
+ * Get uptime summaries for all backing services (24h, 7d, 30d).
+ * @summary Uptime Summaries
+ */
+export const uptimeSummariesApiV1AdminOperationsUptimeGet = (
+    
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiClient<UptimeListResponse>(
+      {url: `/api/v1/admin/operations/uptime`, method: 'GET', signal
+    },
+      );
+    }
+  
+
+
+
+export const getUptimeSummariesApiV1AdminOperationsUptimeGetQueryKey = () => {
+    return [
+    `/api/v1/admin/operations/uptime`
+    ] as const;
+    }
+
+    
+export const getUptimeSummariesApiV1AdminOperationsUptimeGetQueryOptions = <TData = Awaited<ReturnType<typeof uptimeSummariesApiV1AdminOperationsUptimeGet>>, TError = unknown>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof uptimeSummariesApiV1AdminOperationsUptimeGet>>, TError, TData>>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getUptimeSummariesApiV1AdminOperationsUptimeGetQueryKey();
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof uptimeSummariesApiV1AdminOperationsUptimeGet>>> = ({ signal }) => uptimeSummariesApiV1AdminOperationsUptimeGet(signal);
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof uptimeSummariesApiV1AdminOperationsUptimeGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type UptimeSummariesApiV1AdminOperationsUptimeGetQueryResult = NonNullable<Awaited<ReturnType<typeof uptimeSummariesApiV1AdminOperationsUptimeGet>>>
+export type UptimeSummariesApiV1AdminOperationsUptimeGetQueryError = unknown
+
+
+export function useUptimeSummariesApiV1AdminOperationsUptimeGet<TData = Awaited<ReturnType<typeof uptimeSummariesApiV1AdminOperationsUptimeGet>>, TError = unknown>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof uptimeSummariesApiV1AdminOperationsUptimeGet>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof uptimeSummariesApiV1AdminOperationsUptimeGet>>,
+          TError,
+          Awaited<ReturnType<typeof uptimeSummariesApiV1AdminOperationsUptimeGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useUptimeSummariesApiV1AdminOperationsUptimeGet<TData = Awaited<ReturnType<typeof uptimeSummariesApiV1AdminOperationsUptimeGet>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof uptimeSummariesApiV1AdminOperationsUptimeGet>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof uptimeSummariesApiV1AdminOperationsUptimeGet>>,
+          TError,
+          Awaited<ReturnType<typeof uptimeSummariesApiV1AdminOperationsUptimeGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useUptimeSummariesApiV1AdminOperationsUptimeGet<TData = Awaited<ReturnType<typeof uptimeSummariesApiV1AdminOperationsUptimeGet>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof uptimeSummariesApiV1AdminOperationsUptimeGet>>, TError, TData>>, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Uptime Summaries
+ */
+
+export function useUptimeSummariesApiV1AdminOperationsUptimeGet<TData = Awaited<ReturnType<typeof uptimeSummariesApiV1AdminOperationsUptimeGet>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof uptimeSummariesApiV1AdminOperationsUptimeGet>>, TError, TData>>, }
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getUptimeSummariesApiV1AdminOperationsUptimeGetQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+/**
  * Get full LLM configuration overview: providers + tiers + env defaults.
  * @summary Get Overview
  */
@@ -2104,6 +3012,444 @@ export const useApplyConfigApiV1AdminLlmConfigApplyPost = <TError = unknown,
       > => {
 
       const mutationOptions = getApplyConfigApiV1AdminLlmConfigApplyPostMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * List all feature flags with current state and metadata.
+ * @summary List Flags
+ */
+export const listFlagsApiV1AdminFeatureFlagsGet = (
+    
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiClient<FeatureFlagListResponse>(
+      {url: `/api/v1/admin/feature-flags`, method: 'GET', signal
+    },
+      );
+    }
+  
+
+
+
+export const getListFlagsApiV1AdminFeatureFlagsGetQueryKey = () => {
+    return [
+    `/api/v1/admin/feature-flags`
+    ] as const;
+    }
+
+    
+export const getListFlagsApiV1AdminFeatureFlagsGetQueryOptions = <TData = Awaited<ReturnType<typeof listFlagsApiV1AdminFeatureFlagsGet>>, TError = unknown>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listFlagsApiV1AdminFeatureFlagsGet>>, TError, TData>>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListFlagsApiV1AdminFeatureFlagsGetQueryKey();
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listFlagsApiV1AdminFeatureFlagsGet>>> = ({ signal }) => listFlagsApiV1AdminFeatureFlagsGet(signal);
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listFlagsApiV1AdminFeatureFlagsGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListFlagsApiV1AdminFeatureFlagsGetQueryResult = NonNullable<Awaited<ReturnType<typeof listFlagsApiV1AdminFeatureFlagsGet>>>
+export type ListFlagsApiV1AdminFeatureFlagsGetQueryError = unknown
+
+
+export function useListFlagsApiV1AdminFeatureFlagsGet<TData = Awaited<ReturnType<typeof listFlagsApiV1AdminFeatureFlagsGet>>, TError = unknown>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listFlagsApiV1AdminFeatureFlagsGet>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listFlagsApiV1AdminFeatureFlagsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listFlagsApiV1AdminFeatureFlagsGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListFlagsApiV1AdminFeatureFlagsGet<TData = Awaited<ReturnType<typeof listFlagsApiV1AdminFeatureFlagsGet>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listFlagsApiV1AdminFeatureFlagsGet>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listFlagsApiV1AdminFeatureFlagsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listFlagsApiV1AdminFeatureFlagsGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListFlagsApiV1AdminFeatureFlagsGet<TData = Awaited<ReturnType<typeof listFlagsApiV1AdminFeatureFlagsGet>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listFlagsApiV1AdminFeatureFlagsGet>>, TError, TData>>, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List Flags
+ */
+
+export function useListFlagsApiV1AdminFeatureFlagsGet<TData = Awaited<ReturnType<typeof listFlagsApiV1AdminFeatureFlagsGet>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listFlagsApiV1AdminFeatureFlagsGet>>, TError, TData>>, }
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListFlagsApiV1AdminFeatureFlagsGetQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+/**
+ * Toggle a feature flag. Takes effect immediately for safe/cache_clear flags.
+ * @summary Update Flag
+ */
+export const updateFlagApiV1AdminFeatureFlagsFlagNamePut = (
+    flagName: string,
+    featureFlagUpdateRequest: FeatureFlagUpdateRequest,
+ ) => {
+      
+      
+      return apiClient<FeatureFlagUpdateResponse>(
+      {url: `/api/v1/admin/feature-flags/${flagName}`, method: 'PUT',
+      headers: {'Content-Type': 'application/json', },
+      data: featureFlagUpdateRequest
+    },
+      );
+    }
+  
+
+
+export const getUpdateFlagApiV1AdminFeatureFlagsFlagNamePutMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateFlagApiV1AdminFeatureFlagsFlagNamePut>>, TError,{flagName: string;data: FeatureFlagUpdateRequest}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof updateFlagApiV1AdminFeatureFlagsFlagNamePut>>, TError,{flagName: string;data: FeatureFlagUpdateRequest}, TContext> => {
+
+const mutationKey = ['updateFlagApiV1AdminFeatureFlagsFlagNamePut'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateFlagApiV1AdminFeatureFlagsFlagNamePut>>, {flagName: string;data: FeatureFlagUpdateRequest}> = (props) => {
+          const {flagName,data} = props ?? {};
+
+          return  updateFlagApiV1AdminFeatureFlagsFlagNamePut(flagName,data,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateFlagApiV1AdminFeatureFlagsFlagNamePutMutationResult = NonNullable<Awaited<ReturnType<typeof updateFlagApiV1AdminFeatureFlagsFlagNamePut>>>
+    export type UpdateFlagApiV1AdminFeatureFlagsFlagNamePutMutationBody = FeatureFlagUpdateRequest
+    export type UpdateFlagApiV1AdminFeatureFlagsFlagNamePutMutationError = HTTPValidationError
+
+    /**
+ * @summary Update Flag
+ */
+export const useUpdateFlagApiV1AdminFeatureFlagsFlagNamePut = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateFlagApiV1AdminFeatureFlagsFlagNamePut>>, TError,{flagName: string;data: FeatureFlagUpdateRequest}, TContext>, }
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updateFlagApiV1AdminFeatureFlagsFlagNamePut>>,
+        TError,
+        {flagName: string;data: FeatureFlagUpdateRequest},
+        TContext
+      > => {
+
+      const mutationOptions = getUpdateFlagApiV1AdminFeatureFlagsFlagNamePutMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * Reset a flag to its env default by removing the DB override.
+ * @summary Reset Flag
+ */
+export const resetFlagApiV1AdminFeatureFlagsFlagNameDelete = (
+    flagName: string,
+ ) => {
+      
+      
+      return apiClient<void>(
+      {url: `/api/v1/admin/feature-flags/${flagName}`, method: 'DELETE'
+    },
+      );
+    }
+  
+
+
+export const getResetFlagApiV1AdminFeatureFlagsFlagNameDeleteMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resetFlagApiV1AdminFeatureFlagsFlagNameDelete>>, TError,{flagName: string}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof resetFlagApiV1AdminFeatureFlagsFlagNameDelete>>, TError,{flagName: string}, TContext> => {
+
+const mutationKey = ['resetFlagApiV1AdminFeatureFlagsFlagNameDelete'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof resetFlagApiV1AdminFeatureFlagsFlagNameDelete>>, {flagName: string}> = (props) => {
+          const {flagName} = props ?? {};
+
+          return  resetFlagApiV1AdminFeatureFlagsFlagNameDelete(flagName,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ResetFlagApiV1AdminFeatureFlagsFlagNameDeleteMutationResult = NonNullable<Awaited<ReturnType<typeof resetFlagApiV1AdminFeatureFlagsFlagNameDelete>>>
+    
+    export type ResetFlagApiV1AdminFeatureFlagsFlagNameDeleteMutationError = HTTPValidationError
+
+    /**
+ * @summary Reset Flag
+ */
+export const useResetFlagApiV1AdminFeatureFlagsFlagNameDelete = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resetFlagApiV1AdminFeatureFlagsFlagNameDelete>>, TError,{flagName: string}, TContext>, }
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof resetFlagApiV1AdminFeatureFlagsFlagNameDelete>>,
+        TError,
+        {flagName: string},
+        TContext
+      > => {
+
+      const mutationOptions = getResetFlagApiV1AdminFeatureFlagsFlagNameDeleteMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * List all tunable settings with current values and metadata.
+ * @summary List Settings
+ */
+export const listSettingsApiV1AdminSettingsGet = (
+    
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiClient<SettingListResponse>(
+      {url: `/api/v1/admin/settings`, method: 'GET', signal
+    },
+      );
+    }
+  
+
+
+
+export const getListSettingsApiV1AdminSettingsGetQueryKey = () => {
+    return [
+    `/api/v1/admin/settings`
+    ] as const;
+    }
+
+    
+export const getListSettingsApiV1AdminSettingsGetQueryOptions = <TData = Awaited<ReturnType<typeof listSettingsApiV1AdminSettingsGet>>, TError = unknown>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listSettingsApiV1AdminSettingsGet>>, TError, TData>>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListSettingsApiV1AdminSettingsGetQueryKey();
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listSettingsApiV1AdminSettingsGet>>> = ({ signal }) => listSettingsApiV1AdminSettingsGet(signal);
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listSettingsApiV1AdminSettingsGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListSettingsApiV1AdminSettingsGetQueryResult = NonNullable<Awaited<ReturnType<typeof listSettingsApiV1AdminSettingsGet>>>
+export type ListSettingsApiV1AdminSettingsGetQueryError = unknown
+
+
+export function useListSettingsApiV1AdminSettingsGet<TData = Awaited<ReturnType<typeof listSettingsApiV1AdminSettingsGet>>, TError = unknown>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listSettingsApiV1AdminSettingsGet>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listSettingsApiV1AdminSettingsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listSettingsApiV1AdminSettingsGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListSettingsApiV1AdminSettingsGet<TData = Awaited<ReturnType<typeof listSettingsApiV1AdminSettingsGet>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listSettingsApiV1AdminSettingsGet>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listSettingsApiV1AdminSettingsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listSettingsApiV1AdminSettingsGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListSettingsApiV1AdminSettingsGet<TData = Awaited<ReturnType<typeof listSettingsApiV1AdminSettingsGet>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listSettingsApiV1AdminSettingsGet>>, TError, TData>>, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List Settings
+ */
+
+export function useListSettingsApiV1AdminSettingsGet<TData = Awaited<ReturnType<typeof listSettingsApiV1AdminSettingsGet>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listSettingsApiV1AdminSettingsGet>>, TError, TData>>, }
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListSettingsApiV1AdminSettingsGetQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+/**
+ * Update a tunable setting. Takes effect immediately for safe/cache_clear settings.
+ * @summary Update Setting
+ */
+export const updateSettingApiV1AdminSettingsSettingNamePut = (
+    settingName: string,
+    settingUpdateRequest: SettingUpdateRequest,
+ ) => {
+      
+      
+      return apiClient<SettingUpdateResponse>(
+      {url: `/api/v1/admin/settings/${settingName}`, method: 'PUT',
+      headers: {'Content-Type': 'application/json', },
+      data: settingUpdateRequest
+    },
+      );
+    }
+  
+
+
+export const getUpdateSettingApiV1AdminSettingsSettingNamePutMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSettingApiV1AdminSettingsSettingNamePut>>, TError,{settingName: string;data: SettingUpdateRequest}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof updateSettingApiV1AdminSettingsSettingNamePut>>, TError,{settingName: string;data: SettingUpdateRequest}, TContext> => {
+
+const mutationKey = ['updateSettingApiV1AdminSettingsSettingNamePut'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateSettingApiV1AdminSettingsSettingNamePut>>, {settingName: string;data: SettingUpdateRequest}> = (props) => {
+          const {settingName,data} = props ?? {};
+
+          return  updateSettingApiV1AdminSettingsSettingNamePut(settingName,data,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateSettingApiV1AdminSettingsSettingNamePutMutationResult = NonNullable<Awaited<ReturnType<typeof updateSettingApiV1AdminSettingsSettingNamePut>>>
+    export type UpdateSettingApiV1AdminSettingsSettingNamePutMutationBody = SettingUpdateRequest
+    export type UpdateSettingApiV1AdminSettingsSettingNamePutMutationError = HTTPValidationError
+
+    /**
+ * @summary Update Setting
+ */
+export const useUpdateSettingApiV1AdminSettingsSettingNamePut = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSettingApiV1AdminSettingsSettingNamePut>>, TError,{settingName: string;data: SettingUpdateRequest}, TContext>, }
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updateSettingApiV1AdminSettingsSettingNamePut>>,
+        TError,
+        {settingName: string;data: SettingUpdateRequest},
+        TContext
+      > => {
+
+      const mutationOptions = getUpdateSettingApiV1AdminSettingsSettingNamePutMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * Reset a setting to its env default by removing the DB override.
+ * @summary Reset Setting
+ */
+export const resetSettingApiV1AdminSettingsSettingNameDelete = (
+    settingName: string,
+ ) => {
+      
+      
+      return apiClient<void>(
+      {url: `/api/v1/admin/settings/${settingName}`, method: 'DELETE'
+    },
+      );
+    }
+  
+
+
+export const getResetSettingApiV1AdminSettingsSettingNameDeleteMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resetSettingApiV1AdminSettingsSettingNameDelete>>, TError,{settingName: string}, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof resetSettingApiV1AdminSettingsSettingNameDelete>>, TError,{settingName: string}, TContext> => {
+
+const mutationKey = ['resetSettingApiV1AdminSettingsSettingNameDelete'];
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof resetSettingApiV1AdminSettingsSettingNameDelete>>, {settingName: string}> = (props) => {
+          const {settingName} = props ?? {};
+
+          return  resetSettingApiV1AdminSettingsSettingNameDelete(settingName,)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ResetSettingApiV1AdminSettingsSettingNameDeleteMutationResult = NonNullable<Awaited<ReturnType<typeof resetSettingApiV1AdminSettingsSettingNameDelete>>>
+    
+    export type ResetSettingApiV1AdminSettingsSettingNameDeleteMutationError = HTTPValidationError
+
+    /**
+ * @summary Reset Setting
+ */
+export const useResetSettingApiV1AdminSettingsSettingNameDelete = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resetSettingApiV1AdminSettingsSettingNameDelete>>, TError,{settingName: string}, TContext>, }
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof resetSettingApiV1AdminSettingsSettingNameDelete>>,
+        TError,
+        {settingName: string},
+        TContext
+      > => {
+
+      const mutationOptions = getResetSettingApiV1AdminSettingsSettingNameDeleteMutationOptions(options);
 
       return useMutation(mutationOptions, queryClient);
     }

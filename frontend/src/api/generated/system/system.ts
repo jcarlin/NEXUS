@@ -30,7 +30,7 @@ import { apiClient } from '../../client';
 
 
 /**
- * Ping all five backing services and report their status.
+ * Ping all five backing services in parallel and report their status.
  * @summary Health
  */
 export const healthApiV1HealthGet = (
@@ -217,7 +217,7 @@ export function useHealthDeepApiV1HealthDeepGet<TData = Awaited<ReturnType<typeo
 
 
 /**
- * Return user-visible feature flag states.
+ * Return user-visible feature flag states (reflects DB overrides).
  * @summary Get Feature Flags
  */
 export const getFeatureFlagsApiV1ConfigFeaturesGet = (
