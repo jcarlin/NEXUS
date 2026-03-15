@@ -31,6 +31,11 @@ RUN uv venv /opt/venv
 ENV VIRTUAL_ENV=/opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
+# Install CPU-only PyTorch first (no CUDA bloat — saves ~2GB)
+RUN uv pip install --no-cache \
+    torch --index-url https://download.pytorch.org/whl/cpu
+
+# Install project deps (torch already satisfied from CPU index above)
 RUN uv pip install --no-cache .
 
 # ---------------------------------------------------------------------------
