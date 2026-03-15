@@ -10,6 +10,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follo
 
 ## [Unreleased]
 
+## [1.13.3] - 2026-03-15
+
+### Fixed
+- Auto-detect Docker socket path on macOS — Operations page no longer 503s when Docker Desktop uses `~/.docker/run/docker.sock` (4f2ab0f)
+- Stop frontend container polling on error — `ContainerGrid` no longer spams 10s refetch when Docker is unavailable (4f2ab0f)
+- Update Vercel API rewrite to current GCP VM IP (35.223.187.80)
+- Remove hardcoded deploy memory limits in `docker-compose.cloud.yml` — let Docker use available host memory instead of OOM-killing services
+- Increase cloud API healthcheck `start_period` to 180s with 10 retries for cold boot scenarios
+
+### Changed
+- Deploy script handles ephemeral VM IP — fetches IP dynamically instead of hardcoding, prompts for `vercel.json` update when IP changes
+- Deploy health check extended to 180s (60 retries x 3s) for cold boots with GLiNER model download
+- DRY compose command in deploy script via `$COMPOSE` variable
+
 ## [1.13.2] - 2026-03-15
 
 ### Fixed
