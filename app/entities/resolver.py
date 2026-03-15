@@ -97,8 +97,8 @@ class EntityResolver:
                     name_a = unique_names[i]
                     name_b = unique_names[j]
                     score = fuzz.ratio(
-                        name_a.lower().strip(),
-                        name_b.lower().strip(),
+                        " ".join(name_a.lower().split()),
+                        " ".join(name_b.lower().split()),
                     )
                     if score >= self.fuzzy_threshold:
                         matches.append(

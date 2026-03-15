@@ -474,7 +474,7 @@ def create_app() -> FastAPI:
         try:
             qdrant = get_qdrant()
             info = await qdrant.get_collection_info("nexus_text")
-            services["qdrant_nexus_text"] = {"status": "ok", **info}
+            services["qdrant_nexus_text"] = {**info, "status": "ok"}
         except Exception as exc:
             services["qdrant_nexus_text"] = {"status": f"error: {exc}"}
 

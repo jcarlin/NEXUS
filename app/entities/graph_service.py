@@ -393,13 +393,15 @@ class GraphService:
         {where_clause}
         RETURN e.name           AS source,
                type(r)          AS relationship_type,
-               COALESCE(connected.name, connected.filename, connected.chunk_id, toString(elementId(connected))) AS target,
+               COALESCE(connected.name, connected.filename, connected.chunk_id) AS target,
                labels(connected) AS target_labels,
                properties(r)   AS edge_properties
         LIMIT $limit
         """
         try:
             records = await self._run_query(query, params)
+            # Filter out nodes without a displayable name (COALESCE returned None)
+            records = [r for r in records if r.get("target") is not None]
             logger.debug(
                 "graph.entity_connections.fetched",
                 entity=entity_name,

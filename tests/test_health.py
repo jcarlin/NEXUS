@@ -170,6 +170,40 @@ async def test_health_deep_returns_service_status(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_health_deep_returns_200_when_all_ok(client: AsyncClient) -> None:
+    """Deep health should return 200 when all services report ok.
+
+    Regression: Qdrant info dict contained its own 'status': 'green' which
+    overwrote the hardcoded 'ok', causing the all_ok check to fail.
+    """
+    mock_llm = AsyncMock()
+    mock_llm.complete = AsyncMock(return_value="OK")
+    mock_llm.provider = "anthropic"
+    mock_llm.model = "test-model"
+
+    mock_embedder = AsyncMock()
+    mock_embedder.embed_query = AsyncMock(return_value=[0.1] * 1024)
+
+    mock_qdrant = MagicMock()
+    mock_qdrant.get_collection_info = AsyncMock(
+        return_value={"name": "nexus_text", "points_count": 100, "vectors_count": 100, "status": "green"}
+    )
+
+    with (
+        patch("app.main.get_llm", return_value=mock_llm),
+        patch("app.main.get_embedder", return_value=mock_embedder),
+        patch("app.main.get_qdrant", return_value=mock_qdrant),
+    ):
+        response = await client.get("/api/v1/health/deep")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "healthy"
+    # Verify the Qdrant service status is 'ok' (not 'green')
+    assert body["services"]["qdrant_nexus_text"]["status"] == "ok"
+
+
+@pytest.mark.asyncio
 async def test_health_deep_reports_llm_error(client: AsyncClient) -> None:
     """Deep health should surface LLM errors in the response."""
     mock_llm = AsyncMock()

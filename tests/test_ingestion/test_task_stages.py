@@ -200,6 +200,49 @@ class TestStageExtract:
         assert ctx.all_entities[1]["name"] == "Acme"
         assert ctx.progress.get("entities_extracted") == 2
 
+    def test_normalizes_entity_name_whitespace(self):
+        """Entity names with embedded newlines/tabs should be collapsed to single spaces."""
+        ctx = _make_ctx()
+        ctx.chunks = [
+            _FakeChunk(chunk_index=0, text="Michael Torres works here.", token_count=10),
+        ]
+
+        fake_entities = [
+            _FakeEntity(text="Michael\nTorres", type="PERSON"),
+            _FakeEntity(text="  Jane\t\tDoe  ", type="PERSON"),
+        ]
+
+        with (
+            patch("app.ingestion.tasks._update_stage"),
+            patch("app.entities.extractor.EntityExtractor.extract", return_value=fake_entities),
+        ):
+            _stage_extract(ctx)
+
+        assert len(ctx.all_entities) == 2
+        assert ctx.all_entities[0]["name"] == "Michael Torres"
+        assert ctx.all_entities[1]["name"] == "Jane Doe"
+
+    def test_deduplicates_after_whitespace_normalization(self):
+        """Entities that differ only in whitespace should be deduplicated."""
+        ctx = _make_ctx()
+        ctx.chunks = [
+            _FakeChunk(chunk_index=0, text="Test text.", token_count=10),
+        ]
+
+        fake_entities = [
+            _FakeEntity(text="Michael Torres", type="PERSON"),
+            _FakeEntity(text="Michael\nTorres", type="PERSON"),
+        ]
+
+        with (
+            patch("app.ingestion.tasks._update_stage"),
+            patch("app.entities.extractor.EntityExtractor.extract", return_value=fake_entities),
+        ):
+            _stage_extract(ctx)
+
+        assert len(ctx.all_entities) == 1
+        assert ctx.all_entities[0]["name"] == "Michael Torres"
+
 
 class TestStageIndex:
     """Tests for _stage_index."""

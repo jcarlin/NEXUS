@@ -19,7 +19,7 @@ test.describe("Query and citation flow", () => {
 
     // Should show the user message
     await expect(
-      page.getByText("What are the key contract terms?"),
+      page.locator("main").getByText("What are the key contract terms?"),
     ).toBeVisible({ timeout: 5_000 });
 
     // Wait for assistant response (streaming will add content)

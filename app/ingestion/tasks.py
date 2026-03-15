@@ -970,12 +970,13 @@ def _stage_extract(ctx: _PipelineContext) -> None:
     for chunk in ctx.chunks:
         extracted = extractor.extract(chunk.text)
         for ent in extracted:
-            key = (ent.text.strip().lower(), ent.type)
+            _name = " ".join(ent.text.split())  # collapse all whitespace into single space
+            key = (_name.lower(), ent.type)
             if key not in seen_entities:
                 seen_entities.add(key)
                 ctx.all_entities.append(
                     {
-                        "name": ent.text.strip(),
+                        "name": _name,
                         "type": ent.type,
                         "page_number": chunk.metadata.get("page_number"),
                     }

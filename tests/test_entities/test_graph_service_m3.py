@@ -187,6 +187,44 @@ async def test_get_entity_connections_with_matter_id(graph_service):
 
 
 @pytest.mark.asyncio
+async def test_get_entity_connections_filters_out_none_targets(graph_service):
+    """Connections with no displayable name (target=None) should be excluded."""
+    graph_service._run_query = AsyncMock(
+        return_value=[
+            {
+                "source": "Alice",
+                "relationship_type": "KNOWS",
+                "target": "Bob",
+                "target_labels": ["Entity"],
+                "edge_properties": {},
+            },
+            {
+                "source": "Alice",
+                "relationship_type": "MENTIONED_IN",
+                "target": None,
+                "target_labels": ["Chunk"],
+                "edge_properties": {},
+            },
+        ]
+    )
+
+    records = await graph_service.get_entity_connections("Alice")
+    assert len(records) == 1
+    assert records[0]["target"] == "Bob"
+
+
+@pytest.mark.asyncio
+async def test_get_entity_connections_cypher_no_element_id_fallback(graph_service):
+    """The Cypher query should not use toString(elementId(...)) as a COALESCE fallback."""
+    graph_service._run_query = AsyncMock(return_value=[])
+
+    await graph_service.get_entity_connections("Alice")
+
+    cypher = graph_service._run_query.call_args[0][0]
+    assert "elementId" not in cypher
+
+
+@pytest.mark.asyncio
 async def test_get_entity_timeline_with_matter_id(graph_service):
     """get_entity_timeline with matter_id should filter by matter."""
     graph_service._run_query = AsyncMock(return_value=[])

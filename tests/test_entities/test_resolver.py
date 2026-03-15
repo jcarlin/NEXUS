@@ -103,6 +103,19 @@ def test_fuzzy_single_entity_no_match():
     assert len(matches) == 0
 
 
+def test_fuzzy_normalizes_whitespace_in_names():
+    """Names with embedded newlines should match their normalized counterpart."""
+    resolver = EntityResolver(fuzzy_threshold=80)
+    entities = [
+        {"name": "Michael\nTorres", "type": "person"},
+        {"name": "Michael Torres", "type": "person"},
+    ]
+    matches = resolver.find_fuzzy_matches(entities)
+    # After whitespace normalization both compare as "michael torres" → score 100
+    assert len(matches) == 1
+    assert matches[0].score == 100.0
+
+
 # ---------------------------------------------------------------------------
 # Canonical selection tests (built into fuzzy tests above, plus explicit)
 # ---------------------------------------------------------------------------

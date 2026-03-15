@@ -11,8 +11,9 @@ import { test, expect } from "@playwright/test";
  *   - Total: < 30s (until `done` SSE event or stream close)
  */
 
-const TTFT_BUDGET_MS = 10_000;
-const TOTAL_BUDGET_MS = 30_000;
+const IS_CLOUD = !!process.env.CLOUD_URL;
+const TTFT_BUDGET_MS = IS_CLOUD ? 30_000 : 10_000;
+const TOTAL_BUDGET_MS = IS_CLOUD ? 90_000 : 30_000;
 
 test.describe("Query Performance", () => {
   test("simple factual query responds within performance budget", async ({
