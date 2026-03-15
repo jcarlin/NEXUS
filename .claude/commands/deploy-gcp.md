@@ -9,6 +9,7 @@ Deploy the latest `origin/main` to the GCP VM. Handles VM start, code pull, Dock
 - **GCP Project:** `vault-ai-487703`
 - **VM:** `nexus-demo`
 - **Zone:** `us-central1-a`
+- **Static IP:** `34.70.34.2`
 - **Compose files:** `docker-compose.yml -f docker-compose.prod.yml -f docker-compose.cloud.yml`
 - **Frontend:** `https://nexus-alpha-swart.vercel.app` (deployed separately via Vercel)
 
@@ -16,16 +17,14 @@ Deploy the latest `origin/main` to the GCP VM. Handles VM start, code pull, Dock
 
 Run every `gcloud` command with `--project=vault-ai-487703` to avoid targeting the wrong GCP project.
 
-### Step 1 — Check VM status and get external IP
+### Step 1 — Check VM status
 
 ```bash
 gcloud compute instances describe nexus-demo \
   --zone=us-central1-a \
   --project=vault-ai-487703 \
-  --format="get(status,networkInterfaces[0].accessConfigs[0].natIP)"
+  --format="get(status)"
 ```
-
-Save the external IP from the output — it changes on every VM start (no static IP reserved).
 
 ### Step 2 — Start VM if stopped
 
@@ -35,15 +34,6 @@ If the status from Step 1 is `TERMINATED` or `STOPPED`:
 gcloud compute instances start nexus-demo \
   --zone=us-central1-a \
   --project=vault-ai-487703
-```
-
-Then get the new external IP:
-
-```bash
-gcloud compute instances describe nexus-demo \
-  --zone=us-central1-a \
-  --project=vault-ai-487703 \
-  --format="get(networkInterfaces[0].accessConfigs[0].natIP)"
 ```
 
 Then wait for SSH to become available. Retry up to 12 times, 10 seconds apart:
@@ -96,30 +86,26 @@ $COMPOSE logs --tail=50 api
 exit 1'
 ```
 
-### Step 4 — Check if `vercel.json` needs an IP update
+### Step 4 — External health check
 
-If the VM was started (Step 2) or the IP differs from what's in `frontend/vercel.json`, update the rewrite destination IP and tell the user to push + redeploy Vercel.
-
-### Step 5 — External health check
-
-Verify the API is reachable from outside the VM using the IP from Step 1/2:
+Verify the API is reachable from outside the VM:
 
 ```bash
-curl -sf http://<EXTERNAL_IP>:8000/api/v1/health
+curl -sf http://34.70.34.2:8000/api/v1/health
 ```
 
 If this fails, warn the user (firewall rules may need attention) but don't treat it as a deploy failure — the internal health check in Step 3 already passed.
 
-### Step 6 — Report
+### Step 5 — Report
 
-Print a summary using the actual external IP:
+Print a summary:
 
 ```
 Deploy complete!
 
-  API:      http://<EXTERNAL_IP>:8000
-  Health:   http://<EXTERNAL_IP>:8000/api/v1/health
-  Docs:     http://<EXTERNAL_IP>:8000/docs
+  API:      http://34.70.34.2:8000
+  Health:   http://34.70.34.2:8000/api/v1/health
+  Docs:     http://34.70.34.2:8000/docs
   Frontend: https://nexus-alpha-swart.vercel.app
 
 Cost reminder: VM costs ~$60-80/mo running. Stop it when done:
@@ -131,5 +117,5 @@ Cost reminder: VM costs ~$60-80/mo running. Stop it when done:
 - **Only `api` and `worker` are rebuilt.** Infrastructure services (postgres, redis, qdrant, neo4j, minio, caddy) have `restart: unless-stopped` and come up automatically when the VM starts.
 - **Frontend is NOT deployed here.** Vercel deploys automatically on push to main.
 - **API startup takes ~45s normally**, but cold boots (first start after image rebuild, or GLiNER model download) can take up to 2-3 minutes. The 180s health check timeout accounts for this.
-- **Ephemeral IP:** The VM has no static IP. The external IP changes on every start. When it changes, `frontend/vercel.json` must be updated and pushed so Vercel routes to the new IP.
+- **Static IP:** `34.70.34.2` is a reserved static IP — it persists across VM stop/start cycles. No need to update `vercel.json` after restarts.
 - **If deploy fails**, check logs: `gcloud compute ssh nexus-demo --zone=us-central1-a --project=vault-ai-487703 --command="cd ~/nexus && sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.cloud.yml logs --tail=100 api"`
