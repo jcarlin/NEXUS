@@ -283,7 +283,7 @@ def test_migration_has_immutability_rules() -> None:
 
     spec = importlib.util.spec_from_file_location(
         "migration_004",
-        "/Users/julian/dev/NEXUS/migrations/versions/004_soc2_audit.py",
+        "migrations/versions/004_soc2_audit.py",
     )
     assert spec is not None
     assert spec.loader is not None
@@ -291,7 +291,7 @@ def test_migration_has_immutability_rules() -> None:
     _module = importlib.util.module_from_spec(spec)
 
     # Read the source to check for rule definitions
-    with open("/Users/julian/dev/NEXUS/migrations/versions/004_soc2_audit.py") as f:
+    with open("migrations/versions/004_soc2_audit.py") as f:
         source = f.read()
 
     # Verify all 6 rules are defined (no_update + no_delete for 3 tables)

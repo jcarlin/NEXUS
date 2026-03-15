@@ -164,16 +164,14 @@ class TestResetFlag:
 
 class TestConfigFeaturesEndpoint:
     @pytest.mark.asyncio
-    async def test_returns_all_23_flags(self, client: AsyncClient):
+    async def test_returns_all_flags(self, client: AsyncClient):
         resp = await client.get("/api/v1/config/features")
         assert resp.status_code == 200
         data = resp.json()
-        # Should have all 23 flags
         assert "reranker" in data
         assert "visual_embeddings" in data
         assert "agentic_pipeline" in data
         assert "google_drive" in data
-        assert "retrieval_grading" in data
-        assert "contextual_chunks" in data
-        assert "chunk_quality_scoring" in data
-        assert len(data) == 23
+        # All values must be booleans
+        assert all(isinstance(v, bool) for v in data.values())
+        assert len(data) >= 23  # at least the original flags

@@ -238,7 +238,7 @@ FLAG_REGISTRY: dict[str, FlagMeta] = {
         description="Store chunk summaries as a third named vector for triple RRF fusion (dense + sparse + summary).",
         category=FlagCategory.INGESTION,
         risk_level=FlagRiskLevel.CACHE_CLEAR,
-        di_caches=["get_vector_store", "get_retriever"],
+        di_caches=["get_qdrant", "get_retriever"],
     ),
     "enable_production_quality_monitoring": FlagMeta(
         display_name="Production Quality Monitoring",
