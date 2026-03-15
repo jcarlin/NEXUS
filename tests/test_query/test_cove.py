@@ -104,7 +104,7 @@ async def test_verify_citations_runs_claims_concurrently():
 
 
 async def test_verify_citations_skips_fast_tier():
-    """verify_citations returns empty claims immediately for fast-tier queries."""
+    """verify_citations returns empty claims immediately for fast-tier queries with no sources."""
     state = {
         "_skip_verification": True,
         "response": "Some response",
@@ -114,6 +114,46 @@ async def test_verify_citations_skips_fast_tier():
     result = await verify_citations(state)
 
     assert result == {"cited_claims": []}
+
+
+async def test_verify_citations_extracts_citations_in_fast_tier():
+    """verify_citations extracts citation markers [1], [2] and maps to source documents in fast-tier."""
+    state = {
+        "_skip_verification": True,
+        "response": "The key parties are Alice [1] and Bob [2] from the contract.",
+        "source_documents": [
+            {
+                "document_id": "doc-001",
+                "filename": "contract.pdf",
+                "page": 1,
+                "chunk_text": "Alice and Bob are parties to this agreement",
+            },
+            {
+                "document_id": "doc-002",
+                "filename": "agreement.pdf",
+                "page": 2,
+                "chunk_text": "Bob is the second party to this agreement",
+            },
+        ],
+    }
+
+    result = await verify_citations(state)
+
+    assert "cited_claims" in result
+    cited_claims = result["cited_claims"]
+    assert len(cited_claims) == 2  # Two citation markers found
+
+    # First citation
+    assert cited_claims[0]["document_id"] == "doc-001"
+    assert cited_claims[0]["filename"] == "contract.pdf"
+    assert cited_claims[0]["page_number"] == 1
+    assert cited_claims[0]["verification_status"] == "unverified"
+    assert cited_claims[0]["grounding_score"] == 1.0
+
+    # Second citation
+    assert cited_claims[1]["document_id"] == "doc-002"
+    assert cited_claims[1]["filename"] == "agreement.pdf"
+    assert cited_claims[1]["page_number"] == 2
 
 
 def test_agentic_graph_parallel_post_processing():

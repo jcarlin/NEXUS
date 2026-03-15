@@ -864,6 +864,64 @@ async def _verify_single_claim(
     return claim
 
 
+def _extract_basic_citations_from_response(
+    response: str,
+    source_documents: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Extract citation numbers from response text and map to source documents (fast-tier path).
+
+    When verification is skipped, we still parse citation markers like [1], [2], etc.
+    from the response and map them to source documents for basic citation rendering.
+
+    Returns a list of CitedClaim-compatible dicts with document_id, filename, page_number, etc.
+    """
+    import re
+
+    if not response or not source_documents:
+        return []
+
+    # Find all citation markers [1], [2], etc.
+    citation_pattern = r"\[(\d+)\]"
+    citation_matches = re.finditer(citation_pattern, response)
+
+    cited_claims = []
+    for match in citation_matches:
+        citation_num = int(match.group(1))
+
+        # Citation numbers are 1-indexed; source_documents are 0-indexed
+        doc_idx = citation_num - 1
+        if doc_idx < 0 or doc_idx >= len(source_documents):
+            logger.debug(
+                "node.verify_citations.citation_out_of_range",
+                citation_num=citation_num,
+                num_sources=len(source_documents),
+            )
+            continue
+
+        source_doc = source_documents[doc_idx]
+        claim_text = f"Cited source {citation_num}"  # Placeholder for fast tier
+
+        cited_claim = {
+            "claim_text": claim_text,
+            "document_id": source_doc.get("document_id", "unknown"),
+            "filename": source_doc.get("filename"),
+            "page_number": source_doc.get("page"),
+            "bates_range": source_doc.get("bates_range"),
+            "excerpt": source_doc.get("chunk_text", "")[:500],
+            "grounding_score": 1.0,  # Assume full confidence for pre-fetched sources
+            "verification_status": "unverified",  # Skip verification in fast tier
+        }
+        cited_claims.append(cited_claim)
+
+    logger.debug(
+        "node.verify_citations.basic_extraction",
+        total_citations_found=len(cited_claims),
+        num_sources=len(source_documents),
+    )
+
+    return cited_claims
+
+
 async def verify_citations(state: dict) -> dict:
     """Decompose the agent's response into cited claims and verify each.
 
@@ -872,13 +930,19 @@ async def verify_citations(state: dict) -> dict:
     2. For each claim, run independent retrieval to find verification evidence
     3. Judge whether the evidence supports the claim
 
-    Skipped for fast-tier queries (``_skip_verification=True``).
+    For fast-tier queries (``_skip_verification=True``), extracts basic citations from
+    response text (citation markers [1], [2], etc.) and maps them to source documents
+    without full verification.
     """
-    if state.get("_skip_verification", False):
-        logger.debug("node.verify_citations.skipped", reason="fast_tier")
-        return {"cited_claims": []}
-
     response = state.get("response", "")
+    source_docs = state.get("source_documents", [])
+
+    if state.get("_skip_verification", False):
+        # Fast-tier path: extract citations without verification
+        basic_citations = _extract_basic_citations_from_response(response, source_docs)
+        logger.debug("node.verify_citations.skipped", reason="fast_tier", count=len(basic_citations))
+        return {"cited_claims": basic_citations}
+
     if not response:
         return {"cited_claims": []}
 
