@@ -28,6 +28,11 @@
         }
     }
 
+    # Flower — Celery monitoring (basic auth handled by Flower itself)
+    handle /flower* {
+        reverse_proxy flower:5555
+    }
+
     # Default — return 404 (frontend is on Vercel, not here)
     handle {
         respond "NEXUS API Server" 200
