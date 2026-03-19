@@ -1,0 +1,273 @@
+name: Ingest Epstein Files
+
+on:
+  workflow_dispatch:
+    inputs:
+      matter_id:
+        description: 'Matter UUID (must exist in case_matters table)'
+        required: true
+        type: string
+      dataset:
+        description: 'Which dataset to import'
+        required: true
+        default: 'fbi'
+        type: choice
+        options:
+          - fbi
+          - house
+          - both
+      embedding_mode:
+        description: 'Embedding strategy'
+        required: true
+        default: 'use-precomputed'
+        type: choice
+        options:
+          - use-precomputed
+          - re-embed
+      limit:
+        description: 'Max chunks to import (leave blank for all — fbi=236K, house=69K)'
+        required: false
+        type: string
+      dry_run:
+        description: 'Dry run only — print stats, no writes'
+        required: false
+        default: false
+        type: boolean
+      resume:
+        description: 'Skip already-indexed source files (safe to re-run)'
+        required: false
+        default: true
+        type: boolean
+
+env:
+  GCP_PROJECT: vault-ai-487703
+  VM_NAME: nexus-demo
+  VM_ZONE: us-central1-a
+
+jobs:
+  ingest:
+    name: Import Epstein Files → NEXUS (${{ inputs.dataset }}, ${{ inputs.embedding_mode }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 240  # 4hr ceiling — fbi full corpus re-embed is ~90 min
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── GCP auth (same credentials as deploy workflow) ──────────────────
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      # ── Start VM if stopped ──────────────────────────────────────────────
+      - name: Check VM status
+        id: vm_status
+        run: |
+          STATUS=$(gcloud compute instances describe ${{ env.VM_NAME }} \
+            --zone=${{ env.VM_ZONE }} \
+            --project=${{ env.GCP_PROJECT }} \
+            --format="get(status)")
+          echo "status=$STATUS" >> $GITHUB_OUTPUT
+          echo "VM status: $STATUS"
+
+      - name: Start VM if stopped
+        if: steps.vm_status.outputs.status != 'RUNNING'
+        run: |
+          echo "Starting VM..."
+          gcloud compute instances start ${{ env.VM_NAME }} \
+            --zone=${{ env.VM_ZONE }} \
+            --project=${{ env.GCP_PROJECT }}
+
+      - name: Wait for SSH to be ready
+        run: |
+          echo "Waiting for SSH..."
+          for i in $(seq 1 18); do
+            if gcloud compute ssh ${{ env.VM_NAME }} \
+              --zone=${{ env.VM_ZONE }} \
+              --project=${{ env.GCP_PROJECT }} \
+              --ssh-flag="-o ConnectTimeout=5 -o StrictHostKeyChecking=no" \
+              --command="echo 'SSH ready'" 2>/dev/null; then
+              echo "SSH is ready"
+              break
+            fi
+            echo "Attempt $i/18 failed, waiting 10s..."
+            sleep 10
+            if [ $i -eq 18 ]; then
+              echo "SSH not available after 3 minutes"
+              exit 1
+            fi
+          done
+
+      # ── Copy import script to VM ─────────────────────────────────────────
+      - name: Copy import script
+        run: |
+          gcloud compute scp scripts/import_epstein_fbi.py \
+            ${{ env.VM_NAME }}:~/nexus/scripts/import_epstein_fbi.py \
+            --zone=${{ env.VM_ZONE }} \
+            --project=${{ env.GCP_PROJECT }}
+
+      # ── Install Python deps inside Docker api container ──────────────────
+      - name: Install dependencies in container
+        run: |
+          gcloud compute ssh ${{ env.VM_NAME }} \
+            --zone=${{ env.VM_ZONE }} \
+            --project=${{ env.GCP_PROJECT }} \
+            --ssh-flag="-o StrictHostKeyChecking=no" \
+            --command='
+              cd ~/nexus
+              COMPOSE="sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.cloud.yml"
+              echo "Installing huggingface_hub and datasets in api container..."
+              $COMPOSE exec -T api pip install --quiet \
+                huggingface_hub \
+                datasets \
+                "datasets[parquet]" \
+                structlog
+              echo "Dependencies installed."
+            '
+
+      # ── Dry run first if requested ────────────────────────────────────────
+      - name: Dry run (stats only)
+        if: inputs.dry_run == true
+        run: |
+          LIMIT_FLAG=""
+          if [ -n "${{ inputs.limit }}" ]; then
+            LIMIT_FLAG="--limit ${{ inputs.limit }}"
+          fi
+
+          gcloud compute ssh ${{ env.VM_NAME }} \
+            --zone=${{ env.VM_ZONE }} \
+            --project=${{ env.GCP_PROJECT }} \
+            --ssh-flag="-o StrictHostKeyChecking=no" \
+            --command="
+              cd ~/nexus
+              COMPOSE=\"sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.cloud.yml\"
+              \$COMPOSE exec -T api python scripts/import_epstein_fbi.py \
+                --matter-id ${{ inputs.matter_id }} \
+                --dataset ${{ inputs.dataset }} \
+                --${{ inputs.embedding_mode }} \
+                $LIMIT_FLAG \
+                --dry-run
+            "
+
+      # ── Full import (FBI dataset) ─────────────────────────────────────────
+      - name: Import FBI dataset
+        if: inputs.dry_run == false && (inputs.dataset == 'fbi' || inputs.dataset == 'both')
+        run: |
+          LIMIT_FLAG=""
+          if [ -n "${{ inputs.limit }}" ]; then
+            LIMIT_FLAG="--limit ${{ inputs.limit }}"
+          fi
+
+          RESUME_FLAG=""
+          if [ "${{ inputs.resume }}" == "true" ]; then
+            RESUME_FLAG="--resume"
+          fi
+
+          echo "Starting FBI dataset import..."
+          gcloud compute ssh ${{ env.VM_NAME }} \
+            --zone=${{ env.VM_ZONE }} \
+            --project=${{ env.GCP_PROJECT }} \
+            --ssh-flag="-o StrictHostKeyChecking=no" \
+            --command="
+              cd ~/nexus
+              COMPOSE=\"sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.cloud.yml\"
+              \$COMPOSE exec -T api python scripts/import_epstein_fbi.py \
+                --matter-id ${{ inputs.matter_id }} \
+                --dataset fbi \
+                --${{ inputs.embedding_mode }} \
+                $LIMIT_FLAG \
+                $RESUME_FLAG \
+                --batch-size 500
+            "
+          echo "FBI import complete."
+
+      # ── Full import (House Oversight dataset) ─────────────────────────────
+      - name: Import House Oversight dataset
+        if: inputs.dry_run == false && (inputs.dataset == 'house' || inputs.dataset == 'both')
+        run: |
+          LIMIT_FLAG=""
+          if [ -n "${{ inputs.limit }}" ]; then
+            LIMIT_FLAG="--limit ${{ inputs.limit }}"
+          fi
+
+          RESUME_FLAG=""
+          if [ "${{ inputs.resume }}" == "true" ]; then
+            RESUME_FLAG="--resume"
+          fi
+
+          echo "Starting House Oversight dataset import..."
+          echo "WARNING: House dataset has no page numbers — citations will lack page click-through."
+          gcloud compute ssh ${{ env.VM_NAME }} \
+            --zone=${{ env.VM_ZONE }} \
+            --project=${{ env.GCP_PROJECT }} \
+            --ssh-flag="-o StrictHostKeyChecking=no" \
+            --command="
+              cd ~/nexus
+              COMPOSE=\"sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.cloud.yml\"
+              \$COMPOSE exec -T api python scripts/import_epstein_fbi.py \
+                --matter-id ${{ inputs.matter_id }} \
+                --dataset house \
+                --${{ inputs.embedding_mode }} \
+                $LIMIT_FLAG \
+                $RESUME_FLAG \
+                --batch-size 500
+            "
+          echo "House import complete."
+
+      # ── Post-import health check ──────────────────────────────────────────
+      - name: Verify Qdrant collection stats
+        if: inputs.dry_run == false
+        run: |
+          COLLECTION="nexus_epstein_768"
+          if [ "${{ inputs.embedding_mode }}" == "re-embed" ]; then
+            COLLECTION="nexus_text"
+          fi
+
+          gcloud compute ssh ${{ env.VM_NAME }} \
+            --zone=${{ env.VM_ZONE }} \
+            --project=${{ env.GCP_PROJECT }} \
+            --ssh-flag="-o StrictHostKeyChecking=no" \
+            --command="
+              curl -sf http://localhost:6333/collections/$COLLECTION | python3 -m json.tool | grep -E '(points_count|status|name)'
+            "
+
+      - name: Verify PostgreSQL document count
+        if: inputs.dry_run == false
+        run: |
+          gcloud compute ssh ${{ env.VM_NAME }} \
+            --zone=${{ env.VM_ZONE }} \
+            --project=${{ env.GCP_PROJECT }} \
+            --ssh-flag="-o StrictHostKeyChecking=no" \
+            --command="
+              cd ~/nexus
+              COMPOSE=\"sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.cloud.yml\"
+              \$COMPOSE exec -T postgres psql -U nexus -d nexus -c \
+                \"SELECT COUNT(*) as doc_count, privilege_status FROM documents WHERE matter_id = '${{ inputs.matter_id }}' GROUP BY privilege_status;\"
+            "
+
+      # ── Summary ────────────────────────────────────────────────────────────
+      - name: Print summary
+        if: always()
+        run: |
+          echo "========================================="
+          echo " Epstein Import Summary"
+          echo "========================================="
+          echo " Matter ID  : ${{ inputs.matter_id }}"
+          echo " Dataset    : ${{ inputs.dataset }}"
+          echo " Mode       : ${{ inputs.embedding_mode }}"
+          echo " Dry run    : ${{ inputs.dry_run }}"
+          echo " Limit      : ${{ inputs.limit || 'none (full corpus)' }}"
+          echo ""
+          if [ "${{ inputs.embedding_mode }}" == "use-precomputed" ]; then
+            echo " ⚠️  NEXT STEP REQUIRED:"
+            echo " Vectors are in 'nexus_epstein_768' (768d), not 'nexus_text' (1024d)."
+            echo " Add matter-based collection routing to app/query/retriever.py"
+            echo " OR re-run with --re-embed to unify into nexus_text."
+          else
+            echo " ✅ Vectors loaded into nexus_text — no code changes needed."
+          fi
+          echo "========================================="
