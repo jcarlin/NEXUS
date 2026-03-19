@@ -6,10 +6,11 @@ Creates:
   - Links admin user to the matter
   - Seeds initial case_parties (key individuals)
   - Seeds initial case_claims (primary legal theories)
-  - Seeds case_defined_terms (key legal terms)
-  - Creates a datasets row for the House Oversight release
+  - Seeds case_defined_terms (key legal terms from all datasources)
+  - Creates datasets rows for each datasource (FBI, House Oversight, etc.)
 
 Idempotent: safe to run multiple times (uses ON CONFLICT / upserts).
+Re-run as new datasources are added.
 
 Usage::
 
@@ -38,9 +39,10 @@ from app.config import Settings
 _MATTER_ID = "00000000-0000-0000-0000-000000000002"
 _MATTER_NAME = "Epstein Files Investigation"
 _MATTER_DESC = (
-    "Investigation of Jeffrey Epstein network using House Oversight Committee "
-    "documents released November 2025. 20,000+ pages of depositions, flight "
-    "logs, correspondence, and law enforcement records."
+    "Investigation of Jeffrey Epstein network across FBI files, House Oversight "
+    "Committee releases, court documents, email collections, and DOJ EFTA records. "
+    "Spans depositions, flight logs, correspondence, financial records, and law "
+    "enforcement documents from multiple federal and state sources."
 )
 
 
@@ -125,8 +127,23 @@ def main() -> None:
                             "source_page": None,
                         },
                         {
-                            "date": "2025-11-01",
-                            "event_text": "House Oversight Committee releases 20,000+ pages",
+                            "date": "2024-01-03",
+                            "event_text": "Giuffre v. Maxwell documents unsealed (SDNY)",
+                            "source_page": None,
+                        },
+                        {
+                            "date": "2025-09-08",
+                            "event_text": "House Oversight releases 33,295 pages of DOJ records",
+                            "source_page": None,
+                        },
+                        {
+                            "date": "2025-11-12",
+                            "event_text": "House Oversight releases 20,000+ pages of estate documents",
+                            "source_page": None,
+                        },
+                        {
+                            "date": "2025-12-01",
+                            "event_text": "DOJ begins EFTA document releases (Datasets 1-12)",
                             "source_page": None,
                         },
                     ]
@@ -229,6 +246,7 @@ def main() -> None:
         # 6. Defined terms
         # ---------------------------------------------------------------
         terms = [
+            # Legal / jurisdictional
             (
                 "NPA",
                 "Non-Prosecution Agreement between Jeffrey Epstein and the U.S. Attorney's Office for the Southern District of Florida (2007)",
@@ -236,8 +254,25 @@ def main() -> None:
             ("SDFL", "Southern District of Florida, federal judicial district where the NPA was negotiated"),
             ("SDNY", "Southern District of New York, federal judicial district where 2019 indictment was filed"),
             ("MCC", "Metropolitan Correctional Center, New York — federal detention facility"),
-            ("MC2", "MC2 Model Management, modeling agency founded by Jean-Luc Brunel"),
+            ("CVRA", "Crime Victims' Rights Act — federal statute invoked by Epstein victims challenging the NPA"),
+            ("TVPA", "Trafficking Victims Protection Act — federal anti-trafficking statute"),
+            # FBI / law enforcement
+            ("FD-302", "FBI interview report form — standard format for documenting witness/subject interviews"),
+            ("SAC", "Special Agent in Charge — senior FBI field office leader"),
+            ("ASAC", "Assistant Special Agent in Charge — deputy to the SAC"),
+            ("FOIA", "Freedom of Information Act — basis for FBI document releases"),
+            ("CI", "Confidential Informant — FBI designation for protected sources"),
             ("Palm Beach PD", "Palm Beach Police Department, initiated original 2005 investigation"),
+            ("PBSO", "Palm Beach Sheriff's Office — county-level law enforcement"),
+            # Organizations
+            ("MC2", "MC2 Model Management, modeling agency founded by Jean-Luc Brunel"),
+            ("EFTA", "Epstein Files Transparency Act — DOJ document release mandate (2025)"),
+            # Document sources
+            ("House Oversight", "U.S. House Oversight Committee — released Epstein estate documents Nov 2025"),
+            (
+                "Bates number",
+                "Sequential document identifier stamped during legal discovery (e.g., HOUSE_OVERSIGHT_020367)",
+            ),
         ]
         for term, definition in terms:
             conn.execute(
@@ -257,25 +292,53 @@ def main() -> None:
         print(f"  Inserted {len(terms)} defined terms")
 
         # ---------------------------------------------------------------
-        # 7. Dataset record
+        # 7. Dataset records (one per datasource, all under the same matter)
         # ---------------------------------------------------------------
-        conn.execute(
-            text("""
-                INSERT INTO datasets
-                    (id, matter_id, name, description, created_by, created_at, updated_at)
-                VALUES (:id, :mid, :name, :desc, :created_by, :now, :now)
-                ON CONFLICT DO NOTHING
-            """),
-            {
-                "id": uuid4(),
-                "mid": _MATTER_ID,
-                "name": "House Oversight Nov 2025",
-                "desc": "25,000+ pages released by the House Oversight Committee, November 2025. Pre-OCR'd via Tesseract.",
-                "created_by": admin_rows[0].id if admin_rows else uuid4(),
-                "now": now,
-            },
-        )
-        print("  Created dataset: House Oversight Nov 2025")
+        created_by = admin_rows[0].id if admin_rows else uuid4()
+        datasets = [
+            (
+                "FBI Files",
+                "8,150 FBI documents (236K chunks) from svetfm/epstein-fbi-files. "
+                "Textract OCR with Bates numbers, page numbers, and confidence scores.",
+            ),
+            (
+                "House Oversight Nov 2025",
+                "25,000+ pages released by the House Oversight Committee, November 2025. Pre-OCR'd via Tesseract.",
+            ),
+            (
+                "House Oversight Pre-embedded",
+                "69K pre-chunked + pre-embedded chunks from House Oversight release. "
+                "768d nomic-embed-text vectors. Degraded citations (no page numbers).",
+            ),
+            (
+                "Epstein Emails",
+                "Email collections from multiple HuggingFace datasets. "
+                "Covers correspondence extracted from document images and parsed threads.",
+            ),
+            (
+                "Giuffre v. Maxwell Court Docs",
+                "SDNY Case 1:15-cv-07433-LAP. Unsealed motions, depositions, and exhibits "
+                "from CourtListener RECAP archive.",
+            ),
+        ]
+        for ds_name, ds_desc in datasets:
+            conn.execute(
+                text("""
+                    INSERT INTO datasets
+                        (id, matter_id, name, description, created_by, created_at, updated_at)
+                    VALUES (:id, :mid, :name, :desc, :created_by, :now, :now)
+                    ON CONFLICT DO NOTHING
+                """),
+                {
+                    "id": uuid4(),
+                    "mid": _MATTER_ID,
+                    "name": ds_name,
+                    "desc": ds_desc,
+                    "created_by": created_by,
+                    "now": now,
+                },
+            )
+        print(f"  Created {len(datasets)} dataset records")
 
         conn.commit()
 
