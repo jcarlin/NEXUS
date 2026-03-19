@@ -90,7 +90,7 @@ function NetworkGraphPage() {
           }>({
             url: `/api/v1/entities/connections`,
             method: "GET",
-            params: { name: e.id, limit: 20 },
+            params: { name: e.id, limit: 20, entity_only: true },
           }).catch(() => null),
         ),
       );

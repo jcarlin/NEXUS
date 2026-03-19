@@ -225,6 +225,32 @@ async def test_get_entity_connections_cypher_no_element_id_fallback(graph_servic
 
 
 @pytest.mark.asyncio
+async def test_get_entity_connections_entity_only_true(graph_service):
+    """entity_only=True should restrict Cypher MATCH to (connected:Entity)."""
+    graph_service._run_query = AsyncMock(return_value=[])
+
+    await graph_service.get_entity_connections("Alice", entity_only=True)
+
+    cypher = graph_service._run_query.call_args[0][0]
+    # The MATCH line should target Entity nodes only
+    match_line = [line for line in cypher.splitlines() if "MATCH" in line][0]
+    assert "(connected:Entity)" in match_line
+
+
+@pytest.mark.asyncio
+async def test_get_entity_connections_entity_only_false(graph_service):
+    """entity_only=False (default) should match all node types."""
+    graph_service._run_query = AsyncMock(return_value=[])
+
+    await graph_service.get_entity_connections("Alice", entity_only=False)
+
+    cypher = graph_service._run_query.call_args[0][0]
+    match_line = [line for line in cypher.splitlines() if "MATCH" in line][0]
+    assert "(connected)" in match_line
+    assert "(connected:Entity)" not in match_line
+
+
+@pytest.mark.asyncio
 async def test_get_entity_timeline_with_matter_id(graph_service):
     """get_entity_timeline with matter_id should filter by matter."""
     graph_service._run_query = AsyncMock(return_value=[])
