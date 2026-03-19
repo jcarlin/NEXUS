@@ -87,16 +87,17 @@ def main() -> None:
         conn.execute(
             text("""
                 INSERT INTO case_contexts
-                    (id, matter_id, status, timeline, created_at, updated_at)
+                    (id, matter_id, anchor_document_id, status, timeline, created_at, updated_at)
                 VALUES
-                    (:id, :mid, 'confirmed', :timeline::json, :now, :now)
+                    (:id, :mid, :anchor_doc, 'confirmed', CAST(:timeline AS json), :now, :now)
                 ON CONFLICT (matter_id) DO UPDATE
-                    SET status = 'confirmed', timeline = :timeline::json, updated_at = :now
+                    SET status = 'confirmed', timeline = CAST(:timeline AS json), updated_at = :now
                 RETURNING id
             """),
             {
                 "id": context_id,
                 "mid": _MATTER_ID,
+                "anchor_doc": "epstein-investigation-seed",
                 "timeline": json.dumps(
                     [
                         {
@@ -227,7 +228,7 @@ def main() -> None:
                     INSERT INTO case_claims
                         (id, case_context_id, claim_number, claim_label, claim_text,
                          legal_elements, source_pages, created_at, updated_at)
-                    VALUES (:id, :cid, :num, :label, :text, :elements::json, :pages::json, :now, :now)
+                    VALUES (:id, :cid, :num, :label, :text, CAST(:elements AS json), CAST(:pages AS json), :now, :now)
                 """),
                 {
                     "id": uuid4(),

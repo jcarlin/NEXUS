@@ -99,6 +99,11 @@ def main() -> int:
         action="store_true",
         help="Print schema info without saving to disk",
     )
+    parser.add_argument(
+        "--data-files",
+        default=None,
+        help="Specific data file(s) within the repo (e.g., 'embeddings/all_embeddings.jsonl')",
+    )
     args = parser.parse_args()
 
     try:
@@ -112,15 +117,23 @@ def main() -> int:
 
     print(f"Dataset:    {args.dataset}")
     print(f"Split:      {args.split}")
+    if args.data_files:
+        print(f"Data files: {args.data_files}")
     if args.sample:
         print(f"Sample:     first {args.sample} rows")
 
     # Download
     print("Downloading...")
+    load_kwargs: dict = {"path": args.dataset}
+    if args.data_files:
+        load_kwargs["data_files"] = args.data_files
+
     if args.sample:
-        ds = load_dataset(args.dataset, split=f"{args.split}[:{args.sample}]")
+        load_kwargs["split"] = f"{args.split}[:{args.sample}]"
     else:
-        ds = load_dataset(args.dataset, split=args.split)
+        load_kwargs["split"] = args.split
+
+    ds = load_dataset(**load_kwargs)
 
     # Schema inspection
     _inspect_schema(ds)

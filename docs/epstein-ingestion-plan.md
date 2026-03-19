@@ -27,54 +27,80 @@ This roadmap covers **all available datasources** in priority order, from quick 
 
 ---
 
-## Phase 0: Foundation (wipe + infrastructure)
+## Phase 0: Foundation (wipe + infrastructure) -- COMPLETE
 
 **Goal**: Clean slate on GCP. Standardize embedding setup. Build reusable import tooling.
 
+**Status**: All items complete. Local pipeline validated end-to-end on 2026-03-19.
+
 ### 0.1 Wipe GCP demo data
-- Follow `memory/wipe-reingest.md` procedure
-- Delete all Qdrant collections, truncate PostgreSQL tables, clear Neo4j, clear MinIO
-- Recreate `nexus_text` collection at 768d (Ollama nomic-embed-text)
+- [x] Follow `memory/wipe-reingest.md` procedure
+- [ ] Delete all Qdrant collections, truncate PostgreSQL tables, clear Neo4j, clear MinIO *(GCP wipe deferred to Phase 1 deploy)*
+- [ ] Recreate `nexus_text` collection at 768d (Ollama nomic-embed-text) *(GCP -- deferred)*
 
 ### 0.2 Verify GCP embedding config
-- Confirm `.env` on GCP has `EMBEDDING_PROVIDER=ollama`, `EMBEDDING_DIMENSIONS=768`, `OLLAMA_EMBEDDING_MODEL=nomic-embed-text`
-- Confirm Ollama container is healthy and has nomic-embed-text model pulled
-- Confirm Qdrant collection is 768d after recreation
+- [ ] Confirm `.env` on GCP has `EMBEDDING_PROVIDER=ollama`, `EMBEDDING_DIMENSIONS=768`, `OLLAMA_EMBEDDING_MODEL=nomic-embed-text` *(GCP -- deferred to Phase 1)*
+- [ ] Confirm Ollama container is healthy and has nomic-embed-text model pulled *(GCP)*
+- [ ] Confirm Qdrant collection is 768d after recreation *(GCP)*
 
-### 0.3 Create shared tooling
-These scripts are reused across all phases:
+### 0.3 Create shared tooling -- COMPLETE
+All scripts built, tested, and validated locally:
 
-**`scripts/download_hf_dataset.py`** (new)
-- Downloads from HuggingFace with `--sample N` for local testing
-- Prints schema inspection (columns, types, sample values, null counts)
-- Generic enough to download any HF dataset with `--dataset` flag
+**`scripts/download_hf_dataset.py`** -- COMPLETE
+- [x] Downloads from HuggingFace with `--sample N` for local testing
+- [x] Prints schema inspection (columns, types, sample values, null counts)
+- [x] Generic enough to download any HF dataset with `--dataset` flag
+- [x] Added `--data-files` flag for JSONL-based datasets (FBI uses `embeddings/all_embeddings.jsonl`)
 
-**`scripts/seed_epstein_matter.py`** (already exists)
-- Update to be the single matter for all Epstein sources
-- Matter ID: `00000000-0000-0000-0000-000000000002`
-- Add FBI-specific defined terms (FOIA, FD-302, SAC, etc.) alongside existing House Oversight terms
-- All datasets (FBI, House Oversight, emails, court docs) belong to this one matter
-- Idempotent -- can be re-run as new datasources are added
+**`scripts/seed_epstein_matter.py`** -- COMPLETE
+- [x] Updated as the single matter for all Epstein sources
+- [x] Matter ID: `00000000-0000-0000-0000-000000000002`
+- [x] Added FBI-specific defined terms (FOIA, FD-302, SAC, ASAC, CI, Palm Beach PD, PBSO, MC2, EFTA, etc.)
+- [x] All datasets (FBI, House Oversight, emails, court docs) seeded as dataset records
+- [x] Idempotent -- can be re-run as new datasources are added
+- [x] Fixed: `::json` cast syntax incompatible with SQLAlchemy (now uses `CAST(... AS json)`)
+- [x] Fixed: missing `anchor_document_id` column (NOT NULL constraint)
 
-**`scripts/import_fbi_dataset.py`** (new -- becomes template for pre-embedded imports)
-- Custom import for pre-chunked + pre-embedded HuggingFace datasets
-- Handles: Parquet reading -> document grouping -> PostgreSQL records -> Qdrant upsert (pre-computed vectors) -> GLiNER NER -> Neo4j graph
-- CLI: `--file`, `--matter-id`, `--limit`, `--dry-run`, `--resume`, `--disable-hnsw`, `--skip-ner`, `--skip-neo4j`, `--re-embed`
-- Pattern is reusable for any pre-embedded HF dataset
+**`scripts/import_fbi_dataset.py`** -- COMPLETE
+- [x] Custom import for pre-chunked + pre-embedded HuggingFace datasets
+- [x] Full pipeline: Parquet reading -> document grouping -> PostgreSQL records -> Qdrant upsert (pre-computed vectors) -> GLiNER NER -> Neo4j graph -> dataset linking -> post-ingestion hooks
+- [x] CLI: `--file`, `--matter-id`, `--limit`, `--dry-run`, `--resume`, `--disable-hnsw`, `--skip-ner`, `--skip-neo4j`, `--skip-minio`, `--re-embed`, `--citation-quality`, `--import-source`
+- [x] Schema detection handles FBI JSONL columns (`chunk_text` -> text, `source_path` -> source_file, `source_volume` -> volume, `bates_range` -> bates_number)
+- [x] Fixed: `dataset_documents` junction table uses `(dataset_id, document_id, assigned_at)` not `(id, ...)`
+- [x] Named vector detection auto-adapts to collection config
 
-### 0.4 Files for Phase 0
-| File | Action |
-|------|--------|
-| `scripts/download_hf_dataset.py` | New |
-| `scripts/seed_epstein_matter.py` | Edit (add FBI terms, consolidate) |
-| `scripts/import_fbi_dataset.py` | New |
-| `tests/test_ingestion/test_fbi_import.py` | New |
+### 0.4 Local Pipeline Validation -- COMPLETE (2026-03-19)
+- [x] Synthetic FBI dataset (15 docs, 69 chunks, 768d vectors) created matching real JSONL schema
+- [x] Dry-run: schema detection correctly maps all FBI JSONL columns
+- [x] Live import (10 docs): PostgreSQL, Qdrant, Neo4j all populated
+- [x] NER import (10 docs): GLiNER extracted 120 entities, indexed in Neo4j
+- [x] Post-ingestion hooks dispatched (entity resolution, email detection, hot doc scan)
+- [x] 28 unit tests pass (including 5 new alias tests)
+- [x] 261 ingestion tests pass (full suite, no regressions)
+
+**Bugs found & fixed during validation:**
+1. `detect_schema()` didn't handle FBI JSONL column aliases (`chunk_text`, `source_path`, `source_volume`)
+2. `seed_epstein_matter.py`: SQLAlchemy `::json` cast conflict + missing `anchor_document_id`
+3. `link_document_to_dataset()`: referenced non-existent `id` column in `dataset_documents`
+
+**Qdrant dimension note**: Local collection is already 768d with named vectors -- FBI 768d vectors upserted directly with no dimension mismatch. GCP will need collection recreated at 768d during Phase 1.
+
+### 0.5 Files for Phase 0
+| File | Action | Status |
+|------|--------|--------|
+| `scripts/download_hf_dataset.py` | New | Done |
+| `scripts/seed_epstein_matter.py` | Edit (add FBI terms, consolidate, fix SQL) | Done |
+| `scripts/import_fbi_dataset.py` | New | Done |
+| `tests/test_ingestion/test_fbi_import.py` | New (28 tests) | Done |
+| `docs/epstein-files-plan.md` | New (research doc) | Done |
 
 ---
 
-## Phase 1: FBI Files -- `svetfm/epstein-fbi-files` (MVP)
+## Phase 1: FBI Files -- `svetfm/epstein-fbi-files` (MVP) -- READY
 
 **Why first**: Best metadata (page numbers, Bates, OCR confidence), pre-computed 768d nomic vectors (direct Qdrant load), full citation support. This is the proof-of-concept that validates the entire pipeline.
+
+**Prerequisites**: Phase 0 complete. Import script validated locally. GCP wipe + 768d collection recreation needed before running.
 
 **Dataset**: 236K chunks from 8,150 FBI documents. Textract OCR (higher quality than Tesseract). Includes Bates numbers, page numbers, OCR confidence scores, source volumes, document types.
 

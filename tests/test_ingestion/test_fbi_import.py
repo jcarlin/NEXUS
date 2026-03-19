@@ -50,6 +50,37 @@ def _make_fbi_parquet(path: Path, n_docs: int = 3, chunks_per_doc: int = 2) -> P
     return pq_path
 
 
+def _make_fbi_jsonl_parquet(path: Path, n_docs: int = 3, chunks_per_doc: int = 2) -> Path:
+    """Create a Parquet file mimicking the FBI JSONL schema (chunk_text, source_path, etc.)."""
+    rows = []
+    for doc_i in range(n_docs):
+        source_path = f"VOL{doc_i + 1:05d}/FBI_EFTA_{doc_i:04d}.pdf"
+        for chunk_j in range(chunks_per_doc):
+            rows.append(
+                {
+                    "id": f"uuid-{doc_i}-{chunk_j}",
+                    "bates_number": f"EFTA{doc_i * 10 + chunk_j:08d}",
+                    "bates_range": f"EFTA{doc_i * 10 + chunk_j:08d}-EFTA{doc_i * 10 + chunk_j:08d}",
+                    "source_volume": doc_i + 1,
+                    "source_path": source_path,
+                    "doc_type": "typed_memo",
+                    "ocr_confidence": 0.9,
+                    "ocr_engine": "textract",
+                    "page_number": chunk_j + 1,
+                    "total_pages": chunks_per_doc,
+                    "chunk_index": chunk_j,
+                    "total_chunks": chunks_per_doc,
+                    "chunk_text": f"FBI JSONL Document {doc_i} chunk {chunk_j}.",
+                    "embedding": np.random.rand(768).tolist(),
+                    "ingested_at": 1703123456,
+                }
+            )
+    df = pd.DataFrame(rows)
+    pq_path = path / "fbi_jsonl_test.parquet"
+    df.to_parquet(pq_path, index=False)
+    return pq_path
+
+
 def _make_sparse_parquet(path: Path, n_chunks: int = 5) -> Path:
     """Create a Parquet file mimicking the House Oversight schema (sparse)."""
     rows = []
@@ -130,6 +161,61 @@ class TestSchemaDetection:
         mapping = detect_schema(cols)
         assert mapping["source_file"] == "filename"
 
+    def test_fbi_jsonl_schema(self) -> None:
+        """FBI JSONL uses chunk_text, source_path, source_volume."""
+        from scripts.import_fbi_dataset import detect_schema
+
+        cols = [
+            "id",
+            "bates_number",
+            "bates_range",
+            "source_volume",
+            "source_path",
+            "doc_type",
+            "ocr_confidence",
+            "ocr_engine",
+            "page_number",
+            "total_pages",
+            "chunk_index",
+            "total_chunks",
+            "chunk_text",
+            "embedding",
+            "ingested_at",
+        ]
+        mapping = detect_schema(cols)
+
+        assert mapping["text"] == "chunk_text"
+        assert mapping["embedding"] == "embedding"
+        assert mapping["source_file"] == "source_path"
+        assert mapping["chunk_index"] == "chunk_index"
+        assert mapping["page_number"] == "page_number"
+        assert mapping["bates_number"] == "bates_number"
+        assert mapping["ocr_confidence"] == "ocr_confidence"
+        assert mapping["volume"] == "source_volume"
+        assert mapping["doc_type"] == "doc_type"
+
+    def test_chunk_text_alias_accepted(self) -> None:
+        """chunk_text should be accepted as a text column alias."""
+        from scripts.import_fbi_dataset import detect_schema
+
+        cols = ["chunk_text", "embedding"]
+        mapping = detect_schema(cols)
+        assert mapping["text"] == "chunk_text"
+
+    def test_source_path_alias(self) -> None:
+        from scripts.import_fbi_dataset import detect_schema
+
+        cols = ["source_path", "text", "embedding"]
+        mapping = detect_schema(cols)
+        assert mapping["source_file"] == "source_path"
+
+    def test_bates_range_alias(self) -> None:
+        from scripts.import_fbi_dataset import detect_schema
+
+        cols = ["bates_range", "text", "embedding"]
+        mapping = detect_schema(cols)
+        assert mapping["bates_number"] == "bates_range"
+
 
 # ---------------------------------------------------------------------------
 # 2. Document grouping
@@ -191,6 +277,21 @@ class TestReadAndGroup:
 
         # Each chunk has a unique source_file
         assert len(groups) == 5
+
+    def test_fbi_jsonl_schema_groups(self, tmp_path: Path) -> None:
+        """FBI JSONL format (chunk_text, source_path) groups correctly."""
+        from scripts.import_fbi_dataset import detect_schema, read_and_group
+
+        pq = _make_fbi_jsonl_parquet(tmp_path, n_docs=3, chunks_per_doc=2)
+        df = pd.read_parquet(pq)
+        schema = detect_schema(list(df.columns))
+        groups = read_and_group(pq, schema)
+
+        assert len(groups) == 3
+        for g in groups:
+            assert len(g.chunks) == 2
+            assert g.chunks[0].text.startswith("FBI JSONL")
+            assert g.source_file.startswith("VOL")
 
 
 # ---------------------------------------------------------------------------

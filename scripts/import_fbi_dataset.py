@@ -133,35 +133,41 @@ _FBI_REQUIRED = {"text", "embedding"}
 _FBI_RICH_COLS = {"page_number", "bates_number", "ocr_confidence", "volume", "doc_type"}
 
 
+def _resolve_col(col_set: set[str], *candidates: str) -> str | None:
+    """Return the first column name from candidates found in the dataset."""
+    for c in candidates:
+        if c in col_set:
+            return c
+    return None
+
+
 def detect_schema(columns: list[str]) -> dict[str, str | None]:
     """Map dataset columns to our internal field names.
 
     Returns a dict of internal_name -> actual_column_name (or None if absent).
-    Supports both the rich FBI schema and the sparse House Oversight schema.
+    Supports the rich FBI JSONL schema (chunk_text, source_path, source_volume),
+    the FBI Parquet schema (text, source_file, volume), and the sparse House
+    Oversight schema.
     """
     col_set = set(columns)
 
-    if "text" not in col_set:
-        raise ValueError(f"Dataset must have a 'text' column, got: {columns}")
+    # Text column: "text" or "chunk_text" (FBI JSONL uses chunk_text)
+    text_col = _resolve_col(col_set, "text", "chunk_text")
+    if text_col is None:
+        raise ValueError(f"Dataset must have a 'text' or 'chunk_text' column, got: {columns}")
+
     if "embedding" not in col_set:
         raise ValueError(f"Dataset must have an 'embedding' column, got: {columns}")
 
-    # Detect the source_file / filename column
-    source_col = None
-    for candidate in ("source_file", "filename", "file_name", "source"):
-        if candidate in col_set:
-            source_col = candidate
-            break
-
     mapping: dict[str, str | None] = {
-        "text": "text",
+        "text": text_col,
         "embedding": "embedding",
-        "source_file": source_col,
+        "source_file": _resolve_col(col_set, "source_file", "source_path", "filename", "file_name", "source"),
         "chunk_index": "chunk_index" if "chunk_index" in col_set else None,
         "page_number": "page_number" if "page_number" in col_set else None,
-        "bates_number": "bates_number" if "bates_number" in col_set else None,
+        "bates_number": _resolve_col(col_set, "bates_number", "bates_range"),
         "ocr_confidence": "ocr_confidence" if "ocr_confidence" in col_set else None,
-        "volume": "volume" if "volume" in col_set else None,
+        "volume": _resolve_col(col_set, "volume", "source_volume"),
         "doc_type": "doc_type" if "doc_type" in col_set else None,
     }
 
@@ -391,11 +397,11 @@ def link_document_to_dataset(engine, doc_id: str, dataset_id: str) -> None:
     with engine.connect() as conn:
         conn.execute(
             text("""
-                INSERT INTO dataset_documents (id, dataset_id, document_id, created_at)
-                VALUES (:id, :dataset_id, :doc_id, now())
+                INSERT INTO dataset_documents (dataset_id, document_id, assigned_at)
+                VALUES (:dataset_id, :doc_id, now())
                 ON CONFLICT DO NOTHING
             """),
-            {"id": str(uuid.uuid4()), "dataset_id": dataset_id, "doc_id": doc_id},
+            {"dataset_id": dataset_id, "doc_id": doc_id},
         )
         conn.commit()
 
