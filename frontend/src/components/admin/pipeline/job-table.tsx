@@ -10,7 +10,7 @@ import { RotateCcw, X } from "lucide-react";
 import { toast } from "sonner";
 import { apiClient } from "@/api/client";
 import { useAppStore } from "@/stores/app-store";
-import { formatDateTime, cn } from "@/lib/utils";
+import { formatDateTime } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
