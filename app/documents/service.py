@@ -73,11 +73,11 @@ class DocumentService:
         if not rows:
             return []
 
-        # Qdrant stores job_id as doc_id in point payloads
+        # Qdrant stores documents.id as doc_id in point payloads
         job_id_map: dict[str, dict] = {}
         for r in rows:
             mapping = r._mapping
-            job_id = str(mapping["job_id"]) if mapping.get("job_id") else str(mapping["id"])
+            job_id = str(mapping["id"])
             job_id_map[job_id] = {
                 "doc_id": mapping["id"],
                 "filename": mapping["filename"],

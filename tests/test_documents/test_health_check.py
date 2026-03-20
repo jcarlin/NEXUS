@@ -44,8 +44,8 @@ async def test_health_check_all_healthy() -> None:
     """When Qdrant has all expected chunks, every doc is 'healthy'."""
     from app.documents.service import DocumentService
 
-    job_id = uuid4()
-    row = _fake_db_row(job_id=job_id, chunk_count=30)
+    doc_id = uuid4()
+    row = _fake_db_row(doc_id=doc_id, chunk_count=30)
 
     db = AsyncMock()
     result_mock = MagicMock()
@@ -53,7 +53,7 @@ async def test_health_check_all_healthy() -> None:
     db.execute.return_value = result_mock
 
     qdrant = MagicMock()
-    qdrant.count_points_by_doc_ids.return_value = {str(job_id): 30}
+    qdrant.count_points_by_doc_ids.return_value = {str(doc_id): 30}
 
     items = await DocumentService.check_ingestion_health(db, qdrant, MATTER_ID)
 
@@ -68,8 +68,8 @@ async def test_health_check_missing() -> None:
     """When Qdrant has 0 points for a doc, status is 'missing'."""
     from app.documents.service import DocumentService
 
-    job_id = uuid4()
-    row = _fake_db_row(job_id=job_id, chunk_count=25)
+    doc_id = uuid4()
+    row = _fake_db_row(doc_id=doc_id, chunk_count=25)
 
     db = AsyncMock()
     result_mock = MagicMock()
@@ -77,7 +77,7 @@ async def test_health_check_missing() -> None:
     db.execute.return_value = result_mock
 
     qdrant = MagicMock()
-    qdrant.count_points_by_doc_ids.return_value = {str(job_id): 0}
+    qdrant.count_points_by_doc_ids.return_value = {str(doc_id): 0}
 
     items = await DocumentService.check_ingestion_health(db, qdrant, MATTER_ID)
 
@@ -91,8 +91,8 @@ async def test_health_check_partial() -> None:
     """When Qdrant has fewer points than expected, status is 'partial'."""
     from app.documents.service import DocumentService
 
-    job_id = uuid4()
-    row = _fake_db_row(job_id=job_id, chunk_count=30)
+    doc_id = uuid4()
+    row = _fake_db_row(doc_id=doc_id, chunk_count=30)
 
     db = AsyncMock()
     result_mock = MagicMock()
@@ -100,7 +100,7 @@ async def test_health_check_partial() -> None:
     db.execute.return_value = result_mock
 
     qdrant = MagicMock()
-    qdrant.count_points_by_doc_ids.return_value = {str(job_id): 15}
+    qdrant.count_points_by_doc_ids.return_value = {str(doc_id): 15}
 
     items = await DocumentService.check_ingestion_health(db, qdrant, MATTER_ID)
 
@@ -133,11 +133,11 @@ async def test_health_check_multiple_docs() -> None:
     """Mixed statuses across multiple documents."""
     from app.documents.service import DocumentService
 
-    j1, j2, j3 = uuid4(), uuid4(), uuid4()
+    d1, d2, d3 = uuid4(), uuid4(), uuid4()
     rows = [
-        _fake_db_row(job_id=j1, filename="healthy.pdf", chunk_count=10),
-        _fake_db_row(job_id=j2, filename="missing.pdf", chunk_count=20),
-        _fake_db_row(job_id=j3, filename="partial.pdf", chunk_count=15),
+        _fake_db_row(doc_id=d1, filename="healthy.pdf", chunk_count=10),
+        _fake_db_row(doc_id=d2, filename="missing.pdf", chunk_count=20),
+        _fake_db_row(doc_id=d3, filename="partial.pdf", chunk_count=15),
     ]
 
     db = AsyncMock()
@@ -147,9 +147,9 @@ async def test_health_check_multiple_docs() -> None:
 
     qdrant = MagicMock()
     qdrant.count_points_by_doc_ids.return_value = {
-        str(j1): 10,
-        str(j2): 0,
-        str(j3): 7,
+        str(d1): 10,
+        str(d2): 0,
+        str(d3): 7,
     }
 
     items = await DocumentService.check_ingestion_health(db, qdrant, MATTER_ID)
