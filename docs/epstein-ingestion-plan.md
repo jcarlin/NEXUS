@@ -106,7 +106,7 @@ All scripts built, tested, and validated locally:
 
 ---
 
-## Phase 1: FBI Files -- `svetfm/epstein-fbi-files` (MVP) -- PHASE 1a COMPLETE, 1b IN PROGRESS
+## Phase 1: FBI Files -- `svetfm/epstein-fbi-files` (MVP) -- COMPLETE
 
 **Why first**: Best metadata (page numbers, Bates, OCR confidence), pre-computed 768d nomic vectors (direct Qdrant load), full citation support. This is the proof-of-concept that validates the entire pipeline.
 
@@ -194,17 +194,13 @@ python scripts/import_fbi_dataset.py \
 
 **What's pending**: Entity graph (requires NER pass, Phase 1b running in background).
 
-### 1.3 GCP Phase 1b Status (2026-03-20)
+### 1.3 GCP Phase 1b Results (2026-03-20)
 
-**Status**: IN PROGRESS. NER pass started 2026-03-20 ~05:07 UTC.
+**Status**: COMPLETE. All 29,973 jobs finished (confirmed 2026-03-20 14:39 UTC — all jobs status=complete).
 
 **Command**: `python scripts/run_ner_pass.py --matter-id ...-0002 --concurrency 2`
 
-Using 2 workers (not 4) to leave headroom for API on GCP VM (16GB RAM). Each GLiNER model ~600MB = 1.2GB total.
-
-**Estimates**: 236K chunks x ~2s/chunk / 2 workers = ~65 hours. Expected completion: ~2026-03-22 22:00 UTC.
-
-**Monitoring**: Check progress via `docker exec -T api grep -E "^\[" /tmp/ner_pass.log | tail -5`
+Used 2 workers (not 4) to leave headroom for API on GCP VM (16GB RAM). Each GLiNER model ~600MB = 1.2GB total.
 
 **Known issue fixed**: Dockerfile torch version pin. Unpinned `torch` from PyTorch CPU index grabbed 2.10.0+cpu (nightly/dev build) which had no matching torchvision, breaking `transformers` -> `image_utils` -> `torchvision` import chain required by GLiNER. Fixed by pinning `torch==2.6.0+cpu` and `torchvision==0.21.0+cpu`.
 
@@ -344,19 +340,22 @@ python scripts/import_fbi_dataset.py \
 
 ---
 
-## Phase 4: Epstein Emails
+## Phase 4: Epstein Emails -- DISPATCHED (2026-03-20)
 
 **Two complementary email datasets** -- different extraction methods, different structure.
 
-### 4a: `to-be/epstein-emails` (3,997 emails)
+### 4a: `to-be/epstein-emails` (4,272 rows, flat schema)
 - Extracted via Qwen 2.5 VL 72B vision model from document images
-- Likely has structured fields: from, to, date, subject, body
-- Smaller but potentially higher extraction quality
+- **Flat**: one row per message. Columns: `from_address`, `to_address`, `other_recipients`, `subject`, `timestamp_iso`, `message_html`, `document_id`, `source_filename`, `message_order`
+- Body is HTML -- adapter strips tags to plain text
+- 4,272 rows -> 3,480 emails (792 skipped: empty/short body after HTML stripping)
 
-### 4b: `notesbymuneeb/epstein-emails` (5,082 threads, 16,447 messages)
+### 4b: `notesbymuneeb/epstein-emails` (5,082 threads, threaded JSON schema)
 - Parsed via xAI Grok
-- Thread-level structure (multiple messages per thread)
-- Larger coverage
+- **Threaded**: one row per thread. Columns: `thread_id`, `source_file`, `subject`, `messages` (JSON array), `message_count`
+- Each message in JSON has: `sender`, `recipients`, `timestamp`, `subject`, `body`
+- 5,082 threads -> 16,447 messages -> 13,008 after filtering short bodies (3,439 skipped)
+- Sender names cleaned (strips email addresses in `[]` and `<>` brackets)
 
 ### Why these matter for NEXUS
 - Feed directly into EDRM email threading (M6b)
@@ -364,19 +363,58 @@ python scripts/import_fbi_dataset.py \
 - Email-as-node modeling (M11): Email nodes -> Person nodes via SENT/TO/CC/BCC edges
 - Investigation agent tools: `search_communications`, `find_person_connections`
 
-### Steps
-1. **Download & inspect**: Download both datasets, inspect schemas (need: from, to, cc, date, subject, body)
-2. **Write email adapter**: New adapter `app/ingestion/adapters/epstein_emails.py` that:
-   - Reads email dataset (CSV/Parquet/JSON)
-   - Maps fields to `ImportDocument` with `email_headers` dict
-   - Sets `doc_type="email"` for email-as-node pipeline
-3. **Import via standard pipeline**: The existing Celery task handles email_headers -> creates Email nodes in Neo4j, SENT/TO edges, etc.
-4. **Dedup across datasets**: Both cover overlapping emails. Use content hash or (from + date + subject) for dedup.
+### Adapter: `app/ingestion/adapters/epstein_emails.py`
+- Implements `DatasetAdapter` protocol (like `HuggingFaceCSVAdapter`)
+- Auto-detects schema variant by column names (`from_address` = flat, `messages` = threaded)
+- Maps to `ImportDocument(doc_type="email", email_headers={from, to, subject, date})`
+- Content hash dedup across datasets via `--resume` flag
+- Registered in `ADAPTER_REGISTRY` as `"epstein_emails"`
+- CLI: `python scripts/import_dataset.py epstein_emails --file <path> --matter-id <uuid>`
+- 19 unit tests covering both schemas, HTML stripping, recipient parsing, thread flattening, malformed JSON, limit enforcement
 
-### Estimates
+### GCP Import Results (2026-03-20)
+
+**Dataset A** (to-be/epstein-emails):
+- **Command**: `import_dataset.py epstein_emails --file /tmp/emails_tobe/epstein_emails.parquet --matter-id ...-0002 --disable-hnsw`
+- **Dispatched**: 3,480 tasks, 0 skipped, 632.8s (5.5 docs/sec)
+- **Bulk job ID**: `d4476aa2-f5a5-45a4-8529-36a014e9b50e`
+
+**Dataset B** (notesbymuneeb/epstein-emails):
+- **Command**: `import_dataset.py epstein_emails --file /tmp/emails_muneeb/epstein_emails.parquet --matter-id ...-0002 --resume --disable-hnsw`
+- **Dispatched**: 12,858 tasks, 150 skipped (content hash dedup), 2256.4s (5.7 docs/sec)
+- **Bulk job ID**: `648e1902-16ad-4c4a-95dc-708596e6752d`
+
+**Combined**: 16,338 email tasks dispatched. Processing via single Celery worker (~20s/email = ~90 hours ETA). Each email goes through: chunking -> Ollama embedding -> GLiNER NER -> Qdrant indexing -> Neo4j email-as-node graph -> email threading.
+
+**Dedup**: Only 150/13,008 messages in Dataset B matched content hashes from Dataset A -- very little overlap (expected since the two datasets use different extraction methods on the same source material).
+
+### Post-ingestion hooks dispatched
+- `entities.resolve_entities` -- merge duplicate entities across email + document sources
+- `ingestion.detect_inclusive_emails` -- flag emails that contain/forward other emails
+- `agents.hot_document_scan` -- LLM scan for high-value investigative content
+- `agents.entity_resolution_agent` -- autonomous entity dedup agent
+
+### Estimates (actual vs. planned)
 - **Cost**: $0 (Ollama embedding)
-- **Time**: 2-4 hours (16K messages through Celery pipeline)
-- **Storage**: ~500 MB
+- **Dispatch time**: ~48 min total (11 min Dataset A + 37 min Dataset B)
+- **Processing time**: ~90 hours (single Celery worker, embedding-dominated)
+- **Storage**: ~5 MB parquet source, Qdrant/PG/Neo4j TBD after processing completes
+
+### Files created/modified
+| File | Action |
+|------|--------|
+| `app/ingestion/adapters/epstein_emails.py` | **New**: Email adapter for HF datasets |
+| `app/ingestion/adapters/__init__.py` | Edit: register adapter |
+| `scripts/import_dataset.py` | Edit: add `epstein_emails` choice |
+| `tests/test_ingestion/test_epstein_email_adapter.py` | **New**: 19 tests |
+
+### Pending verification (after processing completes)
+- PG: `SELECT count(*) FROM documents WHERE document_type = 'email'` -- expect ~16,338
+- Neo4j: `MATCH (e:Email) RETURN count(e)` -- email nodes exist
+- Neo4j: `MATCH (p:Person)-[:SENT]->(e:Email) RETURN count(*)` -- SENT edges exist
+- Qdrant: point count increased by ~16K+
+- Email threading: `SELECT count(DISTINCT thread_id) FROM documents WHERE document_type = 'email'`
+- Communication pairs: `SELECT count(*) FROM communication_pairs`
 
 ---
 
@@ -467,15 +505,15 @@ Phase 0 (Foundation)     <- Must do first, ~2 hours -- COMPLETE
   |
   +-- Phase 1a (FBI import, --skip-ner)  <- 22.1 min, $0 -- COMPLETE (2026-03-20)
   |     |
-  |     +-- Phase 1b (FBI NER pass)      <- ~65 hours background -- IN PROGRESS (started 2026-03-20)
+  |     +-- Phase 1b (FBI NER pass)      <- ~65 hours background -- COMPLETE (2026-03-20)
   |     |
   |     +-- Phase 2 (House Oversight pre-embedded)  <- 63 min, $0 -- COMPLETE (2026-03-20)
   |     |     OR
   |     +-- Phase 3 (House Oversight full pipeline)  <- Better quality, ~6 hours, $0
   |
-  +-- Phase 4 (Emails)  <- Parallel with 2/3, ~4 hours, $0
+  +-- Phase 4 (Emails)  <- 16,338 dispatched, processing ~90 hrs -- DISPATCHED (2026-03-20)
   |
-  +-- Phase 5 (Court Docs)  <- Anytime after Phase 0, ~2 hours, $0
+  +-- Phase 5 (Court Docs)  <- Anytime, ~2 hours, $0
   |
   +-- Phase 6 (FBI FOIA)  <- After pipeline proven, ~4 hours, $0-10
   |
