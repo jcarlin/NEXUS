@@ -38,6 +38,7 @@ const PAGE_SIZE = 50;
 
 function statusVariant(status: string) {
   switch (status) {
+    case "complete":
     case "completed":
       return "default" as const;
     case "failed":
@@ -50,7 +51,7 @@ function statusVariant(status: string) {
 }
 
 function jobProgress(job: JobStatusResponse): number {
-  if (job.status === "completed") return 100;
+  if (job.status === "complete" || job.status === "completed") return 100;
   if (job.status === "failed") return 0;
   const p = job.progress;
   if (!p) return 0;

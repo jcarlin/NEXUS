@@ -10,3 +10,12 @@ repos:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
       - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: tsc-frontend
+        name: tsc-frontend
+        entry: bash -c 'cd frontend && npx tsc -p tsconfig.app.json --noEmit'
+        language: system
+        files: ^frontend/src/.*\.tsx?$
+        pass_filenames: false

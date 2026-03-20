@@ -22,8 +22,8 @@ import { CeleryPanel } from "@/components/admin/operations/celery-panel";
 interface QueueInfo {
   name: string;
   active: number;
-  reserved: number;
-  scheduled: number;
+  reserved_count: number;
+  scheduled_count: number;
 }
 
 interface CeleryOverview {
@@ -118,7 +118,7 @@ export function QueueControls() {
           <div className="grid gap-3 sm:grid-cols-3">
             {KNOWN_QUEUES.map((name) => {
               const info = queueMap.get(name);
-              const depth = info ? info.reserved + info.scheduled : 0;
+              const depth = info ? info.reserved_count + info.scheduled_count : 0;
               const isPaused = pausedQueues.has(name);
               return (
                 <Card key={name}>

@@ -13,6 +13,7 @@ import type { PaginatedResponse, JobStatusResponse } from "@/types";
 
 function statusColor(status: string) {
   switch (status) {
+    case "complete":
     case "completed": return "default";
     case "failed": return "destructive";
     case "processing": return "secondary";
@@ -21,7 +22,7 @@ function statusColor(status: string) {
 }
 
 function jobProgress(job: JobStatusResponse): number {
-  if (job.status === "completed") return 100;
+  if (job.status === "complete" || job.status === "completed") return 100;
   if (job.status === "failed") return 0;
   const p = job.progress;
   if (!p) return 0;

@@ -43,6 +43,7 @@ const PAGE_SIZE = 20;
 
 function statusVariant(status: string) {
   switch (status) {
+    case "complete":
     case "completed":
       return "default" as const;
     case "failed":
