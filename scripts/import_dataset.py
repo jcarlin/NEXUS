@@ -61,7 +61,7 @@ def main() -> int:  # noqa: C901
     )
     parser.add_argument(
         "adapter",
-        choices=["directory", "edrm_xml", "concordance_dat", "huggingface_csv"],
+        choices=["directory", "edrm_xml", "concordance_dat", "huggingface_csv", "epstein_emails"],
         help="Dataset adapter to use",
     )
     parser.add_argument("--matter-id", required=True, help="Target matter UUID")
@@ -96,9 +96,9 @@ def main() -> int:  # noqa: C901
             print(f"Error: directory '{args.data_dir}' does not exist", file=sys.stderr)
             return 1
         adapter = adapter_cls(data_dir=args.data_dir)
-    elif args.adapter == "huggingface_csv":
+    elif args.adapter in ("huggingface_csv", "epstein_emails"):
         if not args.file:
-            print("Error: --file is required for the huggingface_csv adapter", file=sys.stderr)
+            print(f"Error: --file is required for the {args.adapter} adapter", file=sys.stderr)
             return 1
         if not args.file.exists():
             print(f"Error: file '{args.file}' does not exist", file=sys.stderr)
