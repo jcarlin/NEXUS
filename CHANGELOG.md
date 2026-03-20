@@ -10,12 +10,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follo
 
 ## [Unreleased]
 
+## [1.14.0] - 2026-03-20
+
 ### Added
 - FBI dataset import pipeline: `import_fbi_dataset.py` with `--concurrency`, `--skip-ner`, `total_pages` support (ca9ab84)
 - Deferred NER pass script: `run_ner_pass.py` with `ProcessPoolExecutor` for CPU parallelism (ca9ab84)
 - `seed_epstein_matter.py`: FBI-specific defined terms, consolidated matter setup (5eedbef)
 - 35 FBI import unit tests (ca9ab84)
 - `entity_only` filter on entity connections endpoint (af716eb)
+- GCP: 4,178 FBI documents (236K chunks) live with full citation support
 
 ### Changed
 - GCP embedding config: switched from OpenAI text-embedding-3-large (1024d) to Ollama nomic-embed-text (768d)
