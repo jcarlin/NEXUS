@@ -44,7 +44,11 @@ function DashboardPage() {
         params: { status: "processing", limit: 1 },
       }),
     enabled: !!matterId,
-    refetchInterval: 10000,
+    refetchInterval: (query) => {
+      const d = query.state.data;
+      if (!d) return 10_000;
+      return d.total > 0 ? 10_000 : false;
+    },
   });
 
   const { data: hotDocs, isLoading: hotDocsLoading } = useQuery({

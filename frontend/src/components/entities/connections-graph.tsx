@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { select } from "d3-selection";
-import { forceSimulation, forceLink, forceManyBody, forceCenter, forceCollide, type SimulationNodeDatum, type SimulationLinkDatum } from "d3-force";
+import { forceSimulation, forceLink, forceManyBody, forceCenter, forceCollide, type SimulationNodeDatum, type SimulationLinkDatum, type Simulation } from "d3-force";
 import { drag } from "d3-drag";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { entityColor } from "@/lib/colors";
@@ -27,9 +27,11 @@ interface ConnectionsGraphProps {
 
 export function ConnectionsGraph({ entity, connections }: ConnectionsGraphProps) {
   const svgRef = useRef<SVGSVGElement>(null);
+  const simulationRef = useRef<Simulation<GraphNode, GraphLink> | null>(null);
   const navigate = useNavigate();
   const { ref: containerRef, width: containerWidth, height: containerHeight } = useContainerSize();
 
+  // Data effect: rebuild simulation when entity/connections change
   useEffect(() => {
     const svg = svgRef.current;
     if (!svg || connections.length === 0 || containerWidth === 0 || containerHeight === 0) return;
@@ -161,8 +163,11 @@ export function ConnectionsGraph({ entity, connections }: ConnectionsGraphProps)
       node.attr("transform", (d) => `translate(${d.x ?? 0},${d.y ?? 0})`);
     });
 
+    simulationRef.current = simulation;
+
     return () => {
       simulation.stop();
+      simulationRef.current = null;
     };
   }, [entity, connections, navigate, containerWidth, containerHeight]);
 

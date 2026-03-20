@@ -81,7 +81,7 @@ describe("PipelineMonitorPage", () => {
 
   it("shows Jobs tab by default with status filter", () => {
     mockUseQuery.mockReturnValue({
-      data: { items: [], total: 0, offset: 0, limit: 50 },
+      data: { items: [], total: 0, offset: 0, limit: 25 },
       isLoading: false,
     });
     render(<Component />);
@@ -116,7 +116,7 @@ describe("PipelineMonitorPage", () => {
             ],
             total: 2,
             offset: 0,
-            limit: 50,
+            limit: 25,
           },
           isLoading: false,
         };
@@ -139,7 +139,7 @@ describe("PipelineMonitorPage", () => {
       if (key === "pipeline-failed-count") {
         return { data: { total: 1 }, isLoading: false };
       }
-      if (key === "pipeline-celery-summary" || key === "pipeline-queue-controls") {
+      if (key === "admin-celery") {
         return {
           data: {
             workers: [{ hostname: "w1", status: "online" }],
@@ -152,7 +152,7 @@ describe("PipelineMonitorPage", () => {
       if (key === "pipeline-imports-eta") {
         return { data: { items: [], total: 0 }, isLoading: false };
       }
-      return { data: { items: [], total: 0, offset: 0, limit: 50 }, isLoading: false };
+      return { data: { items: [], total: 0, offset: 0, limit: 25 }, isLoading: false };
     });
     render(<Component />);
     expect(screen.getByText("Processing")).toBeInTheDocument();
@@ -256,7 +256,7 @@ describe("PipelineMonitorPage", () => {
           isLoading: false,
         };
       }
-      return { data: { items: [], total: 0, offset: 0, limit: 50 }, isLoading: false };
+      return { data: { items: [], total: 0, offset: 0, limit: 25 }, isLoading: false };
     });
     render(<BulkImportTable />);
     // Click the row to expand it
@@ -298,7 +298,7 @@ describe("PipelineMonitorPage", () => {
           isLoading: false,
         };
       }
-      return { data: { items: [], total: 0, offset: 0, limit: 50 }, isLoading: false };
+      return { data: { items: [], total: 0, offset: 0, limit: 25 }, isLoading: false };
     });
     render(<BulkImportTable />);
     const row = screen.getByText("google_drive").closest("tr");

@@ -55,7 +55,12 @@ export function PipelineStatus() {
         params: { limit: 5 },
       }),
     enabled: !!matterId,
-    refetchInterval: 5_000,
+    refetchInterval: (query) => {
+      const d = query.state.data;
+      if (!d) return 5_000;
+      const hasActive = d.items.some((j: JobStatusResponse) => j.status === "processing");
+      return hasActive ? 5_000 : false;
+    },
   });
 
   return (

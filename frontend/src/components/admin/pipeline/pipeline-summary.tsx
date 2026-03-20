@@ -46,7 +46,7 @@ export function PipelineSummary() {
   });
 
   const { data: celeryData, isLoading: celeryLoading } = useQuery({
-    queryKey: ["pipeline-celery-summary"],
+    queryKey: ["admin-celery"],
     queryFn: () =>
       apiClient<CeleryOverview>({
         url: "/api/v1/admin/operations/celery",

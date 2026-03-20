@@ -35,7 +35,7 @@ import {
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import type { PaginatedResponse, JobStatusResponse } from "@/types";
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 25;
 
 function statusBadgeProps(status: string): { variant: "default" | "secondary" | "destructive" | "outline"; className: string } {
   switch (status) {

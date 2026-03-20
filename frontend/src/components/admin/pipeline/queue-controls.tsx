@@ -41,7 +41,7 @@ export function QueueControls() {
   const [confirmQueue, setConfirmQueue] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["pipeline-queue-controls"],
+    queryKey: ["admin-celery"],
     queryFn: () =>
       apiClient<CeleryOverview>({
         url: "/api/v1/admin/operations/celery",
@@ -60,7 +60,6 @@ export function QueueControls() {
       setPausedQueues((prev) => new Set([...prev, queueName]));
       notify.success(`Queue "${queueName}" paused.`);
       void queryClient.invalidateQueries({ queryKey: ["admin-celery"] });
-      void queryClient.invalidateQueries({ queryKey: ["pipeline-queue-controls"] });
     },
     onError: (err) => {
       notify.error(err instanceof Error ? err.message : "Failed to pause queue");
@@ -81,7 +80,6 @@ export function QueueControls() {
       });
       notify.success(`Queue "${queueName}" resumed.`);
       void queryClient.invalidateQueries({ queryKey: ["admin-celery"] });
-      void queryClient.invalidateQueries({ queryKey: ["pipeline-queue-controls"] });
     },
     onError: (err) => {
       notify.error(err instanceof Error ? err.message : "Failed to resume queue");

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback, useImperativeHandle, forwardRef } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { select } from "d3-selection";
-import { forceSimulation, forceLink, forceManyBody, forceCenter, forceCollide, type SimulationNodeDatum, type SimulationLinkDatum } from "d3-force";
+import { select, type Selection } from "d3-selection";
+import { forceSimulation, forceLink, forceManyBody, forceCenter, forceCollide, type SimulationNodeDatum, type SimulationLinkDatum, type Simulation } from "d3-force";
 import { scaleSqrt } from "d3-scale";
 import { zoom, zoomIdentity, type D3ZoomEvent, type ZoomBehavior } from "d3-zoom";
 import { drag } from "d3-drag";
@@ -39,6 +39,9 @@ export const NetworkGraph = forwardRef<NetworkGraphHandle, NetworkGraphProps>(
   function NetworkGraph({ entities, connections, activeTypes, onNodeContextMenu }, ref) {
     const svgRef = useRef<SVGSVGElement>(null);
     const zoomRef = useRef<ZoomBehavior<SVGSVGElement, unknown> | null>(null);
+    const simulationRef = useRef<Simulation<GraphNode, GraphLink> | null>(null);
+    const nodeSelRef = useRef<Selection<SVGGElement, GraphNode, SVGGElement, unknown> | null>(null);
+    const linkSelRef = useRef<Selection<SVGLineElement, GraphLink, SVGGElement, unknown> | null>(null);
     const navigate = useNavigate({});
     const { ref: containerRef, width: containerWidth, height: containerHeight } = useContainerSize();
 
@@ -75,6 +78,7 @@ export const NetworkGraph = forwardRef<NetworkGraphHandle, NetworkGraphProps>(
       fitView,
     ]);
 
+    // Data effect: rebuild simulation when entities/connections/dimensions change
     useEffect(() => {
       const svg = svgRef.current;
       if (!svg || containerWidth === 0 || containerHeight === 0) return;
@@ -82,15 +86,9 @@ export const NetworkGraph = forwardRef<NetworkGraphHandle, NetworkGraphProps>(
       const width = containerWidth;
       const height = containerHeight;
 
-      // Filter entities by active types
-      const filteredEntities = entities.filter(
-        (e) => activeTypes.has(e.type) || !ENTITY_COLORS[e.type],
-      );
-      const entityNames = new Set(filteredEntities.map((e) => e.name));
-
-      // Build node map from entities
+      // Build ALL nodes (no activeTypes filtering — that's handled by the filter effect)
       const nodeMap = new Map<string, GraphNode>();
-      for (const e of filteredEntities) {
+      for (const e of entities) {
         nodeMap.set(e.name, {
           id: e.id,
           name: e.name,
@@ -99,7 +97,7 @@ export const NetworkGraph = forwardRef<NetworkGraphHandle, NetworkGraphProps>(
         });
       }
 
-      // Filter connections where both endpoints are in visible nodes
+      const entityNames = new Set(entities.map((e) => e.name));
       const filteredConnections = connections.filter(
         (c) => entityNames.has(c.source) && entityNames.has(c.target),
       );
@@ -268,10 +266,46 @@ export const NetworkGraph = forwardRef<NetworkGraphHandle, NetworkGraphProps>(
         node.attr("transform", (d) => `translate(${d.x ?? 0},${d.y ?? 0})`);
       });
 
+      // Store refs for the filter effect
+      simulationRef.current = simulation;
+      nodeSelRef.current = node;
+      linkSelRef.current = link;
+
       return () => {
         simulation.stop();
+        simulationRef.current = null;
+        nodeSelRef.current = null;
+        linkSelRef.current = null;
       };
-    }, [entities, connections, activeTypes, navigate, containerWidth, containerHeight, onNodeContextMenu]);
+    }, [entities, connections, navigate, containerWidth, containerHeight, onNodeContextMenu]);
+
+    // Filter effect: toggle node/link visibility when activeTypes changes
+    // This avoids rebuilding the simulation and re-randomizing positions
+    useEffect(() => {
+      const nodeSel = nodeSelRef.current;
+      const linkSel = linkSelRef.current;
+      if (!nodeSel || !linkSel) return;
+
+      // Show/hide nodes based on active types
+      nodeSel.style("display", (d) =>
+        activeTypes.has(d.type) || !ENTITY_COLORS[d.type] ? null : "none",
+      );
+
+      // Build set of visible node names for link filtering
+      const visibleNames = new Set<string>();
+      nodeSel.each((d) => {
+        if (activeTypes.has(d.type) || !ENTITY_COLORS[d.type]) {
+          visibleNames.add(d.name);
+        }
+      });
+
+      // Show/hide links where both endpoints are visible
+      linkSel.style("display", (d) => {
+        const src = (d.source as GraphNode).name;
+        const tgt = (d.target as GraphNode).name;
+        return visibleNames.has(src) && visibleNames.has(tgt) ? null : "none";
+      });
+    }, [activeTypes]);
 
     return (
       <div ref={containerRef} className="w-full min-h-[300px] h-[calc(100vh-220px)]">
