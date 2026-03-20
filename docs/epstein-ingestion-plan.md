@@ -96,7 +96,7 @@ All scripts built, tested, and validated locally:
 
 ---
 
-## Phase 1: FBI Files -- `svetfm/epstein-fbi-files` (MVP) -- READY
+## Phase 1: FBI Files -- `svetfm/epstein-fbi-files` (MVP) -- LOCAL VALIDATION COMPLETE
 
 **Why first**: Best metadata (page numbers, Bates, OCR confidence), pre-computed 768d nomic vectors (direct Qdrant load), full citation support. This is the proof-of-concept that validates the entire pipeline.
 
@@ -110,6 +110,37 @@ All scripts built, tested, and validated locally:
 3. **Seed**: `python scripts/seed_epstein_matter.py` (idempotent)
 4. **Local test**: `python scripts/import_fbi_dataset.py --file data/fbi/... --matter-id ...-0002 --limit 50`
 5. **GCP full import**: SSH -> download -> `python scripts/import_fbi_dataset.py --file ... --matter-id ... --disable-hnsw`
+
+### 1.1 Local Validation Results (2026-03-19)
+
+**Status**: 50 real FBI documents imported end-to-end locally. All stores verified. No script changes needed.
+
+**Download**: 2,000 rows streamed via `--sample 2000 --data-files "embeddings/all_embeddings.jsonl"`. Parquet: 12.1 MB. Schema auto-detected as "rich (FBI-style)" — all 9 column aliases mapped correctly (`chunk_text`→text, `source_path`→source_file, `source_volume`→volume, `bates_range`→bates_number).
+
+**Import results** (50 docs, full pipeline, 27.9 min):
+
+| Store | Count | Notes |
+|-------|-------|-------|
+| PostgreSQL documents | 50 | All with bates metadata, OCR confidence, content hash |
+| PostgreSQL chunks | 764 | Linked via jobs |
+| PostgreSQL entities | 8,129 | Stored in document.entity_count |
+| Qdrant points | 764 | Named vectors (dense), payloads: page_number, bates_number, ocr_confidence, citation_quality=full |
+| Neo4j Documents | 50 | With matter_id filter |
+| Neo4j Entities | 3,901 unique | 2,921 person, 334 flight_number, 163 org, 157 monetary, 147 date, 94 location |
+| Neo4j Chunks | 764 | PART_OF→Document |
+| Neo4j MENTIONED_IN | 7,340 | Entity→Document relationships |
+| Dataset links | 50 | All linked to "FBI Files" dataset |
+| MinIO uploads | 50 | Concatenated text at raw/{job_id}/{filename} |
+
+**API verification**: Health endpoint shows all 5 services healthy. Documents API returns 50 docs. Entities API returns 3,940 entities. Entity search for "epstein" returns Jeffrey Epstein, Paula Epstein, J. Epstein, KAREN EPSTEIN.
+
+**Notable documents**: Flight log (210 chunks, 1,612 entities), Contact Book (34 chunks each, 1,487 entities each), Evidence List from Maxwell trial (12 chunks).
+
+**Performance**: ~1.8 docs/sec overall, NER-dominated (~2s/chunk on CPU for entity-dense chunks like contact book). Post-ingestion hooks dispatched: entity resolution, email detection, hot doc scan, entity resolution agent.
+
+**Tests**: 28/28 FBI import tests pass, no regressions.
+
+**Next**: GCP full import (8,150 docs) with `--disable-hnsw` for bulk performance.
 
 ### What the import script does (full pipeline, pre-embedded path)
 For each document (8,150 total):
