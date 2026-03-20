@@ -362,6 +362,7 @@ class GraphService:
         limit: int = 50,
         exclude_privilege_statuses: list[str] | None = None,
         matter_id: str | None = None,
+        entity_only: bool = False,
     ) -> list[dict[str, Any]]:
         """Return the graph neighbourhood for a named entity.
 
@@ -388,8 +389,10 @@ class GraphService:
 
         where_clause = "WHERE " + " AND ".join(where_clauses) if where_clauses else ""
 
+        connected_pattern = "(connected:Entity)" if entity_only else "(connected)"
+
         query = f"""
-        MATCH (e:Entity {{name: $name}})-[r]-(connected)
+        MATCH (e:Entity {{name: $name}})-[r]-{connected_pattern}
         {where_clause}
         RETURN e.name           AS source,
                type(r)          AS relationship_type,

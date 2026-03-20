@@ -20,11 +20,11 @@ Usage::
         --matter-id 00000000-0000-0000-0000-000000000002 \\
         --limit 50
 
-    # Full GCP import
+    # Full GCP import (fast, skip NER for deferred pass)
     python scripts/import_fbi_dataset.py \\
         --file ./data/epstein_fbi_files/epstein_fbi_files.parquet \\
         --matter-id 00000000-0000-0000-0000-000000000002 \\
-        --disable-hnsw
+        --disable-hnsw --skip-ner --concurrency 4
 
     # House Oversight pre-embedded (auto-detects simpler schema)
     python scripts/import_fbi_dataset.py \\
@@ -44,8 +44,10 @@ import asyncio
 import hashlib
 import json
 import sys
+import threading
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -83,6 +85,7 @@ class ChunkRecord:
     ocr_confidence: float | None = None
     volume: str | None = None
     doc_type_hint: str | None = None
+    total_pages: int | None = None
 
 
 @dataclass
@@ -99,6 +102,9 @@ class DocumentGroup:
 
     @property
     def page_count(self) -> int:
+        # Prefer authoritative total_pages from dataset when available
+        if self.chunks and self.chunks[0].total_pages is not None:
+            return self.chunks[0].total_pages
         pages = [c.page_number for c in self.chunks if c.page_number is not None]
         return max(pages) if pages else 1
 
@@ -133,36 +139,43 @@ _FBI_REQUIRED = {"text", "embedding"}
 _FBI_RICH_COLS = {"page_number", "bates_number", "ocr_confidence", "volume", "doc_type"}
 
 
+def _resolve_col(col_set: set[str], *candidates: str) -> str | None:
+    """Return the first column name from candidates found in the dataset."""
+    for c in candidates:
+        if c in col_set:
+            return c
+    return None
+
+
 def detect_schema(columns: list[str]) -> dict[str, str | None]:
     """Map dataset columns to our internal field names.
 
     Returns a dict of internal_name -> actual_column_name (or None if absent).
-    Supports both the rich FBI schema and the sparse House Oversight schema.
+    Supports the rich FBI JSONL schema (chunk_text, source_path, source_volume),
+    the FBI Parquet schema (text, source_file, volume), and the sparse House
+    Oversight schema.
     """
     col_set = set(columns)
 
-    if "text" not in col_set:
-        raise ValueError(f"Dataset must have a 'text' column, got: {columns}")
+    # Text column: "text" or "chunk_text" (FBI JSONL uses chunk_text)
+    text_col = _resolve_col(col_set, "text", "chunk_text")
+    if text_col is None:
+        raise ValueError(f"Dataset must have a 'text' or 'chunk_text' column, got: {columns}")
+
     if "embedding" not in col_set:
         raise ValueError(f"Dataset must have an 'embedding' column, got: {columns}")
 
-    # Detect the source_file / filename column
-    source_col = None
-    for candidate in ("source_file", "filename", "file_name", "source"):
-        if candidate in col_set:
-            source_col = candidate
-            break
-
     mapping: dict[str, str | None] = {
-        "text": "text",
+        "text": text_col,
         "embedding": "embedding",
-        "source_file": source_col,
+        "source_file": _resolve_col(col_set, "source_file", "source_path", "filename", "file_name", "source"),
         "chunk_index": "chunk_index" if "chunk_index" in col_set else None,
         "page_number": "page_number" if "page_number" in col_set else None,
-        "bates_number": "bates_number" if "bates_number" in col_set else None,
+        "bates_number": _resolve_col(col_set, "bates_number", "bates_range"),
         "ocr_confidence": "ocr_confidence" if "ocr_confidence" in col_set else None,
-        "volume": "volume" if "volume" in col_set else None,
+        "volume": _resolve_col(col_set, "volume", "source_volume"),
         "doc_type": "doc_type" if "doc_type" in col_set else None,
+        "total_pages": "total_pages" if "total_pages" in col_set else None,
     }
 
     rich_count = sum(1 for k in _FBI_RICH_COLS if mapping.get(k))
@@ -238,6 +251,16 @@ def read_and_group(
         dtype_col = schema_map.get("doc_type")
         doc_type_hint = str(getattr(row, dtype_col)) if dtype_col and getattr(row, dtype_col, None) else None
 
+        tp_col = schema_map.get("total_pages")
+        total_pages = None
+        if tp_col:
+            raw_tp = getattr(row, tp_col)
+            if raw_tp is not None and str(raw_tp) != "nan":
+                try:
+                    total_pages = int(raw_tp)
+                except (ValueError, TypeError):
+                    pass
+
         chunk = ChunkRecord(
             text=text.strip(),
             embedding=embedding,
@@ -248,6 +271,7 @@ def read_and_group(
             ocr_confidence=ocr_confidence,
             volume=volume,
             doc_type_hint=doc_type_hint,
+            total_pages=total_pages,
         )
 
         if source_file not in groups:
@@ -391,11 +415,11 @@ def link_document_to_dataset(engine, doc_id: str, dataset_id: str) -> None:
     with engine.connect() as conn:
         conn.execute(
             text("""
-                INSERT INTO dataset_documents (id, dataset_id, document_id, created_at)
-                VALUES (:id, :dataset_id, :doc_id, now())
+                INSERT INTO dataset_documents (dataset_id, document_id, assigned_at)
+                VALUES (:dataset_id, :doc_id, now())
                 ON CONFLICT DO NOTHING
             """),
-            {"id": str(uuid.uuid4()), "dataset_id": dataset_id, "doc_id": doc_id},
+            {"dataset_id": dataset_id, "doc_id": doc_id},
         )
         conn.commit()
 
@@ -630,6 +654,77 @@ def detect_named_vectors(settings) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Per-document processing (used by both sequential and concurrent paths)
+# ---------------------------------------------------------------------------
+
+# Lock for thread-safe progress output
+_print_lock = threading.Lock()
+
+
+def _process_one_document(
+    doc_group: DocumentGroup,
+    engine,
+    settings,
+    matter_id: str,
+    dataset_id: str | None,
+    import_source: str,
+    citation_quality: str,
+    use_named_vectors: bool,
+    extractor,
+    skip_minio: bool,
+    skip_neo4j: bool,
+) -> tuple[int, int]:
+    """Process a single document through the full import pipeline.
+
+    Returns (chunk_count, entity_count).
+    """
+    # 1. PostgreSQL: job + document
+    job_id, doc_id = create_job_and_document(
+        engine,
+        doc_group,
+        matter_id,
+        dataset_id,
+        import_source,
+    )
+
+    # 2. MinIO: upload concatenated text
+    if not skip_minio:
+        filename = doc_group.source_file.split("/")[-1] if "/" in doc_group.source_file else doc_group.source_file
+        minio_key = f"raw/{job_id}/{filename}"
+        upload_to_minio(settings, minio_key, doc_group.full_text.encode("utf-8"))
+
+    # 3. Qdrant: upsert pre-computed vectors
+    chunk_data = upsert_chunks_to_qdrant(
+        settings,
+        doc_id,
+        doc_group,
+        matter_id,
+        citation_quality=citation_quality,
+        use_named_vectors=use_named_vectors,
+    )
+
+    # 4. NER
+    entities: list[dict] = []
+    if extractor:
+        entities = extract_entities(doc_group.chunks, extractor)
+        if entities:
+            update_entity_count(engine, doc_id, len(entities))
+
+    # 5. Neo4j
+    if not skip_neo4j:
+        try:
+            asyncio.run(index_to_neo4j(settings, doc_id, doc_group, entities, chunk_data, matter_id))
+        except Exception:
+            logger.warning("neo4j.index_failed", doc_id=doc_id, exc_info=True)
+
+    # 6. Dataset link
+    if dataset_id:
+        link_document_to_dataset(engine, doc_id, dataset_id)
+
+    return len(doc_group.chunks), len(entities)
+
+
+# ---------------------------------------------------------------------------
 # Main import loop
 # ---------------------------------------------------------------------------
 
@@ -660,6 +755,12 @@ def main() -> int:  # noqa: C901
         "--import-source",
         default="huggingface_pre_embedded",
         help="Value for documents.import_source column",
+    )
+    parser.add_argument(
+        "--concurrency",
+        type=int,
+        default=1,
+        help="Number of threads for parallel import (I/O-bound, best with --skip-ner)",
     )
 
     args = parser.parse_args()
@@ -752,85 +853,86 @@ def main() -> int:  # noqa: C901
     total_chunks_imported = 0
     total_entities = 0
 
-    print(f"\n  Importing {len(doc_groups):,} documents...")
+    concurrency = args.concurrency
+    print(f"\n  Importing {len(doc_groups):,} documents (concurrency={concurrency})...")
+
+    # Filter out already-imported docs when resuming
+    docs_to_process: list[DocumentGroup] = []
+    for doc_group in doc_groups:
+        if args.resume and check_resume(engine, doc_group.content_hash, args.matter_id):
+            skipped += 1
+        else:
+            docs_to_process.append(doc_group)
+
+    if skipped:
+        print(f"  Skipped {skipped} already-imported documents (resume mode)")
+
+    def _print_progress() -> None:
+        elapsed = time.time() - start_time
+        rate = imported / elapsed if elapsed > 0 else 0
+        remaining = len(docs_to_process) - imported
+        eta_min = (remaining / rate / 60) if rate > 0 else 0
+        with _print_lock:
+            print(
+                f"  [{imported:,}/{len(docs_to_process):,}] "
+                f"{total_chunks_imported:,} chunks, "
+                f"{total_entities:,} entities — "
+                f"{rate:.1f} docs/sec, ETA {eta_min:.0f}min"
+            )
 
     try:
-        for i, doc_group in enumerate(doc_groups):
-            # Resume check
-            if args.resume and check_resume(engine, doc_group.content_hash, args.matter_id):
-                skipped += 1
-                continue
-
-            # 1. PostgreSQL: job + document
-            job_id, doc_id = create_job_and_document(
-                engine,
-                doc_group,
-                args.matter_id,
-                dataset_id,
-                args.import_source,
-            )
-
-            # 2. MinIO: upload concatenated text
-            if not args.skip_minio:
-                filename = (
-                    doc_group.source_file.split("/")[-1] if "/" in doc_group.source_file else doc_group.source_file
+        if concurrency <= 1:
+            # Sequential path (original behavior)
+            for doc_group in docs_to_process:
+                chunks, ents = _process_one_document(
+                    doc_group,
+                    engine,
+                    settings,
+                    args.matter_id,
+                    dataset_id,
+                    args.import_source,
+                    args.citation_quality,
+                    use_named,
+                    extractor,
+                    args.skip_minio,
+                    args.skip_neo4j,
                 )
-                minio_key = f"raw/{job_id}/{filename}"
-                upload_to_minio(settings, minio_key, doc_group.full_text.encode("utf-8"))
-
-            # 3. Qdrant: upsert pre-computed vectors
-            chunk_data = upsert_chunks_to_qdrant(
-                settings,
-                doc_id,
-                doc_group,
-                args.matter_id,
-                citation_quality=args.citation_quality,
-                use_named_vectors=use_named,
-            )
-            total_chunks_imported += len(doc_group.chunks)
-
-            # 4. NER
-            entities: list[dict] = []
-            if extractor:
-                entities = extract_entities(doc_group.chunks, extractor)
-                total_entities += len(entities)
-                if entities:
-                    update_entity_count(engine, doc_id, len(entities))
-
-            # 5. Neo4j
-            if not args.skip_neo4j:
-                try:
-                    asyncio.run(
-                        index_to_neo4j(
-                            settings,
-                            doc_id,
-                            doc_group,
-                            entities,
-                            chunk_data,
-                            args.matter_id,
-                        )
-                    )
-                except Exception:
-                    logger.warning("neo4j.index_failed", doc_id=doc_id, exc_info=True)
-
-            # 6. Dataset link
-            if dataset_id:
-                link_document_to_dataset(engine, doc_id, dataset_id)
-
-            imported += 1
-
-            # Progress
-            if imported % 100 == 0 or imported == 1:
-                elapsed = time.time() - start_time
-                rate = imported / elapsed if elapsed > 0 else 0
-                eta_secs = (len(doc_groups) - imported - skipped) / rate if rate > 0 else 0
-                eta_min = eta_secs / 60
-                print(
-                    f"  [{imported:,}/{len(doc_groups):,}] "
-                    f"{skipped} skipped, {total_chunks_imported:,} chunks, "
-                    f"{total_entities:,} entities — "
-                    f"{rate:.1f} docs/sec, ETA {eta_min:.0f}min"
-                )
+                imported += 1
+                total_chunks_imported += chunks
+                total_entities += ents
+                if imported % 100 == 0 or imported == 1:
+                    _print_progress()
+        else:
+            # Concurrent path (ThreadPoolExecutor for I/O-bound work)
+            with ThreadPoolExecutor(max_workers=concurrency) as pool:
+                futures = {
+                    pool.submit(
+                        _process_one_document,
+                        doc_group,
+                        engine,
+                        settings,
+                        args.matter_id,
+                        dataset_id,
+                        args.import_source,
+                        args.citation_quality,
+                        use_named,
+                        extractor,
+                        args.skip_minio,
+                        args.skip_neo4j,
+                    ): doc_group
+                    for doc_group in docs_to_process
+                }
+                for future in as_completed(futures):
+                    try:
+                        chunks, ents = future.result()
+                        imported += 1
+                        total_chunks_imported += chunks
+                        total_entities += ents
+                        if imported % 100 == 0 or imported == 1:
+                            _print_progress()
+                    except Exception:
+                        doc = futures[future]
+                        logger.error("import.doc_failed", source_file=doc.source_file, exc_info=True)
 
     except KeyboardInterrupt:
         print(f"\n  Interrupted! Imported {imported}, skipped {skipped}.")

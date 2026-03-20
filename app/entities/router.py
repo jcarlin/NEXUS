@@ -61,6 +61,7 @@ async def list_entities(
 async def get_entity_connections_by_query(
     name: str = Query(..., description="Entity name"),
     limit: int = Query(50, ge=1, le=200),
+    entity_only: bool = Query(False, description="Only return connections to other Entity nodes"),
     gs: GraphService = Depends(get_graph_service),
     current_user: UserRecord = Depends(get_current_user),
     matter_id: UUID = Depends(get_matter_id),
@@ -79,6 +80,7 @@ async def get_entity_connections_by_query(
         limit=limit,
         exclude_privilege_statuses=exclude_privilege,
         matter_id=str(matter_id),
+        entity_only=entity_only,
     )
     return {"entity": entity, "connections": connections}
 
@@ -101,6 +103,7 @@ async def get_entity(
 async def get_entity_connections(
     entity_id: str,
     limit: int = Query(50, ge=1, le=200),
+    entity_only: bool = Query(False, description="Only return connections to other Entity nodes"),
     gs: GraphService = Depends(get_graph_service),
     current_user: UserRecord = Depends(get_current_user),
     matter_id: UUID = Depends(get_matter_id),
@@ -119,6 +122,7 @@ async def get_entity_connections(
         limit=limit,
         exclude_privilege_statuses=exclude_privilege,
         matter_id=str(matter_id),
+        entity_only=entity_only,
     )
     return {"entity": entity, "connections": connections}
 
