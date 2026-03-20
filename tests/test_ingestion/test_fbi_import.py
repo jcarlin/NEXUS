@@ -543,6 +543,130 @@ class TestQdrantUpsert:
 
 
 # ---------------------------------------------------------------------------
+# 5b. total_pages support
+# ---------------------------------------------------------------------------
+
+
+class TestTotalPages:
+    def test_total_pages_detected_in_schema(self) -> None:
+        """detect_schema maps total_pages when present."""
+        from scripts.import_fbi_dataset import detect_schema
+
+        cols = ["text", "embedding", "source_file", "total_pages"]
+        mapping = detect_schema(cols)
+        assert mapping["total_pages"] == "total_pages"
+
+    def test_total_pages_absent_maps_to_none(self) -> None:
+        from scripts.import_fbi_dataset import detect_schema
+
+        cols = ["text", "embedding", "source_file"]
+        mapping = detect_schema(cols)
+        assert mapping["total_pages"] is None
+
+    def test_total_pages_preferred_over_max_page_number(self) -> None:
+        """When total_pages is set, page_count should use it instead of max(page_number)."""
+        from scripts.import_fbi_dataset import ChunkRecord, DocumentGroup
+
+        group = DocumentGroup(
+            source_file="test.pdf",
+            chunks=[
+                ChunkRecord(
+                    text="a",
+                    embedding=[],
+                    chunk_index=0,
+                    source_file="test.pdf",
+                    page_number=1,
+                    total_pages=42,
+                ),
+                ChunkRecord(
+                    text="b",
+                    embedding=[],
+                    chunk_index=1,
+                    source_file="test.pdf",
+                    page_number=5,
+                    total_pages=42,
+                ),
+            ],
+        )
+        # total_pages=42 should win over max(page_number)=5
+        assert group.page_count == 42
+
+    def test_total_pages_falls_back_when_absent(self) -> None:
+        """When total_pages is None, falls back to max(page_number)."""
+        from scripts.import_fbi_dataset import ChunkRecord, DocumentGroup
+
+        group = DocumentGroup(
+            source_file="test.pdf",
+            chunks=[
+                ChunkRecord(text="a", embedding=[], chunk_index=0, source_file="test.pdf", page_number=1),
+                ChunkRecord(text="b", embedding=[], chunk_index=1, source_file="test.pdf", page_number=5),
+            ],
+        )
+        assert group.page_count == 5
+
+    def test_total_pages_read_from_parquet(self, tmp_path: Path) -> None:
+        """total_pages is extracted from the Parquet file via read_and_group."""
+        from scripts.import_fbi_dataset import detect_schema, read_and_group
+
+        pq = _make_fbi_jsonl_parquet(tmp_path, n_docs=2, chunks_per_doc=3)
+        df = pd.read_parquet(pq)
+        schema = detect_schema(list(df.columns))
+        groups = read_and_group(pq, schema)
+
+        # The JSONL fixture sets total_pages = chunks_per_doc = 3
+        for g in groups:
+            assert g.page_count == 3
+            assert g.chunks[0].total_pages == 3
+
+
+class TestConcurrency:
+    def test_process_one_document_callable(self) -> None:
+        """_process_one_document exists and is callable."""
+        from scripts.import_fbi_dataset import _process_one_document
+
+        assert callable(_process_one_document)
+
+    @patch("scripts.import_fbi_dataset.upsert_chunks_to_qdrant")
+    @patch("scripts.import_fbi_dataset.upload_to_minio")
+    @patch("scripts.import_fbi_dataset.create_job_and_document")
+    def test_process_one_document_returns_counts(
+        self,
+        mock_create,
+        mock_minio,
+        mock_qdrant,
+    ) -> None:
+        """_process_one_document returns (chunk_count, entity_count) tuple."""
+        from scripts.import_fbi_dataset import ChunkRecord, DocumentGroup, _process_one_document
+
+        mock_create.return_value = ("job-1", "doc-1")
+        mock_qdrant.return_value = [{"chunk_id": "c1", "text_preview": "t", "page_number": 1, "qdrant_point_id": "c1"}]
+
+        doc_group = DocumentGroup(
+            source_file="test.pdf",
+            chunks=[ChunkRecord(text="test", embedding=[0.1] * 768, chunk_index=0, source_file="test.pdf")],
+        )
+
+        chunks, ents = _process_one_document(
+            doc_group,
+            engine=MagicMock(),
+            settings=MagicMock(),
+            matter_id="m-1",
+            dataset_id=None,
+            import_source="test",
+            citation_quality="full",
+            use_named_vectors=True,
+            extractor=None,
+            skip_minio=True,
+            skip_neo4j=True,
+        )
+
+        assert chunks == 1
+        assert ents == 0
+        mock_create.assert_called_once()
+        mock_qdrant.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
 # 6. Resume logic
 # ---------------------------------------------------------------------------
 

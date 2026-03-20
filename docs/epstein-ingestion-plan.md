@@ -8,7 +8,7 @@ This roadmap covers **all available datasources** in priority order, from quick 
 
 **GCP embedding setup**: Ollama with nomic-embed-text (768d). Several HuggingFace datasets include pre-computed 768d nomic vectors -- these load directly at $0 cost.
 
-**Full pipeline always**: Every datasource goes through: embedding (pre-computed or Ollama) -> GLiNER NER entity extraction -> Neo4j knowledge graph indexing -> Qdrant vector indexing -> PostgreSQL document records -> MinIO raw storage. The only shortcut is using pre-computed vectors where available (skips the Ollama embedding call). Entities, graph, and citations are never skipped.
+**Full pipeline always**: Every datasource goes through: embedding (pre-computed or Ollama) -> Qdrant vector indexing -> PostgreSQL document records -> MinIO raw storage -> Neo4j document/chunk nodes. NER entity extraction can be deferred to a separate pass for faster initial import (see NER Strategy below). The only shortcut is using pre-computed vectors where available (skips the Ollama embedding call). Citations work immediately after import (sourced from Qdrant chunk payloads, not from NER).
 
 ---
 
@@ -63,11 +63,20 @@ All scripts built, tested, and validated locally:
 
 **`scripts/import_fbi_dataset.py`** -- COMPLETE
 - [x] Custom import for pre-chunked + pre-embedded HuggingFace datasets
-- [x] Full pipeline: Parquet reading -> document grouping -> PostgreSQL records -> Qdrant upsert (pre-computed vectors) -> GLiNER NER -> Neo4j graph -> dataset linking -> post-ingestion hooks
-- [x] CLI: `--file`, `--matter-id`, `--limit`, `--dry-run`, `--resume`, `--disable-hnsw`, `--skip-ner`, `--skip-neo4j`, `--skip-minio`, `--re-embed`, `--citation-quality`, `--import-source`
+- [x] Full pipeline: Parquet reading -> document grouping -> PostgreSQL records -> Qdrant upsert (pre-computed vectors) -> GLiNER NER (optional) -> Neo4j graph -> dataset linking -> post-ingestion hooks
+- [x] CLI: `--file`, `--matter-id`, `--limit`, `--dry-run`, `--resume`, `--disable-hnsw`, `--skip-ner`, `--skip-neo4j`, `--skip-minio`, `--re-embed`, `--citation-quality`, `--import-source`, `--concurrency`
+- [x] `--concurrency N`: ThreadPoolExecutor for parallel I/O-bound import (best with `--skip-ner`)
+- [x] `total_pages` column support: uses authoritative value from dataset when available
 - [x] Schema detection handles FBI JSONL columns (`chunk_text` -> text, `source_path` -> source_file, `source_volume` -> volume, `bates_range` -> bates_number)
 - [x] Fixed: `dataset_documents` junction table uses `(dataset_id, document_id, assigned_at)` not `(id, ...)`
 - [x] Named vector detection auto-adapts to collection config
+
+**`scripts/run_ner_pass.py`** -- COMPLETE
+- [x] Deferred NER for documents imported with `--skip-ner`
+- [x] Finds docs with `entity_count=0`, fetches chunks from Qdrant, runs GLiNER, indexes to Neo4j
+- [x] CLI: `--matter-id`, `--concurrency`, `--limit`, `--dry-run`, `--resume`
+- [x] Uses `ProcessPoolExecutor` for true CPU parallelism (bypasses GIL)
+- [x] Each worker loads its own GLiNER model (~600MB)
 
 ### 0.4 Local Pipeline Validation -- COMPLETE (2026-03-19)
 - [x] Synthetic FBI dataset (15 docs, 69 chunks, 768d vectors) created matching real JSONL schema
@@ -90,8 +99,9 @@ All scripts built, tested, and validated locally:
 |------|--------|--------|
 | `scripts/download_hf_dataset.py` | New | Done |
 | `scripts/seed_epstein_matter.py` | Edit (add FBI terms, consolidate, fix SQL) | Done |
-| `scripts/import_fbi_dataset.py` | New | Done |
-| `tests/test_ingestion/test_fbi_import.py` | New (28 tests) | Done |
+| `scripts/import_fbi_dataset.py` | New (+concurrency, +total_pages) | Done |
+| `scripts/run_ner_pass.py` | New (deferred NER) | Done |
+| `tests/test_ingestion/test_fbi_import.py` | New (35 tests) | Done |
 | `docs/epstein-files-plan.md` | New (research doc) | Done |
 
 ---
@@ -140,15 +150,36 @@ All scripts built, tested, and validated locally:
 
 **Tests**: 28/28 FBI import tests pass, no regressions.
 
-**Next**: GCP full import (8,150 docs) with `--disable-hnsw` for bulk performance.
+**NER throughput correction**: Measured ~2s/chunk (not 50ms/chunk as originally estimated). At 236K chunks, serial NER would take ~131 hours. This motivated the two-pass strategy below.
+
+**Next**: GCP full import — Phase 1a (fast import) then Phase 1b (deferred NER).
+
+### 1.2 Two-Pass Import Strategy (2026-03-19)
+
+**Phase 1a — Fast import** (I/O-bound, ~30-60 min):
+```bash
+python scripts/import_fbi_dataset.py \
+    --file ./data/epstein_fbi_files/epstein_fbi_files.parquet \
+    --matter-id 00000000-0000-0000-0000-000000000002 \
+    --disable-hnsw --skip-ner --concurrency 4
+```
+Imports all 8,150 docs to PG, MinIO, Qdrant, and Neo4j (doc + chunk nodes only). Citations work immediately. Vector search works immediately. Entity graph is empty.
+
+**Phase 1b — Deferred NER** (CPU-bound, ~24-48 hours background):
+```bash
+python scripts/run_ner_pass.py \
+    --matter-id 00000000-0000-0000-0000-000000000002 \
+    --concurrency 4
+```
+Finds docs with `entity_count=0`, fetches chunks from Qdrant, runs GLiNER, indexes entities to Neo4j. Uses `ProcessPoolExecutor` for true CPU parallelism (bypasses GIL). Each worker loads its own GLiNER model (~600MB). With 4 workers on GCP (16GB RAM): ~2.4GB memory, ~33 hours estimated.
 
 ### What the import script does (full pipeline, pre-embedded path)
-For each document (8,150 total):
-1. **PostgreSQL**: Create `jobs` + `documents` rows with Bates metadata, page count, content hash
+For each document (8,150 total), optionally parallelized via `--concurrency N`:
+1. **PostgreSQL**: Create `jobs` + `documents` rows with Bates metadata, page count (prefers `total_pages` from dataset), content hash
 2. **MinIO**: Upload concatenated document text to `raw/{job_id}/{filename}`
 3. **Qdrant**: For each chunk -- use pre-computed 768d nomic vector (no API call), build `PointStruct` with full payload: `page_number`, `bates_number`, `doc_id`, `matter_id`, `chunk_text`, `chunk_index`, `ocr_confidence`, `source_file`, `token_count`
-4. **GLiNER NER**: Run entity extraction on every chunk (~50ms/chunk) -- extracts people, organizations, dates, locations, monetary amounts
-5. **Neo4j KG**: Create Document node -> Entity nodes (with dual labels per M11) -> Chunk nodes -> MENTIONS/APPEARS_IN edges
+4. **GLiNER NER** (optional, `--skip-ner` to defer): Run entity extraction on every chunk (~2s/chunk on CPU) -- extracts people, organizations, dates, locations, monetary amounts
+5. **Neo4j KG**: Create Document node -> Chunk nodes. If NER ran: Entity nodes (with dual labels per M11) -> MENTIONS/APPEARS_IN edges
 6. **Batch upserts**: Qdrant 100 points/batch, Neo4j batched per document
 7. **Post-ingestion hooks**: Entity resolution agent, email threading detection, hot document scan
 
@@ -161,7 +192,8 @@ For each document (8,150 total):
 
 ### Estimates
 - **Cost**: $0 (pre-computed vectors)
-- **Time**: 30-90 min (NER-bound at ~50ms/chunk for 236K chunks)
+- **Phase 1a (import, --skip-ner --concurrency 4)**: ~30-60 min (I/O-bound)
+- **Phase 1b (NER pass, --concurrency 4)**: ~24-48 hours (CPU-bound, ~2s/chunk for 236K chunks)
 - **Storage**: ~1-2 GB Qdrant, ~500 MB PostgreSQL, ~100 MB Neo4j
 
 ---
@@ -187,7 +219,8 @@ For each document (8,150 total):
 
 ### Estimates
 - **Cost**: $0
-- **Time**: 15-30 min
+- **Import (--skip-ner)**: 15-30 min
+- **NER pass**: ~38 hours (69K chunks x ~2s/chunk, parallelizable)
 - **Storage**: ~500 MB additional
 
 ---
@@ -335,9 +368,11 @@ For each document (8,150 total):
 ## Execution Priority & Dependencies
 
 ```
-Phase 0 (Foundation)     <- Must do first, ~2 hours
+Phase 0 (Foundation)     <- Must do first, ~2 hours -- COMPLETE
   |
-  +-- Phase 1 (FBI Files)    <- MVP, ~2 hours, $0
+  +-- Phase 1a (FBI import, --skip-ner)  <- ~30-60 min, $0, citations work immediately
+  |     |
+  |     +-- Phase 1b (FBI NER pass)      <- ~24-48 hours background, entity graph comes online
   |     |
   |     +-- Phase 2 (House Oversight pre-embedded)  <- Quick add, ~1 hour, $0
   |     |     OR
@@ -352,7 +387,7 @@ Phase 0 (Foundation)     <- Must do first, ~2 hours
   +-- Phase 7 (DOJ EFTA)  <- Long-term, days/weeks, $0-50
 ```
 
-**Recommended first session**: Phase 0 + Phase 1 (foundation + FBI files). This gets 8,150 real documents with full citation support running on GCP in one session.
+**Recommended first session**: Phase 0 + Phase 1a (foundation + fast FBI import). Gets 8,150 real documents searchable with full citations in ~1 hour. Phase 1b (NER) runs as a background job afterward.
 
 **Next sessions**: Phase 4 (emails) for communication analytics, then Phase 5 (court docs) for high-value depositions.
 
@@ -366,6 +401,19 @@ Phase 0 (Foundation)     <- Must do first, ~2 hours
 - Unified entity graph (entities from different sources linked)
 - Matter-level analytics (communication patterns across all sources)
 - Per-dataset filtering via `dataset_id` query parameter
+
+### NER Strategy: Two-Pass Import
+GLiNER NER runs at ~2s/chunk on CPU (measured, not the originally estimated 50ms/chunk). For large datasets (236K+ chunks), this dominates import time by 40x.
+
+**Strategy**: Import all documents fast with `--skip-ner --concurrency N` (I/O-bound, parallelizes well), then run NER as a deferred background pass via `scripts/run_ner_pass.py` (CPU-bound, uses `ProcessPoolExecutor` for true parallelism past GIL).
+
+**What works without NER**: Vector search, citations, document browsing, full-text queries, chunk retrieval. Everything sourced from Qdrant payloads.
+
+**What requires NER**: Entity graph traversal (`search_entities`, `find_person_connections`), communication analytics, entity-based filtering, knowledge graph visualization. These come online after the NER pass completes.
+
+**Tooling**:
+- `scripts/import_fbi_dataset.py --skip-ner --concurrency 4` — fast I/O-bound import
+- `scripts/run_ner_pass.py --concurrency 4` — deferred NER with CPU parallelism
 
 ### Embedding standardization
 - All datasets use nomic-embed-text 768d (via Ollama on GCP)
