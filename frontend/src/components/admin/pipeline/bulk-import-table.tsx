@@ -8,6 +8,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/api/client";
 import { useAppStore } from "@/stores/app-store";
+import { useLiveRefresh } from "@/hooks/use-live-refresh";
 import { formatDateTime } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -41,17 +42,19 @@ interface BulkImport {
 
 const PAGE_SIZE = 20;
 
-function statusVariant(status: string) {
+function statusBadgeProps(status: string): { variant: "default" | "secondary" | "destructive" | "outline"; className: string } {
   switch (status) {
     case "complete":
     case "completed":
-      return "default" as const;
-    case "failed":
-      return "destructive" as const;
+      return { variant: "secondary", className: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" };
     case "processing":
-      return "secondary" as const;
+      return { variant: "secondary", className: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" };
+    case "pending":
+      return { variant: "secondary", className: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200" };
+    case "failed":
+      return { variant: "destructive", className: "" };
     default:
-      return "outline" as const;
+      return { variant: "outline", className: "" };
   }
 }
 
@@ -79,11 +82,14 @@ const columns = [
   }),
   columnHelper.accessor("status", {
     header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
-    cell: (info) => (
-      <Badge variant={statusVariant(info.getValue())} className="text-[10px]">
-        {info.getValue()}
-      </Badge>
-    ),
+    cell: (info) => {
+      const { variant, className } = statusBadgeProps(info.getValue());
+      return (
+        <Badge variant={variant} className={`text-[10px] ${className}`}>
+          {info.getValue()}
+        </Badge>
+      );
+    },
   }),
   columnHelper.display({
     id: "progress",
@@ -148,6 +154,7 @@ const columns = [
 
 export function BulkImportTable() {
   const matterId = useAppStore((s) => s.matterId);
+  const { isLive } = useLiveRefresh();
   const [page, setPage] = useState(0);
 
   const { data, isLoading } = useQuery({
@@ -159,12 +166,14 @@ export function BulkImportTable() {
         params: { limit: PAGE_SIZE, offset: page * PAGE_SIZE },
       }),
     enabled: !!matterId,
-    refetchInterval: (query) => {
-      const d = query.state.data;
-      if (!d) return 10000;
-      const hasActive = d.items.some((i) => i.status === "processing");
-      return hasActive ? 5000 : false;
-    },
+    refetchInterval: !isLive
+      ? false
+      : (query) => {
+          const d = query.state.data;
+          if (!d) return 10000;
+          const hasActive = d.items.some((i) => i.status === "processing");
+          return hasActive ? 5000 : false;
+        },
   });
 
   const table = useReactTable({

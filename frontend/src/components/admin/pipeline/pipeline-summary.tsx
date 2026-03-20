@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Activity, AlertTriangle, Clock, Layers, Users } from "lucide-react";
 import { apiClient } from "@/api/client";
 import { useAppStore } from "@/stores/app-store";
+import { useLiveRefresh } from "@/hooks/use-live-refresh";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { PaginatedResponse } from "@/types";
@@ -18,6 +19,7 @@ interface BulkImportItem {
 
 export function PipelineSummary() {
   const matterId = useAppStore((s) => s.matterId);
+  const { isLive } = useLiveRefresh();
 
   const { data: processingData, isLoading: processingLoading } = useQuery({
     queryKey: ["pipeline-processing-count", matterId],
@@ -28,7 +30,7 @@ export function PipelineSummary() {
         params: { status: "processing", limit: 1 },
       }),
     enabled: !!matterId,
-    refetchInterval: 5_000,
+    refetchInterval: isLive ? 5_000 : false,
   });
 
   const { data: failedData, isLoading: failedLoading } = useQuery({
@@ -40,7 +42,7 @@ export function PipelineSummary() {
         params: { status: "failed", limit: 1 },
       }),
     enabled: !!matterId,
-    refetchInterval: 30_000,
+    refetchInterval: isLive ? 30_000 : false,
   });
 
   const { data: celeryData, isLoading: celeryLoading } = useQuery({
@@ -50,7 +52,7 @@ export function PipelineSummary() {
         url: "/api/v1/admin/operations/celery",
         method: "GET",
       }),
-    refetchInterval: 10_000,
+    refetchInterval: isLive ? 10_000 : false,
   });
 
   const { data: importsData, isLoading: importsLoading } = useQuery({
@@ -62,7 +64,7 @@ export function PipelineSummary() {
         params: { limit: 5 },
       }),
     enabled: !!matterId,
-    refetchInterval: 10_000,
+    refetchInterval: isLive ? 10_000 : false,
   });
 
   const processingCount = processingData?.total ?? 0;

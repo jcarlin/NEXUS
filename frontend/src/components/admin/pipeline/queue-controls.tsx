@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Pause, Play } from "lucide-react";
 import { apiClient } from "@/api/client";
 import { useNotifications } from "@/hooks/use-notifications";
+import { useLiveRefresh } from "@/hooks/use-live-refresh";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -34,6 +35,7 @@ const KNOWN_QUEUES = ["default", "bulk", "background"];
 
 export function QueueControls() {
   const notify = useNotifications();
+  const { isLive } = useLiveRefresh();
   const queryClient = useQueryClient();
   const [pausedQueues, setPausedQueues] = useState<Set<string>>(new Set());
   const [confirmQueue, setConfirmQueue] = useState<string | null>(null);
@@ -45,7 +47,7 @@ export function QueueControls() {
         url: "/api/v1/admin/operations/celery",
         method: "GET",
       }),
-    refetchInterval: 10_000,
+    refetchInterval: isLive ? 10_000 : false,
   });
 
   const pauseMutation = useMutation({

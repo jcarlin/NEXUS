@@ -187,4 +187,31 @@ describe("PipelineMonitorPage", () => {
     // Summary cards should show skeletons
     expect(screen.getByText("Pipeline Monitor")).toBeInTheDocument();
   });
+
+  it("renders Live toggle in default-on state", () => {
+    mockUseQuery.mockReturnValue({ data: undefined, isLoading: false });
+    render(<Component />);
+    expect(screen.getByText("Live")).toBeInTheDocument();
+    const switchEl = screen.getByRole("switch");
+    expect(switchEl).toBeInTheDocument();
+    expect(switchEl).toHaveAttribute("data-state", "checked");
+  });
+
+  it("toggles to Paused when clicked", async () => {
+    mockUseQuery.mockReturnValue({ data: undefined, isLoading: false });
+    const userEvent = (await import("@testing-library/user-event")).default;
+    render(<Component />);
+    const switchEl = screen.getByRole("switch");
+    await userEvent.setup().click(switchEl);
+    expect(screen.getByText("Paused")).toBeInTheDocument();
+    expect(switchEl).toHaveAttribute("data-state", "unchecked");
+  });
+
+  it("shows pulsing green dot when live", () => {
+    mockUseQuery.mockReturnValue({ data: undefined, isLoading: false });
+    render(<Component />);
+    // The pulsing dot has both bg-green-500 and animate-pulse classes
+    const dot = document.querySelector(".bg-green-500.animate-pulse");
+    expect(dot).toBeTruthy();
+  });
 });
