@@ -70,7 +70,8 @@ services:
         condition: service_healthy
 
   flower:
-    ports: !override []
+    ports: !override
+      - "127.0.0.1:5555:5555"
     logging: *default-logging
 
   postgres:
