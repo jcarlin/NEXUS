@@ -62,7 +62,7 @@ export function PipelineStatus() {
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="text-sm font-medium">Pipeline Status</CardTitle>
-          <Link to="/documents/import" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+          <Link to="/admin/pipeline" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
             View all
           </Link>
         </div>

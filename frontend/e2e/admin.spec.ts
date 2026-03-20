@@ -149,6 +149,54 @@ test.describe("Admin", () => {
     await page.keyboard.press("Escape");
   });
 
+  test("pipeline monitor renders without console errors", async ({ page }) => {
+    const errors = collectConsoleErrors(page);
+    await page.goto("/admin/pipeline", { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(3_000);
+    expectNoConsoleErrors(errors);
+  });
+
+  test("pipeline monitor shows heading and tabs", async ({ page }) => {
+    await page.goto("/admin/pipeline", { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2_000);
+
+    await expect(
+      page.getByRole("heading", { name: "Pipeline Monitor" }),
+    ).toBeVisible({ timeout: 10_000 });
+    await expect(
+      page.getByText("Real-time view of all ingestion jobs, imports, and workers."),
+    ).toBeVisible();
+
+    // All three tabs should be visible
+    await expect(page.getByRole("tab", { name: "Jobs" })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Bulk Imports" })).toBeVisible();
+    await expect(
+      page.getByRole("tab", { name: "Workers & Queues" }),
+    ).toBeVisible();
+  });
+
+  test("pipeline monitor shows summary stat cards", async ({ page }) => {
+    await page.goto("/admin/pipeline", { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(3_000);
+
+    // Summary cards should be present
+    const labels = ["Processing", "Failed", "Queued", "Workers", "ETA"];
+    for (const label of labels) {
+      await expect(page.getByText(label).first()).toBeVisible({
+        timeout: 10_000,
+      });
+    }
+  });
+
+  test("pipeline monitor jobs tab has status filter", async ({ page }) => {
+    await page.goto("/admin/pipeline", { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2_000);
+
+    await expect(
+      page.getByPlaceholder("Search by filename..."),
+    ).toBeVisible({ timeout: 10_000 });
+  });
+
   test("evaluation quality gates show metric values", async ({ page }) => {
     await page.goto("/admin/evaluation", { waitUntil: "domcontentloaded" });
     await page.waitForTimeout(3_000);

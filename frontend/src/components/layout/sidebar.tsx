@@ -19,6 +19,7 @@ import {
   ToggleLeft,
   SlidersHorizontal,
   Activity,
+  Gauge,
   ChevronsLeft,
   ChevronsRight,
 } from "lucide-react";
@@ -59,6 +60,7 @@ const reviewNav: NavItem[] = [
 ];
 
 const adminNav: NavItem[] = [
+  { to: "/admin/pipeline", label: "Pipeline", icon: Gauge, roles: ["admin"] },
   { to: "/admin/users", label: "Users", icon: Shield, roles: ["admin"] },
   { to: "/admin/audit-log", label: "Audit Log", icon: ScrollText, roles: ["admin"] },
   { to: "/admin/evaluation", label: "Evaluation", icon: FlaskConical, roles: ["admin"] },

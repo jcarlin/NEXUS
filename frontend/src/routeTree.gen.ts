@@ -29,6 +29,7 @@ import { Route as AnalyticsTimelineRouteImport } from './routes/analytics/timeli
 import { Route as AnalyticsCommsRouteImport } from './routes/analytics/comms'
 import { Route as AdminUsersRouteImport } from './routes/admin/users'
 import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
+import { Route as AdminPipelineRouteImport } from './routes/admin/pipeline'
 import { Route as AdminOperationsRouteImport } from './routes/admin/operations'
 import { Route as AdminLlmSettingsRouteImport } from './routes/admin/llm-settings'
 import { Route as AdminKnowledgeGraphRouteImport } from './routes/admin/knowledge-graph'
@@ -163,6 +164,13 @@ const AdminSettingsRoute = AdminSettingsRouteImport.update({
 } as any).lazy(() =>
   import('./routes/admin/settings.lazy').then((d) => d.Route),
 )
+const AdminPipelineRoute = AdminPipelineRouteImport.update({
+  id: '/admin/pipeline',
+  path: '/admin/pipeline',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() =>
+  import('./routes/admin/pipeline.lazy').then((d) => d.Route),
+)
 const AdminOperationsRoute = AdminOperationsRouteImport.update({
   id: '/admin/operations',
   path: '/admin/operations',
@@ -221,6 +229,7 @@ export interface FileRoutesByFullPath {
   '/admin/knowledge-graph': typeof AdminKnowledgeGraphRoute
   '/admin/llm-settings': typeof AdminLlmSettingsRoute
   '/admin/operations': typeof AdminOperationsRoute
+  '/admin/pipeline': typeof AdminPipelineRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/users': typeof AdminUsersRoute
   '/analytics/comms': typeof AnalyticsCommsRoute
@@ -250,6 +259,7 @@ export interface FileRoutesByTo {
   '/admin/knowledge-graph': typeof AdminKnowledgeGraphRoute
   '/admin/llm-settings': typeof AdminLlmSettingsRoute
   '/admin/operations': typeof AdminOperationsRoute
+  '/admin/pipeline': typeof AdminPipelineRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/users': typeof AdminUsersRoute
   '/analytics/comms': typeof AnalyticsCommsRoute
@@ -280,6 +290,7 @@ export interface FileRoutesById {
   '/admin/knowledge-graph': typeof AdminKnowledgeGraphRoute
   '/admin/llm-settings': typeof AdminLlmSettingsRoute
   '/admin/operations': typeof AdminOperationsRoute
+  '/admin/pipeline': typeof AdminPipelineRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/users': typeof AdminUsersRoute
   '/analytics/comms': typeof AnalyticsCommsRoute
@@ -311,6 +322,7 @@ export interface FileRouteTypes {
     | '/admin/knowledge-graph'
     | '/admin/llm-settings'
     | '/admin/operations'
+    | '/admin/pipeline'
     | '/admin/settings'
     | '/admin/users'
     | '/analytics/comms'
@@ -340,6 +352,7 @@ export interface FileRouteTypes {
     | '/admin/knowledge-graph'
     | '/admin/llm-settings'
     | '/admin/operations'
+    | '/admin/pipeline'
     | '/admin/settings'
     | '/admin/users'
     | '/analytics/comms'
@@ -369,6 +382,7 @@ export interface FileRouteTypes {
     | '/admin/knowledge-graph'
     | '/admin/llm-settings'
     | '/admin/operations'
+    | '/admin/pipeline'
     | '/admin/settings'
     | '/admin/users'
     | '/analytics/comms'
@@ -399,6 +413,7 @@ export interface RootRouteChildren {
   AdminKnowledgeGraphRoute: typeof AdminKnowledgeGraphRoute
   AdminLlmSettingsRoute: typeof AdminLlmSettingsRoute
   AdminOperationsRoute: typeof AdminOperationsRoute
+  AdminPipelineRoute: typeof AdminPipelineRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
   AdminUsersRoute: typeof AdminUsersRoute
   AnalyticsCommsRoute: typeof AnalyticsCommsRoute
@@ -561,6 +576,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminSettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/pipeline': {
+      id: '/admin/pipeline'
+      path: '/admin/pipeline'
+      fullPath: '/admin/pipeline'
+      preLoaderRoute: typeof AdminPipelineRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/operations': {
       id: '/admin/operations'
       path: '/admin/operations'
@@ -623,6 +645,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminKnowledgeGraphRoute: AdminKnowledgeGraphRoute,
   AdminLlmSettingsRoute: AdminLlmSettingsRoute,
   AdminOperationsRoute: AdminOperationsRoute,
+  AdminPipelineRoute: AdminPipelineRoute,
   AdminSettingsRoute: AdminSettingsRoute,
   AdminUsersRoute: AdminUsersRoute,
   AnalyticsCommsRoute: AnalyticsCommsRoute,

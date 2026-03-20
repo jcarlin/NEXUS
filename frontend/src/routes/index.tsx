@@ -98,7 +98,7 @@ function DashboardPage() {
           icon={Loader2}
           loading={jobsLoading}
           description="Active pipeline jobs"
-          href="/ingestion"
+          href="/admin/pipeline"
         />
       </div>
 
