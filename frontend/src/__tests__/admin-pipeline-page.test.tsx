@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import React from "react";
 
 const mockUseQuery = vi.fn();
@@ -44,6 +44,7 @@ vi.mock("@/components/admin/operations/celery-panel", () => ({
 }));
 
 import { Route } from "@/routes/admin/pipeline.lazy";
+import { BulkImportTable } from "@/components/admin/pipeline/bulk-import-table";
 
 const Component = (Route as unknown as { component: React.ComponentType }).component;
 
@@ -213,5 +214,98 @@ describe("PipelineMonitorPage", () => {
     // The pulsing dot has both bg-green-500 and animate-pulse classes
     const dot = document.querySelector(".bg-green-500.animate-pulse");
     expect(dot).toBeTruthy();
+  });
+
+  it("expands a bulk import row to show sub-table", () => {
+    const bulkImportItem = {
+      import_id: "imp-001",
+      status: "complete",
+      adapter_type: "local_folder",
+      source_path: "/data/documents",
+      total_documents: 10,
+      processed_documents: 10,
+      failed_documents: 0,
+      skipped_documents: 0,
+      elapsed_seconds: 120,
+      estimated_remaining_seconds: null,
+      error: null,
+      created_at: "2026-03-20T10:00:00Z",
+      updated_at: "2026-03-20T10:02:00Z",
+    };
+    const jobItem = {
+      job_id: "job-100",
+      status: "completed",
+      stage: "done",
+      filename: "report.pdf",
+      progress: { chunks_created: 5 },
+      error: null,
+      created_at: "2026-03-20T10:00:00Z",
+      updated_at: "2026-03-20T10:01:00Z",
+    };
+    mockUseQuery.mockImplementation((opts: { queryKey: string[] }) => {
+      const key = opts.queryKey[0];
+      if (key === "pipeline-bulk-imports") {
+        return {
+          data: { items: [bulkImportItem], total: 1, offset: 0, limit: 20 },
+          isLoading: false,
+        };
+      }
+      if (key === "bulk-import-jobs") {
+        return {
+          data: { items: [jobItem], total: 1, offset: 0, limit: 20 },
+          isLoading: false,
+        };
+      }
+      return { data: { items: [], total: 0, offset: 0, limit: 50 }, isLoading: false };
+    });
+    render(<BulkImportTable />);
+    // Click the row to expand it
+    const row = screen.getByText("local_folder").closest("tr");
+    expect(row).toBeTruthy();
+    fireEvent.click(row!);
+    // Sub-table headers should appear
+    expect(screen.getByText("Filename")).toBeInTheDocument();
+    expect(screen.getByText("report.pdf")).toBeInTheDocument();
+  });
+
+  it("shows fallback text when expanded import has no linked jobs", () => {
+    const bulkImportItem = {
+      import_id: "imp-002",
+      status: "complete",
+      adapter_type: "google_drive",
+      source_path: null,
+      total_documents: 5,
+      processed_documents: 5,
+      failed_documents: 0,
+      skipped_documents: 0,
+      elapsed_seconds: 60,
+      estimated_remaining_seconds: null,
+      error: null,
+      created_at: "2026-03-20T09:00:00Z",
+      updated_at: "2026-03-20T09:01:00Z",
+    };
+    mockUseQuery.mockImplementation((opts: { queryKey: string[] }) => {
+      const key = opts.queryKey[0];
+      if (key === "pipeline-bulk-imports") {
+        return {
+          data: { items: [bulkImportItem], total: 1, offset: 0, limit: 20 },
+          isLoading: false,
+        };
+      }
+      if (key === "bulk-import-jobs") {
+        return {
+          data: { items: [], total: 0, offset: 0, limit: 20 },
+          isLoading: false,
+        };
+      }
+      return { data: { items: [], total: 0, offset: 0, limit: 50 }, isLoading: false };
+    });
+    render(<BulkImportTable />);
+    const row = screen.getByText("google_drive").closest("tr");
+    expect(row).toBeTruthy();
+    fireEvent.click(row!);
+    expect(
+      screen.getByText("Job tracking was added after this import. Per-document status is not available."),
+    ).toBeInTheDocument();
   });
 });

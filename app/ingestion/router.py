@@ -440,6 +440,7 @@ async def list_bulk_imports(
             import_id=row["id"],
             status=row["status"],
             adapter_type=row.get("adapter_type"),
+            source_path=row.get("source_path"),
             total_documents=row.get("total_documents"),
             processed_documents=row["processed_documents"],
             failed_documents=row["failed_documents"],
@@ -780,6 +781,7 @@ async def get_bulk_import_status(
         import_id=row["id"],
         status=row["status"],
         adapter_type=row.get("adapter_type"),
+        source_path=row.get("source_path"),
         total_documents=row.get("total_documents"),
         processed_documents=row["processed_documents"],
         failed_documents=row["failed_documents"],
@@ -789,4 +791,41 @@ async def get_bulk_import_status(
         error=row.get("error"),
         created_at=row["created_at"],
         updated_at=row["updated_at"],
+    )
+
+
+# -----------------------------------------------------------------------
+# GET /bulk-imports/{import_id}/jobs — list jobs for a bulk import
+# -----------------------------------------------------------------------
+
+
+@router.get("/bulk-imports/{import_id}/jobs", response_model=JobListResponse)
+async def list_bulk_import_jobs(
+    import_id: UUID,
+    offset: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(50, ge=1, le=200, description="Max records to return"),
+    status: str | None = Query(None, description="Filter by job status"),
+    db: AsyncSession = Depends(get_db),
+    current_user: UserRecord = Depends(get_current_user),
+    matter_id: UUID = Depends(get_matter_id),
+):
+    """List individual ingestion jobs belonging to a bulk import (paginated)."""
+    # Verify import exists and belongs to matter
+    bulk_import = await IngestionService.get_bulk_import_job(db=db, import_id=import_id, matter_id=matter_id)
+    if bulk_import is None:
+        raise HTTPException(status_code=404, detail=f"Bulk import job {import_id} not found")
+
+    items, total = await IngestionService.list_jobs_by_bulk_import(
+        db=db,
+        bulk_import_job_id=import_id,
+        matter_id=matter_id,
+        offset=offset,
+        limit=limit,
+        status=status,
+    )
+    return JobListResponse(
+        items=[_job_row_to_status_response(row) for row in items],
+        total=total,
+        offset=offset,
+        limit=limit,
     )

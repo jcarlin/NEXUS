@@ -154,6 +154,7 @@ def create_job_row(
     filename: str,
     matter_id: str,
     dataset_id: str | None = None,
+    bulk_import_job_id: str | None = None,
 ) -> None:
     """Create a job row in the jobs table (sync)."""
     import json
@@ -166,9 +167,12 @@ def create_job_row(
                 """
                 INSERT INTO jobs (id, filename, status, stage, progress, error,
                                   parent_job_id, matter_id, dataset_id,
+                                  bulk_import_job_id,
                                   metadata_, created_at, updated_at)
                 VALUES (:id, :filename, 'pending', 'uploading', '{}', NULL,
-                        NULL, :matter_id, :dataset_id, :metadata_, now(), now())
+                        NULL, :matter_id, :dataset_id,
+                        :bulk_import_job_id,
+                        :metadata_, now(), now())
                 """
             ),
             {
@@ -176,6 +180,7 @@ def create_job_row(
                 "filename": filename,
                 "matter_id": matter_id,
                 "dataset_id": dataset_id,
+                "bulk_import_job_id": bulk_import_job_id,
                 "metadata_": json.dumps({}),
             },
         )

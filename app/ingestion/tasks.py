@@ -2309,6 +2309,7 @@ def run_bulk_import(
                 doc.filename,
                 matter_id,
                 dataset_id,
+                bulk_import_job_id=bulk_job_id,
             )
 
             # Dispatch per-document task

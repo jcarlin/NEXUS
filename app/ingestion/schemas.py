@@ -93,6 +93,7 @@ class BulkImportStatusResponse(BaseModel):
     import_id: UUID
     status: str
     adapter_type: str | None = None
+    source_path: str | None = None
     total_documents: int | None = None
     processed_documents: int = 0
     failed_documents: int = 0

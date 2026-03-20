@@ -193,6 +193,58 @@ class IngestionService:
         return items, total
 
     # ------------------------------------------------------------------
+    # LIST JOBS BY BULK IMPORT
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    async def list_jobs_by_bulk_import(
+        db: AsyncSession,
+        bulk_import_job_id: UUID,
+        matter_id: UUID,
+        offset: int = 0,
+        limit: int = 50,
+        status: str | None = None,
+    ) -> tuple[list[dict], int]:
+        """Return ``(items, total_count)`` for jobs linked to a bulk import."""
+        clauses: list[str] = [
+            "bulk_import_job_id = :bulk_import_job_id",
+            "matter_id = :matter_id",
+        ]
+        params: dict = {
+            "bulk_import_job_id": bulk_import_job_id,
+            "matter_id": matter_id,
+            "offset": offset,
+            "limit": limit,
+        }
+        if status is not None:
+            clauses.append("status = :status")
+            params["status"] = status
+        where = "WHERE " + " AND ".join(clauses)
+
+        count_result = await db.execute(text(f"SELECT count(*) FROM jobs {where}"), params)
+        total = count_result.scalar_one()
+
+        result = await db.execute(
+            text(
+                f"""
+                SELECT id, filename, status, stage, progress, error,
+                       parent_job_id, matter_id, metadata_,
+                       task_type, label, created_at, updated_at
+                FROM jobs
+                {where}
+                ORDER BY created_at DESC
+                OFFSET :offset
+                LIMIT :limit
+                """
+            ),
+            params,
+        )
+        rows = result.all()
+        items = [row_to_dict(r) for r in rows]
+
+        return items, total
+
+    # ------------------------------------------------------------------
     # UPDATE (stage transition)
     # ------------------------------------------------------------------
 

@@ -62,6 +62,7 @@ async def test_list_bulk_imports_with_data(client: AsyncClient) -> None:
     assert len(body["items"]) == 1
     item = body["items"][0]
     assert item["status"] == "complete"
+    assert item["source_path"] == "/tmp/test"
     assert item["total_documents"] == 50
     assert item["processed_documents"] == 48
     assert item["failed_documents"] == 2
