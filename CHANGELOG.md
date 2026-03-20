@@ -10,6 +10,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follo
 
 ## [Unreleased]
 
+## [1.15.0] - 2026-03-20
+
+### Added
+- Epstein emails adapter (`epstein_emails`) for HuggingFace email datasets (aa3dc0c)
+  - `to-be/epstein-emails`: 4,272 rows → 3,480 emails (flat schema, HTML body)
+  - `notesbymuneeb/epstein-emails`: 5,082 threads → 13,008 messages (threaded JSON schema)
+  - Auto-detects schema variant, strips HTML, cleans sender names, extracts email headers
+  - Routes as `doc_type="email"` for full pipeline: chunking, Ollama embedding, email threading, communication analytics, email-as-node graph
+- 19 adapter unit tests covering both schemas, dedup, malformed JSON, limit enforcement
+- GCP: Phase 4 email import — 16,338 emails dispatched to Epstein Files Investigation matter (3,480 to-be + 12,858 muneeb, 150 deduped)
+
 ## [1.14.1] - 2026-03-20
 
 ### Added
