@@ -31,9 +31,11 @@ RUN uv venv /opt/venv
 ENV VIRTUAL_ENV=/opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Install CPU-only PyTorch first (no CUDA bloat — saves ~2GB)
+# Install CPU-only PyTorch + torchvision first (no CUDA bloat — saves ~2GB)
+# Pin versions to avoid transformers/torchvision compatibility issues
 RUN uv pip install --no-cache \
-    torch --index-url https://download.pytorch.org/whl/cpu
+    "torch==2.6.0+cpu" "torchvision==0.21.0+cpu" \
+    --index-url https://download.pytorch.org/whl/cpu
 
 # Install project deps (torch already satisfied from CPU index above)
 RUN uv pip install --no-cache .
