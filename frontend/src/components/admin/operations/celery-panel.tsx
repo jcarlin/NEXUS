@@ -43,15 +43,14 @@ interface ActiveTask {
   name: string;
   worker: string;
   queue: string;
-  started_at: string;
-  runtime_seconds: number;
+  started_at: number | null;
 }
 
 interface QueueInfo {
   name: string;
-  active: number;
-  reserved: number;
-  scheduled: number;
+  active_count: number;
+  reserved_count: number;
+  scheduled_count: number;
 }
 
 interface CeleryOverview {
@@ -75,6 +74,7 @@ function formatUptime(seconds: number): string {
 }
 
 function formatDuration(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return "--";
   if (seconds < 60) return `${seconds.toFixed(1)}s`;
   const mins = Math.floor(seconds / 60);
   const secs = Math.floor(seconds % 60);
@@ -337,7 +337,9 @@ export function CeleryPanel() {
                       </span>
                     </TableCell>
                     <TableCell className="text-right text-xs">
-                      {formatDuration(t.runtime_seconds)}
+                      {t.started_at
+                        ? formatDuration(Date.now() / 1000 - t.started_at)
+                        : "--"}
                     </TableCell>
                     <TableCell className="text-right">
                       <Button
@@ -392,19 +394,19 @@ export function CeleryPanel() {
                   </div>
                   <div className="grid grid-cols-3 gap-2 text-center">
                     <div>
-                      <p className="text-lg font-semibold">{q.active}</p>
+                      <p className="text-lg font-semibold">{q.active_count}</p>
                       <p className="text-[10px] text-muted-foreground">
                         Active
                       </p>
                     </div>
                     <div>
-                      <p className="text-lg font-semibold">{q.reserved}</p>
+                      <p className="text-lg font-semibold">{q.reserved_count}</p>
                       <p className="text-[10px] text-muted-foreground">
                         Reserved
                       </p>
                     </div>
                     <div>
-                      <p className="text-lg font-semibold">{q.scheduled}</p>
+                      <p className="text-lg font-semibold">{q.scheduled_count}</p>
                       <p className="text-[10px] text-muted-foreground">
                         Scheduled
                       </p>

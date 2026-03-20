@@ -10,6 +10,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follo
 
 ## [Unreleased]
 
+## [1.15.1] - 2026-03-20
+
+### Fixed
+- Workers & Queues tab: active task duration showed "NaNm NaNs" — compute elapsed time from `started_at` timestamp instead of missing `runtime_seconds` field
+- Workers & Queues tab: queue cards showed blank counts — use correct backend field names (`active_count`, `reserved_count`, `scheduled_count`)
+- `formatDuration` guard against NaN/negative inputs
+
 ## [1.15.0] - 2026-03-20
 
 ### Added
