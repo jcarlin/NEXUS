@@ -14,6 +14,7 @@ Vercel (CDN)                    GCP Compute Engine VM
                                 │ Docker Compose                  │
                                 │   ├── api (FastAPI)             │
                                 │   ├── worker (Celery)           │
+                                │   ├── flower (Celery monitoring) │
                                 │   ├── ollama (embeddings, CPU)  │
                                 │   ├── postgres (16-alpine)      │
                                 │   ├── redis (7-alpine)          │
@@ -172,6 +173,8 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compos
 | `VITE_API_BASE_URL` | Frontend → backend URL (Vercel env) | `https://api.nexus-demo.com` |
 | `MINIO_PUBLIC_ENDPOINT` | Public endpoint for presigned URLs | `api.nexus-demo.com/storage` |
 | `CORS_ALLOWED_ORIGINS` | Allowed frontend origins | `https://nexus.vercel.app` |
+| `FLOWER_USER` | Flower dashboard username | `admin` |
+| `FLOWER_PASSWORD` | Flower dashboard password | (set a secure password) |
 
 ---
 
@@ -311,6 +314,39 @@ gcloud compute disks add-resource-policies nexus-demo \
 ```
 
 **Restore from snapshot:** Create a new disk from the snapshot, attach to a new VM, and `docker compose up`.
+
+### Celery Monitoring (Flower)
+
+Flower provides a web dashboard for monitoring Celery workers, active/pending tasks, and task history.
+
+**Setup** (one-time):
+
+Add credentials to `~/nexus/.env` on the VM:
+
+```bash
+FLOWER_USER=admin
+FLOWER_PASSWORD=<secure-password>
+```
+
+Then recreate the Flower container:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.cloud.yml up -d --force-recreate flower
+```
+
+**Access via SSH tunnel** (Flower is bound to `127.0.0.1` only — not publicly exposed):
+
+```bash
+# Open tunnel (keep this terminal open)
+gcloud compute ssh nexus-demo --zone=us-central1-a --project=vault-ai-487703 -- -L 5555:localhost:5555
+
+# Then open in browser:
+# http://<user>:<password>@localhost:5555/flower/
+```
+
+The basic auth prompt may not appear in all browsers — embedding credentials in the URL is the reliable method.
+
+**In-app alternative:** The frontend also has a Celery panel at **Admin → Operations → Celery Workers** that shows worker status, active tasks, and queue controls via the API (no SSH tunnel needed).
 
 ### Monitoring & Alerting
 
