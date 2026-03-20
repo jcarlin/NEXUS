@@ -10,6 +10,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follo
 
 ## [Unreleased]
 
+### Added
+- FBI dataset import pipeline: `import_fbi_dataset.py` with `--concurrency`, `--skip-ner`, `total_pages` support (ca9ab84)
+- Deferred NER pass script: `run_ner_pass.py` with `ProcessPoolExecutor` for CPU parallelism (ca9ab84)
+- `seed_epstein_matter.py`: FBI-specific defined terms, consolidated matter setup (5eedbef)
+- 35 FBI import unit tests (ca9ab84)
+- `entity_only` filter on entity connections endpoint (af716eb)
+
+### Changed
+- GCP embedding config: switched from OpenAI text-embedding-3-large (1024d) to Ollama nomic-embed-text (768d)
+- Dockerfile: pin `torch==2.6.0+cpu` + `torchvision==0.21.0+cpu` for GLiNER compatibility (2614384)
+
+### Fixed
+- `detect_schema()` FBI JSONL column aliases (`chunk_text`, `source_path`, `source_volume`) (ce31cf0)
+- `seed_epstein_matter.py`: SQLAlchemy `::json` cast conflict + missing `anchor_document_id` (ce31cf0)
+- `link_document_to_dataset()`: referenced non-existent `id` column in `dataset_documents` (ce31cf0)
+
 ## [1.13.3] - 2026-03-15
 
 ### Fixed

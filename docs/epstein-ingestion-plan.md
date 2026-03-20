@@ -6,7 +6,7 @@ NEXUS is a multimodal RAG investigation platform. The GCP environment currently 
 
 This roadmap covers **all available datasources** in priority order, from quick wins (pre-processed HuggingFace datasets with pre-computed embeddings) to the long tail (3.5M-page DOJ corpus requiring bulk OCR).
 
-**GCP embedding setup**: Ollama with nomic-embed-text (768d). Several HuggingFace datasets include pre-computed 768d nomic vectors -- these load directly at $0 cost.
+**GCP embedding setup**: Ollama with nomic-embed-text (768d). Switched from OpenAI text-embedding-3-large (1024d) on 2026-03-20. Several HuggingFace datasets include pre-computed 768d nomic vectors -- these load directly at $0 cost. Dockerfile pins `torch==2.6.0+cpu` + `torchvision==0.21.0+cpu` for GLiNER compatibility.
 
 **Full pipeline always**: Every datasource goes through: embedding (pre-computed or Ollama) -> Qdrant vector indexing -> PostgreSQL document records -> MinIO raw storage -> Neo4j document/chunk nodes. NER entity extraction can be deferred to a separate pass for faster initial import (see NER Strategy below). The only shortcut is using pre-computed vectors where available (skips the Ollama embedding call). Citations work immediately after import (sourced from Qdrant chunk payloads, not from NER).
 
@@ -35,13 +35,13 @@ This roadmap covers **all available datasources** in priority order, from quick 
 
 ### 0.1 Wipe GCP demo data
 - [x] Follow `memory/wipe-reingest.md` procedure
-- [ ] Delete all Qdrant collections, truncate PostgreSQL tables, clear Neo4j, clear MinIO *(GCP wipe deferred to Phase 1 deploy)*
-- [ ] Recreate `nexus_text` collection at 768d (Ollama nomic-embed-text) *(GCP -- deferred)*
+- [x] Delete all Qdrant collections, truncate PostgreSQL tables, clear Neo4j, clear MinIO *(done 2026-03-20)*
+- [x] Recreate `nexus_text` collection at 768d (Ollama nomic-embed-text) *(done 2026-03-20)*
 
-### 0.2 Verify GCP embedding config
-- [ ] Confirm `.env` on GCP has `EMBEDDING_PROVIDER=ollama`, `EMBEDDING_DIMENSIONS=768`, `OLLAMA_EMBEDDING_MODEL=nomic-embed-text` *(GCP -- deferred to Phase 1)*
-- [ ] Confirm Ollama container is healthy and has nomic-embed-text model pulled *(GCP)*
-- [ ] Confirm Qdrant collection is 768d after recreation *(GCP)*
+### 0.2 Verify GCP embedding config -- COMPLETE (2026-03-20)
+- [x] Confirm `.env` on GCP has `EMBEDDING_PROVIDER=ollama`, `EMBEDDING_DIMENSIONS=768`, `OLLAMA_EMBEDDING_MODEL=nomic-embed-text`
+- [x] Confirm Ollama container is healthy and has nomic-embed-text model pulled
+- [x] Confirm Qdrant collection is 768d after recreation
 
 ### 0.3 Create shared tooling -- COMPLETE
 All scripts built, tested, and validated locally:
@@ -106,13 +106,13 @@ All scripts built, tested, and validated locally:
 
 ---
 
-## Phase 1: FBI Files -- `svetfm/epstein-fbi-files` (MVP) -- LOCAL VALIDATION COMPLETE
+## Phase 1: FBI Files -- `svetfm/epstein-fbi-files` (MVP) -- PHASE 1a COMPLETE, 1b IN PROGRESS
 
 **Why first**: Best metadata (page numbers, Bates, OCR confidence), pre-computed 768d nomic vectors (direct Qdrant load), full citation support. This is the proof-of-concept that validates the entire pipeline.
 
 **Prerequisites**: Phase 0 complete. Import script validated locally. GCP wipe + 768d collection recreation needed before running.
 
-**Dataset**: 236K chunks from 8,150 FBI documents. Textract OCR (higher quality than Tesseract). Includes Bates numbers, page numbers, OCR confidence scores, source volumes, document types.
+**Dataset**: 236K chunks from 4,178 unique documents (grouped by `source_path`). Textract OCR (higher quality than Tesseract). Includes Bates numbers, page numbers, OCR confidence scores, source volumes, document types.
 
 ### Steps
 1. **Download**: `python scripts/download_hf_dataset.py --dataset svetfm/epstein-fbi-files` (3.31 GB)
@@ -152,9 +152,63 @@ All scripts built, tested, and validated locally:
 
 **NER throughput correction**: Measured ~2s/chunk (not 50ms/chunk as originally estimated). At 236K chunks, serial NER would take ~131 hours. This motivated the two-pass strategy below.
 
-**Next**: GCP full import — Phase 1a (fast import) then Phase 1b (deferred NER).
+### 1.2 GCP Phase 1a Results (2026-03-20)
 
-### 1.2 Two-Pass Import Strategy (2026-03-19)
+**Status**: COMPLETE. All 4,178 documents imported to GCP in 22.1 minutes.
+
+**GCP setup changes**:
+- Switched `.env`: `EMBEDDING_PROVIDER=ollama`, `EMBEDDING_DIMENSIONS=768`, `OLLAMA_EMBEDDING_MODEL=nomic-embed-text`
+- Wiped all demo data (PG, Qdrant, Neo4j, MinIO, Redis)
+- Deleted Qdrant `nexus_text` collection, API startup recreated at 768d with named vectors
+- Pulled nomic-embed-text model into Ollama container
+- Seeded Epstein matter via `seed_epstein_matter.py`
+- Fixed Dockerfile: pinned `torch==2.6.0+cpu` + `torchvision==0.21.0+cpu` (unpinned torch grabbed 2.10.0 nightly which broke GLiNER)
+
+**Import command**:
+```bash
+python scripts/import_fbi_dataset.py \
+    --file /tmp/fbi_data/epstein_fbi_files.parquet \
+    --matter-id 00000000-0000-0000-0000-000000000002 \
+    --dataset-name "FBI Files" \
+    --disable-hnsw --skip-ner --concurrency 4
+```
+
+**Import results** (4,178 docs, skip-ner, concurrency 4, 22.1 min):
+
+| Store | Count | Notes |
+|-------|-------|-------|
+| PostgreSQL documents | 4,178 | All with bates metadata, OCR confidence, content hash |
+| PostgreSQL jobs | 4,179 | One per doc + seed job |
+| Qdrant points | 236,174 | 768d named vectors (dense), full payloads |
+| Neo4j Documents | 4,178 | With matter_id filter |
+| Neo4j Chunks | 236,174 | PART_OF relationships |
+| Neo4j Entities | 0 | Deferred to Phase 1b |
+| Dataset links | 4,178 | All linked to "FBI Files" dataset |
+| MinIO uploads | 4,178 | Concatenated text at raw/{job_id}/{filename} |
+
+**Performance**: Peak 10.4 docs/sec (small single-chunk docs), sustained 3.2 docs/sec overall. Bottleneck: Neo4j chunk node creation (serial per document, 200+ chunks for flight logs/contact books). HNSW disabled during import, rebuilt after.
+
+**Doc count correction**: Dataset groups to 4,178 unique documents by `source_path` (not 8,150 as originally estimated from HuggingFace metadata). 236K chunks confirmed.
+
+**What works now**: Vector search, document browsing, citations with page numbers and Bates numbers, full-text queries. Everything sourced from Qdrant chunk payloads.
+
+**What's pending**: Entity graph (requires NER pass, Phase 1b running in background).
+
+### 1.3 GCP Phase 1b Status (2026-03-20)
+
+**Status**: IN PROGRESS. NER pass started 2026-03-20 ~05:07 UTC.
+
+**Command**: `python scripts/run_ner_pass.py --matter-id ...-0002 --concurrency 2`
+
+Using 2 workers (not 4) to leave headroom for API on GCP VM (16GB RAM). Each GLiNER model ~600MB = 1.2GB total.
+
+**Estimates**: 236K chunks x ~2s/chunk / 2 workers = ~65 hours. Expected completion: ~2026-03-22 22:00 UTC.
+
+**Monitoring**: Check progress via `docker exec -T api grep -E "^\[" /tmp/ner_pass.log | tail -5`
+
+**Known issue fixed**: Dockerfile torch version pin. Unpinned `torch` from PyTorch CPU index grabbed 2.10.0+cpu (nightly/dev build) which had no matching torchvision, breaking `transformers` -> `image_utils` -> `torchvision` import chain required by GLiNER. Fixed by pinning `torch==2.6.0+cpu` and `torchvision==0.21.0+cpu`.
+
+### 1.4 Two-Pass Import Strategy (2026-03-19)
 
 **Phase 1a — Fast import** (I/O-bound, ~30-60 min):
 ```bash
@@ -163,7 +217,7 @@ python scripts/import_fbi_dataset.py \
     --matter-id 00000000-0000-0000-0000-000000000002 \
     --disable-hnsw --skip-ner --concurrency 4
 ```
-Imports all 8,150 docs to PG, MinIO, Qdrant, and Neo4j (doc + chunk nodes only). Citations work immediately. Vector search works immediately. Entity graph is empty.
+Imports all 4,178 docs to PG, MinIO, Qdrant, and Neo4j (doc + chunk nodes only). Citations work immediately. Vector search works immediately. Entity graph is empty.
 
 **Phase 1b — Deferred NER** (CPU-bound, ~24-48 hours background):
 ```bash
@@ -174,7 +228,7 @@ python scripts/run_ner_pass.py \
 Finds docs with `entity_count=0`, fetches chunks from Qdrant, runs GLiNER, indexes entities to Neo4j. Uses `ProcessPoolExecutor` for true CPU parallelism (bypasses GIL). Each worker loads its own GLiNER model (~600MB). With 4 workers on GCP (16GB RAM): ~2.4GB memory, ~33 hours estimated.
 
 ### What the import script does (full pipeline, pre-embedded path)
-For each document (8,150 total), optionally parallelized via `--concurrency N`:
+For each document (4,178 total), optionally parallelized via `--concurrency N`:
 1. **PostgreSQL**: Create `jobs` + `documents` rows with Bates metadata, page count (prefers `total_pages` from dataset), content hash
 2. **MinIO**: Upload concatenated document text to `raw/{job_id}/{filename}`
 3. **Qdrant**: For each chunk -- use pre-computed 768d nomic vector (no API call), build `PointStruct` with full payload: `page_number`, `bates_number`, `doc_id`, `matter_id`, `chunk_text`, `chunk_index`, `ocr_confidence`, `source_file`, `token_count`
@@ -370,9 +424,9 @@ For each document (8,150 total), optionally parallelized via `--concurrency N`:
 ```
 Phase 0 (Foundation)     <- Must do first, ~2 hours -- COMPLETE
   |
-  +-- Phase 1a (FBI import, --skip-ner)  <- ~30-60 min, $0, citations work immediately
+  +-- Phase 1a (FBI import, --skip-ner)  <- 22.1 min, $0 -- COMPLETE (2026-03-20)
   |     |
-  |     +-- Phase 1b (FBI NER pass)      <- ~24-48 hours background, entity graph comes online
+  |     +-- Phase 1b (FBI NER pass)      <- ~65 hours background -- IN PROGRESS (started 2026-03-20)
   |     |
   |     +-- Phase 2 (House Oversight pre-embedded)  <- Quick add, ~1 hour, $0
   |     |     OR
