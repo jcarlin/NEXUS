@@ -10,6 +10,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follo
 
 ## [Unreleased]
 
+### Added
+- GCP: 25,791 House Oversight documents (69K chunks) imported with degraded citations
+- Combined corpus: 29,969 documents, 305K chunks across FBI + House Oversight datasets
+
 ## [1.14.0] - 2026-03-20
 
 ### Added

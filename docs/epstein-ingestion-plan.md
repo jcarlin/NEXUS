@@ -252,30 +252,71 @@ For each document (4,178 total), optionally parallelized via `--concurrency N`:
 
 ---
 
-## Phase 2: House Oversight (pre-embedded) -- `svetfm/epstein-files-nov11-25-house-post-ocr-embeddings`
+## Phase 2: House Oversight (pre-embedded) -- `svetfm/epstein-files-nov11-25-house-post-ocr-embeddings` -- COMPLETE
 
 **Why second**: Pre-computed 768d nomic vectors (same as Phase 1 -- $0 cost), adds 69K chunks covering different source material (estate documents, correspondence). **Degraded citations** -- no page numbers, no Bates ranges.
 
-**Dataset**: 69K chunks from House Oversight Nov 2025 release. Sparse schema: `source_file`, `chunk_index`, `text`, `embedding`. Tesseract OCR (noisier than FBI's Textract).
+**Dataset**: 69,290 chunks from 25,791 unique documents (grouped by `source_file`). Sparse schema: `source_file`, `chunk_index`, `text`, `embedding`. Tesseract OCR (noisier than FBI's Textract).
 
 ### Steps
-1. **Download**: Same download script with `--dataset svetfm/epstein-files-nov11-25-house-post-ocr-embeddings` (357 MB)
-2. **Import**: Adapt `import_fbi_dataset.py` or create `import_house_oversight.py` (simpler schema, no page numbers)
-3. **GCP import**: SSH -> download -> import
+1. **Download**: Same download script with `--dataset svetfm/epstein-files-nov11-25-house-post-ocr-embeddings` (415 MB parquet)
+2. **Import**: Reused `import_fbi_dataset.py` with `--citation-quality degraded` (auto-detects sparse schema)
+3. **GCP import**: SSH -> download -> dry-run -> full import
+
+### 2.1 GCP Import Results (2026-03-20)
+
+**Status**: COMPLETE. All 25,791 documents imported in ~63 minutes. Ran concurrently with FBI NER pass (Phase 1b) with no issues.
+
+**Import command**:
+```bash
+python scripts/import_fbi_dataset.py \
+    --file /tmp/house_oversight/epstein_files_nov11_25_house_post_ocr_embeddings.parquet \
+    --matter-id 00000000-0000-0000-0000-000000000002 \
+    --dataset-name "House Oversight Pre-embedded" \
+    --citation-quality degraded \
+    --disable-hnsw --skip-ner --concurrency 4
+```
+
+**Import results** (25,791 docs, skip-ner, concurrency 4, ~63 min):
+
+| Store | Count | Notes |
+|-------|-------|-------|
+| PostgreSQL documents | 25,791 | Linked to "House Oversight Pre-embedded" dataset |
+| PostgreSQL jobs | 25,792 | One per doc + seed job |
+| Qdrant points | 69,290 | 768d named vectors (dense), citation_quality=degraded |
+| Neo4j Documents | 25,791 | With matter_id filter |
+| Neo4j Chunks | 69,290 | PART_OF relationships |
+| Neo4j Entities | 0 | Deferred (NER pass needed) |
+| Dataset links | 25,791 | All linked to "House Oversight Pre-embedded" dataset |
+| MinIO uploads | 25,791 | Concatenated text at raw/{job_id}/{filename} |
+
+**Combined totals (FBI + House Oversight)**:
+
+| Store | FBI | House Oversight | Total |
+|-------|-----|-----------------|-------|
+| PostgreSQL documents | 4,178 | 25,791 | 29,969 |
+| Qdrant points | 236,174 | 69,290 | 305,464 |
+| Neo4j Documents | 4,178 | 25,791 | 29,969 |
+| Neo4j Chunks | 236,174 | 69,290 | 305,464 |
+
+**Doc count note**: Dataset groups to 25,791 unique documents by `source_file` (not the 69K row count). Most are single-chunk documents with avg ~2.7 chunks/doc.
+
+**What works now**: Vector search across both FBI + House Oversight, document browsing, citations (degraded for House Oversight -- filename only, no page numbers). House Oversight chunks have `citation_quality: "degraded"` in Qdrant payload.
+
+**What's pending**: Entity graph for House Oversight docs (NER pass needed after Phase 1b completes).
 
 ### Citation impact
-- `page_number` defaults to `None` (not available in dataset)
-- `bates_range` defaults to `None`
-- `filename` available from `source_file` column
-- Frontend PDF viewer click-through won't work (no page to jump to)
-- CoVe verification still works on text-level (excerpt matching)
-- Consider: add a `citation_quality: "degraded" | "full"` flag to Qdrant payload so the frontend can show a warning badge
+- `page_number` = `None` (not available in dataset)
+- `bates_range` = `None`
+- `filename` from `source_file` column
+- `citation_quality` = `"degraded"` in Qdrant payload
+- CoVe verification works on text-level (excerpt matching)
 
-### Estimates
-- **Cost**: $0
-- **Import (--skip-ner)**: 15-30 min
-- **NER pass**: ~38 hours (69K chunks x ~2s/chunk, parallelizable)
-- **Storage**: ~500 MB additional
+### Estimates (actual vs. planned)
+- **Cost**: $0 (pre-computed vectors)
+- **Import (--skip-ner --concurrency 4)**: ~63 min (planned 15-30 min; slower due to 25K docs, not 69K chunks -- higher per-doc overhead)
+- **NER pass**: ~38 hours (69K chunks x ~2s/chunk, parallelizable) -- pending
+- **Storage**: ~415 MB parquet + Qdrant/PG/Neo4j
 
 ---
 
@@ -428,7 +469,7 @@ Phase 0 (Foundation)     <- Must do first, ~2 hours -- COMPLETE
   |     |
   |     +-- Phase 1b (FBI NER pass)      <- ~65 hours background -- IN PROGRESS (started 2026-03-20)
   |     |
-  |     +-- Phase 2 (House Oversight pre-embedded)  <- Quick add, ~1 hour, $0
+  |     +-- Phase 2 (House Oversight pre-embedded)  <- 63 min, $0 -- COMPLETE (2026-03-20)
   |     |     OR
   |     +-- Phase 3 (House Oversight full pipeline)  <- Better quality, ~6 hours, $0
   |
