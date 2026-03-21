@@ -2,8 +2,10 @@ import { useState } from "react";
 import {
   useReactTable,
   getCoreRowModel,
+  getSortedRowModel,
   flexRender,
   createColumnHelper,
+  type SortingState,
 } from "@tanstack/react-table";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { RotateCcw, X } from "lucide-react";
@@ -72,6 +74,7 @@ export function JobTable() {
   const [page, setPage] = useState(0);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
+  const [sorting, setSorting] = useState<SortingState>([]);
 
   const params: Record<string, string | number> = {
     limit: PAGE_SIZE,
@@ -130,7 +133,7 @@ export function JobTable() {
       ),
     }),
     columnHelper.accessor("document_type", {
-      header: "Type",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Type" />,
       cell: (info) => (
         <Badge variant="outline" className="font-mono text-[10px]">
           {info.getValue() ?? "ingestion"}
@@ -167,7 +170,7 @@ export function JobTable() {
       },
     }),
     columnHelper.accessor("page_count", {
-      header: "Pages",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Pages" />,
       cell: (info) => {
         const val = info.getValue();
         return (
@@ -178,7 +181,7 @@ export function JobTable() {
       },
     }),
     columnHelper.accessor("file_size_bytes", {
-      header: "Size",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Size" />,
       cell: (info) => {
         const val = info.getValue();
         return (
@@ -247,7 +250,10 @@ export function JobTable() {
   const table = useReactTable({
     data: items,
     columns,
+    state: { sorting },
+    onSortingChange: setSorting,
     getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
   });
 
   const totalPages = data ? Math.ceil(data.total / PAGE_SIZE) : 0;

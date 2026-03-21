@@ -81,6 +81,9 @@ def _job_row_to_status_response(row: dict) -> JobStatusResponse:
         error=row.get("error"),
         created_at=row["created_at"],
         updated_at=row["updated_at"],
+        file_size_bytes=row.get("file_size_bytes"),
+        page_count=row.get("page_count"),
+        document_type=row.get("document_type"),
     )
 
 
