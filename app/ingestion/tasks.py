@@ -1686,6 +1686,7 @@ def import_text_document(
 
     engine = _get_sync_engine(settings)
     load_overrides_sync_safe(settings, engine)
+    _store_celery_task_id(engine, job_id, self.request.id)
 
     logger.info(
         "task.import_text.start",

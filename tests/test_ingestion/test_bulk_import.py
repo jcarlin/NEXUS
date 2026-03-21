@@ -56,6 +56,7 @@ def test_import_text_document_skips_parse() -> None:
     with (
         patch("app.ingestion.tasks._get_sync_engine", return_value=mock_engine),
         patch("app.ingestion.tasks._update_stage"),
+        patch("app.ingestion.tasks._store_celery_task_id"),
         patch("app.ingestion.tasks._upload_to_minio"),
         patch("app.ingestion.tasks._create_document_record", return_value=str(uuid4())),
         patch("app.ingestion.tasks.asyncio.run") as mock_arun,
@@ -131,6 +132,7 @@ def test_import_text_updates_qdrant_doc_id() -> None:
     with (
         patch("app.ingestion.tasks._get_sync_engine", return_value=mock_engine),
         patch("app.ingestion.tasks._update_stage"),
+        patch("app.ingestion.tasks._store_celery_task_id"),
         patch("app.ingestion.tasks._upload_to_minio"),
         patch("app.ingestion.tasks._create_document_record", return_value=real_doc_id),
         patch("app.ingestion.tasks.asyncio.run") as mock_arun,
