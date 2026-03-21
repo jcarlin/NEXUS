@@ -5,13 +5,13 @@ import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 
 interface ServiceNode {
-  name: string;
+  service: string;
   status: string;
   depends_on: string[];
 }
 
 interface DependencyResponse {
-  services: ServiceNode[];
+  nodes: ServiceNode[];
 }
 
 const STATUS_DOT: Record<string, string> = {
@@ -44,7 +44,7 @@ export function DependencyDiagram() {
       </div>
     );
 
-  const services = data?.services ?? [];
+  const services = data?.nodes ?? [];
   if (services.length === 0)
     return (
       <p className="text-sm text-muted-foreground">
@@ -53,7 +53,7 @@ export function DependencyDiagram() {
     );
 
   // Group into tiers: services with no dependencies first, then services that depend on them
-  const serviceMap = new Map(services.map((s) => [s.name, s]));
+  const serviceMap = new Map(services.map((s) => [s.service, s]));
   const tiers: ServiceNode[][] = [];
   const placed = new Set<string>();
 
@@ -61,7 +61,7 @@ export function DependencyDiagram() {
   const tier0 = services.filter((s) => s.depends_on.length === 0);
   if (tier0.length > 0) {
     tiers.push(tier0);
-    tier0.forEach((s) => placed.add(s.name));
+    tier0.forEach((s) => placed.add(s.service));
   }
 
   // Subsequent tiers: services whose dependencies are all placed
@@ -69,17 +69,17 @@ export function DependencyDiagram() {
   while (placed.size < services.length && maxIterations-- > 0) {
     const nextTier = services.filter(
       (s) =>
-        !placed.has(s.name) &&
+        !placed.has(s.service) &&
         s.depends_on.every((d) => placed.has(d) || !serviceMap.has(d)),
     );
     if (nextTier.length === 0) {
       // Remaining services have circular or unresolvable deps -- place them
-      const remaining = services.filter((s) => !placed.has(s.name));
+      const remaining = services.filter((s) => !placed.has(s.service));
       if (remaining.length > 0) tiers.push(remaining);
       break;
     }
     tiers.push(nextTier);
-    nextTier.forEach((s) => placed.add(s.name));
+    nextTier.forEach((s) => placed.add(s.service));
   }
 
   return (
@@ -95,7 +95,7 @@ export function DependencyDiagram() {
           </p>
           <div className="flex flex-wrap gap-3">
             {tier.map((service) => (
-              <Card key={service.name} className="w-48">
+              <Card key={service.service} className="w-48">
                 <CardContent className="pt-4 pb-3">
                   <div className="flex items-center gap-2 mb-2">
                     <span
@@ -105,7 +105,7 @@ export function DependencyDiagram() {
                       )}
                     />
                     <span className="text-sm font-medium truncate">
-                      {service.name}
+                      {service.service}
                     </span>
                   </div>
                   {service.depends_on.length > 0 && (
