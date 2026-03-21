@@ -29,6 +29,7 @@ services:
     deploy:
       resources:
         limits:
+          cpus: "1.0"
           memory: 2G
 
   caddy:
@@ -48,6 +49,11 @@ services:
         condition: service_healthy
     restart: unless-stopped
     logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 128M
 
   # --- Port overrides: keep API on 8000 (Vercel rewrites), remove all others ---
   api:
@@ -60,6 +66,11 @@ services:
     depends_on:
       ollama:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
 
   worker:
     logging: *default-logging
@@ -68,31 +79,69 @@ services:
     depends_on:
       ollama:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "1.5"
+          memory: 2G
 
   flower:
     ports: !override
       - "127.0.0.1:5555:5555"
     logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
 
   postgres:
     ports: !override []
     logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
 
   redis:
     ports: !override []
     logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
 
   qdrant:
     ports: !override []
     logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 3G
 
   neo4j:
     ports: !override []
     logging: *default-logging
+    environment:
+      NEO4J_server_memory_heap_max__size: 2G
+      NEO4J_server_memory_pagecache_size: 512M
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 4G
 
   minio:
     ports: !override []
     logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
 
 volumes:
   caddy_data:
