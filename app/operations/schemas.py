@@ -32,6 +32,18 @@ class ContainerStats(BaseModel):
     memory_percent: float = 0.0
 
 
+class SystemMetrics(BaseModel):
+    """Host-level CPU, memory, and disk usage."""
+
+    cpu_percent: float = 0.0
+    memory_used_mb: float = 0.0
+    memory_total_mb: float = 0.0
+    memory_percent: float = 0.0
+    disk_used_gb: float = 0.0
+    disk_total_gb: float = 0.0
+    disk_percent: float = 0.0
+
+
 class ContainerInfo(BaseModel):
     container_id: str
     name: str

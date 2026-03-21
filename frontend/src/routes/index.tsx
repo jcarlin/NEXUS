@@ -8,6 +8,7 @@ import { StatCard } from "@/components/dashboard/stat-card";
 import { RecentActivity } from "@/components/dashboard/recent-activity";
 import { PipelineStatus } from "@/components/dashboard/pipeline-status";
 import { ServiceHealth } from "@/components/dashboard/service-health";
+import { SystemMetrics } from "@/components/dashboard/system-metrics";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { PaginatedResponse, DocumentResponse, GraphStats } from "@/types";
@@ -80,7 +81,10 @@ function DashboardPage() {
         <p className="text-muted-foreground">Overview of your investigation workspace.</p>
       </div>
 
-      <ServiceHealth />
+      <div className="flex gap-4">
+        <ServiceHealth />
+        <SystemMetrics />
+      </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 animate-stagger-in" data-tour="stat-cards">
         <StatCard

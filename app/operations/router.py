@@ -20,9 +20,15 @@ from app.operations.schemas import (
     ContainerListResponse,
     ContainerLogsResponse,
     DependencyGraphResponse,
+    SystemMetrics,
     UptimeListResponse,
 )
-from app.operations.service import CeleryService, DockerService, UptimeService
+from app.operations.service import (
+    CeleryService,
+    DockerService,
+    SystemMetricsService,
+    UptimeService,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -216,6 +222,19 @@ async def dependency_graph(
 ) -> DependencyGraphResponse:
     """Get the Docker Compose service dependency graph."""
     return await _docker_call(DockerService.get_dependency_graph(docker, settings.docker_compose_project))
+
+
+# ---------------------------------------------------------------------------
+# System metrics
+# ---------------------------------------------------------------------------
+
+
+@router.get("/system-metrics", response_model=SystemMetrics)
+async def system_metrics(
+    _user: UserRecord = Depends(require_role("admin")),
+) -> SystemMetrics:
+    """Get host-level CPU, memory, and disk usage."""
+    return await SystemMetricsService.get_system_metrics()
 
 
 # ---------------------------------------------------------------------------

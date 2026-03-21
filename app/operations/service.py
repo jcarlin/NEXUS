@@ -25,6 +25,7 @@ from app.operations.schemas import (
     ContainerStatus,
     DependencyGraphResponse,
     ServiceDependency,
+    SystemMetrics,
     UptimeListResponse,
     UptimeSummary,
 )
@@ -460,3 +461,114 @@ class UptimeService:
             )
 
         return UptimeListResponse(services=services)
+
+
+class SystemMetricsService:
+    """Host-level CPU, memory, and disk metrics collection."""
+
+    @staticmethod
+    async def get_system_metrics() -> SystemMetrics:
+        """Collect host CPU, memory, and disk usage.
+
+        Uses /proc/stat and /proc/meminfo on Linux (including inside Docker
+        containers where these reflect the host). Falls back gracefully on
+        platforms where /proc is unavailable (macOS dev).
+        """
+
+        cpu = await SystemMetricsService._read_cpu()
+        mem = await SystemMetricsService._read_memory()
+        disk = await asyncio.to_thread(SystemMetricsService._read_disk)
+
+        return SystemMetrics(
+            cpu_percent=cpu,
+            memory_used_mb=mem[0],
+            memory_total_mb=mem[1],
+            memory_percent=mem[2],
+            disk_used_gb=disk[0],
+            disk_total_gb=disk[1],
+            disk_percent=disk[2],
+        )
+
+    @staticmethod
+    async def _read_cpu() -> float:
+        """Compute host CPU% from two /proc/stat samples 100ms apart."""
+        try:
+            idle1, total1 = await asyncio.to_thread(SystemMetricsService._parse_proc_stat)
+            await asyncio.sleep(0.1)
+            idle2, total2 = await asyncio.to_thread(SystemMetricsService._parse_proc_stat)
+
+            idle_delta = idle2 - idle1
+            total_delta = total2 - total1
+            if total_delta <= 0:
+                return 0.0
+            return round((1.0 - idle_delta / total_delta) * 100.0, 1)
+        except FileNotFoundError:
+            logger.debug("system_metrics.cpu.unavailable", reason="/proc/stat not found")
+            return 0.0
+        except Exception as exc:
+            logger.warning("system_metrics.cpu.error", error=str(exc))
+            return 0.0
+
+    @staticmethod
+    def _parse_proc_stat() -> tuple[float, float]:
+        """Parse the first line of /proc/stat and return (idle, total) jiffies."""
+        with open("/proc/stat") as f:
+            line = f.readline()
+        # cpu  user nice system idle iowait irq softirq steal guest guest_nice
+        parts = line.split()
+        values = [float(v) for v in parts[1:]]
+        idle = values[3] + values[4]  # idle + iowait
+        total = sum(values)
+        return idle, total
+
+    @staticmethod
+    async def _read_memory() -> tuple[float, float, float]:
+        """Read host memory from /proc/meminfo. Returns (used_mb, total_mb, percent)."""
+        try:
+            total, available = await asyncio.to_thread(SystemMetricsService._parse_proc_meminfo)
+            used = total - available
+            percent = round((used / total) * 100.0, 1) if total > 0 else 0.0
+            return (round(used / 1024, 1), round(total / 1024, 1), percent)
+        except FileNotFoundError:
+            logger.debug("system_metrics.memory.unavailable", reason="/proc/meminfo not found")
+            # macOS fallback: os.sysconf for total only
+            try:
+                import os
+
+                total_bytes = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
+                total_mb = round(total_bytes / (1024 * 1024), 1)
+                return (0.0, total_mb, 0.0)
+            except (ValueError, OSError):
+                return (0.0, 0.0, 0.0)
+        except Exception as exc:
+            logger.warning("system_metrics.memory.error", error=str(exc))
+            return (0.0, 0.0, 0.0)
+
+    @staticmethod
+    def _parse_proc_meminfo() -> tuple[float, float]:
+        """Parse /proc/meminfo and return (total_kb, available_kb)."""
+        total_kb = 0.0
+        available_kb = 0.0
+        with open("/proc/meminfo") as f:
+            for line in f:
+                if line.startswith("MemTotal:"):
+                    total_kb = float(line.split()[1])
+                elif line.startswith("MemAvailable:"):
+                    available_kb = float(line.split()[1])
+                    break
+        return total_kb, available_kb
+
+    @staticmethod
+    def _read_disk() -> tuple[float, float, float]:
+        """Read disk usage for the root filesystem. Returns (used_gb, total_gb, percent)."""
+        import shutil
+
+        try:
+            usage = shutil.disk_usage("/")
+            total_gb = round(usage.total / (1024**3), 1)
+            used_gb = round(usage.used / (1024**3), 1)
+            percent = round((usage.used / usage.total) * 100.0, 1) if usage.total > 0 else 0.0
+            return (used_gb, total_gb, percent)
+        except Exception as exc:
+            logger.warning("system_metrics.disk.error", error=str(exc))
+            return (0.0, 0.0, 0.0)

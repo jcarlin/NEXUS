@@ -63,7 +63,7 @@ export function ServiceHealth() {
     SERVICES.every((s) => services[s.key] === "ok");
 
   return (
-    <Card>
+    <Card className="flex-1 min-w-0">
       <CardContent className="flex items-center gap-6 py-3">
         <div className="flex items-center gap-4 flex-wrap">
           {SERVICES.map(({ key, label, icon: Icon }) => {
