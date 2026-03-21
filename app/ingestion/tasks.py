@@ -1688,6 +1688,22 @@ def import_text_document(
     load_overrides_sync_safe(settings, engine)
     _store_celery_task_id(engine, job_id, self.request.id)
 
+    # Dedup guard: skip if a document with this content_hash already exists
+    if matter_id and content_hash:
+        from app.ingestion.bulk_import import check_resume
+
+        if check_resume(engine, content_hash, matter_id):
+            _update_stage(engine, job_id, "complete", "complete")
+            logger.info("task.import_text.dedup_skipped", content_hash=content_hash[:16])
+            return {
+                "job_id": job_id,
+                "status": "complete",
+                "skipped": True,
+                "page_count": 0,
+                "chunk_count": 0,
+                "entity_count": 0,
+            }
+
     logger.info(
         "task.import_text.start",
         filename=filename,

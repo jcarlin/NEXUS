@@ -57,6 +57,7 @@ def test_import_text_document_skips_parse() -> None:
         patch("app.ingestion.tasks._get_sync_engine", return_value=mock_engine),
         patch("app.ingestion.tasks._update_stage"),
         patch("app.ingestion.tasks._store_celery_task_id"),
+        patch("app.ingestion.bulk_import.check_resume", return_value=False),
         patch("app.ingestion.tasks._upload_to_minio"),
         patch("app.ingestion.tasks._create_document_record", return_value=str(uuid4())),
         patch("app.ingestion.tasks.asyncio.run") as mock_arun,
@@ -89,6 +90,50 @@ def test_import_text_document_skips_parse() -> None:
         chunker_instance.chunk.assert_called_once()
         # Qdrant upsert was called
         qdrant_instance.upsert.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# 1a-2. test_import_text_document_dedup_skips
+# ---------------------------------------------------------------------------
+
+
+def test_import_text_document_dedup_skips() -> None:
+    """import_text_document should skip processing when content_hash already exists."""
+    job_id = str(uuid4())
+    text_content = "Duplicate document text."
+    filename = "dup.txt"
+    content_hash = compute_content_hash(text_content)
+    matter_id = str(uuid4())
+
+    mock_engine = MagicMock()
+    mock_conn = MagicMock()
+    mock_engine.connect.return_value.__enter__ = MagicMock(return_value=mock_conn)
+    mock_engine.connect.return_value.__exit__ = MagicMock(return_value=False)
+
+    with (
+        patch("app.ingestion.tasks._get_sync_engine", return_value=mock_engine),
+        patch("app.ingestion.tasks._update_stage") as mock_stage,
+        patch("app.ingestion.tasks._store_celery_task_id"),
+        patch("app.ingestion.bulk_import.check_resume", return_value=True),
+        patch("app.ingestion.tasks._upload_to_minio") as mock_upload,
+    ):
+        from app.ingestion.tasks import import_text_document
+
+        result = import_text_document.run(
+            job_id=job_id,
+            text=text_content,
+            filename=filename,
+            content_hash=content_hash,
+            matter_id=matter_id,
+        )
+
+        assert result["status"] == "complete"
+        assert result["skipped"] is True
+        assert result["chunk_count"] == 0
+        # Should NOT have uploaded or chunked
+        mock_upload.assert_not_called()
+        # Should have set stage to complete
+        mock_stage.assert_called_once_with(mock_engine, job_id, "complete", "complete")
 
 
 # ---------------------------------------------------------------------------
@@ -133,6 +178,7 @@ def test_import_text_updates_qdrant_doc_id() -> None:
         patch("app.ingestion.tasks._get_sync_engine", return_value=mock_engine),
         patch("app.ingestion.tasks._update_stage"),
         patch("app.ingestion.tasks._store_celery_task_id"),
+        patch("app.ingestion.bulk_import.check_resume", return_value=False),
         patch("app.ingestion.tasks._upload_to_minio"),
         patch("app.ingestion.tasks._create_document_record", return_value=real_doc_id),
         patch("app.ingestion.tasks.asyncio.run") as mock_arun,
