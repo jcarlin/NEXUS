@@ -424,17 +424,30 @@ python scripts/import_fbi_dataset.py \
 
 ~2-3K pages of motions, depositions, exhibits released in 8+ batches. Native PDFs with text layers -- ideal for Docling parsing.
 
-### Steps
-1. **Download**: Script to bulk-download from CourtListener RECAP API or Public Intelligence mirrors
-2. **Organize**: Save PDFs to a directory, one per filing
-3. **Import via standard pipeline**: Use `directory` adapter with PDF support, or upload PDFs through the NEXUS UI/API
-4. **Full citation support**: Docling extracts page numbers from PDF structure -> full page-level citations
+### Scripts
+- **Download**: `scripts/download_courtlistener.py` — queries CourtListener REST API (`/api/rest/v3/recap-documents/`), downloads available PDFs with rate limiting (1 req/sec). Optional `--api-token` for authenticated access. Falls back to Public Intelligence mirrors if API is unavailable.
+- **Import**: `scripts/import_pdf_directory.py` — uploads PDFs to MinIO and dispatches `process_document` Celery tasks (Docling parsing pipeline).
+
+### Commands
+```bash
+# Download
+python scripts/download_courtlistener.py \
+    --docket-id 4355835 \
+    --output-dir /tmp/maxwell_docs
+
+# Import
+python scripts/import_pdf_directory.py \
+    --dir /tmp/maxwell_docs \
+    --matter-id 00000000-0000-0000-0000-000000000002 \
+    --dataset-name "Giuffre v. Maxwell Court Docs" \
+    --disable-hnsw
+```
 
 ### What's special
-- These are properly formatted court documents (not scanned images)
-- Docling parsing produces excellent structured output
+- Properly formatted court documents (not scanned images) -- Docling produces excellent structured output
 - Depositions have Q&A structure that the query agent can exploit
 - Named entities are densely packed (names, dates, locations referenced repeatedly)
+- **Full citation support**: Page numbers extracted from PDF structure automatically
 
 ### Estimates
 - **Cost**: $0 (Ollama embedding)
@@ -447,18 +460,41 @@ python scripts/import_fbi_dataset.py \
 
 **Source**: `vault.fbi.gov/jeffrey-epstein` -- 22 parts, ~2-3K pages of older FOIA releases.
 
-**Challenge**: Scanned image PDFs without text layers. Requires OCR.
+**Challenge**: Scanned image PDFs without text layers. Docling handles OCR automatically via built-in backend.
 
-### Steps
-1. **Download**: Script to crawl FBI vault and download all 22 PDF parts
-2. **OCR pipeline**: Docling handles image PDFs with built-in OCR (EasyOCR). Alternatively, use Textract for higher quality (paid).
-3. **Import via standard pipeline**: Upload PDFs -> Docling parse (with OCR) -> chunk -> embed -> NER -> index
-4. **Quality check**: OCR quality on scanned FBI documents may be poor. Spot-check and potentially enable `ENABLE_OCR_CORRECTION` (LLM post-processing)
+### Scripts
+- **Download**: `scripts/download_fbi_vault.py` — scrapes the FBI vault index page, discovers PDF links for all 22 parts, downloads with rate limiting (1 req/sec). Resume-safe (skips existing files).
+- **Import**: `scripts/import_pdf_directory.py` — same shared PDF import script as Phase 5.
+
+### Commands
+```bash
+# Download
+python scripts/download_fbi_vault.py \
+    --output-dir /tmp/fbi_vault
+
+# Import (Docling auto-detects scanned PDFs and applies OCR)
+python scripts/import_pdf_directory.py \
+    --dir /tmp/fbi_vault \
+    --matter-id 00000000-0000-0000-0000-000000000002 \
+    --dataset-name "FBI FOIA Vault" \
+    --disable-hnsw
+```
+
+### OCR handling
+- Docling auto-detects scanned image PDFs and applies built-in OCR -- no manual configuration needed
+- **Optional quality boost**: Set `ENABLE_OCR_CORRECTION=true` on GCP before import for regex-based legal OCR fixes (`app/ingestion/ocr_corrector.py`)
+- **Quality check**: After import, spot-check documents via API. If OCR quality is poor, consider re-import with `ENABLE_CONTEXTUAL_CHUNKS=true` (LLM-assisted chunk enrichment)
 
 ### Estimates
 - **Cost**: $0 (local OCR + Ollama embedding) or ~$5-10 if using Textract
-- **Time**: 2-4 hours (OCR is slow, ~5-10s/page)
+- **Time**: 2-4 hours (OCR adds ~5-10s/page)
 - **Storage**: ~200 MB
+
+### Parallel execution
+Phases 5 and 6 can run simultaneously. Both download scripts are independent. Both import commands dispatch to the same Celery worker queue -- bump worker concurrency to `-c 2` during import:
+```bash
+$COMPOSE exec -T worker celery -A workers.celery_app control pool_resize 2
+```
 
 ---
 

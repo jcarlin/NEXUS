@@ -283,14 +283,81 @@ These issues were discovered and fixed during the initial ingestion run. Documen
 
 ---
 
+## PDF Ingestion (Court Docs & FBI FOIA Vault)
+
+For datasources that are native PDFs (not pre-extracted text), use the PDF directory import script. This uploads PDFs to MinIO and dispatches the full Docling parsing pipeline (`process_document` task) which handles OCR for scanned documents automatically.
+
+### Phase 5: Giuffre v. Maxwell Court Documents
+
+```bash
+# 1. Download from CourtListener RECAP
+python scripts/download_courtlistener.py \
+    --docket-id 4355835 \
+    --output-dir /tmp/maxwell_docs
+
+# 2. Import PDFs via Docling pipeline
+python scripts/import_pdf_directory.py \
+    --dir /tmp/maxwell_docs \
+    --matter-id 00000000-0000-0000-0000-000000000002 \
+    --dataset-name "Giuffre v. Maxwell Court Docs" \
+    --disable-hnsw
+```
+
+- ~200-500 PDFs, native text layers — Docling parses directly
+- Full citation support (page numbers extracted from PDF structure)
+- Processing: ~1-2 hours
+
+### Phase 6: FBI FOIA Vault
+
+```bash
+# 1. Download from vault.fbi.gov
+python scripts/download_fbi_vault.py \
+    --output-dir /tmp/fbi_vault
+
+# 2. Import PDFs (Docling handles OCR for scanned images)
+python scripts/import_pdf_directory.py \
+    --dir /tmp/fbi_vault \
+    --matter-id 00000000-0000-0000-0000-000000000002 \
+    --dataset-name "FBI FOIA Vault" \
+    --disable-hnsw
+```
+
+- 22-part release, scanned image PDFs — Docling auto-detects and applies OCR
+- Optional: enable `ENABLE_OCR_CORRECTION=true` for regex-based legal OCR fixes
+- Processing: ~2-4 hours (OCR adds ~5-10s/page)
+
+### PDF Import Script Usage
+
+```bash
+python scripts/import_pdf_directory.py \
+    --dir /path/to/pdfs \
+    --matter-id <UUID> \
+    [--dataset-name "..."] \
+    [--limit N] \
+    [--resume] \
+    [--dry-run] \
+    [--disable-hnsw]
+```
+
+The script recursively discovers `.pdf` files, uploads each to MinIO, creates a job record, and dispatches a `process_document` Celery task. Supports resume (skips by content hash) and HNSW control for fast bulk inserts.
+
+---
+
 ## Key Files
 
 | File | Purpose |
 |------|---------|
 | `scripts/download_epstein_dataset.py` | Download from HuggingFace, save as Parquet |
-| `scripts/seed_epstein_matter.py` | Seed matter, parties, claims, terms |
-| `scripts/import_dataset.py` | CLI for bulk import (adapter dispatch) |
+| `scripts/download_hf_dataset.py` | Generic HuggingFace downloader with schema inspection |
+| `scripts/import_fbi_dataset.py` | Import pre-chunked + pre-embedded datasets (FBI, House) |
+| `scripts/import_dataset.py` | CLI for bulk import (adapter dispatch, text-based) |
+| `scripts/import_pdf_directory.py` | Bulk PDF import (Docling pipeline, OCR support) |
+| `scripts/download_courtlistener.py` | Download court docs from CourtListener RECAP |
+| `scripts/download_fbi_vault.py` | Download FBI FOIA Vault PDFs |
+| `scripts/run_ner_pass.py` | Deferred NER for documents imported with --skip-ner |
+| `scripts/seed_epstein_matter.py` | Seed matter, parties, claims, terms, datasets |
 | `app/ingestion/adapters/huggingface_csv.py` | Adapter: Parquet → ImportDocument |
-| `app/ingestion/tasks.py` | Celery task: import_text_document |
+| `app/ingestion/adapters/epstein_emails.py` | Adapter: Email datasets (flat + threaded) |
+| `app/ingestion/tasks.py` | Celery tasks: process_document, import_text_document |
 | `app/ingestion/bulk_import.py` | Bulk import orchestration |
-| `data/epstein/epstein_files_20k.parquet` | Downloaded dataset (not committed) |
+| `app/ingestion/parser.py` | Docling PDF/DOCX parser with built-in OCR |

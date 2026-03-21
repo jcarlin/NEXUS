@@ -321,6 +321,11 @@ def main() -> None:
                 "SDNY Case 1:15-cv-07433-LAP. Unsealed motions, depositions, and exhibits "
                 "from CourtListener RECAP archive.",
             ),
+            (
+                "FBI FOIA Vault",
+                "22-part FBI FOIA release from vault.fbi.gov/jeffrey-epstein. "
+                "Scanned image PDFs (~2-3K pages) requiring OCR. Pre-2025 FOIA releases.",
+            ),
         ]
         for ds_name, ds_desc in datasets:
             conn.execute(
