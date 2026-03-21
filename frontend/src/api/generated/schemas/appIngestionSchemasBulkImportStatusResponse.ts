@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AppIngestionSchemasBulkImportStatusResponseAdapterType } from './appIngestionSchemasBulkImportStatusResponseAdapterType';
+import type { AppIngestionSchemasBulkImportStatusResponseSourcePath } from './appIngestionSchemasBulkImportStatusResponseSourcePath';
 import type { AppIngestionSchemasBulkImportStatusResponseTotalDocuments } from './appIngestionSchemasBulkImportStatusResponseTotalDocuments';
 import type { AppIngestionSchemasBulkImportStatusResponseElapsedSeconds } from './appIngestionSchemasBulkImportStatusResponseElapsedSeconds';
 import type { AppIngestionSchemasBulkImportStatusResponseEstimatedRemainingSeconds } from './appIngestionSchemasBulkImportStatusResponseEstimatedRemainingSeconds';
@@ -18,6 +19,7 @@ export interface AppIngestionSchemasBulkImportStatusResponse {
   import_id: string;
   status: string;
   adapter_type?: AppIngestionSchemasBulkImportStatusResponseAdapterType;
+  source_path?: AppIngestionSchemasBulkImportStatusResponseSourcePath;
   total_documents?: AppIngestionSchemasBulkImportStatusResponseTotalDocuments;
   processed_documents?: number;
   failed_documents?: number;

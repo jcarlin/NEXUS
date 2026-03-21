@@ -39,6 +39,7 @@ import type {
   IngestSingleApiV1IngestPostParams,
   JobListResponse,
   JobStatusResponse,
+  ListBulkImportJobsApiV1BulkImportsImportIdJobsGetParams,
   ListBulkImportsApiV1BulkImportsGetParams,
   ListJobsApiV1JobsGetParams,
   PresignedUploadRequest,
@@ -1232,6 +1233,106 @@ export function useGetBulkImportStatusApiV1BulkImportsImportIdGet<TData = Awaite
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getGetBulkImportStatusApiV1BulkImportsImportIdGetQueryOptions(importId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+/**
+ * List individual ingestion jobs belonging to a bulk import (paginated).
+ * @summary List Bulk Import Jobs
+ */
+export const listBulkImportJobsApiV1BulkImportsImportIdJobsGet = (
+    importId: string,
+    params?: ListBulkImportJobsApiV1BulkImportsImportIdJobsGetParams,
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiClient<JobListResponse>(
+      {url: `/api/v1/bulk-imports/${importId}/jobs`, method: 'GET',
+        params, signal
+    },
+      );
+    }
+  
+
+
+
+export const getListBulkImportJobsApiV1BulkImportsImportIdJobsGetQueryKey = (importId?: string,
+    params?: ListBulkImportJobsApiV1BulkImportsImportIdJobsGetParams,) => {
+    return [
+    `/api/v1/bulk-imports/${importId}/jobs`, ...(params ? [params]: [])
+    ] as const;
+    }
+
+    
+export const getListBulkImportJobsApiV1BulkImportsImportIdJobsGetQueryOptions = <TData = Awaited<ReturnType<typeof listBulkImportJobsApiV1BulkImportsImportIdJobsGet>>, TError = HTTPValidationError>(importId: string,
+    params?: ListBulkImportJobsApiV1BulkImportsImportIdJobsGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listBulkImportJobsApiV1BulkImportsImportIdJobsGet>>, TError, TData>>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListBulkImportJobsApiV1BulkImportsImportIdJobsGetQueryKey(importId,params);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listBulkImportJobsApiV1BulkImportsImportIdJobsGet>>> = ({ signal }) => listBulkImportJobsApiV1BulkImportsImportIdJobsGet(importId,params, signal);
+
+      
+
+      
+
+   return  { queryKey, queryFn, enabled: !!(importId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listBulkImportJobsApiV1BulkImportsImportIdJobsGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListBulkImportJobsApiV1BulkImportsImportIdJobsGetQueryResult = NonNullable<Awaited<ReturnType<typeof listBulkImportJobsApiV1BulkImportsImportIdJobsGet>>>
+export type ListBulkImportJobsApiV1BulkImportsImportIdJobsGetQueryError = HTTPValidationError
+
+
+export function useListBulkImportJobsApiV1BulkImportsImportIdJobsGet<TData = Awaited<ReturnType<typeof listBulkImportJobsApiV1BulkImportsImportIdJobsGet>>, TError = HTTPValidationError>(
+ importId: string,
+    params: undefined |  ListBulkImportJobsApiV1BulkImportsImportIdJobsGetParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listBulkImportJobsApiV1BulkImportsImportIdJobsGet>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listBulkImportJobsApiV1BulkImportsImportIdJobsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listBulkImportJobsApiV1BulkImportsImportIdJobsGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListBulkImportJobsApiV1BulkImportsImportIdJobsGet<TData = Awaited<ReturnType<typeof listBulkImportJobsApiV1BulkImportsImportIdJobsGet>>, TError = HTTPValidationError>(
+ importId: string,
+    params?: ListBulkImportJobsApiV1BulkImportsImportIdJobsGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listBulkImportJobsApiV1BulkImportsImportIdJobsGet>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listBulkImportJobsApiV1BulkImportsImportIdJobsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listBulkImportJobsApiV1BulkImportsImportIdJobsGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListBulkImportJobsApiV1BulkImportsImportIdJobsGet<TData = Awaited<ReturnType<typeof listBulkImportJobsApiV1BulkImportsImportIdJobsGet>>, TError = HTTPValidationError>(
+ importId: string,
+    params?: ListBulkImportJobsApiV1BulkImportsImportIdJobsGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listBulkImportJobsApiV1BulkImportsImportIdJobsGet>>, TError, TData>>, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List Bulk Import Jobs
+ */
+
+export function useListBulkImportJobsApiV1BulkImportsImportIdJobsGet<TData = Awaited<ReturnType<typeof listBulkImportJobsApiV1BulkImportsImportIdJobsGet>>, TError = HTTPValidationError>(
+ importId: string,
+    params?: ListBulkImportJobsApiV1BulkImportsImportIdJobsGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listBulkImportJobsApiV1BulkImportsImportIdJobsGet>>, TError, TData>>, }
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListBulkImportJobsApiV1BulkImportsImportIdJobsGetQueryOptions(importId,params,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 

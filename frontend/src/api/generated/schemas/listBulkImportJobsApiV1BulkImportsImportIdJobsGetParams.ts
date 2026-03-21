@@ -6,18 +6,20 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type GetEntityConnectionsByQueryApiV1EntitiesConnectionsGetParams = {
+export type ListBulkImportJobsApiV1BulkImportsImportIdJobsGetParams = {
 /**
- * Entity name
+ * Number of records to skip
+ * @minimum 0
  */
-name: string;
+offset?: number;
 /**
+ * Max records to return
  * @minimum 1
  * @maximum 200
  */
 limit?: number;
 /**
- * Only return connections to other Entity nodes
+ * Filter by job status
  */
-entity_only?: boolean;
+status?: string | null;
 };

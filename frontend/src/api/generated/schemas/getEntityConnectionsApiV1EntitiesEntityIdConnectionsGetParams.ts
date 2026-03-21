@@ -12,4 +12,8 @@ export type GetEntityConnectionsApiV1EntitiesEntityIdConnectionsGetParams = {
  * @maximum 200
  */
 limit?: number;
+/**
+ * Only return connections to other Entity nodes
+ */
+entity_only?: boolean;
 };
