@@ -26,7 +26,7 @@ def main() -> None:
     from app.config import Settings
 
     settings = Settings()
-    engine = create_engine(settings.database_url.replace("+asyncpg", ""))
+    engine = create_engine(settings.postgres_url_sync)
 
     # Fetch all documents that have a job_id different from their id
     with engine.connect() as conn:

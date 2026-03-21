@@ -134,14 +134,19 @@ def _create_document_record(
     metadata: dict | None = None,
     summary: str | None = None,
 ) -> str:
-    """Insert a row into the ``documents`` table and return its id."""
+    """Insert or update a document record keyed by job_id. Returns the document id.
+
+    Idempotent: if a record already exists for this job_id (e.g. from a
+    Celery retry), the existing row is updated and its id is returned
+    instead of creating a duplicate.
+    """
     doc_id = str(uuid.uuid4())
     # Serialize metadata, stripping attachment_data (binary) if present
     meta = dict(metadata) if metadata else {}
     meta.pop("attachment_data", None)
     metadata_json = json.dumps(meta, default=str)
     with engine.connect() as conn:
-        conn.execute(
+        result = conn.execute(
             text(
                 """
                 INSERT INTO documents
@@ -152,6 +157,19 @@ def _create_document_record(
                     (:id, :job_id, :filename, :doc_type, :page_count, :chunk_count,
                      :entity_count, :minio_path, :file_size, :content_hash,
                      :matter_id, :metadata_, :summary, now(), now())
+                ON CONFLICT (job_id) DO UPDATE SET
+                    filename = EXCLUDED.filename,
+                    document_type = EXCLUDED.document_type,
+                    page_count = EXCLUDED.page_count,
+                    chunk_count = EXCLUDED.chunk_count,
+                    entity_count = EXCLUDED.entity_count,
+                    minio_path = EXCLUDED.minio_path,
+                    file_size_bytes = EXCLUDED.file_size_bytes,
+                    content_hash = EXCLUDED.content_hash,
+                    metadata_ = EXCLUDED.metadata_,
+                    summary = EXCLUDED.summary,
+                    updated_at = now()
+                RETURNING id
                 """
             ),
             {
@@ -170,6 +188,8 @@ def _create_document_record(
                 "summary": summary or None,
             },
         )
+        row = result.fetchone()
+        doc_id = str(row[0]) if row else doc_id
         conn.commit()
 
     logger.info("task.document_created", doc_id=doc_id, job_id=job_id, filename=filename)
