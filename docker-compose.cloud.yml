@@ -70,7 +70,7 @@ services:
       resources:
         limits:
           cpus: "2.0"
-          memory: 2G
+          memory: 3G
 
   worker:
     logging: *default-logging
