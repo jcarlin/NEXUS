@@ -79,6 +79,7 @@ async def test_list_documents_with_type_filter(client: AsyncClient) -> None:
     body = response.json()
     assert body["total"] == 1
     assert len(body["items"]) == 1
+    assert body["items"][0]["file_size_bytes"] == 204800
 
     # Verify the filter was passed through
     mock_list.assert_called_once()
@@ -107,6 +108,28 @@ async def test_list_documents_with_file_extension_filter(client: AsyncClient) ->
     mock_list.assert_called_once()
     call_kwargs = mock_list.call_args[1]
     assert call_kwargs.get("file_extension") == "pdf"
+
+
+# ---------------------------------------------------------------------------
+# GET /documents/stats
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_corpus_stats(client: AsyncClient) -> None:
+    """GET /documents/stats should return aggregate corpus statistics."""
+    with patch(
+        "app.documents.service.DocumentService.get_corpus_stats",
+        new_callable=AsyncMock,
+        return_value={"doc_count": 14, "total_pages": 1250, "total_size_bytes": 52428800},
+    ):
+        response = await client.get("/api/v1/documents/stats")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["doc_count"] == 14
+    assert body["total_pages"] == 1250
+    assert body["total_size_bytes"] == 52428800
 
 
 # ---------------------------------------------------------------------------

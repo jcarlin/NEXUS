@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { FileText, Users, Flame, Loader2, Network } from "lucide-react";
 import { apiClient } from "@/api/client";
+import { formatFileSize } from "@/lib/utils";
 import { useAppStore } from "@/stores/app-store";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { RecentActivity } from "@/components/dashboard/recent-activity";
@@ -62,6 +63,16 @@ function DashboardPage() {
     enabled: !!matterId,
   });
 
+  const { data: corpusStats, isLoading: statsLoading } = useQuery({
+    queryKey: ["corpus-stats", matterId],
+    queryFn: () =>
+      apiClient<{ doc_count: number; total_pages: number; total_size_bytes: number }>({
+        url: "/api/v1/documents/stats",
+        method: "GET",
+      }),
+    enabled: !!matterId,
+  });
+
   return (
     <div className="space-y-6 animate-page-in">
       <div>
@@ -76,13 +87,17 @@ function DashboardPage() {
           title="Documents"
           value={docs?.total ?? 0}
           icon={FileText}
-          loading={docsLoading}
-          description="Total ingested"
+          loading={docsLoading || statsLoading}
+          description={
+            corpusStats
+              ? `${formatFileSize(corpusStats.total_size_bytes)} · ${corpusStats.total_pages.toLocaleString()} pages`
+              : "Total ingested"
+          }
           href="/documents"
         />
         <StatCard
           title="Entities"
-          value={graph?.total_nodes ?? 0}
+          value={graph?.node_counts?.Entity ?? 0}
           icon={Users}
           loading={graphLoading}
           description="In knowledge graph"
@@ -128,7 +143,7 @@ function DashboardPage() {
               <div className="space-y-4">
                 <div className="flex gap-6">
                   <div>
-                    <p className="text-2xl font-semibold tracking-tight tabular-nums">{(graph.total_nodes ?? 0).toLocaleString()}</p>
+                    <p className="text-2xl font-semibold tracking-tight tabular-nums">{(graph.node_counts?.Entity ?? 0).toLocaleString()}</p>
                     <p className="text-xs text-muted-foreground">Entities</p>
                   </div>
                   <div>

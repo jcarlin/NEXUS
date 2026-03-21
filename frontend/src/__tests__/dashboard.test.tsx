@@ -91,7 +91,7 @@ describe("DashboardPage", () => {
       }
       if (key === "graph-stats-summary") {
         return {
-          data: { total_nodes: 135, total_edges: 387, node_counts: {} },
+          data: { total_nodes: 135, total_edges: 387, node_counts: { Entity: 98 } },
           isLoading: false,
         };
       }
@@ -101,15 +101,24 @@ describe("DashboardPage", () => {
       if (key === "hot-doc-count") {
         return { data: { items: [], total: 7 }, isLoading: false };
       }
+      if (key === "corpus-stats") {
+        return {
+          data: { doc_count: 42, total_pages: 1250, total_size_bytes: 52428800 },
+          isLoading: false,
+        };
+      }
       return { data: undefined, isLoading: false };
     });
 
     render(<Component />);
     expect(screen.getByText("42")).toBeInTheDocument();
-    // "135" appears in both the Entities stat card and the Knowledge Graph card
-    expect(screen.getAllByText("135").length).toBeGreaterThanOrEqual(1);
+    // Entity count from node_counts.Entity appears in stat card and KG card
+    expect(screen.getAllByText("98").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("7")).toBeInTheDocument();
     expect(screen.getByText("3")).toBeInTheDocument();
+    // Corpus stats description: 50.0 MB · 1,250 pages
+    expect(screen.getByText(/50\.0 MB/)).toBeInTheDocument();
+    expect(screen.getByText(/1,250 pages/)).toBeInTheDocument();
   });
 
   it("renders sub-components for bottom section", () => {
@@ -127,9 +136,9 @@ describe("DashboardPage", () => {
     expect(screen.getByText("Active pipeline jobs")).toBeInTheDocument();
   });
 
-  it("makes 4 useQuery calls (doc-count, graph-stats, active-jobs, hot-docs)", () => {
+  it("makes 5 useQuery calls (doc-count, graph-stats, active-jobs, hot-docs, corpus-stats)", () => {
     render(<Component />);
-    expect(mockUseQuery).toHaveBeenCalledTimes(4);
+    expect(mockUseQuery).toHaveBeenCalledTimes(5);
   });
 
   it("passes matterId-based query keys", () => {
@@ -141,5 +150,6 @@ describe("DashboardPage", () => {
     expect(queryKeys).toContain("graph-stats-summary");
     expect(queryKeys).toContain("active-jobs");
     expect(queryKeys).toContain("hot-doc-count");
+    expect(queryKeys).toContain("corpus-stats");
   });
 });

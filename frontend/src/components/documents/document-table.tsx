@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
-import { formatDate } from "@/lib/utils";
+import { formatDate, formatFileSize } from "@/lib/utils";
 import type { DocumentResponse } from "@/types";
 
 function scoreColor(score: number | null | undefined): string {
@@ -72,6 +72,15 @@ export function DocumentTable({ data, loading }: DocumentTableProps) {
       {
         accessorKey: "page_count",
         header: ({ column }) => <DataTableColumnHeader column={column} title="Pages" />,
+      },
+      {
+        accessorKey: "file_size_bytes",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Size" />,
+        cell: ({ row }) => {
+          const bytes = (row.original as DocumentResponse & { file_size_bytes?: number | null }).file_size_bytes;
+          if (bytes == null) return <span className="text-muted-foreground">{"\u2014"}</span>;
+          return <span className="text-muted-foreground">{formatFileSize(bytes)}</span>;
+        },
       },
       {
         id: "hot_doc_score",

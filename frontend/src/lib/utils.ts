@@ -28,6 +28,13 @@ export function truncate(str: string, maxLength: number): string {
   return str.slice(0, maxLength - 1) + "\u2026";
 }
 
+export function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
 export type DocumentViewType = "pdf" | "text" | "image" | "email" | "unknown";
 
 const TEXT_EXTENSIONS = new Set(["txt", "csv", "md", "log", "json", "xml", "html", "htm", "yaml", "yml", "tsv"]);

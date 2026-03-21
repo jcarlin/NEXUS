@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { DocumentDetailType } from './documentDetailType';
+import type { DocumentDetailFileSizeBytes } from './documentDetailFileSizeBytes';
 import type { DocumentDetailPrivilegeStatus } from './documentDetailPrivilegeStatus';
 import type { DocumentDetailThreadId } from './documentDetailThreadId';
 import type { DocumentDetailIsInclusive } from './documentDetailIsInclusive';
@@ -14,7 +15,6 @@ import type { DocumentDetailVersionGroupId } from './documentDetailVersionGroupI
 import type { DocumentDetailHotDocScore } from './documentDetailHotDocScore';
 import type { DocumentDetailSummary } from './documentDetailSummary';
 import type { DocumentDetailMetadata } from './documentDetailMetadata';
-import type { DocumentDetailFileSizeBytes } from './documentDetailFileSizeBytes';
 import type { DocumentDetailContentHash } from './documentDetailContentHash';
 import type { DocumentDetailJobId } from './documentDetailJobId';
 import type { DocumentDetailUpdatedAt } from './documentDetailUpdatedAt';
@@ -50,6 +50,7 @@ export interface DocumentDetail {
   entity_count?: number;
   created_at: string;
   minio_path: string;
+  file_size_bytes?: DocumentDetailFileSizeBytes;
   privilege_status?: DocumentDetailPrivilegeStatus;
   thread_id?: DocumentDetailThreadId;
   is_inclusive?: DocumentDetailIsInclusive;
@@ -58,7 +59,6 @@ export interface DocumentDetail {
   hot_doc_score?: DocumentDetailHotDocScore;
   summary?: DocumentDetailSummary;
   metadata_?: DocumentDetailMetadata;
-  file_size_bytes?: DocumentDetailFileSizeBytes;
   content_hash?: DocumentDetailContentHash;
   job_id?: DocumentDetailJobId;
   updated_at?: DocumentDetailUpdatedAt;

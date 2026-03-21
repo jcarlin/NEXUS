@@ -26,6 +26,7 @@ import type {
 
 import type {
   CompareDocumentsApiV1DocumentsCompareGetParams,
+  CorpusStatsResponse,
   DocumentDetail,
   DocumentDiffResponse,
   DocumentDownloadApiV1DocumentsDocIdDownloadGetParams,
@@ -130,6 +131,98 @@ export function useCheckDocumentHealthApiV1DocumentsHealthGet<TData = Awaited<Re
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getCheckDocumentHealthApiV1DocumentsHealthGetQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+/**
+ * Return aggregate document count, total pages, and total file size.
+ * @summary Get Corpus Stats
+ */
+export const getCorpusStatsApiV1DocumentsStatsGet = (
+    
+ signal?: AbortSignal
+) => {
+      
+      
+      return apiClient<CorpusStatsResponse>(
+      {url: `/api/v1/documents/stats`, method: 'GET', signal
+    },
+      );
+    }
+  
+
+
+
+export const getGetCorpusStatsApiV1DocumentsStatsGetQueryKey = () => {
+    return [
+    `/api/v1/documents/stats`
+    ] as const;
+    }
+
+    
+export const getGetCorpusStatsApiV1DocumentsStatsGetQueryOptions = <TData = Awaited<ReturnType<typeof getCorpusStatsApiV1DocumentsStatsGet>>, TError = unknown>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCorpusStatsApiV1DocumentsStatsGet>>, TError, TData>>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCorpusStatsApiV1DocumentsStatsGetQueryKey();
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCorpusStatsApiV1DocumentsStatsGet>>> = ({ signal }) => getCorpusStatsApiV1DocumentsStatsGet(signal);
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCorpusStatsApiV1DocumentsStatsGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetCorpusStatsApiV1DocumentsStatsGetQueryResult = NonNullable<Awaited<ReturnType<typeof getCorpusStatsApiV1DocumentsStatsGet>>>
+export type GetCorpusStatsApiV1DocumentsStatsGetQueryError = unknown
+
+
+export function useGetCorpusStatsApiV1DocumentsStatsGet<TData = Awaited<ReturnType<typeof getCorpusStatsApiV1DocumentsStatsGet>>, TError = unknown>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCorpusStatsApiV1DocumentsStatsGet>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getCorpusStatsApiV1DocumentsStatsGet>>,
+          TError,
+          Awaited<ReturnType<typeof getCorpusStatsApiV1DocumentsStatsGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetCorpusStatsApiV1DocumentsStatsGet<TData = Awaited<ReturnType<typeof getCorpusStatsApiV1DocumentsStatsGet>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCorpusStatsApiV1DocumentsStatsGet>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getCorpusStatsApiV1DocumentsStatsGet>>,
+          TError,
+          Awaited<ReturnType<typeof getCorpusStatsApiV1DocumentsStatsGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetCorpusStatsApiV1DocumentsStatsGet<TData = Awaited<ReturnType<typeof getCorpusStatsApiV1DocumentsStatsGet>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCorpusStatsApiV1DocumentsStatsGet>>, TError, TData>>, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get Corpus Stats
+ */
+
+export function useGetCorpusStatsApiV1DocumentsStatsGet<TData = Awaited<ReturnType<typeof getCorpusStatsApiV1DocumentsStatsGet>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCorpusStatsApiV1DocumentsStatsGet>>, TError, TData>>, }
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetCorpusStatsApiV1DocumentsStatsGetQueryOptions(options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 

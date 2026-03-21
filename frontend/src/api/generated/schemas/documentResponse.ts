@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { DocumentResponseType } from './documentResponseType';
+import type { DocumentResponseFileSizeBytes } from './documentResponseFileSizeBytes';
 import type { DocumentResponsePrivilegeStatus } from './documentResponsePrivilegeStatus';
 import type { DocumentResponseThreadId } from './documentResponseThreadId';
 import type { DocumentResponseIsInclusive } from './documentResponseIsInclusive';
@@ -26,6 +27,7 @@ export interface DocumentResponse {
   entity_count?: number;
   created_at: string;
   minio_path: string;
+  file_size_bytes?: DocumentResponseFileSizeBytes;
   privilege_status?: DocumentResponsePrivilegeStatus;
   thread_id?: DocumentResponseThreadId;
   is_inclusive?: DocumentResponseIsInclusive;

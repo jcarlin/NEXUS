@@ -20,6 +20,7 @@ class DocumentResponse(BaseModel):
     entity_count: int = 0
     created_at: datetime
     minio_path: str
+    file_size_bytes: int | None = None
     privilege_status: str | None = None
     thread_id: str | None = None
     is_inclusive: bool | None = None
@@ -61,6 +62,14 @@ class DocumentDetail(DocumentResponse):
 
 class DocumentListResponse(PaginatedResponse[DocumentResponse]):
     """Paginated list of ingested documents."""
+
+
+class CorpusStatsResponse(BaseModel):
+    """Aggregate size and page statistics for a matter's document corpus."""
+
+    doc_count: int = 0
+    total_pages: int = 0
+    total_size_bytes: int = 0
 
 
 class DocumentHealthItem(BaseModel):

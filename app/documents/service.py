@@ -109,6 +109,32 @@ class DocumentService:
         return items
 
     # ------------------------------------------------------------------
+    # CORPUS STATS — aggregate size and page count
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    async def get_corpus_stats(
+        db: AsyncSession,
+        matter_id: UUID,
+    ) -> dict:
+        """Return aggregate document count, total pages, and total size."""
+        result = await db.execute(
+            text(
+                "SELECT COUNT(*) AS doc_count, "
+                "COALESCE(SUM(page_count), 0) AS total_pages, "
+                "COALESCE(SUM(file_size_bytes), 0) AS total_size_bytes "
+                "FROM documents WHERE matter_id = :matter_id"
+            ),
+            {"matter_id": matter_id},
+        )
+        row = result.one()
+        return {
+            "doc_count": row.doc_count,
+            "total_pages": row.total_pages,
+            "total_size_bytes": row.total_size_bytes,
+        }
+
+    # ------------------------------------------------------------------
     # LIST (paginated, with optional filters)
     # ------------------------------------------------------------------
 

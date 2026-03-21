@@ -22,6 +22,7 @@ from app.common.storage import StorageClient
 from app.common.vector_store import VectorStoreClient
 from app.dependencies import get_db, get_graph_service, get_minio, get_qdrant
 from app.documents.schemas import (
+    CorpusStatsResponse,
     DiffBlock,
     DocumentDetail,
     DocumentDiffResponse,
@@ -60,6 +61,7 @@ def _row_to_response(row: dict) -> DocumentResponse:
         entity_count=row.get("entity_count", 0),
         created_at=row["created_at"],
         minio_path=row["minio_path"],
+        file_size_bytes=row.get("file_size_bytes"),
         privilege_status=row.get("privilege_status"),
         thread_id=row.get("thread_id"),
         is_inclusive=row.get("is_inclusive"),
@@ -143,6 +145,22 @@ async def check_document_health(
         partial=partial,
         documents=health_items,
     )
+
+
+# -----------------------------------------------------------------------
+# GET /documents/stats — aggregate corpus size and page count
+# -----------------------------------------------------------------------
+
+
+@router.get("/documents/stats", response_model=CorpusStatsResponse)
+async def get_corpus_stats(
+    db: AsyncSession = Depends(get_db),
+    current_user: UserRecord = Depends(get_current_user),
+    matter_id: UUID = Depends(get_matter_id),
+):
+    """Return aggregate document count, total pages, and total file size."""
+    stats = await DocumentService.get_corpus_stats(db=db, matter_id=matter_id)
+    return CorpusStatsResponse(**stats)
 
 
 # -----------------------------------------------------------------------
