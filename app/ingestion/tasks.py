@@ -1126,18 +1126,23 @@ def _stage_index(ctx: _PipelineContext) -> None:
         logger.error("task.neo4j_index_failed", doc_id=ctx.job_id, exc_info=True)
 
 
-def _update_qdrant_doc_id(ctx: _PipelineContext, doc_id: str) -> None:
+def _update_qdrant_doc_id(
+    qdrant_url: str,
+    job_id: str,
+    doc_id: str,
+    has_visual: bool = False,
+) -> None:
     """Update Qdrant payload to use real document ID instead of job_id placeholder."""
     from qdrant_client import QdrantClient
     from qdrant_client import models as qdrant_models
 
     try:
-        client = QdrantClient(url=ctx.settings.qdrant_url)
+        client = QdrantClient(url=qdrant_url)
         filter_ = qdrant_models.Filter(
             must=[
                 qdrant_models.FieldCondition(
                     key="doc_id",
-                    match=qdrant_models.MatchValue(value=ctx.job_id),
+                    match=qdrant_models.MatchValue(value=job_id),
                 )
             ]
         )
@@ -1150,7 +1155,7 @@ def _update_qdrant_doc_id(ctx: _PipelineContext, doc_id: str) -> None:
             points=filter_,
         )
 
-        if ctx.visual_page_embeddings:
+        if has_visual:
             try:
                 from app.common.vector_store import VISUAL_COLLECTION
 
@@ -1163,9 +1168,9 @@ def _update_qdrant_doc_id(ctx: _PipelineContext, doc_id: str) -> None:
                 pass  # Visual collection may not exist
 
         client.close()
-        logger.info("task.qdrant_doc_id_updated", job_id=ctx.job_id, doc_id=doc_id)
+        logger.info("task.qdrant_doc_id_updated", job_id=job_id, doc_id=doc_id)
     except Exception:
-        logger.warning("task.qdrant_doc_id_update_failed", job_id=ctx.job_id, exc_info=True)
+        logger.warning("task.qdrant_doc_id_update_failed", job_id=job_id, exc_info=True)
 
 
 def _stage_complete(ctx: _PipelineContext) -> None:
@@ -1187,7 +1192,7 @@ def _stage_complete(ctx: _PipelineContext) -> None:
     )
 
     # Update Qdrant payload with real document ID (was using job_id as placeholder)
-    _update_qdrant_doc_id(ctx, doc_id)
+    _update_qdrant_doc_id(ctx.settings.qdrant_url, ctx.job_id, doc_id, bool(ctx.visual_page_embeddings))
 
     # Auto-assign document to dataset if the job has a dataset_id
     if ctx.dataset_id:
@@ -1857,6 +1862,9 @@ def import_text_document(
             matter_id=matter_id,
             metadata=metadata,
         )
+
+        # Update Qdrant payload with real document ID (was using job_id as placeholder)
+        _update_qdrant_doc_id(settings.qdrant_url, job_id, doc_id)
 
         # Set import_source on the document record
         if import_source:

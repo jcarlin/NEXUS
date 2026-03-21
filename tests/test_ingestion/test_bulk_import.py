@@ -91,6 +91,79 @@ def test_import_text_document_skips_parse() -> None:
 
 
 # ---------------------------------------------------------------------------
+# 1b. test_import_text_updates_qdrant_doc_id
+# ---------------------------------------------------------------------------
+
+
+def test_import_text_updates_qdrant_doc_id() -> None:
+    """import_text_document must call _update_qdrant_doc_id to reconcile IDs."""
+    job_id = str(uuid4())
+    real_doc_id = str(uuid4())
+    text_content = "Legal document text."
+    filename = "test.txt"
+    content_hash = compute_content_hash(text_content)
+
+    mock_engine = MagicMock()
+    mock_conn = MagicMock()
+    mock_engine.connect.return_value.__enter__ = MagicMock(return_value=mock_conn)
+    mock_engine.connect.return_value.__exit__ = MagicMock(return_value=False)
+    mock_conn.execute = MagicMock()
+    mock_conn.commit = MagicMock()
+
+    mock_chunks = [
+        MagicMock(
+            text="chunk text",
+            chunk_index=0,
+            token_count=10,
+            metadata={"page_number": 1, "section_heading": ""},
+        )
+    ]
+
+    mock_chunker_cls = MagicMock()
+    mock_chunker_cls.return_value.chunk.return_value = mock_chunks
+
+    mock_qdrant_cls = MagicMock()
+    mock_qdrant_cls.return_value.upsert = MagicMock()
+
+    mock_extractor_cls = MagicMock()
+    mock_extractor_cls.return_value.extract.return_value = []
+
+    with (
+        patch("app.ingestion.tasks._get_sync_engine", return_value=mock_engine),
+        patch("app.ingestion.tasks._update_stage"),
+        patch("app.ingestion.tasks._upload_to_minio"),
+        patch("app.ingestion.tasks._create_document_record", return_value=real_doc_id),
+        patch("app.ingestion.tasks.asyncio.run") as mock_arun,
+        patch("app.ingestion.chunker.TextChunker", mock_chunker_cls),
+        patch("qdrant_client.QdrantClient", mock_qdrant_cls),
+        patch("app.entities.extractor.EntityExtractor", mock_extractor_cls),
+        patch("app.ingestion.tasks.detect_duplicates"),
+        patch("app.ingestion.tasks._update_qdrant_doc_id") as mock_update_doc_id,
+    ):
+        mock_arun.side_effect = [
+            [[0.1] * 1024],  # _embed_chunks
+            None,  # _index_to_neo4j
+        ]
+
+        from app.ingestion.tasks import import_text_document
+
+        result = import_text_document.run(
+            job_id=job_id,
+            text=text_content,
+            filename=filename,
+            content_hash=content_hash,
+            matter_id=str(uuid4()),
+        )
+
+        assert result["status"] == "complete"
+        # _update_qdrant_doc_id must be called with qdrant_url, job_id, doc_id
+        mock_update_doc_id.assert_called_once()
+        call_args = mock_update_doc_id.call_args
+        assert call_args[0][1] == job_id
+        assert call_args[0][2] == real_doc_id
+
+
+# ---------------------------------------------------------------------------
 # 2. test_dataset_adapter_interface_contract
 # ---------------------------------------------------------------------------
 
