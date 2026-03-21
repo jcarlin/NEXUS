@@ -22,6 +22,7 @@ import sys
 import time
 from html.parser import HTMLParser
 from pathlib import Path
+from urllib.parse import unquote
 
 import httpx
 
@@ -72,13 +73,15 @@ def _find_part_links(html: str) -> list[tuple[int, str]]:
     parts: dict[int, str] = {}
 
     # Match patterns like:
-    #   /jeffrey-epstein/jeffrey-epstein-part-01-of-22
     #   /jeffrey-epstein/jeffrey-epstein-part-01-of-22/view
-    #   jeffrey-epstein-part-1
-    part_pattern = re.compile(r"jeffrey-epstein-part-(\d+)", re.IGNORECASE)
+    #   /jeffrey-epstein/Jeffrey%20Epstein%20Part%2001/view
+    #   Jeffrey Epstein Part 01 (after URL-decoding)
+    part_pattern = re.compile(r"(?:jeffrey[- ]epstein[- ])?part[- ]?(\d+)", re.IGNORECASE)
 
     for href in links:
-        match = part_pattern.search(href)
+        # URL-decode before matching so %20 → space
+        decoded = unquote(href)
+        match = part_pattern.search(decoded)
         if match:
             part_num = int(match.group(1))
             # Normalize the URL
