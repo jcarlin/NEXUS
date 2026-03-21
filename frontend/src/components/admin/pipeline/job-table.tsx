@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import { apiClient } from "@/api/client";
 import { useAppStore } from "@/stores/app-store";
 import { useLiveRefresh } from "@/hooks/use-live-refresh";
-import { formatDateTime } from "@/lib/utils";
+import { formatDateTime, formatFileSize } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -164,6 +164,28 @@ export function JobTable() {
         const job = row.original;
         if (job.status !== "processing") return null;
         return <Progress value={jobProgress(job)} className="h-1.5 w-20" />;
+      },
+    }),
+    columnHelper.accessor("page_count", {
+      header: "Pages",
+      cell: (info) => {
+        const val = info.getValue();
+        return (
+          <span className="text-xs text-muted-foreground">
+            {val != null ? val.toLocaleString() : "--"}
+          </span>
+        );
+      },
+    }),
+    columnHelper.accessor("file_size_bytes", {
+      header: "Size",
+      cell: (info) => {
+        const val = info.getValue();
+        return (
+          <span className="text-xs text-muted-foreground whitespace-nowrap">
+            {val != null ? formatFileSize(val) : "--"}
+          </span>
+        );
       },
     }),
     columnHelper.accessor("created_at", {

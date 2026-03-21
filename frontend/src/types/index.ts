@@ -262,6 +262,8 @@ export interface JobStatusResponse {
   created_at: string;
   updated_at?: string | null;
   completed_at?: string | null;
+  file_size_bytes?: number | null;
+  page_count?: number | null;
 }
 
 export interface BulkImportStatusResponse {
@@ -276,4 +278,6 @@ export interface BulkImportStatusResponse {
   created_at: string;
   completed_at: string | null;
   error: string | null;
+  total_size_bytes?: number;
+  total_pages?: number;
 }

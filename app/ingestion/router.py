@@ -450,6 +450,8 @@ async def list_bulk_imports(
             error=row.get("error"),
             created_at=row["created_at"],
             updated_at=row["updated_at"],
+            total_size_bytes=row.get("total_size_bytes", 0),
+            total_pages=row.get("total_pages", 0),
         )
 
     return BulkImportListResponse(

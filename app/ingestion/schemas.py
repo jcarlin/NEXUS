@@ -40,6 +40,9 @@ class JobStatusResponse(BaseModel):
     error: str | None = None
     created_at: datetime
     updated_at: datetime
+    file_size_bytes: int | None = None
+    page_count: int | None = None
+    document_type: str | None = None
 
 
 class JobListResponse(PaginatedResponse[JobStatusResponse]):
@@ -103,6 +106,8 @@ class BulkImportStatusResponse(BaseModel):
     error: str | None = None
     created_at: datetime
     updated_at: datetime
+    total_size_bytes: int = 0
+    total_pages: int = 0
 
 
 # ---------------------------------------------------------------------------

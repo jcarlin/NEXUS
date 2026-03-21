@@ -11,7 +11,7 @@ import { ChevronRight, ChevronDown } from "lucide-react";
 import { apiClient } from "@/api/client";
 import { useAppStore } from "@/stores/app-store";
 import { useLiveRefresh } from "@/hooks/use-live-refresh";
-import { formatDateTime } from "@/lib/utils";
+import { formatDateTime, formatFileSize } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -41,6 +41,8 @@ interface BulkImport {
   source_path: string | null;
   created_at: string;
   updated_at: string;
+  total_size_bytes: number;
+  total_pages: number;
 }
 
 const PAGE_SIZE = 20;
@@ -173,6 +175,19 @@ const columns = [
       </span>
     ),
   }),
+  columnHelper.display({
+    id: "size",
+    header: "Size",
+    cell: ({ row }) => {
+      const item = row.original;
+      if (!item.total_size_bytes) return <span className="text-xs text-muted-foreground">--</span>;
+      return (
+        <span className="text-xs text-muted-foreground whitespace-nowrap" title={`${item.total_pages.toLocaleString()} pages`}>
+          {formatFileSize(item.total_size_bytes)}
+        </span>
+      );
+    },
+  }),
   columnHelper.accessor("created_at", {
     header: ({ column }) => <DataTableColumnHeader column={column} title="Created" />,
     cell: (info) => (
@@ -192,7 +207,7 @@ function BulkImportDetailRow({ importId, importStatus, hasIncompleteProgress }: 
   const { data, isLoading } = useQuery({
     queryKey: ["bulk-import-jobs", matterId, importId, page],
     queryFn: () =>
-      apiClient<PaginatedResponse<{ job_id: string; status: string; stage: string; filename: string | null; progress: { pages_parsed?: number; chunks_created?: number; entities_extracted?: number; embeddings_generated?: number } | null; error: string | null; created_at: string; updated_at: string }>>({
+      apiClient<PaginatedResponse<{ job_id: string; status: string; stage: string; filename: string | null; progress: { pages_parsed?: number; chunks_created?: number; entities_extracted?: number; embeddings_generated?: number } | null; error: string | null; created_at: string; updated_at: string; file_size_bytes?: number | null; page_count?: number | null }>>({
         url: `/api/v1/bulk-imports/${importId}/jobs`,
         method: "GET",
         params: { limit: PAGE, offset: page * PAGE },
@@ -232,6 +247,8 @@ function BulkImportDetailRow({ importId, importStatus, hasIncompleteProgress }: 
             <th className="px-4 py-2 text-left font-medium">Status</th>
             <th className="px-4 py-2 text-left font-medium">Stage</th>
             <th className="px-4 py-2 text-left font-medium">Progress</th>
+            <th className="px-4 py-2 text-left font-medium">Pages</th>
+            <th className="px-4 py-2 text-left font-medium">Size</th>
             <th className="px-4 py-2 text-left font-medium">Error</th>
           </tr>
         </thead>
@@ -251,6 +268,12 @@ function BulkImportDetailRow({ importId, importStatus, hasIncompleteProgress }: 
                 {job.progress
                   ? `${job.progress.chunks_created ?? 0} chunks`
                   : "--"}
+              </td>
+              <td className="px-4 py-1.5 text-muted-foreground">
+                {job.page_count != null ? job.page_count.toLocaleString() : "--"}
+              </td>
+              <td className="px-4 py-1.5 text-muted-foreground whitespace-nowrap">
+                {job.file_size_bytes != null ? formatFileSize(job.file_size_bytes) : "--"}
               </td>
               <td className="px-4 py-1.5 text-destructive truncate max-w-[200px]" title={job.error ?? ""}>
                 {job.error ?? ""}

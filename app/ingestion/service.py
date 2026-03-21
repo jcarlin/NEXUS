@@ -157,30 +157,33 @@ class IngestionService:
         clauses: list[str] = []
         params: dict = {"offset": offset, "limit": limit}
         if matter_id is not None:
-            clauses.append("matter_id = :matter_id")
+            clauses.append("j.matter_id = :matter_id")
             params["matter_id"] = matter_id
         if status is not None:
-            clauses.append("status = :status")
+            clauses.append("j.status = :status")
             params["status"] = status
         if task_type is not None:
-            clauses.append("task_type = :task_type")
+            clauses.append("j.task_type = :task_type")
             params["task_type"] = task_type
         where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
 
         # Total count
-        count_result = await db.execute(text(f"SELECT count(*) FROM jobs {where}"), params)
+        count_result = await db.execute(text(f"SELECT count(*) FROM jobs j {where}"), params)
         total = count_result.scalar_one()
 
         # Paginated rows
         result = await db.execute(
             text(
                 f"""
-                SELECT id, filename, status, stage, progress, error,
-                       parent_job_id, matter_id, metadata_,
-                       task_type, label, created_at, updated_at
-                FROM jobs
+                SELECT j.id, j.filename, j.status, j.stage, j.progress, j.error,
+                       j.parent_job_id, j.matter_id, j.metadata_,
+                       j.task_type, j.label, j.created_at, j.updated_at,
+                       d.file_size_bytes, d.page_count,
+                       d.document_type
+                FROM jobs j
+                LEFT JOIN documents d ON d.job_id = j.id
                 {where}
-                ORDER BY created_at DESC
+                ORDER BY j.created_at DESC
                 OFFSET :offset
                 LIMIT :limit
                 """
@@ -207,8 +210,8 @@ class IngestionService:
     ) -> tuple[list[dict], int]:
         """Return ``(items, total_count)`` for jobs linked to a bulk import."""
         clauses: list[str] = [
-            "bulk_import_job_id = :bulk_import_job_id",
-            "matter_id = :matter_id",
+            "j.bulk_import_job_id = :bulk_import_job_id",
+            "j.matter_id = :matter_id",
         ]
         params: dict = {
             "bulk_import_job_id": bulk_import_job_id,
@@ -217,22 +220,25 @@ class IngestionService:
             "limit": limit,
         }
         if status is not None:
-            clauses.append("status = :status")
+            clauses.append("j.status = :status")
             params["status"] = status
         where = "WHERE " + " AND ".join(clauses)
 
-        count_result = await db.execute(text(f"SELECT count(*) FROM jobs {where}"), params)
+        count_result = await db.execute(text(f"SELECT count(*) FROM jobs j {where}"), params)
         total = count_result.scalar_one()
 
         result = await db.execute(
             text(
                 f"""
-                SELECT id, filename, status, stage, progress, error,
-                       parent_job_id, matter_id, metadata_,
-                       task_type, label, created_at, updated_at
-                FROM jobs
+                SELECT j.id, j.filename, j.status, j.stage, j.progress, j.error,
+                       j.parent_job_id, j.matter_id, j.metadata_,
+                       j.task_type, j.label, j.created_at, j.updated_at,
+                       d.file_size_bytes, d.page_count,
+                       d.document_type
+                FROM jobs j
+                LEFT JOIN documents d ON d.job_id = j.id
                 {where}
-                ORDER BY created_at DESC
+                ORDER BY j.created_at DESC
                 OFFSET :offset
                 LIMIT :limit
                 """
@@ -426,12 +432,22 @@ class IngestionService:
         result = await db.execute(
             text(
                 """
-                SELECT id, matter_id, adapter_type, source_path, status,
-                       total_documents, processed_documents, failed_documents,
-                       skipped_documents, error, created_at, updated_at, completed_at
-                FROM bulk_import_jobs
-                WHERE matter_id = :matter_id
-                ORDER BY created_at DESC
+                SELECT bi.id, bi.matter_id, bi.adapter_type, bi.source_path, bi.status,
+                       bi.total_documents, bi.processed_documents, bi.failed_documents,
+                       bi.skipped_documents, bi.error, bi.created_at, bi.updated_at,
+                       bi.completed_at,
+                       COALESCE(agg.total_size_bytes, 0) AS total_size_bytes,
+                       COALESCE(agg.total_pages, 0) AS total_pages
+                FROM bulk_import_jobs bi
+                LEFT JOIN LATERAL (
+                    SELECT SUM(d.file_size_bytes) AS total_size_bytes,
+                           SUM(d.page_count) AS total_pages
+                    FROM jobs j
+                    JOIN documents d ON d.job_id = j.id
+                    WHERE j.bulk_import_job_id = bi.id
+                ) agg ON true
+                WHERE bi.matter_id = :matter_id
+                ORDER BY bi.created_at DESC
                 OFFSET :offset
                 LIMIT :limit
                 """

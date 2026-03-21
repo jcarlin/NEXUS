@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { DocumentTable } from "@/components/documents/document-table";
 import { DocumentFilters } from "@/components/documents/document-filters";
+import { formatFileSize } from "@/lib/utils";
 import type { DocumentResponse, PaginatedResponse } from "@/types";
 
 export const Route = createLazyFileRoute("/documents/")({
@@ -238,6 +239,8 @@ interface JobStatus {
   error: string | null;
   created_at: string;
   updated_at: string;
+  file_size_bytes?: number | null;
+  page_count?: number | null;
 }
 
 const TERMINAL_STATUSES = new Set(["complete", "completed", "failed", "error"]);
@@ -427,9 +430,19 @@ function BackgroundTasks() {
             return (
               <div key={job.job_id} className="space-y-1">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="truncate max-w-[60%] text-muted-foreground" title={displayName}>
-                    {displayName}
-                  </span>
+                  <div className="truncate max-w-[60%]">
+                    <span className="text-muted-foreground" title={displayName}>
+                      {displayName}
+                    </span>
+                    {isTerminal(job.status) && (job.page_count != null || job.file_size_bytes != null) && (
+                      <span className="ml-1.5 text-[10px] text-muted-foreground/60">
+                        {[
+                          job.page_count != null ? `${job.page_count}p` : null,
+                          job.file_size_bytes != null ? formatFileSize(job.file_size_bytes) : null,
+                        ].filter(Boolean).join(" · ")}
+                      </span>
+                    )}
+                  </div>
                   <div className="flex items-center gap-1.5">
                     {isProcessing && (
                       <Badge variant="outline" className="text-[10px] px-1.5 py-0">
