@@ -128,13 +128,13 @@ const columns = [
     cell: ({ row }) => {
       const item = row.original;
       const total = item.total_documents ?? 0;
-      const processed = item.processed_documents;
-      const pct = total > 0 ? Math.round((processed / total) * 100) : 0;
+      const done = item.processed_documents + item.failed_documents + item.skipped_documents;
+      const pct = total > 0 ? Math.round((done / total) * 100) : 0;
       return (
         <div className="flex items-center gap-2 min-w-[140px]">
           <Progress value={pct} className="h-1.5 w-20" />
           <span className="text-xs text-muted-foreground whitespace-nowrap">
-            {processed.toLocaleString()} / {total.toLocaleString()}
+            {done.toLocaleString()} / {total.toLocaleString()}
           </span>
         </div>
       );
@@ -183,7 +183,7 @@ const columns = [
   }),
 ];
 
-function BulkImportDetailRow({ importId, importStatus }: { importId: string; importStatus: string }) {
+function BulkImportDetailRow({ importId, importStatus, hasIncompleteProgress }: { importId: string; importStatus: string; hasIncompleteProgress: boolean }) {
   const matterId = useAppStore((s) => s.matterId);
   const { isLive } = useLiveRefresh();
   const [page, setPage] = useState(0);
@@ -198,7 +198,7 @@ function BulkImportDetailRow({ importId, importStatus }: { importId: string; imp
         params: { limit: PAGE, offset: page * PAGE },
       }),
     enabled: !!matterId,
-    refetchInterval: isLive && importStatus === "processing" ? 5000 : false,
+    refetchInterval: isLive && (importStatus === "processing" || hasIncompleteProgress) ? 5_000 : false,
   });
 
   if (isLoading) {
@@ -295,9 +295,13 @@ export function BulkImportTable() {
       ? false
       : (query) => {
           const d = query.state.data;
-          if (!d) return 10000;
-          const hasActive = d.items.some((i) => i.status === "processing");
-          return hasActive ? 5000 : false;
+          if (!d) return 10_000;
+          const hasActive = d.items.some((i) => {
+            if (i.status === "processing") return true;
+            const done = i.processed_documents + i.failed_documents + i.skipped_documents;
+            return (i.total_documents ?? 0) > 0 && done < (i.total_documents ?? 0);
+          });
+          return hasActive ? 5_000 : false;
         },
   });
 
@@ -352,7 +356,14 @@ export function BulkImportTable() {
                   {row.getIsExpanded() && (
                     <TableRow key={`${row.id}-detail`}>
                       <TableCell colSpan={row.getVisibleCells().length} className="p-0">
-                        <BulkImportDetailRow importId={row.original.import_id} importStatus={row.original.status} />
+                        <BulkImportDetailRow
+                          importId={row.original.import_id}
+                          importStatus={row.original.status}
+                          hasIncompleteProgress={
+                            (row.original.total_documents ?? 0) > 0 &&
+                            row.original.processed_documents + row.original.failed_documents + row.original.skipped_documents < (row.original.total_documents ?? 0)
+                          }
+                        />
                       </TableCell>
                     </TableRow>
                   )}
