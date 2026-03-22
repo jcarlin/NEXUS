@@ -42,7 +42,13 @@ function IngestPage() {
     refetchInterval: (query) => {
       const data = query.state.data;
       if (!data) return 10000;
-      const hasActive = data.items.some((j) => j.status === "processing");
+      const hasActive = data.items.some(
+        (j) =>
+          j.status === "processing" ||
+          (j.total_documents > 0 &&
+            j.processed_documents + j.failed_documents + j.skipped_documents <
+              j.total_documents),
+      );
       return hasActive ? 5000 : false;
     },
   });

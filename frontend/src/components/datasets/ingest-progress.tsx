@@ -35,7 +35,13 @@ export function IngestProgress({ datasetId }: IngestProgressProps) {
     refetchInterval: (query) => {
       const data = query.state.data;
       if (!data) return 5000;
-      const hasActive = data.some((j) => j.status === "processing");
+      const hasActive = data.some(
+        (j) =>
+          j.status === "processing" ||
+          (j.total_documents > 0 &&
+            j.processed_documents + j.failed_documents + j.skipped_documents <
+              j.total_documents),
+      );
       return hasActive ? 5000 : false;
     },
   });
@@ -73,7 +79,8 @@ export function IngestProgress({ datasetId }: IngestProgressProps) {
                 </Badge>
               </div>
             </div>
-            {job.status === "processing" && (
+            {(job.status === "processing" ||
+              (job.total_documents > 0 && processed < job.total_documents)) && (
               <Progress value={percent} className="h-1.5" />
             )}
             {job.error && (
