@@ -1943,21 +1943,28 @@ def import_text_document(
             except Exception:
                 logger.warning("task.import_text.hot_doc_dispatch_failed", exc_info=True)
 
-        # Increment bulk_import_jobs counter
+        # Increment bulk_import_jobs counter; mark complete if last task
         if bulk_import_job_id:
+            from app.ingestion.bulk_import import complete_bulk_job
+
             with engine.connect() as conn:
-                conn.execute(
+                row = conn.execute(
                     sa_text(
                         """
                         UPDATE bulk_import_jobs
                         SET processed_documents = processed_documents + 1,
                             updated_at = now()
                         WHERE id = :id
+                        RETURNING processed_documents + failed_documents + skipped_documents AS done,
+                                  total_documents
                         """
                     ),
                     {"id": bulk_import_job_id},
-                )
+                ).fetchone()
                 conn.commit()
+
+            if row and row.done >= row.total_documents:
+                complete_bulk_job(engine, bulk_import_job_id, "complete")
 
         _update_stage(engine, job_id, "complete", "complete", progress=progress)
 
@@ -1990,19 +1997,26 @@ def import_text_document(
         # the individual job error is still raised/retried below.
         if bulk_import_job_id:
             try:
+                from app.ingestion.bulk_import import complete_bulk_job
+
                 with engine.connect() as conn:
-                    conn.execute(
+                    row = conn.execute(
                         sa_text(
                             """
                             UPDATE bulk_import_jobs
                             SET failed_documents = failed_documents + 1,
                                 updated_at = now()
                             WHERE id = :id
+                            RETURNING processed_documents + failed_documents + skipped_documents AS done,
+                                      total_documents
                             """
                         ),
                         {"id": bulk_import_job_id},
-                    )
+                    ).fetchone()
                     conn.commit()
+
+                if row and row.done >= row.total_documents:
+                    complete_bulk_job(engine, bulk_import_job_id, "complete")
             except Exception:
                 logger.error("task.import_text.failed_to_update_bulk_job", exc_info=True)
 
@@ -2389,11 +2403,8 @@ def run_bulk_import(
             hooks=dispatched_hooks,
         )
 
-        # Mark bulk job as dispatched (tasks still running in Celery)
-        complete_bulk_job(engine, bulk_job_id, "complete")
-
         _logger.info(
-            "bulk_import.complete",
+            "bulk_import.dispatched",
             dispatched=dispatched,
             skipped=skipped,
         )

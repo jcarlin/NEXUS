@@ -47,12 +47,22 @@ interface BulkImport {
 
 const PAGE_SIZE = 20;
 
+function displayStatus(item: BulkImport): string {
+  if (item.status === "complete" || item.status === "completed") {
+    const total = item.total_documents ?? 0;
+    const done = item.processed_documents + item.failed_documents + item.skipped_documents;
+    if (total > 0 && done < total) return "ingesting";
+  }
+  return item.status;
+}
+
 function statusBadgeProps(status: string): { variant: "default" | "secondary" | "destructive" | "outline"; className: string } {
   switch (status) {
     case "complete":
     case "completed":
       return { variant: "secondary", className: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" };
     case "processing":
+    case "ingesting":
       return { variant: "secondary", className: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" };
     case "pending":
       return { variant: "secondary", className: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200" };
@@ -116,10 +126,11 @@ const columns = [
   columnHelper.accessor("status", {
     header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
     cell: (info) => {
-      const { variant, className } = statusBadgeProps(info.getValue());
+      const status = displayStatus(info.row.original);
+      const { variant, className } = statusBadgeProps(status);
       return (
         <Badge variant={variant} className={`text-[10px] ${className}`}>
-          {info.getValue()}
+          {status}
         </Badge>
       );
     },
