@@ -21,11 +21,14 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     environment:
       # Override dev localhost URLs to use Docker service names
       POSTGRES_URL: postgresql+asyncpg://nexus:${POSTGRES_PASSWORD}@postgres:5432/nexus
       POSTGRES_URL_SYNC: postgresql://nexus:${POSTGRES_PASSWORD}@postgres:5432/nexus
       REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: amqp://nexus:${RABBITMQ_PASSWORD:-nexus}@rabbitmq:5672/nexus
       QDRANT_URL: http://qdrant:6333
       NEO4J_URI: bolt://neo4j:7687
       MINIO_ENDPOINT: minio:9000
@@ -60,11 +63,14 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     environment:
       # Override dev localhost URLs to use Docker service names
       POSTGRES_URL: postgresql+asyncpg://nexus:${POSTGRES_PASSWORD}@postgres:5432/nexus
       POSTGRES_URL_SYNC: postgresql://nexus:${POSTGRES_PASSWORD}@postgres:5432/nexus
       REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: amqp://nexus:${RABBITMQ_PASSWORD:-nexus}@rabbitmq:5672/nexus
       QDRANT_URL: http://qdrant:6333
       NEO4J_URI: bolt://neo4j:7687
       MINIO_ENDPOINT: minio:9000
@@ -85,10 +91,11 @@ services:
       - "5555:5555"
     env_file: .env
     depends_on:
-      redis:
+      rabbitmq:
         condition: service_healthy
     environment:
       REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: amqp://nexus:${RABBITMQ_PASSWORD:-nexus}@rabbitmq:5672/nexus
     volumes:
       - flower-data:/data
     restart: unless-stopped

@@ -188,6 +188,11 @@ class Settings(BaseSettings):
     # --- Redis ---
     redis_url: str = "redis://localhost:6379/0"
 
+    # --- Celery Broker ---
+    # If set, uses this URL as the Celery broker (e.g. amqp://... for RabbitMQ).
+    # If empty/unset, falls back to redis_url.
+    celery_broker_url: str | None = None
+
     # --- Qdrant ---
     qdrant_url: str = "http://localhost:6333"
 

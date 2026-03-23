@@ -9,7 +9,7 @@ settings = Settings()
 
 celery_app = Celery(
     "nexus",
-    broker=settings.redis_url,
+    broker=settings.celery_broker_url or settings.redis_url,
     backend=settings.redis_url,
 )
 
