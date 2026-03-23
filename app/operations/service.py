@@ -660,18 +660,18 @@ class SystemMetricsService:
             if not containers:
                 return {}
             container = containers[0]
-            exec_obj = await container.exec(
+            exec_result = await container.exec(
                 cmd=[
                     "nvidia-smi",
                     "--query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu",
                     "--format=csv,noheader,nounits",
                 ],
             )
-            stream = exec_obj.start()
-            output = b""
-            async for chunk in stream:
-                output += chunk
-            line = output.decode().strip().split("\n")[0]
+            stream = exec_result.start()
+            output = await stream.read_out()
+            if not output:
+                return {}
+            line = output.data.decode().strip().split("\n")[0]
             parts = [p.strip() for p in line.split(",")]
             if len(parts) < 5:
                 return {}
