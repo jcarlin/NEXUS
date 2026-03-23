@@ -603,34 +603,47 @@ class SystemMetricsService:
 
     @staticmethod
     def _read_gpu() -> dict:
-        """Read NVIDIA GPU metrics via nvidia-smi. Returns empty dict on CPU-only hosts."""
+        """Read NVIDIA GPU metrics via Docker exec into a GPU container.
+
+        The API container doesn't have nvidia-smi, but GPU containers
+        (ollama, infinity) do. Uses the Docker socket to exec into one.
+        Falls back gracefully on CPU-only hosts.
+        """
         import subprocess
 
-        try:
-            result = subprocess.run(
-                [
-                    "nvidia-smi",
-                    "--query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu",
-                    "--format=csv,noheader,nounits",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            if result.returncode != 0:
-                return {}
-            line = result.stdout.strip().split("\n")[0]
-            parts = [p.strip() for p in line.split(",")]
-            if len(parts) < 5:
-                return {}
-            return {
-                "name": parts[0],
-                "utilization": float(parts[1]),
-                "memory_used": float(parts[2]),
-                "memory_total": float(parts[3]),
-                "temperature": float(parts[4]),
-            }
-        except (FileNotFoundError, subprocess.TimeoutExpired):
-            return {}
-        except Exception:
-            return {}
+        # Try local nvidia-smi first (works if API has GPU access)
+        for cmd in [
+            [
+                "nvidia-smi",
+                "--query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu",
+                "--format=csv,noheader,nounits",
+            ],
+            [
+                "docker",
+                "exec",
+                "nexus-ollama-1",
+                "nvidia-smi",
+                "--query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu",
+                "--format=csv,noheader,nounits",
+            ],
+        ]:
+            try:
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+                if result.returncode != 0:
+                    continue
+                line = result.stdout.strip().split("\n")[0]
+                parts = [p.strip() for p in line.split(",")]
+                if len(parts) < 5:
+                    continue
+                return {
+                    "name": parts[0],
+                    "utilization": float(parts[1]),
+                    "memory_used": float(parts[2]),
+                    "memory_total": float(parts[3]),
+                    "temperature": float(parts[4]),
+                }
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                continue
+            except Exception:
+                continue
+        return {}

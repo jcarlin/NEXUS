@@ -124,6 +124,12 @@ FLAG_REGISTRY: dict[str, FlagMeta] = {
         category=FlagCategory.INGESTION,
         risk_level=FlagRiskLevel.SAFE,
     ),
+    "defer_ner_to_queue": FlagMeta(
+        display_name="Deferred NER Queue",
+        description="Dispatch GLiNER NER to a dedicated 'ner' Celery queue instead of running inline. Documents become searchable faster; entities populate asynchronously.",
+        category=FlagCategory.INGESTION,
+        risk_level=FlagRiskLevel.SAFE,
+    ),
     # --- Intelligence ---
     "enable_case_setup_agent": FlagMeta(
         display_name="Case Setup Agent",

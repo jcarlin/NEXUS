@@ -987,8 +987,11 @@ def _stage_extract(ctx: _PipelineContext) -> None:
     ctx.all_entities = []
     seen_entities: set[tuple[str, str]] = set()  # (name, type) dedup within doc
 
-    for chunk in ctx.chunks:
-        extracted = extractor.extract(chunk.text)
+    # Batch extraction: process all chunks in batched forward passes
+    chunk_texts = [chunk.text for chunk in ctx.chunks]
+    batch_results = extractor.extract_batch(chunk_texts)
+
+    for chunk, extracted in zip(ctx.chunks, batch_results):
         for ent in extracted:
             _name = " ".join(ent.text.split())  # collapse all whitespace into single space
             key = (_name.lower(), ent.type)
@@ -1029,6 +1032,26 @@ def _stage_extract(ctx: _PipelineContext) -> None:
 
     ctx.progress["entities_extracted"] = len(ctx.all_entities)
     _update_stage(ctx.engine, ctx.job_id, "indexing", "processing", progress=ctx.progress)
+
+
+def _stage_embed_and_extract(ctx: _PipelineContext) -> None:
+    """Stages 3+4 combined: run embedding (I/O-bound, GPU) and NER (CPU-bound) concurrently.
+
+    Embedding via Infinity is an HTTP call to the GPU server.  GLiNER NER is
+    CPU-bound.  They don't compete for the same resource, so overlapping them
+    hides the shorter stage's latency entirely.  The two stages write to
+    independent fields on ``ctx`` (``embeddings`` vs ``all_entities``), so
+    concurrent mutation is safe.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(max_workers=2, thread_name_prefix="ingest") as pool:
+        embed_future = pool.submit(_stage_embed, ctx)
+        extract_future = pool.submit(_stage_extract, ctx)
+
+        # Re-raise exceptions from either stage
+        embed_future.result()
+        extract_future.result()
 
 
 def _stage_index(ctx: _PipelineContext) -> None:
@@ -1574,8 +1597,7 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
         _stage_chunk,
         _stage_contextualize,
         _stage_summarize,
-        _stage_embed,
-        _stage_extract,
+        _stage_embed_and_extract,
         _stage_index,
         _stage_complete,
     ]

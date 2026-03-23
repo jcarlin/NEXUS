@@ -28,6 +28,7 @@ celery_app.conf.update(
     task_queues=[
         Queue("default"),  # user-initiated ingestion (high priority)
         Queue("bulk"),  # batch reindex, matter scans
+        Queue("ner"),  # deferred NER extraction (CPU-bound, separate scaling)
         Queue("background"),  # entity resolution, analysis, case setup, exports
     ],
     task_default_queue="default",

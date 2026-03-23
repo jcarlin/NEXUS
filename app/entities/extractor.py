@@ -134,11 +134,65 @@ class EntityExtractor:
         *,
         entity_types: list[str] | None = None,
         threshold: float = 0.3,
+        batch_size: int = 8,
     ) -> list[list[ExtractedEntity]]:
-        """Extract entities from multiple texts.
+        """Extract entities from multiple texts using batched inference.
 
-        This is a convenience wrapper that calls :meth:`extract` per text.
-        GLiNER itself processes one text at a time, so there is no additional
-        batching optimisation here beyond keeping the model warm in memory.
+        GLiNER's ``batch_predict_entities`` processes multiple texts in a
+        single forward pass, amortising model overhead across the batch.
+
+        Args:
+            texts: Input texts (typically chunks, ~512 tokens each).
+            entity_types: Override the default ``GLINER_ENTITY_TYPES``.
+            threshold: Minimum confidence score for returned entities.
+            batch_size: Number of texts per forward pass (default 8).
+
+        Returns:
+            List of entity lists, one per input text.
         """
-        return [self.extract(text, entity_types=entity_types, threshold=threshold) for text in texts]
+        if not texts:
+            return []
+
+        model = self._load_model()
+        labels = entity_types or GLINER_ENTITY_TYPES
+        max_chars = 4_000
+
+        truncated = [t[:max_chars] if len(t) > max_chars else t for t in texts]
+
+        all_results: list[list[ExtractedEntity]] = []
+
+        try:
+            for i in range(0, len(truncated), batch_size):
+                batch = truncated[i : i + batch_size]
+                batch_preds = model.batch_predict_entities(
+                    batch,
+                    labels,
+                    threshold=threshold,
+                )
+                for preds in batch_preds:
+                    all_results.append(
+                        [
+                            ExtractedEntity(
+                                text=ent["text"],
+                                type=ent["label"],
+                                score=round(ent["score"], 4),
+                                start=ent["start"],
+                                end=ent["end"],
+                            )
+                            for ent in preds
+                        ]
+                    )
+
+            logger.debug(
+                "extractor.batch_extracted",
+                texts=len(texts),
+                total_entities=sum(len(r) for r in all_results),
+                batch_size=batch_size,
+            )
+            return all_results
+
+        except Exception as exc:
+            logger.error("extractor.batch_failed", error=str(exc))
+            # Fallback to sequential extraction on batch failure
+            logger.warning("extractor.batch_fallback_to_sequential")
+            return [self.extract(text, entity_types=entity_types, threshold=threshold) for text in texts]

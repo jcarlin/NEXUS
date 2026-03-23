@@ -83,6 +83,7 @@ class ProcessingConfig(BaseModel):
     chunk_overlap: int
     gliner_model: str
     enable_relationship_extraction: bool
+    defer_ner_to_queue: bool
 
 
 class FeatureFlags(BaseModel):
@@ -215,6 +216,7 @@ class Settings(BaseSettings):
     chunk_overlap: int = 64
     gliner_model: str = "urchade/gliner_multi_pii-v1"
     enable_relationship_extraction: bool = False  # Tier-2 Instructor+LLM extraction off by default
+    defer_ner_to_queue: bool = False  # Deferred NER: dispatch to separate 'ner' queue instead of inline
 
     # --- Rate Limiting ---
     rate_limit_queries_per_minute: int = 30
@@ -555,6 +557,7 @@ class Settings(BaseSettings):
                 chunk_overlap=self.chunk_overlap,
                 gliner_model=self.gliner_model,
                 enable_relationship_extraction=self.enable_relationship_extraction,
+                defer_ner_to_queue=self.defer_ner_to_queue,
             )
         if self.features is None:
             self.features = FeatureFlags(

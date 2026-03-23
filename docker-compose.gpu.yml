@@ -17,6 +17,26 @@ services:
               count: 1
               capabilities: [gpu]
 
+  worker:
+    command: celery -A workers.celery_app worker -Q default,bulk,background -l info -c ${CELERY_CONCURRENCY:-2} --pool=prefork --max-tasks-per-child=100
+
+  ner-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A workers.celery_app worker -Q ner -l info -c ${NER_WORKER_CONCURRENCY:-4} --pool=prefork --max-tasks-per-child=50
+    env_file: .env
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+    depends_on:
+      redis:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
   infinity:
     image: michaelf34/infinity:latest
     deploy:
@@ -28,7 +48,7 @@ services:
               capabilities: [gpu]
     environment:
       INFINITY_MODEL_ID: "${INFINITY_EMBEDDING_MODEL:-BAAI/bge-m3};${INFINITY_RERANKER_MODEL:-BAAI/bge-reranker-v2-m3}"
-      INFINITY_BATCH_SIZE: "64;32"
+      INFINITY_BATCH_SIZE: "128;32"
       INFINITY_ENGINE: "torch;torch"
       INFINITY_DEVICE: "cuda;cuda"
       INFINITY_DTYPE: "float16;float16"
