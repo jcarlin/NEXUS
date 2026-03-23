@@ -49,7 +49,7 @@ export function PipelineSummary() {
         params: { status: "processing", limit: 1 },
       }),
     enabled: !!matterId,
-    refetchInterval: isLive ? 5_000 : false,
+    refetchInterval: isLive ? 10_000 : false,
   });
 
   const { data: failedData, isLoading: failedLoading } = useQuery({

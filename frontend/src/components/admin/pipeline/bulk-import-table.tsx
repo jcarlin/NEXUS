@@ -6,8 +6,9 @@ import {
   flexRender,
   createColumnHelper,
 } from "@tanstack/react-table";
-import { useQuery } from "@tanstack/react-query";
-import { ChevronRight, ChevronDown } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { ChevronRight, ChevronDown, EyeOff, Info, RotateCcw } from "lucide-react";
+import { toast } from "sonner";
 import { apiClient } from "@/api/client";
 import { useAppStore } from "@/stores/app-store";
 import { useLiveRefresh } from "@/hooks/use-live-refresh";
@@ -25,6 +26,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type { PaginatedResponse } from "@/types";
 
 interface BulkImport {
@@ -137,7 +144,20 @@ const columns = [
   }),
   columnHelper.display({
     id: "progress",
-    header: "Progress",
+    header: () => (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex items-center gap-1 cursor-help">
+              Progress <Info className="h-3 w-3 text-muted-foreground" />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="max-w-[260px] text-xs">
+            Processed + failed + skipped out of total files attempted. Dashboard &quot;Documents&quot; count shows only fully ingested documents.
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    ),
     cell: ({ row }) => {
       const item = row.original;
       const total = item.total_documents ?? 0;
@@ -154,10 +174,28 @@ const columns = [
     },
   }),
   columnHelper.accessor("skipped_documents", {
-    header: "Skipped",
-    cell: (info) => (
-      <span className="text-xs text-muted-foreground">{info.getValue()}</span>
+    header: () => (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex items-center gap-1 cursor-help">
+              Skipped <Info className="h-3 w-3 text-muted-foreground" />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="max-w-[240px] text-xs">
+            Documents skipped due to empty text content or duplicate content hash (already ingested). Skipped documents have no individual job rows.
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     ),
+    cell: (info) => {
+      const val = info.getValue();
+      return (
+        <span className={`text-xs ${val > 0 ? "text-amber-600 font-medium" : "text-muted-foreground"}`}>
+          {val}
+        </span>
+      );
+    },
   }),
   columnHelper.accessor("failed_documents", {
     header: "Failed",
@@ -209,9 +247,10 @@ const columns = [
   }),
 ];
 
-function BulkImportDetailRow({ importId, importStatus, hasIncompleteProgress }: { importId: string; importStatus: string; hasIncompleteProgress: boolean }) {
+function BulkImportDetailRow({ importId, importStatus, hasIncompleteProgress, failedDocuments }: { importId: string; importStatus: string; hasIncompleteProgress: boolean; failedDocuments: number }) {
   const matterId = useAppStore((s) => s.matterId);
   const { isLive } = useLiveRefresh();
+  const queryClient = useQueryClient();
   const [page, setPage] = useState(0);
   const PAGE = 20;
 
@@ -224,7 +263,59 @@ function BulkImportDetailRow({ importId, importStatus, hasIncompleteProgress }: 
         params: { limit: PAGE, offset: page * PAGE },
       }),
     enabled: !!matterId,
-    refetchInterval: isLive && (importStatus === "processing" || hasIncompleteProgress) ? 5_000 : false,
+    refetchInterval: isLive && (importStatus === "processing" || hasIncompleteProgress) ? 15_000 : false,
+  });
+
+  const invalidateQueries = () => {
+    void queryClient.invalidateQueries({ queryKey: ["bulk-import-jobs", matterId, importId] });
+    void queryClient.invalidateQueries({ queryKey: ["pipeline-bulk-imports"] });
+    void queryClient.invalidateQueries({ queryKey: ["pipeline-failed-count"] });
+  };
+
+  const retryAllMutation = useMutation({
+    mutationFn: () =>
+      apiClient<{ retried: number; skipped: number }>({
+        url: `/api/v1/bulk-imports/${importId}/retry-failed`,
+        method: "POST",
+      }),
+    onSuccess: (data) => {
+      toast.success(`Retried ${data.retried} failed jobs`);
+      invalidateQueries();
+    },
+    onError: () => toast.error("Failed to retry jobs"),
+  });
+
+  const dismissAllMutation = useMutation({
+    mutationFn: () =>
+      apiClient<{ dismissed: number }>({
+        url: `/api/v1/bulk-imports/${importId}/dismiss-failed`,
+        method: "POST",
+      }),
+    onSuccess: (data) => {
+      toast.success(`Dismissed ${data.dismissed} failed jobs`);
+      invalidateQueries();
+    },
+    onError: () => toast.error("Failed to dismiss jobs"),
+  });
+
+  const retryJobMutation = useMutation({
+    mutationFn: (jobId: string) =>
+      apiClient({ url: `/api/v1/jobs/${jobId}/retry`, method: "POST" }),
+    onSuccess: () => {
+      toast.success("Job retried");
+      invalidateQueries();
+    },
+    onError: () => toast.error("Failed to retry job"),
+  });
+
+  const dismissJobMutation = useMutation({
+    mutationFn: (jobId: string) =>
+      apiClient({ url: `/api/v1/jobs/${jobId}/dismiss`, method: "POST" }),
+    onSuccess: () => {
+      toast.success("Job dismissed");
+      invalidateQueries();
+    },
+    onError: () => toast.error("Failed to dismiss job"),
   });
 
   if (isLoading) {
@@ -251,6 +342,31 @@ function BulkImportDetailRow({ importId, importStatus, hasIncompleteProgress }: 
 
   return (
     <div className="bg-muted/30">
+      {failedDocuments > 0 && (
+        <div className="flex items-center gap-2 px-4 py-2 border-b">
+          <span className="text-xs text-destructive font-medium">{failedDocuments} failed</span>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 px-2 text-[10px]"
+            disabled={retryAllMutation.isPending}
+            onClick={() => retryAllMutation.mutate()}
+          >
+            <RotateCcw className="mr-1 h-3 w-3" />
+            {retryAllMutation.isPending ? "Retrying..." : "Retry All Failed"}
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 px-2 text-[10px] text-muted-foreground"
+            disabled={dismissAllMutation.isPending}
+            onClick={() => dismissAllMutation.mutate()}
+          >
+            <EyeOff className="mr-1 h-3 w-3" />
+            {dismissAllMutation.isPending ? "Dismissing..." : "Dismiss All Failed"}
+          </Button>
+        </div>
+      )}
       <table className="w-full text-xs">
         <thead>
           <tr className="border-b text-muted-foreground">
@@ -261,6 +377,7 @@ function BulkImportDetailRow({ importId, importStatus, hasIncompleteProgress }: 
             <th className="px-4 py-2 text-left font-medium">Pages</th>
             <th className="px-4 py-2 text-left font-medium">Size</th>
             <th className="px-4 py-2 text-left font-medium">Error</th>
+            <th className="px-4 py-2 text-left font-medium"></th>
           </tr>
         </thead>
         <tbody>
@@ -288,6 +405,31 @@ function BulkImportDetailRow({ importId, importStatus, hasIncompleteProgress }: 
               </td>
               <td className="px-4 py-1.5 text-destructive truncate max-w-[200px]" title={job.error ?? ""}>
                 {job.error ?? ""}
+              </td>
+              <td className="px-4 py-1.5">
+                {job.status === "failed" && (
+                  <div className="flex gap-1">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 px-1.5 text-[10px]"
+                      disabled={retryJobMutation.isPending}
+                      onClick={() => retryJobMutation.mutate(job.job_id)}
+                    >
+                      <RotateCcw className="mr-0.5 h-3 w-3" />
+                      Retry
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 px-1.5 text-[10px] text-muted-foreground"
+                      disabled={dismissJobMutation.isPending}
+                      onClick={() => dismissJobMutation.mutate(job.job_id)}
+                    >
+                      <EyeOff className="mr-0.5 h-3 w-3" />
+                    </Button>
+                  </div>
+                )}
               </td>
             </tr>
           ))}
@@ -328,7 +470,7 @@ export function BulkImportTable() {
           i.processed_documents + i.failed_documents + i.skipped_documents;
         return (i.total_documents ?? 0) > 0 && done < (i.total_documents ?? 0);
       });
-      return hasActive ? 5_000 : false;
+      return hasActive ? 10_000 : false;
     },
     [isLive],
   );
@@ -404,6 +546,7 @@ export function BulkImportTable() {
                             (row.original.total_documents ?? 0) > 0 &&
                             row.original.processed_documents + row.original.failed_documents + row.original.skipped_documents < (row.original.total_documents ?? 0)
                           }
+                          failedDocuments={row.original.failed_documents}
                         />
                       </TableCell>
                     </TableRow>
