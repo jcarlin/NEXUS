@@ -229,7 +229,7 @@ New `ner-worker` service: 4 prefork processes, CPU-only, each loads its own GLiN
 When `DEFER_NER_TO_QUEUE=true`: the main pipeline skips inline NER, documents become searchable immediately. NER runs asynchronously on the dedicated queue.
 
 #### 4. Celery concurrency fix (`docker-compose.gpu.yml`)
-GPU overlay overrides worker command to honor `CELERY_CONCURRENCY` env var. Default: 3 workers on GPU VM (was 1 due to hardcoded base compose).
+GPU overlay overrides worker command to honor `CELERY_CONCURRENCY` env var. Default: 2 workers on GPU VM (was 1 due to hardcoded base compose). Keep at 2 with the NER worker running — 3 risks OOM on 30GB VM.
 
 #### 5. Infinity batch size increase
 Embedding batch size bumped from 64 to 128 (T4 16GB VRAM handles this in fp16). Benefits Tier 2 re-embed jobs.
@@ -240,7 +240,7 @@ Fuzzy matching now uses first-character blocking. Entities are bucketed by first
 ### Recommended Settings (GPU VM)
 
 ```bash
-CELERY_CONCURRENCY=3          # Main pipeline workers (30GB VM, ~5.7GB each)
+CELERY_CONCURRENCY=2          # Main pipeline workers (30GB VM, ~5.7GB each; keep at 2 with NER worker)
 NER_WORKER_CONCURRENCY=4      # Dedicated NER workers (600MB GLiNER each)
 DEFER_NER_TO_QUEUE=true        # For bulk import; false for interactive upload
 INFINITY_BATCH_SIZE=128;32    # Embedding;Reranker

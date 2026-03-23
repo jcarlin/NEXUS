@@ -381,6 +381,11 @@ class CeleryService:
         except Exception:
             logger.debug("celery.broker_queue_query.failed")
 
+        # Ensure all declared queues appear in the response (even when idle)
+        for q in celery_app.conf.task_queues:
+            if q.name not in queue_map:
+                queue_map[q.name] = CeleryQueueInfo(name=q.name)
+
         queues = sorted(queue_map.values(), key=lambda q: q.name)
 
         # Build active tasks

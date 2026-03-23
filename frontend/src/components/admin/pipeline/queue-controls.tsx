@@ -25,13 +25,14 @@ interface QueueInfo {
   active: number;
   reserved_count: number;
   scheduled_count: number;
+  pending_count: number;
 }
 
 interface CeleryOverview {
   queues: QueueInfo[];
 }
 
-const KNOWN_QUEUES = ["default", "bulk", "background"];
+const KNOWN_QUEUES = ["default", "bulk", "ner", "background"];
 
 export function QueueControls() {
   const notify = useNotifications();
@@ -109,16 +110,18 @@ export function QueueControls() {
       <div>
         <h3 className="mb-3 text-sm font-semibold">Queue Controls</h3>
         {isLoading ? (
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-4">
             {KNOWN_QUEUES.map((q) => (
               <Skeleton key={q} className="h-20 w-full" />
             ))}
           </div>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-4">
             {KNOWN_QUEUES.map((name) => {
               const info = queueMap.get(name);
-              const depth = info ? info.reserved_count + info.scheduled_count : 0;
+              const depth = info
+                ? info.pending_count + info.reserved_count + info.scheduled_count
+                : 0;
               const isPaused = pausedQueues.has(name);
               return (
                 <Card key={name}>
