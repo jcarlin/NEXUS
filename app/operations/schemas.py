@@ -33,7 +33,7 @@ class ContainerStats(BaseModel):
 
 
 class SystemMetrics(BaseModel):
-    """Host-level CPU, memory, and disk usage."""
+    """Host-level CPU, memory, disk, and optional GPU usage."""
 
     cpu_percent: float = 0.0
     memory_used_mb: float = 0.0
@@ -42,6 +42,11 @@ class SystemMetrics(BaseModel):
     disk_used_gb: float = 0.0
     disk_total_gb: float = 0.0
     disk_percent: float = 0.0
+    gpu_name: str | None = None
+    gpu_utilization_percent: float | None = None
+    gpu_memory_used_mb: float | None = None
+    gpu_memory_total_mb: float | None = None
+    gpu_temperature_c: float | None = None
 
 
 class ContainerInfo(BaseModel):
@@ -103,6 +108,7 @@ class CeleryQueueInfo(BaseModel):
     active_count: int = 0
     reserved_count: int = 0
     scheduled_count: int = 0
+    pending_count: int = 0
 
 
 class CeleryOverview(BaseModel):

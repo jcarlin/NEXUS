@@ -9,7 +9,7 @@ import type { PaginatedResponse } from "@/types";
 
 interface CeleryOverview {
   workers: { hostname: string; status: string }[];
-  queues: { name: string; reserved_count: number; scheduled_count: number }[];
+  queues: { name: string; reserved_count: number; scheduled_count: number; pending_count?: number }[];
 }
 
 interface BulkImportItem {
@@ -71,7 +71,7 @@ export function PipelineSummary() {
   const failedCount = failedData?.total ?? 0;
 
   const queuedCount = (celeryData?.queues ?? []).reduce(
-    (sum, q) => sum + q.reserved_count + q.scheduled_count,
+    (sum, q) => sum + (q.pending_count ?? 0) + q.reserved_count + q.scheduled_count,
     0,
   );
 

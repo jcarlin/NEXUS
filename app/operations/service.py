@@ -360,6 +360,27 @@ class CeleryService:
                     queue_map[queue] = CeleryQueueInfo(name=queue)
                 queue_map[queue].scheduled_count += 1
 
+        # Query broker for pending message counts (tasks not yet claimed)
+        try:
+            broker_url = celery_app.conf.broker_url or ""
+            if "amqp" in broker_url:
+                import httpx
+
+                mgmt_url = "http://rabbitmq:15672/api/queues/nexus"
+                rmq_user = "nexus"
+                rmq_pass = "nexus"
+                resp = httpx.get(mgmt_url, auth=(rmq_user, rmq_pass), timeout=5)
+                if resp.status_code == 200:
+                    for q_info in resp.json():
+                        q_name = q_info.get("name", "")
+                        pending = q_info.get("messages_ready", 0)
+                        if q_name in queue_map:
+                            queue_map[q_name].pending_count = pending
+                        elif pending > 0:
+                            queue_map[q_name] = CeleryQueueInfo(name=q_name, pending_count=pending)
+        except Exception:
+            logger.debug("celery.broker_queue_query.failed")
+
         queues = sorted(queue_map.values(), key=lambda q: q.name)
 
         # Build active tasks
@@ -479,6 +500,8 @@ class SystemMetricsService:
         mem = await SystemMetricsService._read_memory()
         disk = await asyncio.to_thread(SystemMetricsService._read_disk)
 
+        gpu = await asyncio.to_thread(SystemMetricsService._read_gpu)
+
         return SystemMetrics(
             cpu_percent=cpu,
             memory_used_mb=mem[0],
@@ -487,6 +510,11 @@ class SystemMetricsService:
             disk_used_gb=disk[0],
             disk_total_gb=disk[1],
             disk_percent=disk[2],
+            gpu_name=gpu.get("name"),
+            gpu_utilization_percent=gpu.get("utilization"),
+            gpu_memory_used_mb=gpu.get("memory_used"),
+            gpu_memory_total_mb=gpu.get("memory_total"),
+            gpu_temperature_c=gpu.get("temperature"),
         )
 
     @staticmethod
@@ -572,3 +600,37 @@ class SystemMetricsService:
         except Exception as exc:
             logger.warning("system_metrics.disk.error", error=str(exc))
             return (0.0, 0.0, 0.0)
+
+    @staticmethod
+    def _read_gpu() -> dict:
+        """Read NVIDIA GPU metrics via nvidia-smi. Returns empty dict on CPU-only hosts."""
+        import subprocess
+
+        try:
+            result = subprocess.run(
+                [
+                    "nvidia-smi",
+                    "--query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu",
+                    "--format=csv,noheader,nounits",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if result.returncode != 0:
+                return {}
+            line = result.stdout.strip().split("\n")[0]
+            parts = [p.strip() for p in line.split(",")]
+            if len(parts) < 5:
+                return {}
+            return {
+                "name": parts[0],
+                "utilization": float(parts[1]),
+                "memory_used": float(parts[2]),
+                "memory_total": float(parts[3]),
+                "temperature": float(parts[4]),
+            }
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            return {}
+        except Exception:
+            return {}

@@ -106,7 +106,7 @@ All scripts built, tested, and validated locally:
 
 ---
 
-## Phase 1: FBI Files -- `svetfm/epstein-fbi-files` (MVP) -- COMPLETE
+## Phase 1: FBI Files -- `svetfm/epstein-fbi-files` (MVP) -- IMPORT COMPLETE, NER INCOMPLETE
 
 **Why first**: Best metadata (page numbers, Bates, OCR confidence), pre-computed 768d nomic vectors (direct Qdrant load), full citation support. This is the proof-of-concept that validates the entire pipeline.
 
@@ -194,11 +194,15 @@ python scripts/import_fbi_dataset.py \
 
 **What's pending**: Entity graph (requires NER pass, Phase 1b running in background).
 
-### 1.3 GCP Phase 1b Results (2026-03-20)
+### 1.3 GCP Phase 1b Results (2026-03-20) -- INCOMPLETE
 
-**Status**: COMPLETE. All 29,973 jobs finished (confirmed 2026-03-20 14:39 UTC — all jobs status=complete).
+**Status**: INCOMPLETE. Plan originally claimed "all 29,973 jobs finished" but GCP audit (2026-03-22) shows only 1,147 / 27,689 pre-embedded docs (4.1%) have `entity_count > 0`. The "29,973 jobs complete" likely referred to Phase 1a import jobs, not NER jobs. The NER pass either didn't fully run, was interrupted by worker restarts, or `entity_count` wasn't updated for completed NER.
 
-**Command**: `python scripts/run_ner_pass.py --matter-id ...-0002 --concurrency 2`
+**Impact**: Entity graph, person connections, KG visualization, and communication analytics are unavailable for ~96% of pre-embedded docs (FBI + House Oversight). Vector search and citations still work (sourced from Qdrant payloads, independent of NER).
+
+**To complete**: Re-run `python scripts/run_ner_pass.py --matter-id ...-0002 --concurrency 2` after email queue drains. Estimated ~131 hours at concurrency 2 for 26,542 docs.
+
+**Command used**: `python scripts/run_ner_pass.py --matter-id ...-0002 --concurrency 2`
 
 Used 2 workers (not 4) to leave headroom for API on GCP VM (16GB RAM). Each GLiNER model ~600MB = 1.2GB total.
 
@@ -248,7 +252,7 @@ For each document (4,178 total), optionally parallelized via `--concurrency N`:
 
 ---
 
-## Phase 2: House Oversight (pre-embedded) -- `svetfm/epstein-files-nov11-25-house-post-ocr-embeddings` -- COMPLETE
+## Phase 2: House Oversight (pre-embedded) -- `svetfm/epstein-files-nov11-25-house-post-ocr-embeddings` -- MOSTLY COMPLETE (23,511/25,791)
 
 **Why second**: Pre-computed 768d nomic vectors (same as Phase 1 -- $0 cost), adds 69K chunks covering different source material (estate documents, correspondence). **Degraded citations** -- no page numbers, no Bates ranges.
 
@@ -261,7 +265,7 @@ For each document (4,178 total), optionally parallelized via `--concurrency N`:
 
 ### 2.1 GCP Import Results (2026-03-20)
 
-**Status**: COMPLETE. All 25,791 documents imported in ~63 minutes. Ran concurrently with FBI NER pass (Phase 1b) with no issues.
+**Status**: MOSTLY COMPLETE. 23,511 of 25,791 documents imported (~63 min). 2,280 docs were likely skipped by content hash dedup or empty text. GCP audit (2026-03-22) confirmed 23,511 linked to "House Oversight Pre-embedded" dataset. Ran concurrently with FBI NER pass (Phase 1b) with no issues.
 
 **Import command**:
 ```bash
@@ -340,7 +344,7 @@ python scripts/import_fbi_dataset.py \
 
 ---
 
-## Phase 4: Epstein Emails -- DISPATCHED (2026-03-20)
+## Phase 4: Epstein Emails -- PROCESSING (2026-03-20, ~23% complete as of 2026-03-22)
 
 **Two complementary email datasets** -- different extraction methods, different structure.
 
@@ -541,24 +545,24 @@ Phase 0 (Foundation)     <- Must do first, ~2 hours -- COMPLETE
   |
   +-- Phase 1a (FBI import, --skip-ner)  <- 22.1 min, $0 -- COMPLETE (2026-03-20)
   |     |
-  |     +-- Phase 1b (FBI NER pass)      <- ~65 hours background -- COMPLETE (2026-03-20)
+  |     +-- Phase 1b (FBI NER pass)      <- ~131 hrs est. -- INCOMPLETE (4.1% done, see 1.3)
   |     |
-  |     +-- Phase 2 (House Oversight pre-embedded)  <- 63 min, $0 -- COMPLETE (2026-03-20)
+  |     +-- Phase 2 (House Oversight pre-embedded)  <- 63 min, $0 -- MOSTLY COMPLETE (23,511/25,791 docs)
   |     |     OR
   |     +-- Phase 3 (House Oversight full pipeline)  <- Better quality, ~6 hours, $0
   |
-  +-- Phase 4 (Emails)  <- 16,338 dispatched, processing ~90 hrs -- DISPATCHED (2026-03-20)
+  +-- Phase 4 (Emails)  <- 16,338 dispatched, ~23% complete -- PROCESSING (2026-03-21, 3 workers)
   |
   +-- Phase 5 (Court Docs)  <- Anytime, ~2 hours, $0
   |
-  +-- Phase 6 (FBI FOIA)  <- After pipeline proven, ~4 hours, $0-10
+  +-- Phase 6 (FBI FOIA)  <- After pipeline proven, ~4 hours, $0-10 (20 test docs imported)
   |
   +-- Phase 7 (DOJ EFTA)  <- Long-term, days/weeks, $0-50
 ```
 
-**Recommended first session**: Phase 0 + Phase 1a (foundation + fast FBI import). Gets 8,150 real documents searchable with full citations in ~1 hour. Phase 1b (NER) runs as a background job afterward.
+**GCP audit (2026-03-22)**: Phase 1b NER is ~96% incomplete despite being marked COMPLETE. 26,542 pre-embedded docs have `entity_count=0`. Phase 4 emails are actively processing (~3,810 of ~16,338 docs created, ~9,285 tasks still pending in queue, 76 failed). 3 Celery workers active.
 
-**Next sessions**: Phase 4 (emails) for communication analytics, then Phase 5 (court docs) for high-value depositions.
+**Next priority after email queue drains**: Re-run NER pass for pre-embedded docs, retry failed jobs, then consider Phase 5 (court docs).
 
 ---
 
