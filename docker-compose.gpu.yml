@@ -59,5 +59,29 @@ services:
       - infinity-models:/app/.cache
     restart: unless-stopped
 
+  vllm:
+    image: vllm/vllm-openai:latest
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    command: >
+      --model ${VLLM_MODEL:-Qwen/Qwen2.5-14B-Instruct-AWQ}
+      --quantization awq
+      --max-model-len ${VLLM_MAX_MODEL_LEN:-8192}
+      --gpu-memory-utilization 0.6
+      --trust-remote-code
+    ports:
+      - "8080:8000"
+    volumes:
+      - vllm-models:/root/.cache/huggingface
+    restart: unless-stopped
+    profiles:
+      - vllm
+
 volumes:
   infinity-models:
+  vllm-models:
