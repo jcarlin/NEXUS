@@ -29,8 +29,10 @@ function ChatPage() {
     cancel,
   } = useStreamQuery();
 
+  const sentRef = useRef(false);
   const handleSend = useCallback(
     (text: string) => {
+      sentRef.current = true;
       send(text);
     },
     [send],
@@ -38,6 +40,7 @@ function ChatPage() {
 
   const handleRetry = useCallback(() => {
     if (lastQuery) {
+      sentRef.current = true;
       send(lastQuery);
     }
   }, [lastQuery, send]);
@@ -45,7 +48,7 @@ function ChatPage() {
   // Auto-navigate to thread page once stream completes with a threadId
   const navigatedRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!isStreaming && threadId && navigatedRef.current !== threadId) {
+    if (sentRef.current && !isStreaming && threadId && navigatedRef.current !== threadId) {
       navigatedRef.current = threadId;
       void navigate({
         to: "/chat/$threadId",
@@ -57,13 +60,14 @@ function ChatPage() {
   // Navigate to thread page once stream completes and we have a thread ID
   const handleFollowUp = useCallback(
     (question: string) => {
-      if (threadId) {
+      if (sentRef.current && threadId) {
         void navigate({
           to: "/chat/$threadId",
           params: { threadId },
           search: { followUp: question },
         });
       } else {
+        sentRef.current = true;
         send(question);
       }
     },

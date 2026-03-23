@@ -462,10 +462,6 @@ export const useStreamStore = create<StreamStore>()((set, get) => ({
     for (const [key, entry] of get().streams) {
       if (key.startsWith("_new_") && entry.state.isStreaming) return key;
     }
-    // Also return completed but not yet cleaned up new-chat streams
-    for (const [key] of get().streams) {
-      if (key.startsWith("_new_")) return key;
-    }
     return undefined;
   },
 
