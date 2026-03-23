@@ -10,14 +10,14 @@ Multimodal RAG investigation platform for legal document intelligence. Ingests, 
 - **Investigate relationships** — knowledge graph with entity resolution, email threading, communication analytics, topic clustering
 - **Export for court** — annotations, production sets, Bates numbering, redaction, EDRM-compatible output
 - **Full auditability** — SOC 2-ready audit trail for every API call and LLM invocation
-- **Run anywhere** — 4 LLM providers, 5 embedding providers, full local deployment with zero cloud dependency
+- **Run anywhere** — 4 LLM providers, 6 embedding providers, CPU or GPU, full local deployment with zero cloud dependency
 
 ## Tech Stack
 
 | Component | Technology |
 |---|---|
 | API | FastAPI |
-| Task Queue | Celery + Redis |
+| Task Queue | Celery + RabbitMQ (Redis fallback) |
 | Object Storage | MinIO (S3-compatible) |
 | Metadata DB | PostgreSQL 16 |
 | Vector DB | Qdrant |
@@ -66,7 +66,7 @@ vLLM and Ollama both expose OpenAI-compatible APIs, so switching is a config cha
 
 ## Embedding Providers
 
-NEXUS supports 5 embedding providers. Set `EMBEDDING_PROVIDER` in `.env`:
+NEXUS supports 6 embedding providers. Set `EMBEDDING_PROVIDER` in `.env`:
 
 | Provider | `EMBEDDING_PROVIDER` | Default Model | Dimensions | Requires |
 |----------|---------------------|---------------|------------|----------|
@@ -75,6 +75,7 @@ NEXUS supports 5 embedding providers. Set `EMBEDDING_PROVIDER` in `.env`:
 | Local | `local` | `BAAI/bge-large-en-v1.5` | 1024 | — (auto-downloads) |
 | Gemini | `gemini` | `gemini-embedding-exp-03-07` | 1024 | `GEMINI_API_KEY` |
 | TEI | `tei` | Any HuggingFace model | varies | `TEI_EMBEDDING_URL` |
+| BGE-M3 | `bgem3` | `BAAI/bge-m3` | 1024 | — (auto-downloads, dense+sparse in one pass) |
 
 Ollama and Local providers run entirely on-device — no data leaves the machine. Set `EMBEDDING_DIMENSIONS` to match your model's output size. Changing dimensions requires deleting the Qdrant `nexus_text` collection (auto-recreated on startup).
 
@@ -154,9 +155,10 @@ nexus/
 ├── tests/                      # 512 backend tests (mirrors app/ structure)
 ├── scripts/                    # cloud-deploy.sh, seed_admin.py, import_dataset.py, evaluate.py
 ├── docs/                       # modules.md, database-schema.md, feature-flags.md, agents.md, ...
-├── docker-compose.yml          # Infrastructure services (dev)
+├── docker-compose.yml          # Infrastructure services (dev) + RabbitMQ
 ├── docker-compose.prod.yml     # Full containerized stack
 ├── docker-compose.cloud.yml    # Cloud overlay (Caddy + TLS)
+├── docker-compose.gpu.yml      # GPU overlay (NVIDIA passthrough for Ollama + TEI)
 ├── docker-compose.local.yml    # Local LLM stack (vLLM/Ollama, TEI)
 ├── Caddyfile                   # Reverse proxy config
 ├── Makefile                    # Dev workflow targets
@@ -213,6 +215,32 @@ Optional capabilities controlled via environment variables. See [docs/feature-fl
 | `ENABLE_SSO` | `false` | OIDC/OAuth2 SSO authentication |
 | `ENABLE_MEMO_DRAFTING` | `false` | LLM-powered legal memo generation from investigation results |
 
+## Deployment
+
+### CPU (default)
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.cloud.yml up -d
+```
+
+### GPU (NVIDIA T4/L4/A100)
+Add the GPU overlay for accelerated embeddings and reranking (~20x faster):
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+  -f docker-compose.cloud.yml -f docker-compose.gpu.yml up -d
+```
+
+Requires NVIDIA drivers + [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html). The GPU overlay adds NVIDIA passthrough to Ollama and an optional TEI embedding server. See [docs/CLOUD-DEPLOY.md](docs/CLOUD-DEPLOY.md) for full GPU VM provisioning guide.
+
+### Celery Broker
+
+By default, Celery uses Redis as its message broker. For production, set `CELERY_BROKER_URL` to use RabbitMQ (included in `docker-compose.yml`):
+
+```bash
+CELERY_BROKER_URL=amqp://nexus:nexus@rabbitmq:5672/nexus
+```
+
+Leave `CELERY_BROKER_URL` empty to fall back to Redis. See [docs/celery-scaling.md](docs/celery-scaling.md) for worker scaling guide.
+
 ## See Also
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) — System design, tech stack, data flow, security model
@@ -223,5 +251,6 @@ Optional capabilities controlled via environment variables. See [docs/feature-fl
 - [docs/feature-flags.md](docs/feature-flags.md) — All 16 feature flags with resource impact
 - [docs/agents.md](docs/agents.md) — 6 LangGraph agents with state schemas and tools
 - [docs/testing-guide.md](docs/testing-guide.md) — Test infrastructure, fixtures, patterns
-- [docs/CLOUD-DEPLOY.md](docs/CLOUD-DEPLOY.md) — Cloud deployment guide (GCP + Vercel)
+- [docs/CLOUD-DEPLOY.md](docs/CLOUD-DEPLOY.md) — Cloud deployment guide (GCP + Vercel, CPU + GPU)
+- [docs/celery-scaling.md](docs/celery-scaling.md) — Celery worker scaling runbook
 - [.env.example](.env.example) — All configuration variables

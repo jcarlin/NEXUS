@@ -230,7 +230,7 @@ This project uses [Semantic Versioning](https://semver.org/) with `v`-prefixed g
 - **Don't use pgvector**: Qdrant for vectors (multi-vector support, metadata filtering)
 - **Don't use Marker**: GPL-3.0 license
 - **Don't use fixed-size chunking**: Use semantic boundaries (Docling document structure)
-- **Don't store chat history in Redis**: PostgreSQL only (LangGraph PostgresCheckpointer). Redis = cache + broker
+- **Don't store chat history in Redis**: PostgreSQL only (LangGraph PostgresCheckpointer). Redis = cache + result backend. RabbitMQ = Celery broker (via `CELERY_BROKER_URL`, falls back to Redis if unset)
 - **Don't call LLM for every NER**: GLiNER handles entity extraction at ~50ms/chunk. LLM only for relationship extraction on entity-rich chunks (feature-flagged)
 
 ---

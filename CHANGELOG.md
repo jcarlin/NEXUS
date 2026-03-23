@@ -10,6 +10,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follo
 
 ## [Unreleased]
 
+### Added
+- RabbitMQ as Celery message broker — durable queues, publisher confirms, guaranteed redelivery on worker crash (b241664)
+- `CELERY_BROKER_URL` config: set to `amqp://...` for RabbitMQ, leave empty for Redis fallback (backwards compatible)
+- `docker-compose.gpu.yml` overlay for NVIDIA GPU passthrough (Ollama + TEI embedder)
+- TEI embedding server (HuggingFace Text Embeddings Inference) with GPU support in GPU overlay
+- `docs/celery-scaling.md` operational runbook for Celery worker scaling (hot-scaling, pool_grow, memory limits)
+- GPU VM provisioning guide in `docs/CLOUD-DEPLOY.md` (T4/L4, spot pricing, disk snapshots)
+- Weekly disk snapshot schedule for GPU VM backup (30-day retention)
+
 ## [1.15.1] - 2026-03-20
 
 ### Fixed

@@ -52,7 +52,8 @@ React SPA ──── HTTPS ──── Nginx/Caddy ──── FastAPI ─�
                │  Neo4j (entity graph, multi-hop, temporal, path-finding)│
                │  PostgreSQL (users, matters, docs, audit, chat)         │
                │  MinIO (raw files, parsed output, page images)          │
-               │  Redis (Celery broker, rate limiting, cache)            │
+               │  RabbitMQ (Celery broker — durable queues, redelivery)  │
+               │  Redis (rate limiting, cache, Celery result backend)   │
                └─────────────────────────────────────────────────────────┘
 
                ┌────────────────── INGESTION PIPELINE ───────────────────┐
@@ -72,12 +73,13 @@ React SPA ──── HTTPS ──── Nginx/Caddy ──── FastAPI ─�
 | Component | Technology | Notes |
 |---|---|---|
 | API | FastAPI 0.115+ | Async, OpenAPI docs, DI |
-| Task Queue | Celery 5.5+ / Redis | Background ingestion pipeline |
+| Task Queue | Celery 5.5+ / RabbitMQ | Durable message broker; Redis fallback via `CELERY_BROKER_URL` |
 | Object Storage | MinIO (S3-compat) | Bucket webhook triggers ingestion |
 | Metadata DB | PostgreSQL 16 | Users, matters, jobs, documents, chat, audit, LangGraph checkpointer |
 | Vector DB | Qdrant v1.13.2 | Named dense+sparse vectors, native RRF fusion |
 | Knowledge Graph | Neo4j 5.x | Entity graph, multi-hop traversal, path-finding, temporal queries |
-| Cache/Broker | Redis 7+ | Celery broker, rate limiting, response cache |
+| Message Broker | RabbitMQ 3.x | Celery broker — durable queues, publisher confirms, dead-letter handling |
+| Cache | Redis 7+ | Rate limiting, Celery result backend, response cache |
 
 ### AI Models
 
