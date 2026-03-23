@@ -1816,12 +1816,19 @@ def import_text_document(
         _update_stage(engine, job_id, "extracting", "processing", progress=progress)
 
         # ---------------------------------------------------------------
-        # Stage 4: EXTRACTING — use pre_entities or run GLiNER
+        # Stage 4: EXTRACTING — use pre_entities, defer to NER queue, or run GLiNER inline
         # ---------------------------------------------------------------
         all_entities: list[dict] = []
 
         if pre_entities:
             all_entities = pre_entities
+        elif settings.defer_ner_to_queue:
+            # Dispatch NER to dedicated queue — document becomes searchable immediately
+            extract_entities_for_job.apply_async(
+                args=[job_id, matter_id],
+                queue="ner",
+            )
+            logger.info("task.import_text.ner_deferred", job_id=job_id)
         else:
             from app.entities.extractor import EntityExtractor
 
