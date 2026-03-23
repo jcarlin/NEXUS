@@ -1,6 +1,6 @@
 import { createLazyFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { useState, useRef, useEffect } from "react";
+import { useCallback, useState, useRef, useEffect } from "react";
 import { Upload, AlertTriangle, ChevronDown, ChevronRight, RefreshCw, Loader2, FileUp, CheckCircle2, XCircle, Clock, X, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { apiClient } from "@/api/client";
@@ -309,11 +309,15 @@ function BackgroundTasks() {
         params: { limit: 20 },
       }),
     enabled: !!matterId,
-    refetchInterval: (query) => {
-      const items = query.state.data?.items ?? [];
-      const hasActive = items.some((j) => !isTerminal(j.status));
-      return hasActive ? 3000 : false;
-    },
+    refetchInterval: useCallback(
+      (query: { state: { data: PaginatedResponse<JobStatus> | undefined } }) => {
+        const items = query.state.data?.items ?? [];
+        const hasActive = items.some((j) => !isTerminal(j.status));
+        return hasActive ? 3000 : false;
+      },
+      [],
+    ),
+    gcTime: 5 * 60_000,
   });
 
   const cancelMutation = useMutation({

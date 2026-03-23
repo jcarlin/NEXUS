@@ -309,11 +309,19 @@ class CeleryService:
         """Get overview of all Celery workers, queues, and active tasks."""
         inspect = celery_app.control.inspect()
 
-        active = await asyncio.to_thread(inspect.active) or {}
-        stats = await asyncio.to_thread(inspect.stats) or {}
-        active_queues = await asyncio.to_thread(inspect.active_queues) or {}
-        reserved = await asyncio.to_thread(inspect.reserved) or {}
-        scheduled = await asyncio.to_thread(inspect.scheduled) or {}
+        # Parallelize the 5 inspect calls (~5s sequential → ~1s parallel)
+        active_r, stats_r, active_queues_r, reserved_r, scheduled_r = await asyncio.gather(
+            asyncio.to_thread(inspect.active),
+            asyncio.to_thread(inspect.stats),
+            asyncio.to_thread(inspect.active_queues),
+            asyncio.to_thread(inspect.reserved),
+            asyncio.to_thread(inspect.scheduled),
+        )
+        active = active_r or {}
+        stats = stats_r or {}
+        active_queues = active_queues_r or {}
+        reserved = reserved_r or {}
+        scheduled = scheduled_r or {}
 
         # Build worker info
         workers: list[CeleryWorkerInfo] = []

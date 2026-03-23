@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
@@ -46,6 +47,16 @@ export function PipelineStatus() {
     },
   });
 
+  const pipelineRefetch = useCallback(
+    (query: { state: { data: PaginatedResponse<JobStatusResponse> | undefined } }) => {
+      const d = query.state.data;
+      if (!d) return 5_000;
+      const hasActive = d.items.some((j: JobStatusResponse) => j.status === "processing");
+      return hasActive ? 5_000 : false;
+    },
+    [],
+  );
+
   const { data, isLoading } = useQuery({
     queryKey: ["pipeline-jobs", matterId],
     queryFn: () =>
@@ -55,12 +66,8 @@ export function PipelineStatus() {
         params: { limit: 5 },
       }),
     enabled: !!matterId,
-    refetchInterval: (query) => {
-      const d = query.state.data;
-      if (!d) return 5_000;
-      const hasActive = d.items.some((j: JobStatusResponse) => j.status === "processing");
-      return hasActive ? 5_000 : false;
-    },
+    refetchInterval: pipelineRefetch,
+    gcTime: 5 * 60_000,
   });
 
   return (

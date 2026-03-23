@@ -160,8 +160,13 @@ class IngestionService:
             clauses.append("j.matter_id = :matter_id")
             params["matter_id"] = matter_id
         if status is not None:
-            clauses.append("j.status = :status")
-            params["status"] = status
+            statuses = [s.strip() for s in status.split(",") if s.strip()]
+            if len(statuses) == 1:
+                clauses.append("j.status = :status")
+                params["status"] = statuses[0]
+            elif statuses:
+                clauses.append("j.status = ANY(:statuses)")
+                params["statuses"] = statuses
         if task_type is not None:
             clauses.append("j.task_type = :task_type")
             params["task_type"] = task_type
@@ -433,12 +438,20 @@ class IngestionService:
             text(
                 """
                 SELECT bi.id, bi.matter_id, bi.adapter_type, bi.source_path, bi.status,
-                       bi.total_documents, bi.processed_documents, bi.failed_documents,
-                       bi.skipped_documents, bi.error, bi.created_at, bi.updated_at,
+                       bi.total_documents, bi.skipped_documents,
+                       COALESCE(counts.done, 0) AS processed_documents,
+                       COALESCE(counts.failed, 0) AS failed_documents,
+                       bi.error, bi.created_at, bi.updated_at,
                        bi.completed_at,
                        COALESCE(agg.total_size_bytes, 0) AS total_size_bytes,
                        COALESCE(agg.total_pages, 0) AS total_pages
                 FROM bulk_import_jobs bi
+                LEFT JOIN LATERAL (
+                    SELECT count(*) FILTER (WHERE j.status = 'complete') AS done,
+                           count(*) FILTER (WHERE j.status = 'failed') AS failed
+                    FROM jobs j
+                    WHERE j.bulk_import_job_id = bi.id
+                ) counts ON true
                 LEFT JOIN LATERAL (
                     SELECT SUM(d.file_size_bytes) AS total_size_bytes,
                            SUM(d.page_count) AS total_pages

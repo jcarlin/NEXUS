@@ -1,5 +1,5 @@
 import { createLazyFileRoute } from "@tanstack/react-router";
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Upload, Server, FileSpreadsheet } from "lucide-react";
@@ -39,18 +39,22 @@ function IngestPage() {
         method: "GET",
         params: { limit: 20 },
       }),
-    refetchInterval: (query) => {
-      const data = query.state.data;
-      if (!data) return 10000;
-      const hasActive = data.items.some(
-        (j) =>
-          j.status === "processing" ||
-          (j.total_documents > 0 &&
-            j.processed_documents + j.failed_documents + j.skipped_documents <
-              j.total_documents),
-      );
-      return hasActive ? 5000 : false;
-    },
+    refetchInterval: useCallback(
+      (query: { state: { data: PaginatedResponse<BulkImportStatusResponse> | undefined } }) => {
+        const data = query.state.data;
+        if (!data) return 10000;
+        const hasActive = data.items.some(
+          (j) =>
+            j.status === "processing" ||
+            (j.total_documents > 0 &&
+              j.processed_documents + j.failed_documents + j.skipped_documents <
+                j.total_documents),
+        );
+        return hasActive ? 5000 : false;
+      },
+      [],
+    ),
+    gcTime: 5 * 60_000,
   });
 
   return (

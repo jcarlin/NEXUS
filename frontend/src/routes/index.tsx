@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { FileText, Users, Flame, Loader2, Network } from "lucide-react";
@@ -46,11 +47,14 @@ function DashboardPage() {
         params: { status: "processing", limit: 1 },
       }),
     enabled: !!matterId,
-    refetchInterval: (query) => {
-      const d = query.state.data;
-      if (!d) return 10_000;
-      return d.total > 0 ? 10_000 : false;
-    },
+    refetchInterval: useCallback(
+      (query: { state: { data: PaginatedResponse<{ id: string }> | undefined } }) => {
+        const d = query.state.data;
+        if (!d) return 10_000;
+        return d.total > 0 ? 10_000 : false;
+      },
+      [],
+    ),
   });
 
   const { data: hotDocs, isLoading: hotDocsLoading } = useQuery({

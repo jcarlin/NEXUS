@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import {
   useReactTable,
   getCoreRowModel,
@@ -8,7 +8,7 @@ import {
   type SortingState,
 } from "@tanstack/react-table";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { EyeOff, RotateCcw, X } from "lucide-react";
+import { Check, ChevronsUpDown, EyeOff, RotateCcw, X } from "lucide-react";
 import { toast } from "sonner";
 import { apiClient } from "@/api/client";
 import { useAppStore } from "@/stores/app-store";
@@ -16,16 +16,15 @@ import { useLiveRefresh } from "@/hooks/use-live-refresh";
 import { formatDateTime, formatFileSize } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -39,17 +38,42 @@ import type { PaginatedResponse, JobStatusResponse } from "@/types";
 
 const PAGE_SIZE = 25;
 
-function statusBadgeProps(status: string): { variant: "default" | "secondary" | "destructive" | "outline"; className: string } {
+const STATUS_OPTIONS = [
+  { value: "pending", label: "Pending" },
+  { value: "processing", label: "Processing" },
+  { value: "complete", label: "Completed" },
+  { value: "failed", label: "Failed" },
+  { value: "dismissed", label: "Dismissed" },
+] as const;
+
+function statusBadgeProps(status: string): {
+  variant: "default" | "secondary" | "destructive" | "outline";
+  className: string;
+} {
   switch (status) {
     case "complete":
     case "completed":
-      return { variant: "secondary", className: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" };
+      return {
+        variant: "secondary",
+        className:
+          "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+      };
     case "processing":
-      return { variant: "secondary", className: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" };
+      return {
+        variant: "secondary",
+        className:
+          "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+      };
     case "pending":
-      return { variant: "secondary", className: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200" };
+      return {
+        variant: "secondary",
+        className:
+          "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
+      };
     case "failed":
       return { variant: "destructive", className: "" };
+    case "dismissed":
+      return { variant: "outline", className: "text-muted-foreground" };
     default:
       return { variant: "outline", className: "" };
   }
@@ -60,7 +84,14 @@ function jobProgress(job: JobStatusResponse): number {
   if (job.status === "failed") return 0;
   const p = job.progress;
   if (!p) return 0;
-  const stages = ["parsing", "chunking", "embedding", "extracting", "indexing", "completed"];
+  const stages = [
+    "parsing",
+    "chunking",
+    "embedding",
+    "extracting",
+    "indexing",
+    "completed",
+  ];
   const idx = stages.indexOf(p.stage);
   return idx >= 0 ? Math.round(((idx + 1) / stages.length) * 100) : 10;
 }
@@ -72,18 +103,37 @@ export function JobTable() {
   const { isLive } = useLiveRefresh();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(0);
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(
+    new Set(),
+  );
   const [search, setSearch] = useState("");
   const [sorting, setSorting] = useState<SortingState>([]);
+
+  const statusParam =
+    selectedStatuses.size > 0
+      ? Array.from(selectedStatuses).join(",")
+      : undefined;
 
   const params: Record<string, string | number> = {
     limit: PAGE_SIZE,
     offset: page * PAGE_SIZE,
   };
-  if (statusFilter !== "all") params.status = statusFilter;
+  if (statusParam) params.status = statusParam;
+
+  // Stable refetchInterval callback — prevents interval timer explosion
+  const refetchInterval = useCallback(
+    (query: { state: { data: PaginatedResponse<JobStatusResponse> | undefined } }) => {
+      if (!isLive) return false;
+      const d = query.state.data;
+      if (!d) return 5000;
+      const hasActive = d.items.some((j) => j.status === "processing");
+      return hasActive ? 5000 : false;
+    },
+    [isLive],
+  );
 
   const { data, isLoading } = useQuery({
-    queryKey: ["pipeline-jobs-table", matterId, page, statusFilter],
+    queryKey: ["pipeline-jobs-table", matterId, page, statusParam],
     queryFn: () =>
       apiClient<PaginatedResponse<JobStatusResponse>>({
         url: "/api/v1/jobs",
@@ -91,14 +141,8 @@ export function JobTable() {
         params,
       }),
     enabled: !!matterId,
-    refetchInterval: !isLive
-      ? false
-      : (query) => {
-          const d = query.state.data;
-          if (!d) return 5000;
-          const hasActive = d.items.some((j) => j.status === "processing");
-          return hasActive ? 5000 : false;
-        },
+    refetchInterval,
+    gcTime: 5 * 60_000,
   });
 
   const cancelMutation = useMutation({
@@ -106,8 +150,12 @@ export function JobTable() {
       apiClient({ url: `/api/v1/jobs/${jobId}`, method: "DELETE" }),
     onSuccess: () => {
       toast.success("Job cancelled");
-      void queryClient.invalidateQueries({ queryKey: ["pipeline-jobs-table"] });
-      void queryClient.invalidateQueries({ queryKey: ["pipeline-processing-count"] });
+      void queryClient.invalidateQueries({
+        queryKey: ["pipeline-jobs-table"],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["pipeline-processing-count"],
+      });
     },
     onError: () => toast.error("Failed to cancel job"),
   });
@@ -117,8 +165,12 @@ export function JobTable() {
       apiClient({ url: `/api/v1/jobs/${jobId}/retry`, method: "POST" }),
     onSuccess: () => {
       toast.success("Job retried");
-      void queryClient.invalidateQueries({ queryKey: ["pipeline-jobs-table"] });
-      void queryClient.invalidateQueries({ queryKey: ["pipeline-failed-count"] });
+      void queryClient.invalidateQueries({
+        queryKey: ["pipeline-jobs-table"],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["pipeline-failed-count"],
+      });
     },
     onError: () => toast.error("Failed to retry job"),
   });
@@ -128,15 +180,31 @@ export function JobTable() {
       apiClient({ url: `/api/v1/jobs/${jobId}/dismiss`, method: "POST" }),
     onSuccess: () => {
       toast.success("Job dismissed");
-      void queryClient.invalidateQueries({ queryKey: ["pipeline-jobs-table"] });
-      void queryClient.invalidateQueries({ queryKey: ["pipeline-failed-count"] });
+      void queryClient.invalidateQueries({
+        queryKey: ["pipeline-jobs-table"],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["pipeline-failed-count"],
+      });
     },
     onError: () => toast.error("Failed to dismiss job"),
   });
 
+  function toggleStatus(value: string) {
+    setSelectedStatuses((prev) => {
+      const next = new Set(prev);
+      if (next.has(value)) next.delete(value);
+      else next.add(value);
+      return next;
+    });
+    setPage(0);
+  }
+
   const columns = [
     columnHelper.accessor("filename", {
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Filename" />,
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Filename" />
+      ),
       cell: (info) => (
         <span className="text-sm font-medium truncate max-w-[240px] block">
           {info.getValue() ?? info.row.original.job_id.slice(0, 8)}
@@ -144,7 +212,9 @@ export function JobTable() {
       ),
     }),
     columnHelper.accessor("document_type", {
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Type" />,
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Type" />
+      ),
       cell: (info) => (
         <Badge variant="outline" className="font-mono text-[10px]">
           {info.getValue() ?? "ingestion"}
@@ -152,7 +222,9 @@ export function JobTable() {
       ),
     }),
     columnHelper.accessor("status", {
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Status" />
+      ),
       cell: (info) => {
         const { variant, className } = statusBadgeProps(info.getValue());
         return (
@@ -162,18 +234,29 @@ export function JobTable() {
         );
       },
     }),
-    columnHelper.display({
+    columnHelper.accessor((row) => row.progress?.stage ?? "", {
       id: "stage",
-      header: "Stage",
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Stage" />
+      ),
       cell: ({ row }) => {
         const job = row.original;
-        if (job.status !== "processing") return <span className="text-xs text-muted-foreground">--</span>;
-        return <span className="text-xs">{job.progress?.stage ?? "starting"}</span>;
+        if (job.status !== "processing")
+          return (
+            <span className="text-xs text-muted-foreground">--</span>
+          );
+        return (
+          <span className="text-xs">
+            {job.progress?.stage ?? "starting"}
+          </span>
+        );
       },
     }),
-    columnHelper.display({
+    columnHelper.accessor((row) => jobProgress(row), {
       id: "progress",
-      header: "Progress",
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Progress" />
+      ),
       cell: ({ row }) => {
         const job = row.original;
         if (job.status !== "processing") return null;
@@ -181,7 +264,9 @@ export function JobTable() {
       },
     }),
     columnHelper.accessor("page_count", {
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Pages" />,
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Pages" />
+      ),
       cell: (info) => {
         const val = info.getValue();
         return (
@@ -192,7 +277,9 @@ export function JobTable() {
       },
     }),
     columnHelper.accessor("file_size_bytes", {
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Size" />,
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Size" />
+      ),
       cell: (info) => {
         const val = info.getValue();
         return (
@@ -203,7 +290,9 @@ export function JobTable() {
       },
     }),
     columnHelper.accessor("created_at", {
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Created" />,
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Created" />
+      ),
       cell: (info) => (
         <span className="whitespace-nowrap text-xs text-muted-foreground">
           {formatDateTime(info.getValue())}
@@ -213,6 +302,7 @@ export function JobTable() {
     columnHelper.display({
       id: "actions",
       header: "",
+      enableSorting: false,
       cell: ({ row }) => {
         const job = row.original;
         if (job.status === "processing") {
@@ -265,7 +355,7 @@ export function JobTable() {
     if (!search) return true;
     const term = search.toLowerCase();
     return (
-      (job.filename?.toLowerCase().includes(term)) ||
+      job.filename?.toLowerCase().includes(term) ||
       job.job_id.toLowerCase().includes(term)
     );
   });
@@ -291,6 +381,14 @@ export function JobTable() {
     );
   }
 
+  const filterLabel =
+    selectedStatuses.size === 0
+      ? "All statuses"
+      : selectedStatuses.size === 1
+        ? STATUS_OPTIONS.find((o) => selectedStatuses.has(o.value))?.label ??
+          "1 selected"
+        : `${selectedStatuses.size} selected`;
+
   return (
     <div className="space-y-4">
       {/* Toolbar */}
@@ -301,24 +399,51 @@ export function JobTable() {
           onChange={(e) => setSearch(e.target.value)}
           className="max-w-xs"
         />
-        <Select
-          value={statusFilter}
-          onValueChange={(v) => {
-            setStatusFilter(v);
-            setPage(0);
-          }}
-        >
-          <SelectTrigger className="w-[150px]">
-            <SelectValue placeholder="All statuses" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
-            <SelectItem value="processing">Processing</SelectItem>
-            <SelectItem value="completed">Completed</SelectItem>
-            <SelectItem value="failed">Failed</SelectItem>
-          </SelectContent>
-        </Select>
+
+        {/* Multi-select status filter */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              className="w-[180px] justify-between font-normal"
+            >
+              <span className="truncate">{filterLabel}</span>
+              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[200px] p-2" align="start">
+            <div className="space-y-1">
+              {STATUS_OPTIONS.map((opt) => (
+                <label
+                  key={opt.value}
+                  className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
+                >
+                  <Checkbox
+                    checked={selectedStatuses.has(opt.value)}
+                    onCheckedChange={() => toggleStatus(opt.value)}
+                  />
+                  <span>{opt.label}</span>
+                  {selectedStatuses.has(opt.value) && (
+                    <Check className="ml-auto h-3 w-3" />
+                  )}
+                </label>
+              ))}
+              {selectedStatuses.size > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full mt-1 text-xs"
+                  onClick={() => {
+                    setSelectedStatuses(new Set());
+                    setPage(0);
+                  }}
+                >
+                  Clear filters
+                </Button>
+              )}
+            </div>
+          </PopoverContent>
+        </Popover>
       </div>
 
       {/* Table */}
@@ -331,7 +456,10 @@ export function JobTable() {
                   <TableHead key={header.id}>
                     {header.isPlaceholder
                       ? null
-                      : flexRender(header.column.columnDef.header, header.getContext())}
+                      : flexRender(
+                          header.column.columnDef.header,
+                          header.getContext(),
+                        )}
                   </TableHead>
                 ))}
               </TableRow>
@@ -343,14 +471,20 @@ export function JobTable() {
                 <TableRow key={row.id}>
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      {flexRender(
+                        cell.column.columnDef.cell,
+                        cell.getContext(),
+                      )}
                     </TableCell>
                   ))}
                 </TableRow>
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={columns.length} className="h-24 text-center">
+                <TableCell
+                  colSpan={columns.length}
+                  className="h-24 text-center"
+                >
                   No jobs found.
                 </TableCell>
               </TableRow>

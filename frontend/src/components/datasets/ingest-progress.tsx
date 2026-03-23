@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/api/client";
 import { Progress } from "@/components/ui/progress";
@@ -32,18 +33,22 @@ export function IngestProgress({ datasetId }: IngestProgressProps) {
       });
       return paginated.items;
     },
-    refetchInterval: (query) => {
-      const data = query.state.data;
-      if (!data) return 5000;
-      const hasActive = data.some(
-        (j) =>
-          j.status === "processing" ||
-          (j.total_documents > 0 &&
-            j.processed_documents + j.failed_documents + j.skipped_documents <
-              j.total_documents),
-      );
-      return hasActive ? 5000 : false;
-    },
+    refetchInterval: useCallback(
+      (query: { state: { data: BulkImportStatusResponse[] | undefined } }) => {
+        const data = query.state.data;
+        if (!data) return 5000;
+        const hasActive = data.some(
+          (j) =>
+            j.status === "processing" ||
+            (j.total_documents > 0 &&
+              j.processed_documents + j.failed_documents + j.skipped_documents <
+                j.total_documents),
+        );
+        return hasActive ? 5000 : false;
+      },
+      [],
+    ),
+    gcTime: 5 * 60_000,
   });
 
   if (!jobs || jobs.length === 0) return null;
