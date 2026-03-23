@@ -19,17 +19,13 @@ services:
 
   infinity:
     image: michaelf34/infinity:latest
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+    runtime: nvidia
     environment:
+      NVIDIA_VISIBLE_DEVICES: "0"
       INFINITY_MODEL_ID: "${INFINITY_EMBEDDING_MODEL:-BAAI/bge-m3};${INFINITY_RERANKER_MODEL:-BAAI/bge-reranker-v2-m3}"
       INFINITY_BATCH_SIZE: "64;32"
       INFINITY_ENGINE: "torch;torch"
+      INFINITY_DEVICE: "cuda;cuda"
       INFINITY_DTYPE: "float16;float16"
       INFINITY_PORT: "7997"
     ports:
