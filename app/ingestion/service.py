@@ -243,7 +243,14 @@ class IngestionService:
                 FROM jobs j
                 LEFT JOIN documents d ON d.job_id = j.id
                 {where}
-                ORDER BY j.created_at DESC
+                ORDER BY CASE j.status
+                    WHEN 'processing' THEN 1
+                    WHEN 'pending' THEN 2
+                    WHEN 'failed' THEN 3
+                    WHEN 'complete' THEN 4
+                    WHEN 'dismissed' THEN 5
+                    ELSE 6
+                END, j.created_at DESC
                 OFFSET :offset
                 LIMIT :limit
                 """
@@ -648,3 +655,69 @@ class IngestionService:
         if updated:
             logger.info("job.dismissed", job_id=str(job_id))
         return updated
+
+    @staticmethod
+    async def retry_failed_by_bulk_import(
+        db: AsyncSession,
+        bulk_import_job_id: UUID,
+        matter_id: UUID,
+    ) -> list[dict]:
+        """Reset failed jobs for a specific bulk import to pending.
+
+        Returns list of job dicts that were reset.
+        """
+        result = await db.execute(
+            text(
+                """
+                UPDATE jobs
+                SET status = 'pending',
+                    stage = 'uploading',
+                    error = NULL,
+                    celery_task_id = NULL,
+                    updated_at = now()
+                WHERE status = 'failed'
+                  AND bulk_import_job_id = :bulk_import_job_id
+                  AND matter_id = :matter_id
+                RETURNING id, filename, metadata_, task_type, matter_id
+                """
+            ),
+            {"bulk_import_job_id": bulk_import_job_id, "matter_id": matter_id},
+        )
+        rows = result.fetchall()
+        logger.info(
+            "jobs.retry_by_bulk_import",
+            bulk_import_job_id=str(bulk_import_job_id),
+            count=len(rows),
+        )
+        return [row_to_dict(r) for r in rows]
+
+    @staticmethod
+    async def dismiss_failed_by_bulk_import(
+        db: AsyncSession,
+        bulk_import_job_id: UUID,
+        matter_id: UUID,
+    ) -> int:
+        """Dismiss all failed jobs for a specific bulk import.
+
+        Returns the number of jobs dismissed.
+        """
+        result = await db.execute(
+            text(
+                """
+                UPDATE jobs
+                SET status = 'dismissed',
+                    updated_at = now()
+                WHERE status = 'failed'
+                  AND bulk_import_job_id = :bulk_import_job_id
+                  AND matter_id = :matter_id
+                """
+            ),
+            {"bulk_import_job_id": bulk_import_job_id, "matter_id": matter_id},
+        )
+        count = result.rowcount or 0  # type: ignore[attr-defined]
+        logger.info(
+            "jobs.dismiss_by_bulk_import",
+            bulk_import_job_id=str(bulk_import_job_id),
+            count=count,
+        )
+        return count

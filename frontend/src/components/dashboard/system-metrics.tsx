@@ -44,7 +44,7 @@ export function SystemMetrics() {
       }),
     refetchInterval: 30_000,
     enabled: userRole === "admin",
-    retry: false,
+    retry: 1,
   });
 
   if (userRole !== "admin" || !data) return null;

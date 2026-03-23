@@ -902,3 +902,78 @@ async def list_bulk_import_jobs(
         offset=offset,
         limit=limit,
     )
+
+
+# -----------------------------------------------------------------------
+# POST /bulk-imports/{import_id}/retry-failed
+# -----------------------------------------------------------------------
+
+
+@router.post("/bulk-imports/{import_id}/retry-failed")
+async def retry_failed_bulk_import_jobs(
+    import_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserRecord = Depends(get_current_user),
+    matter_id: UUID = Depends(get_matter_id),
+):
+    """Retry all failed jobs belonging to a specific bulk import."""
+    bulk_import = await IngestionService.get_bulk_import_job(db=db, import_id=import_id, matter_id=matter_id)
+    if bulk_import is None:
+        raise HTTPException(status_code=404, detail=f"Bulk import job {import_id} not found")
+
+    rows = await IngestionService.retry_failed_by_bulk_import(
+        db=db,
+        bulk_import_job_id=import_id,
+        matter_id=matter_id,
+    )
+
+    dispatched = 0
+    for row in rows:
+        job_id = str(row["id"])
+        filename = row.get("filename", "")
+        metadata = row.get("metadata_") or {}
+        if isinstance(metadata, str):
+            import json
+
+            metadata = json.loads(metadata)
+        minio_path = metadata.get("minio_path") or f"raw/{job_id}/{filename}"
+        process_document.apply_async(args=[job_id, minio_path], queue="default")
+        dispatched += 1
+
+    logger.info(
+        "bulk_import.retry_failed.complete",
+        import_id=str(import_id),
+        dispatched=dispatched,
+    )
+    return {"retried": dispatched, "skipped": 0}
+
+
+# -----------------------------------------------------------------------
+# POST /bulk-imports/{import_id}/dismiss-failed
+# -----------------------------------------------------------------------
+
+
+@router.post("/bulk-imports/{import_id}/dismiss-failed")
+async def dismiss_failed_bulk_import_jobs(
+    import_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserRecord = Depends(get_current_user),
+    matter_id: UUID = Depends(get_matter_id),
+):
+    """Dismiss all failed jobs belonging to a specific bulk import."""
+    bulk_import = await IngestionService.get_bulk_import_job(db=db, import_id=import_id, matter_id=matter_id)
+    if bulk_import is None:
+        raise HTTPException(status_code=404, detail=f"Bulk import job {import_id} not found")
+
+    count = await IngestionService.dismiss_failed_by_bulk_import(
+        db=db,
+        bulk_import_job_id=import_id,
+        matter_id=matter_id,
+    )
+
+    logger.info(
+        "bulk_import.dismiss_failed.complete",
+        import_id=str(import_id),
+        dismissed=count,
+    )
+    return {"dismissed": count}

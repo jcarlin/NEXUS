@@ -359,37 +359,57 @@ def create_app() -> FastAPI:
         """Ping all five backing services in parallel and report their status."""
         import asyncio
 
+        health_timeout = 5.0  # seconds per service check
+
         async def _check_qdrant() -> tuple[str, str]:
             try:
                 qdrant = get_qdrant()
-                await asyncio.to_thread(qdrant.client.get_collections)
+                await asyncio.wait_for(
+                    asyncio.to_thread(qdrant.client.get_collections),
+                    timeout=health_timeout,
+                )
                 return ("qdrant", "ok")
+            except TimeoutError:
+                return ("qdrant", "error: timeout")
             except Exception as exc:
                 return ("qdrant", f"error: {exc}")
 
         async def _check_minio() -> tuple[str, str]:
             try:
                 storage = get_minio()
-                await storage.list_objects(prefix="")
+                await asyncio.wait_for(
+                    storage.list_objects(prefix=""),
+                    timeout=health_timeout,
+                )
                 return ("minio", "ok")
+            except TimeoutError:
+                return ("minio", "error: timeout")
             except Exception as exc:
                 return ("minio", f"error: {exc}")
 
         async def _check_neo4j() -> tuple[str, str]:
             try:
-                driver = get_neo4j()
-                async with driver.session() as session:
-                    result = await session.run("RETURN 1 AS n")
-                    await result.consume()
+
+                async def _neo4j_ping() -> None:
+                    driver = get_neo4j()
+                    async with driver.session() as session:
+                        result = await session.run("RETURN 1 AS n")
+                        await result.consume()
+
+                await asyncio.wait_for(_neo4j_ping(), timeout=health_timeout)
                 return ("neo4j", "ok")
+            except TimeoutError:
+                return ("neo4j", "error: timeout")
             except Exception as exc:
                 return ("neo4j", f"error: {exc}")
 
         async def _check_redis() -> tuple[str, str]:
             try:
                 redis = get_redis()
-                await redis.ping()
+                await asyncio.wait_for(redis.ping(), timeout=health_timeout)
                 return ("redis", "ok")
+            except TimeoutError:
+                return ("redis", "error: timeout")
             except Exception as exc:
                 return ("redis", f"error: {exc}")
 
@@ -399,10 +419,15 @@ def create_app() -> FastAPI:
 
                 from app.dependencies import _get_engine
 
-                engine = _get_engine()
-                async with engine.connect() as conn:
-                    await conn.execute(sa_text("SELECT 1"))
+                async def _pg_ping() -> None:
+                    engine = _get_engine()
+                    async with engine.connect() as conn:
+                        await conn.execute(sa_text("SELECT 1"))
+
+                await asyncio.wait_for(_pg_ping(), timeout=health_timeout)
                 return ("postgres", "ok")
+            except TimeoutError:
+                return ("postgres", "error: timeout")
             except Exception as exc:
                 return ("postgres", f"error: {exc}")
 

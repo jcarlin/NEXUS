@@ -310,13 +310,20 @@ class CeleryService:
         inspect = celery_app.control.inspect()
 
         # Parallelize the 5 inspect calls (~5s sequential → ~1s parallel)
-        active_r, stats_r, active_queues_r, reserved_r, scheduled_r = await asyncio.gather(
-            asyncio.to_thread(inspect.active),
-            asyncio.to_thread(inspect.stats),
-            asyncio.to_thread(inspect.active_queues),
-            asyncio.to_thread(inspect.reserved),
-            asyncio.to_thread(inspect.scheduled),
-        )
+        try:
+            active_r, stats_r, active_queues_r, reserved_r, scheduled_r = await asyncio.wait_for(
+                asyncio.gather(
+                    asyncio.to_thread(inspect.active),
+                    asyncio.to_thread(inspect.stats),
+                    asyncio.to_thread(inspect.active_queues),
+                    asyncio.to_thread(inspect.reserved),
+                    asyncio.to_thread(inspect.scheduled),
+                ),
+                timeout=15.0,
+            )
+        except TimeoutError:
+            logger.warning("celery.inspect.timeout")
+            active_r = stats_r = active_queues_r = reserved_r = scheduled_r = None
         active = active_r or {}
         stats = stats_r or {}
         active_queues = active_queues_r or {}
@@ -513,7 +520,13 @@ class SystemMetricsService:
         mem = await SystemMetricsService._read_memory()
         disk = await asyncio.to_thread(SystemMetricsService._read_disk)
 
-        gpu = await asyncio.to_thread(SystemMetricsService._read_gpu)
+        try:
+            gpu = await asyncio.wait_for(
+                asyncio.to_thread(SystemMetricsService._read_gpu),
+                timeout=10.0,
+            )
+        except TimeoutError:
+            gpu = {}
 
         return SystemMetrics(
             cpu_percent=cpu,

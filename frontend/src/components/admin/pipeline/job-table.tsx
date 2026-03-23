@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   useReactTable,
   getCoreRowModel,
@@ -7,7 +7,7 @@ import {
   createColumnHelper,
   type SortingState,
 } from "@tanstack/react-table";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronsUpDown, EyeOff, RotateCcw, X } from "lucide-react";
 import { toast } from "sonner";
 import { apiClient } from "@/api/client";
@@ -143,6 +143,7 @@ export function JobTable() {
     enabled: !!matterId,
     refetchInterval,
     gcTime: 5 * 60_000,
+    placeholderData: keepPreviousData,
   });
 
   const cancelMutation = useMutation({
@@ -200,7 +201,7 @@ export function JobTable() {
     setPage(0);
   }
 
-  const columns = [
+  const columns = useMemo(() => [
     columnHelper.accessor("filename", {
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title="Filename" />
@@ -348,7 +349,8 @@ export function JobTable() {
         return null;
       },
     }),
-  ];
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [cancelMutation.isPending, retryMutation.isPending, dismissMutation.isPending]);
 
   // Client-side filename search on already-fetched page
   const items = (data?.items ?? []).filter((job) => {
@@ -371,7 +373,7 @@ export function JobTable() {
 
   const totalPages = data ? Math.ceil(data.total / PAGE_SIZE) : 0;
 
-  if (isLoading) {
+  if (isLoading && !data) {
     return (
       <div className="space-y-3">
         {Array.from({ length: 8 }).map((_, i) => (
