@@ -59,6 +59,10 @@ celery_app.conf.update(
             "task": "app.operations.tasks.poll_service_health",
             "schedule": 60,
         },
+        "recover-orphan-jobs": {
+            "task": "ingestion.recover_orphan_jobs",
+            "schedule": 300,  # Every 5 minutes
+        },
     },
 )
 

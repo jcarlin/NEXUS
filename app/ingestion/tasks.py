@@ -2426,3 +2426,122 @@ def run_bulk_import(
         raise
     finally:
         engine.dispose()
+
+
+# ---------------------------------------------------------------------------
+# Periodic orphan job recovery
+# ---------------------------------------------------------------------------
+
+
+@shared_task(name="ingestion.recover_orphan_jobs")
+def recover_orphan_jobs() -> dict:
+    """Re-dispatch jobs stuck in pending/processing after a worker restart.
+
+    When Celery workers restart, tasks consumed from Redis but not yet
+    completed are lost.  Job rows remain in Postgres but the Celery
+    messages are gone.  This task finds those orphans and re-dispatches
+    them.
+
+    Runs every 5 minutes via Celery Beat.
+    """
+    _logger = structlog.get_logger("ingestion.recover_orphan_jobs")
+
+    from app.config import Settings
+
+    settings = Settings()
+    engine = _get_sync_engine(settings)
+
+    try:
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    """
+                    SELECT id, filename, status, stage, metadata_,
+                           celery_task_id, matter_id
+                    FROM jobs
+                    WHERE status IN ('pending', 'processing')
+                      AND updated_at < now() - INTERVAL '10 minutes'
+                      AND task_type = 'ingestion'
+                      AND (metadata_ IS NULL
+                           OR metadata_->>'recovery_count' IS NULL
+                           OR (metadata_->>'recovery_count')::int < 2)
+                    ORDER BY created_at
+                    LIMIT 500
+                    """
+                )
+            ).fetchall()
+
+        recovered = 0
+        skipped = 0
+
+        for row in rows:
+            job_id = str(row.id)
+            celery_task_id = row.celery_task_id
+            metadata = row.metadata_ or {}
+
+            # Skip if the Celery task is still alive
+            if celery_task_id:
+                result = celery_app.AsyncResult(celery_task_id)
+                if result.state in ("STARTED", "RETRY", "RECEIVED"):
+                    skipped += 1
+                    continue
+
+            minio_path = metadata.get("minio_path") if metadata else None
+            if not minio_path:
+                # Cannot recover without the file — mark as failed
+                _update_stage(
+                    engine,
+                    job_id,
+                    "failed",
+                    "failed",
+                    error="Recovery failed: no minio_path in job metadata",
+                )
+                skipped += 1
+                continue
+
+            # Reset job state and increment recovery counter
+            recovery_count = int(metadata.get("recovery_count", 0)) + 1
+            metadata["recovery_count"] = recovery_count
+
+            with engine.connect() as conn:
+                conn.execute(
+                    text(
+                        """
+                        UPDATE jobs
+                        SET status = 'pending',
+                            stage = 'uploading',
+                            error = NULL,
+                            metadata_ = :metadata,
+                            updated_at = now()
+                        WHERE id = :job_id
+                        """
+                    ),
+                    {"job_id": job_id, "metadata": json.dumps(metadata)},
+                )
+                conn.commit()
+
+            # Re-dispatch to Celery
+            result = process_document.apply_async(args=[job_id, minio_path], queue="default")
+            _store_celery_task_id(engine, job_id, result.id)
+            recovered += 1
+
+            _logger.info(
+                "orphan_job.recovered",
+                job_id=job_id,
+                filename=row.filename,
+                recovery_count=recovery_count,
+                celery_task_id=result.id,
+            )
+
+        if recovered or skipped:
+            _logger.info(
+                "orphan_recovery.complete",
+                recovered=recovered,
+                skipped=skipped,
+                total_scanned=len(rows),
+            )
+
+        return {"recovered": recovered, "skipped": skipped}
+
+    finally:
+        engine.dispose()
