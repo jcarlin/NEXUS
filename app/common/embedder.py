@@ -382,6 +382,72 @@ class TEIEmbeddingProvider:
 
 
 # ---------------------------------------------------------------------------
+# Infinity provider (OpenAI-compatible /embeddings endpoint)
+# ---------------------------------------------------------------------------
+
+
+class InfinityEmbeddingProvider:
+    """Dense embeddings via a michaelfeil/infinity server.
+
+    Uses the OpenAI-compatible ``/embeddings`` endpoint.
+    Supports co-hosted models (embedding + reranker on one GPU).
+    """
+
+    def __init__(
+        self,
+        base_url: str = "http://localhost:7997",
+        model: str = "BAAI/bge-m3",
+        dimensions: int = 1024,
+    ) -> None:
+        self._base_url = base_url.rstrip("/")
+        self._model = model
+        self._dimensions = dimensions
+        self._client = httpx.AsyncClient(base_url=self._base_url, timeout=120.0)
+
+    @retry(
+        retry=retry_if_exception_type((httpx.ConnectError, httpx.TimeoutException)),
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=30),
+        reraise=True,
+        before_sleep=before_sleep_log(logger, 30),
+    )
+    async def _embed_batch(self, texts: list[str]) -> list[list[float]]:
+        response = await self._client.post(
+            "/embeddings",
+            json={"input": texts, "model": self._model},
+        )
+        response.raise_for_status()
+        data = response.json()
+        embeddings = [item["embedding"] for item in data["data"]]
+        return [vec[: self._dimensions] for vec in embeddings]
+
+    async def embed_texts(self, texts: list[str]) -> list[list[float]]:
+        if not texts:
+            raise ValueError("Cannot embed an empty list of texts.")
+
+        from app.common.metrics import EMBEDDING_CALLS_TOTAL, EMBEDDING_DURATION, track_duration
+
+        with track_duration(EMBEDDING_DURATION, provider="infinity"):
+            result = await self._embed_batch(texts)
+
+        EMBEDDING_CALLS_TOTAL.labels(provider="infinity").inc()
+        logger.info(
+            "embedder.batch_complete",
+            provider="infinity",
+            base_url=self._base_url,
+            count=len(texts),
+        )
+        return result
+
+    async def embed_query(self, text: str) -> list[float]:
+        results = await self.embed_texts([text])
+        return results[0]
+
+    async def close(self) -> None:
+        await self._client.aclose()
+
+
+# ---------------------------------------------------------------------------
 # Ollama provider (native /api/embed endpoint)
 # ---------------------------------------------------------------------------
 

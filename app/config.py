@@ -246,8 +246,11 @@ class Settings(BaseSettings):
     enable_reranker: bool = True  # bge-reranker-v2-m3
     reranker_model: str = "BAAI/bge-reranker-v2-m3"
     reranker_top_n: int = 10
-    reranker_provider: str = "local"  # local | tei
+    reranker_provider: str = "local"  # local | tei | infinity
     tei_reranker_url: str = "http://localhost:8082"
+    infinity_url: str = "http://localhost:7997"
+    infinity_embedding_model: str = "BAAI/bge-m3"
+    infinity_reranker_model: str = "BAAI/bge-reranker-v2-m3"
 
     # --- Sparse Embeddings ---
     enable_sparse_embeddings: bool = False

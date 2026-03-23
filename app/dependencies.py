@@ -33,7 +33,7 @@ from app.entities.extractor import EntityExtractor
 from app.entities.graph_service import GraphService
 from app.ingestion.sparse_embedder import BGEM3SparseAdapter, SparseEmbedder
 from app.ingestion.visual_embedder import VisualEmbedder
-from app.query.reranker import Reranker, TEIReranker
+from app.query.reranker import InfinityReranker, Reranker, TEIReranker
 from app.query.retriever import HybridRetriever
 
 logger = structlog.get_logger(__name__)
@@ -214,6 +214,14 @@ def get_embedder() -> EmbeddingProvider:
             batch_size=settings.bgem3_batch_size,
             use_fp16=settings.bgem3_use_fp16,
         )
+    if settings.embedding_provider == "infinity":
+        from app.common.embedder import InfinityEmbeddingProvider
+
+        return InfinityEmbeddingProvider(
+            base_url=settings.infinity_url,
+            model=settings.infinity_embedding_model,
+            dimensions=settings.embedding_dimensions,
+        )
     if settings.embedding_provider == "ollama":
         return OllamaEmbeddingProvider(
             base_url=settings.ollama_base_url.removesuffix("/v1"),
@@ -257,13 +265,18 @@ def get_entity_extractor() -> EntityExtractor:
 
 
 @functools.cache
-def get_reranker() -> Reranker | TEIReranker | None:
+def get_reranker() -> Reranker | TEIReranker | InfinityReranker | None:
     """Return the ``Reranker`` singleton, or ``None`` when disabled."""
     settings = get_settings()
     if not settings.enable_reranker:
         return None
     if settings.reranker_provider == "tei":
         return TEIReranker(base_url=settings.tei_reranker_url)
+    if settings.reranker_provider == "infinity":
+        return InfinityReranker(
+            base_url=settings.infinity_url,
+            model=settings.infinity_reranker_model,
+        )
     return Reranker(model_name=settings.reranker_model)
 
 
