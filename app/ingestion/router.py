@@ -706,6 +706,74 @@ async def retry_job(
 
 
 # -----------------------------------------------------------------------
+# POST /jobs/retry-all — retry all failed jobs for the current matter
+# -----------------------------------------------------------------------
+
+
+@router.post("/jobs/retry-all")
+async def retry_all_failed_jobs(
+    db: AsyncSession = Depends(get_db),
+    current_user: UserRecord = Depends(get_current_user),
+    matter_id: UUID = Depends(get_matter_id),
+):
+    """Retry all failed ingestion jobs for the current matter.
+
+    Resets every failed job to pending and re-dispatches the Celery tasks.
+    """
+    rows = await IngestionService.retry_all_failed(db=db, matter_id=matter_id)
+
+    dispatched = 0
+    skipped = 0
+    for row in rows:
+        metadata = row.get("metadata_") or {}
+        if isinstance(metadata, str):
+            import json
+
+            metadata = json.loads(metadata)
+        minio_path = metadata.get("minio_path", "")
+        job_id = str(row["id"])
+
+        if minio_path:
+            process_document.apply_async(args=[job_id, minio_path], queue="default")
+            dispatched += 1
+        else:
+            skipped += 1
+
+    logger.info("jobs.retry_all.complete", dispatched=dispatched, skipped=skipped)
+    return {"retried": dispatched, "skipped": skipped}
+
+
+# -----------------------------------------------------------------------
+# POST /jobs/{job_id}/dismiss — dismiss a failed job
+# -----------------------------------------------------------------------
+
+
+@router.post("/jobs/{job_id}/dismiss")
+async def dismiss_job(
+    job_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserRecord = Depends(get_current_user),
+    matter_id: UUID = Depends(get_matter_id),
+):
+    """Dismiss a failed job (mark as reviewed/archived).
+
+    Dismissed jobs no longer count toward the failed total.
+    """
+    row = await IngestionService.get_job(db=db, job_id=job_id, matter_id=matter_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+
+    dismissed = await IngestionService.dismiss_job(db=db, job_id=job_id)
+    if not dismissed:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Job {job_id} cannot be dismissed (status: {row['status']})",
+        )
+
+    return {"status": "dismissed", "job_id": str(job_id)}
+
+
+# -----------------------------------------------------------------------
 # POST /admin/queues/{queue_name}/pause — pause a Celery queue
 # -----------------------------------------------------------------------
 

@@ -1,8 +1,10 @@
-import { useQuery } from "@tanstack/react-query";
-import { Activity, AlertTriangle, Clock, Layers, Users } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Activity, AlertTriangle, Clock, Layers, RotateCcw, Users } from "lucide-react";
 import { apiClient } from "@/api/client";
 import { useAppStore } from "@/stores/app-store";
 import { useLiveRefresh } from "@/hooks/use-live-refresh";
+import { useNotifications } from "@/hooks/use-notifications";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { PaginatedResponse } from "@/types";
@@ -20,6 +22,23 @@ interface BulkImportItem {
 export function PipelineSummary() {
   const matterId = useAppStore((s) => s.matterId);
   const { isLive } = useLiveRefresh();
+  const queryClient = useQueryClient();
+  const notify = useNotifications();
+
+  const retryAllMutation = useMutation({
+    mutationFn: () =>
+      apiClient<{ retried: number; skipped: number }>({
+        url: "/api/v1/jobs/retry-all",
+        method: "POST",
+      }),
+    onSuccess: (data) => {
+      notify.success(`Retried ${data.retried} failed jobs`);
+      void queryClient.invalidateQueries({ queryKey: ["pipeline-failed-count"] });
+      void queryClient.invalidateQueries({ queryKey: ["pipeline-jobs-table"] });
+      void queryClient.invalidateQueries({ queryKey: ["pipeline-processing-count"] });
+    },
+    onError: () => notify.error("Failed to retry jobs"),
+  });
 
   const { data: processingData, isLoading: processingLoading } = useQuery({
     queryKey: ["pipeline-processing-count", matterId],
@@ -140,13 +159,27 @@ export function PipelineSummary() {
         <Card key={stat.label}>
           <CardContent className="flex items-center gap-3 pt-4 pb-3">
             <stat.icon className={`h-5 w-5 shrink-0 ${stat.color}`} />
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               {stat.loading ? (
                 <Skeleton className="h-6 w-12" />
               ) : (
-                <p className="text-xl font-semibold tabular-nums tracking-tight">
-                  {stat.value}
-                </p>
+                <div className="flex items-center gap-2">
+                  <p className="text-xl font-semibold tabular-nums tracking-tight">
+                    {stat.value}
+                  </p>
+                  {stat.label === "Failed" && failedCount > 0 && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 px-2 text-[10px]"
+                      disabled={retryAllMutation.isPending}
+                      onClick={() => retryAllMutation.mutate()}
+                    >
+                      <RotateCcw className="mr-1 h-3 w-3" />
+                      {retryAllMutation.isPending ? "Retrying..." : "Retry All"}
+                    </Button>
+                  )}
+                </div>
               )}
               <p className="text-[11px] text-muted-foreground">{stat.label}</p>
             </div>

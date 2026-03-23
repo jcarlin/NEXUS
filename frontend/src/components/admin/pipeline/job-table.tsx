@@ -8,7 +8,7 @@ import {
   type SortingState,
 } from "@tanstack/react-table";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { RotateCcw, X } from "lucide-react";
+import { EyeOff, RotateCcw, X } from "lucide-react";
 import { toast } from "sonner";
 import { apiClient } from "@/api/client";
 import { useAppStore } from "@/stores/app-store";
@@ -123,6 +123,17 @@ export function JobTable() {
     onError: () => toast.error("Failed to retry job"),
   });
 
+  const dismissMutation = useMutation({
+    mutationFn: (jobId: string) =>
+      apiClient({ url: `/api/v1/jobs/${jobId}/dismiss`, method: "POST" }),
+    onSuccess: () => {
+      toast.success("Job dismissed");
+      void queryClient.invalidateQueries({ queryKey: ["pipeline-jobs-table"] });
+      void queryClient.invalidateQueries({ queryKey: ["pipeline-failed-count"] });
+    },
+    onError: () => toast.error("Failed to dismiss job"),
+  });
+
   const columns = [
     columnHelper.accessor("filename", {
       header: ({ column }) => <DataTableColumnHeader column={column} title="Filename" />,
@@ -220,16 +231,28 @@ export function JobTable() {
         }
         if (job.status === "failed") {
           return (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 text-xs"
-              disabled={retryMutation.isPending}
-              onClick={() => retryMutation.mutate(job.job_id)}
-            >
-              <RotateCcw className="mr-1 h-3 w-3" />
-              Retry
-            </Button>
+            <div className="flex gap-1">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-xs"
+                disabled={retryMutation.isPending}
+                onClick={() => retryMutation.mutate(job.job_id)}
+              >
+                <RotateCcw className="mr-1 h-3 w-3" />
+                Retry
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-xs text-muted-foreground"
+                disabled={dismissMutation.isPending}
+                onClick={() => dismissMutation.mutate(job.job_id)}
+              >
+                <EyeOff className="mr-1 h-3 w-3" />
+                Dismiss
+              </Button>
+            </div>
           );
         }
         return null;

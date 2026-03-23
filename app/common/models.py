@@ -24,6 +24,7 @@ class JobStatus(StrEnum):
     INDEXING = "indexing"
     COMPLETE = "complete"
     FAILED = "failed"
+    DISMISSED = "dismissed"
 
 
 class TaskType(StrEnum):

@@ -593,3 +593,53 @@ class IngestionService:
         if row is None:
             return None
         return row_to_dict(row)
+
+    @staticmethod
+    async def retry_all_failed(db: AsyncSession, matter_id: UUID) -> list[dict]:
+        """Reset all failed ingestion jobs for a matter to pending.
+
+        Returns list of job dicts that were reset.
+        """
+        result = await db.execute(
+            text(
+                """
+                UPDATE jobs
+                SET status = 'pending',
+                    stage = 'uploading',
+                    error = NULL,
+                    celery_task_id = NULL,
+                    updated_at = now()
+                WHERE status = 'failed'
+                  AND matter_id = :matter_id
+                  AND task_type = 'ingestion'
+                RETURNING id, filename, metadata_, task_type, matter_id
+                """
+            ),
+            {"matter_id": matter_id},
+        )
+        rows = result.fetchall()
+        logger.info("jobs.retry_all", matter_id=str(matter_id), count=len(rows))
+        return [row_to_dict(r) for r in rows]
+
+    @staticmethod
+    async def dismiss_job(db: AsyncSession, job_id: UUID) -> bool:
+        """Mark a failed job as dismissed (reviewed/archived).
+
+        Returns True if the job was dismissed, False if not found or not failed.
+        """
+        result = await db.execute(
+            text(
+                """
+                UPDATE jobs
+                SET status = 'dismissed',
+                    updated_at = now()
+                WHERE id = :job_id
+                  AND status = 'failed'
+                """
+            ),
+            {"job_id": job_id},
+        )
+        updated: bool = (result.rowcount or 0) > 0  # type: ignore[attr-defined]
+        if updated:
+            logger.info("job.dismissed", job_id=str(job_id))
+        return updated
