@@ -465,6 +465,16 @@ def upload_to_minio(settings, key: str, data: bytes) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _re_embed_texts(settings, texts: list[str]) -> list[list[float]]:
+    """Embed texts via the configured embedding provider (sync wrapper)."""
+    import asyncio
+
+    from app.dependencies import get_embedder
+
+    embedder = get_embedder()
+    return asyncio.run(embedder.embed_texts(texts))
+
+
 def upsert_chunks_to_qdrant(
     settings,
     doc_id: str,
@@ -472,18 +482,32 @@ def upsert_chunks_to_qdrant(
     matter_id: str,
     citation_quality: str = "full",
     use_named_vectors: bool = True,
+    re_embed: bool = False,
 ) -> list[dict]:
-    """Upsert pre-embedded chunks to Qdrant. Returns chunk_data for Neo4j."""
+    """Upsert chunks to Qdrant. Returns chunk_data for Neo4j.
+
+    When *re_embed* is True, ignores pre-computed vectors and generates
+    fresh embeddings via the configured provider (e.g. Infinity BGE-M3).
+    """
     from qdrant_client import QdrantClient
     from qdrant_client.models import PointStruct
 
     from app.common.vector_store import TEXT_COLLECTION
 
     qdrant = QdrantClient(url=settings.qdrant_url)
+    sorted_chunks = sorted(doc_group.chunks, key=lambda c: c.chunk_index)
+
+    # Re-embed all chunk texts if requested
+    embeddings: list[list[float]] | None = None
+    if re_embed:
+        chunk_texts = [c.text for c in sorted_chunks]
+        if chunk_texts:
+            embeddings = _re_embed_texts(settings, chunk_texts)
+
     points: list[PointStruct] = []
     chunk_data_for_neo4j: list[dict] = []
 
-    for chunk in sorted(doc_group.chunks, key=lambda c: c.chunk_index):
+    for i, chunk in enumerate(sorted_chunks):
         point_id = str(uuid.uuid4())
 
         payload: dict[str, Any] = {
@@ -503,12 +527,13 @@ def upsert_chunks_to_qdrant(
         if chunk.ocr_confidence is not None:
             payload["ocr_confidence"] = chunk.ocr_confidence
 
-        # Use named vectors (dense) for collections with sparse support,
-        # or unnamed vectors for simple collections
+        # Use re-embedded vectors or pre-computed vectors
+        embedding = embeddings[i] if embeddings else chunk.embedding
+
         if use_named_vectors:
-            vector: Any = {"dense": chunk.embedding}
+            vector: Any = {"dense": embedding}
         else:
-            vector = chunk.embedding
+            vector = embedding
 
         points.append(PointStruct(id=point_id, vector=vector, payload=payload))
         chunk_data_for_neo4j.append(
@@ -673,6 +698,7 @@ def _process_one_document(
     extractor,
     skip_minio: bool,
     skip_neo4j: bool,
+    re_embed: bool = False,
 ) -> tuple[int, int]:
     """Process a single document through the full import pipeline.
 
@@ -693,7 +719,7 @@ def _process_one_document(
         minio_key = f"raw/{job_id}/{filename}"
         upload_to_minio(settings, minio_key, doc_group.full_text.encode("utf-8"))
 
-    # 3. Qdrant: upsert pre-computed vectors
+    # 3. Qdrant: upsert vectors (pre-computed or re-embedded)
     chunk_data = upsert_chunks_to_qdrant(
         settings,
         doc_id,
@@ -701,6 +727,7 @@ def _process_one_document(
         matter_id,
         citation_quality=citation_quality,
         use_named_vectors=use_named_vectors,
+        re_embed=re_embed,
     )
 
     # 4. NER
@@ -896,6 +923,7 @@ def main() -> int:  # noqa: C901
                     extractor,
                     args.skip_minio,
                     args.skip_neo4j,
+                    re_embed=args.re_embed,
                 )
                 imported += 1
                 total_chunks_imported += chunks
@@ -919,6 +947,7 @@ def main() -> int:  # noqa: C901
                         extractor,
                         args.skip_minio,
                         args.skip_neo4j,
+                        args.re_embed,
                     ): doc_group
                     for doc_group in docs_to_process
                 }
