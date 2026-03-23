@@ -300,7 +300,34 @@ class GraphService:
             doc_id=doc_id,
             count=total,
         )
+
+        # Create CO_OCCURS edges between entities that share this document
+        if total >= 2:
+            await self._create_co_occurrence_edges(doc_id)
+
         return total
+
+    async def _create_co_occurrence_edges(self, doc_id: str) -> None:
+        """Create ``CO_OCCURS`` edges between entities sharing a document.
+
+        Uses internal Neo4j IDs (``id(e1) < id(e2)``) to create each
+        pair only once.  Weight increments when entities co-occur across
+        multiple documents.
+        """
+        query = """
+        MATCH (e1:Entity)-[:MENTIONED_IN]->(d:Document {id: $doc_id})<-[:MENTIONED_IN]-(e2:Entity)
+        WHERE id(e1) < id(e2)
+        MERGE (e1)-[r:CO_OCCURS]->(e2)
+        ON CREATE SET r.weight = 1, r.first_doc = $doc_id
+        ON MATCH  SET r.weight = r.weight + 1
+        """
+        try:
+            await self._run_write(query, {"doc_id": doc_id})
+        except Exception:
+            logger.warning(
+                "graph.co_occurrence.failed",
+                doc_id=doc_id,
+            )
 
     # ------------------------------------------------------------------
     # Read queries
