@@ -29,7 +29,7 @@ services:
     environment:
       INFINITY_MODEL_ID: "${INFINITY_EMBEDDING_MODEL:-BAAI/bge-m3};${INFINITY_RERANKER_MODEL:-BAAI/bge-reranker-v2-m3}"
       INFINITY_BATCH_SIZE: "64;32"
-      INFINITY_ENGINE: "optimum;optimum"
+      INFINITY_ENGINE: "torch;torch"
       INFINITY_DTYPE: "float16;float16"
       INFINITY_PORT: "7997"
     ports:
