@@ -377,10 +377,57 @@ The default **e2-standard-2** (2 vCPU / 8GB) is adequate for demos with a small 
 | Machine Type | Specs | Monthly Cost | Use Case |
 |---|---|---|---|
 | e2-standard-2 | 2 vCPU / 8GB | ~$49 | Demo, small corpus |
-| e2-highmem-2 | 2 vCPU / 16GB | ~$68 | Full corpus, light usage |
-| e2-standard-4 | 4 vCPU / 16GB | ~$98 | Full corpus, concurrent users |
+| e2-custom-8-24576 | 8 vCPU / 24GB | ~$175 | Full corpus, CPU-only |
+| n1-standard-8 + T4 | 8 vCPU / 30GB + 16GB VRAM | ~$186 (spot) | Full corpus, GPU-accelerated |
+| g2-standard-8 (L4) | 8 vCPU / 32GB + 24GB VRAM | ~$249 (spot) | Full corpus, best GPU option |
 
-Neo4j and Qdrant are the main memory consumers at scale. Resource limits in `docker-compose.cloud.yml` prevent any single service from OOM-killing the VM.
+**Per-worker memory: ~5.7GB** (Docling ~1GB, GLiNER ~600MB, sparse embedder ~300MB, torch ~800MB, working memory ~3GB). Max 3 workers on 24GB, 4 on 30GB.
+
+### GPU VM Setup
+
+For GPU-accelerated inference (20x faster embeddings, 20x faster reranking):
+
+```bash
+# Create VM with T4 GPU (spot pricing)
+gcloud compute instances create nexus-gpu \
+  --zone=us-west1-a \
+  --machine-type=n1-standard-8 \
+  --accelerator=type=nvidia-tesla-t4,count=1 \
+  --image-family=common-cu128-ubuntu-2404-nvidia-570 \
+  --image-project=deeplearning-platform-release \
+  --boot-disk-size=100GB --boot-disk-type=pd-ssd \
+  --tags=nexus-web \
+  --provisioning-model=SPOT \
+  --instance-termination-action=STOP \
+  --maintenance-policy=TERMINATE
+
+# Install Docker + NVIDIA Container Toolkit
+curl -fsSL https://get.docker.com | sh
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | \
+  sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+  sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+  sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+sudo apt-get update && sudo apt-get install -y nvidia-container-toolkit
+sudo nvidia-ctk runtime configure --runtime=docker
+sudo systemctl restart docker
+```
+
+Start the stack with the GPU overlay:
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+  -f docker-compose.cloud.yml -f docker-compose.gpu.yml up -d
+```
+
+The GPU overlay adds NVIDIA passthrough to Ollama and optionally a TEI embedder. See `docker-compose.gpu.yml` for details.
+
+**Disk snapshots (weekly backup):**
+```bash
+gcloud compute resource-policies create snapshot-schedule nexus-gpu-weekly \
+  --region=us-west1 --max-retention-days=30 --weekly-schedule=sunday --start-time=04:00
+gcloud compute disks add-resource-policies nexus-gpu \
+  --zone=us-west1-a --resource-policies=nexus-gpu-weekly
+```
 
 ### Rollback
 

@@ -18,10 +18,13 @@ services:
               capabilities: [gpu]
 
   tei-embedder:
-    image: ghcr.io/huggingface/text-embeddings-inference:turing
-    command: --model-id ${TEI_EMBEDDING_MODEL:-BAAI/bge-m3} --port 8081
+    image: ghcr.io/huggingface/text-embeddings-inference:turing-1.9
     ports:
-      - "8081:8081"
+      - "8081:80"
+    environment:
+      MODEL_ID: ${TEI_EMBEDDING_MODEL:-BAAI/bge-m3}
+      # Flash Attention off by default for Turing (precision issues on T4).
+      # For Ampere+ (A100/L4), switch to the :1.9 image and enable flash attn.
     deploy:
       resources:
         reservations:
