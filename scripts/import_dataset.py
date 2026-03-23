@@ -192,7 +192,7 @@ def main() -> int:  # noqa: C901
 
             # Create job row
             job_id = str(uuid.uuid4())
-            create_job_row(engine, job_id, doc.filename, args.matter_id)
+            create_job_row(engine, job_id, doc.filename, args.matter_id, bulk_import_job_id=bulk_job_id)
 
             # Dispatch Celery task
             import_text_document.delay(
