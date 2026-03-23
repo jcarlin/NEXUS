@@ -14,7 +14,6 @@ Vercel (CDN)                    GCP Compute Engine VM
                                 │ Docker Compose                  │
                                 │   ├── api (FastAPI)             │
                                 │   ├── worker (Celery)           │
-                                │   ├── flower (Celery monitoring) │
                                 │   ├── ollama (embeddings, CPU)  │
                                 │   ├── postgres (16-alpine)      │
                                 │   ├── redis (7-alpine)          │

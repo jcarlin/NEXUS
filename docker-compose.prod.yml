@@ -1,6 +1,6 @@
 # docker-compose.prod.yml — Full containerized stack (extends docker-compose.yml)
 # Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-# Adds the FastAPI API server, Celery worker, and Flower monitoring.
+# Adds the FastAPI API server and Celery worker.
 
 services:
   api:
@@ -76,29 +76,3 @@ services:
       MINIO_ENDPOINT: minio:9000
     restart: unless-stopped
 
-  flower:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    command: >
-      celery -A workers.celery_app flower
-      --port=5555
-      --basic_auth=${FLOWER_USER}:${FLOWER_PASSWORD}
-      --persistent=True
-      --db=/data/flower.db
-      --url_prefix=flower
-    ports:
-      - "5555:5555"
-    env_file: .env
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    environment:
-      REDIS_URL: redis://redis:6379/0
-      CELERY_BROKER_URL: amqp://nexus:${RABBITMQ_PASSWORD:-nexus}@rabbitmq:5672/nexus
-    volumes:
-      - flower-data:/data
-    restart: unless-stopped
-
-volumes:
-  flower-data:
