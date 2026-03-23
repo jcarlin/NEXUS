@@ -196,3 +196,62 @@ curl -X POST http://localhost:8000/api/v1/cases/setup \
 3. `MATCH ()-[r:CO_OCCURS]-() RETURN count(r)` — entity co-occurrence edges
 4. Query: "Who did Epstein communicate with about flights?"
 5. Frontend: entity network graph shows connections, email threading works
+
+---
+
+## Performance Optimizations
+
+### Bottleneck Analysis (GPU VM)
+
+With Infinity BGE-M3 on the T4 GPU, embedding is effectively free (~60-2700 chunks/sec). The pipeline bottleneck has shifted to CPU-bound stages:
+
+| Stage | Time per doc (50 chunks) | % of wall time | Bound |
+|-------|--------------------------|----------------|-------|
+| GLiNER NER | ~100-300s (2s/chunk) | **50-60%** | CPU |
+| Docling parsing | ~50-100s (1-2s/page) | 20-30% | CPU |
+| LLM relationship extraction | ~30-60s | 10-20% | I/O (Gemini) |
+| Embedding (Infinity GPU) | ~1-3s | <1% | GPU |
+| Neo4j indexing | ~5-15s | 2-5% | I/O |
+
+**Measured**: GLiNER runs at ~2s/chunk on this VM (not the theoretical 50ms), making NER the dominant bottleneck. At 236K FBI chunks, serial NER = ~131 hours.
+
+### Implemented Optimizations
+
+#### 1. Batched GLiNER inference (`app/entities/extractor.py`)
+GLiNER's `batch_predict_entities` processes multiple texts in a single forward pass, amortising model overhead. Batch size 8 (configurable). Expected: **2-4x speedup** on NER stage.
+
+#### 2. Concurrent embed + extract stages (`app/ingestion/tasks.py`)
+Embedding (GPU I/O via Infinity HTTP) and NER (CPU via GLiNER) now run concurrently via `ThreadPoolExecutor`. They don't compete for the same resource. Hides the shorter stage's latency entirely.
+
+#### 3. Dedicated NER Celery queue (`docker-compose.gpu.yml`)
+New `ner-worker` service: 4 prefork processes, CPU-only, each loads its own GLiNER model (~600MB). Total memory: ~4GB.
+
+When `DEFER_NER_TO_QUEUE=true`: the main pipeline skips inline NER, documents become searchable immediately. NER runs asynchronously on the dedicated queue.
+
+#### 4. Celery concurrency fix (`docker-compose.gpu.yml`)
+GPU overlay overrides worker command to honor `CELERY_CONCURRENCY` env var. Default: 3 workers on GPU VM (was 1 due to hardcoded base compose).
+
+#### 5. Infinity batch size increase
+Embedding batch size bumped from 64 to 128 (T4 16GB VRAM handles this in fp16). Benefits Tier 2 re-embed jobs.
+
+#### 6. Entity resolution O(n²) mitigation (`app/entities/resolver.py`)
+Fuzzy matching now uses first-character blocking. Entities are bucketed by first letter; only intra-bucket and adjacent-bucket pairs are compared. For 10K persons across ~26 letter buckets: ~26x fewer comparisons.
+
+### Recommended Settings (GPU VM)
+
+```bash
+CELERY_CONCURRENCY=3          # Main pipeline workers (30GB VM, ~5.7GB each)
+NER_WORKER_CONCURRENCY=4      # Dedicated NER workers (600MB GLiNER each)
+DEFER_NER_TO_QUEUE=true        # For bulk import; false for interactive upload
+INFINITY_BATCH_SIZE=128;32    # Embedding;Reranker
+```
+
+### Revised Time Estimates (with optimizations)
+
+| Tier | Source | Before | After (est.) | Speedup |
+|------|--------|--------|--------------|---------|
+| Tier 1 | Emails + 20K docs (full pipeline) | ~10 hrs | ~3-4 hrs | 2.5-3x |
+| Tier 2 | FBI + House (re-embed, deferred NER) | ~4 hrs embed + 131 hrs NER | ~4 hrs embed + ~30 hrs NER | 4x NER |
+| Tier 3 | Court + FOIA PDFs (Docling + full) | ~17 hrs | ~6-8 hrs | 2-2.5x |
+
+**Key insight**: Deferred NER (`DEFER_NER_TO_QUEUE=true`) is the biggest win for bulk import. Documents become searchable immediately while NER catches up on the dedicated queue. Combined with batched GLiNER and 4 NER workers, the 131-hour NER backlog drops to ~30 hours.

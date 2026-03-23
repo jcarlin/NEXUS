@@ -58,12 +58,12 @@ def _make_mock_settings() -> MagicMock:
 # ---------------------------------------------------------------------------
 
 
-def test_celery_app_has_three_queues():
-    """Celery app should define default, bulk, and background queues."""
+def test_celery_app_has_four_queues():
+    """Celery app should define default, bulk, ner, and background queues."""
     from workers.celery_app import celery_app
 
     queue_names = {q.name for q in celery_app.conf.task_queues}
-    assert queue_names == {"default", "bulk", "background"}
+    assert queue_names == {"default", "bulk", "ner", "background"}
 
 
 def test_celery_app_default_queue():

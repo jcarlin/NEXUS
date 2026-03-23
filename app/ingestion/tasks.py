@@ -979,7 +979,24 @@ def _stage_embed(ctx: _PipelineContext) -> None:
 
 
 def _stage_extract(ctx: _PipelineContext) -> None:
-    """Stage 4: GLiNER zero-shot NER + optional relationship extraction."""
+    """Stage 4: GLiNER zero-shot NER + optional relationship extraction.
+
+    When ``defer_ner_to_queue`` is enabled, NER is dispatched to the
+    dedicated ``ner`` Celery queue instead of running inline.  The document
+    becomes searchable immediately; entities populate asynchronously.
+    """
+    if ctx.settings.defer_ner_to_queue:
+        extract_entities_for_job.apply_async(
+            args=[ctx.job_id, ctx.matter_id],
+            queue="ner",
+        )
+        logger.info("task.ner_deferred", job_id=ctx.job_id)
+        ctx.all_entities = []
+        ctx.relationship_count = 0
+        ctx.progress["entities_extracted"] = 0
+        _update_stage(ctx.engine, ctx.job_id, "indexing", "processing", progress=ctx.progress)
+        return
+
     from app.entities.extractor import EntityExtractor
 
     extractor = EntityExtractor(model_name=ctx.settings.gliner_model)
@@ -2283,6 +2300,148 @@ def _infer_doc_type(filename: str) -> str:
         ".tif": "image",
     }
     return type_map.get(ext, "other")
+
+
+# ---------------------------------------------------------------------------
+# Deferred NER extraction task (dispatched to 'ner' queue)
+# ---------------------------------------------------------------------------
+
+
+@shared_task(
+    bind=True,
+    name="ingestion.extract_entities_for_job",
+    max_retries=2,
+    default_retry_delay=60,
+    acks_late=True,
+)
+def extract_entities_for_job(self, job_id: str, matter_id: str | None = None) -> dict:
+    """Run GLiNER NER for a document that was ingested with deferred NER.
+
+    Reads chunk texts from Qdrant, runs batched GLiNER extraction, indexes
+    entities to Neo4j, and updates ``entity_count`` in PostgreSQL.
+    """
+    structlog.contextvars.clear_contextvars()
+    structlog.contextvars.bind_contextvars(task_id=self.request.id, job_id=job_id)
+
+    from app.config import Settings
+    from app.entities.extractor import EntityExtractor
+    from app.feature_flags.service import load_overrides_sync_safe
+
+    settings = Settings()
+    engine = _get_sync_engine(settings)
+    try:
+        load_overrides_sync_safe(settings, engine)
+    except Exception:
+        pass  # Feature flag DB may not be initialised yet
+
+    try:
+        from qdrant_client import QdrantClient
+
+        qdrant = QdrantClient(url=settings.qdrant_url)
+
+        # Fetch chunks for this document from Qdrant
+        scroll_result = qdrant.scroll(
+            collection_name="nexus_text",
+            scroll_filter={
+                "must": [{"key": "doc_id", "match": {"value": job_id}}],
+            },
+            limit=10_000,
+            with_payload=True,
+            with_vectors=False,
+        )
+        points = scroll_result[0]
+
+        if not points:
+            logger.warning("task.deferred_ner.no_chunks", job_id=job_id)
+            return {"job_id": job_id, "status": "no_chunks", "entity_count": 0}
+
+        # Sort by chunk_index for stable ordering
+        points.sort(key=lambda p: p.payload.get("chunk_index", 0))
+
+        chunk_texts = [p.payload.get("chunk_text", "") for p in points]
+        page_numbers = [p.payload.get("page_number", 1) for p in points]
+
+        # Batch NER extraction
+        extractor = EntityExtractor(model_name=settings.gliner_model)
+        batch_results = extractor.extract_batch(chunk_texts)
+
+        all_entities: list[dict] = []
+        seen: set[tuple[str, str]] = set()
+
+        for page_num, extracted in zip(page_numbers, batch_results):
+            for ent in extracted:
+                _name = " ".join(ent.text.split())
+                key = (_name.lower(), ent.type)
+                if key not in seen:
+                    seen.add(key)
+                    all_entities.append(
+                        {
+                            "name": _name,
+                            "type": ent.type,
+                            "page_number": page_num,
+                        }
+                    )
+
+        logger.info(
+            "task.deferred_ner.extracted",
+            job_id=job_id,
+            entity_count=len(all_entities),
+            chunk_count=len(chunk_texts),
+        )
+
+        # Index to Neo4j
+        if all_entities:
+            try:
+                from app.entities.graph_service import GraphService
+
+                neo4j_driver = _get_neo4j_driver(settings)
+                graph_svc = GraphService(neo4j_driver)
+                asyncio.run(
+                    graph_svc.index_entities(
+                        entities=all_entities,
+                        doc_id=job_id,
+                        matter_id=matter_id,
+                    )
+                )
+                neo4j_driver.close()
+            except Exception:
+                logger.warning("task.deferred_ner.neo4j_failed", exc_info=True)
+
+        # Update entity_count in PostgreSQL
+        with engine.connect() as conn:
+            conn.execute(
+                text(
+                    """
+                    UPDATE documents SET entity_count = :count, updated_at = now()
+                    WHERE id = (SELECT document_id FROM jobs WHERE id = :job_id)
+                       OR id = CAST(:job_id AS uuid)
+                    """
+                ),
+                {"count": len(all_entities), "job_id": job_id},
+            )
+            conn.commit()
+
+        return {
+            "job_id": job_id,
+            "status": "complete",
+            "entity_count": len(all_entities),
+        }
+
+    except Exception as exc:
+        logger.error("task.deferred_ner.failed", job_id=job_id, error=str(exc), exc_info=True)
+        raise self.retry(exc=exc)
+    finally:
+        engine.dispose()
+
+
+def _get_neo4j_driver(settings):
+    """Create a disposable Neo4j driver for the current task."""
+    from neo4j import GraphDatabase
+
+    return GraphDatabase.driver(
+        settings.neo4j_uri,
+        auth=(settings.neo4j_user, settings.neo4j_password),
+    )
 
 
 # ---------------------------------------------------------------------------

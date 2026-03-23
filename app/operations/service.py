@@ -603,47 +603,84 @@ class SystemMetricsService:
 
     @staticmethod
     def _read_gpu() -> dict:
-        """Read NVIDIA GPU metrics via Docker exec into a GPU container.
+        """Read NVIDIA GPU metrics via Docker API exec into a GPU container.
 
-        The API container doesn't have nvidia-smi, but GPU containers
-        (ollama, infinity) do. Uses the Docker socket to exec into one.
-        Falls back gracefully on CPU-only hosts.
+        The API container doesn't have nvidia-smi or the docker CLI, but
+        has the Docker socket mounted. Uses aiodocker (sync wrapper) to
+        exec into the Ollama container which has GPU access.
         """
         import subprocess
 
-        # Try local nvidia-smi first (works if API has GPU access)
-        for cmd in [
-            [
-                "nvidia-smi",
-                "--query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu",
-                "--format=csv,noheader,nounits",
-            ],
-            [
-                "docker",
-                "exec",
-                "nexus-ollama-1",
-                "nvidia-smi",
-                "--query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu",
-                "--format=csv,noheader,nounits",
-            ],
-        ]:
-            try:
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
-                if result.returncode != 0:
-                    continue
+        # Try local nvidia-smi first (works if API has direct GPU access)
+        try:
+            result = subprocess.run(
+                [
+                    "nvidia-smi",
+                    "--query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu",
+                    "--format=csv,noheader,nounits",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if result.returncode == 0:
                 line = result.stdout.strip().split("\n")[0]
                 parts = [p.strip() for p in line.split(",")]
-                if len(parts) < 5:
-                    continue
-                return {
-                    "name": parts[0],
-                    "utilization": float(parts[1]),
-                    "memory_used": float(parts[2]),
-                    "memory_total": float(parts[3]),
-                    "temperature": float(parts[4]),
-                }
-            except (FileNotFoundError, subprocess.TimeoutExpired):
-                continue
-            except Exception:
-                continue
-        return {}
+                if len(parts) >= 5:
+                    return {
+                        "name": parts[0],
+                        "utilization": float(parts[1]),
+                        "memory_used": float(parts[2]),
+                        "memory_total": float(parts[3]),
+                        "temperature": float(parts[4]),
+                    }
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+        except Exception:
+            pass
+
+        # Fallback: exec into GPU container via Docker socket + aiodocker
+        try:
+            import asyncio
+
+            return asyncio.run(SystemMetricsService._read_gpu_via_docker())
+        except Exception:
+            return {}
+
+    @staticmethod
+    async def _read_gpu_via_docker() -> dict:
+        """Exec nvidia-smi inside a GPU container via the Docker socket."""
+        import aiodocker
+
+        docker = aiodocker.Docker()
+        try:
+            containers = await docker.containers.list(
+                filters={"name": ["nexus-ollama-1"]},
+            )
+            if not containers:
+                return {}
+            container = containers[0]
+            exec_obj = await container.exec(
+                cmd=[
+                    "nvidia-smi",
+                    "--query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu",
+                    "--format=csv,noheader,nounits",
+                ],
+            )
+            stream = exec_obj.start()
+            output = b""
+            async for chunk in stream:
+                output += chunk
+            line = output.decode().strip().split("\n")[0]
+            parts = [p.strip() for p in line.split(",")]
+            if len(parts) < 5:
+                return {}
+            return {
+                "name": parts[0],
+                "utilization": float(parts[1]),
+                "memory_used": float(parts[2]),
+                "memory_total": float(parts[3]),
+                "temperature": float(parts[4]),
+            }
+        finally:
+            await docker.close()

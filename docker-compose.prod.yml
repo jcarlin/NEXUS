@@ -48,7 +48,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: celery -A workers.celery_app worker -Q default,bulk,background -l info -c 1 --pool=prefork --max-tasks-per-child=100
+    command: celery -A workers.celery_app worker -Q default,bulk,background,ner -l info -c 1 --pool=prefork --max-tasks-per-child=100
     env_file: .env
     deploy:
       replicas: 2

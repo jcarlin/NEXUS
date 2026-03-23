@@ -92,24 +92,49 @@ class EntityResolver:
             if len(unique_names) < 2:
                 continue
 
-            for i in range(len(unique_names)):
-                for j in range(i + 1, len(unique_names)):
-                    name_a = unique_names[i]
-                    name_b = unique_names[j]
-                    score = fuzz.ratio(
-                        " ".join(name_a.lower().split()),
-                        " ".join(name_b.lower().split()),
-                    )
-                    if score >= self.fuzzy_threshold:
-                        matches.append(
-                            EntityMatch(
-                                name_a=name_a,
-                                name_b=name_b,
-                                entity_type=entity_type,
-                                score=score,
-                                method="fuzzy",
-                            )
+            # First-character blocking: bucket names by first letter to reduce
+            # O(n²) comparisons.  Compare within each bucket AND with adjacent
+            # buckets (±1 in alphabet) to catch typos like "Keffrey" / "Jeffrey".
+            buckets: dict[str, list[int]] = {}
+            for idx, name in enumerate(unique_names):
+                key = name.strip()[0].lower() if name.strip() else ""
+                buckets.setdefault(key, []).append(idx)
+
+            # Build comparison pairs: within bucket + adjacent buckets
+            bucket_keys = sorted(buckets.keys())
+            comparison_pairs: set[tuple[int, int]] = set()
+
+            for bk_idx, bk in enumerate(bucket_keys):
+                indices = buckets[bk]
+                # Intra-bucket pairs
+                for ii in range(len(indices)):
+                    for jj in range(ii + 1, len(indices)):
+                        comparison_pairs.add((indices[ii], indices[jj]))
+                # Adjacent-bucket pairs (next bucket only, avoids duplicates)
+                if bk_idx + 1 < len(bucket_keys):
+                    next_indices = buckets[bucket_keys[bk_idx + 1]]
+                    for ii in indices:
+                        for jj in next_indices:
+                            pair = (min(ii, jj), max(ii, jj))
+                            comparison_pairs.add(pair)
+
+            for i, j in comparison_pairs:
+                name_a = unique_names[i]
+                name_b = unique_names[j]
+                score = fuzz.ratio(
+                    " ".join(name_a.lower().split()),
+                    " ".join(name_b.lower().split()),
+                )
+                if score >= self.fuzzy_threshold:
+                    matches.append(
+                        EntityMatch(
+                            name_a=name_a,
+                            name_b=name_b,
+                            entity_type=entity_type,
+                            score=score,
+                            method="fuzzy",
                         )
+                    )
 
         logger.info(
             "resolver.fuzzy.complete",
