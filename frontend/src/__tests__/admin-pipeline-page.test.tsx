@@ -37,6 +37,7 @@ vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({
     invalidateQueries: vi.fn(),
   }),
+  keepPreviousData: Symbol("keepPreviousData"),
 }));
 
 vi.mock("@/components/admin/operations/celery-panel", () => ({
