@@ -26,9 +26,9 @@ get_cpu_usage() {
     # 1-minute load average as percentage of available CPUs
     local cores
     cores=$(nproc)
-    local load
-    load=$(awk '{print $1}' /proc/loadavg)
-    awk -v load="$load" -v cores="$cores" 'BEGIN { printf "%.0f", (load / cores) * 100 }'
+    local lavg
+    lavg=$(awk '{print $1}' /proc/loadavg)
+    awk -v lavg="$lavg" -v cores="$cores" 'BEGIN { printf "%.0f", (lavg / cores) * 100 }'
 }
 
 get_worker_count() {
