@@ -18,7 +18,7 @@ services:
               capabilities: [gpu]
 
   tei-embedder:
-    image: ghcr.io/huggingface/text-embeddings-inference:latest
+    image: ghcr.io/huggingface/text-embeddings-inference:turing
     command: --model-id ${TEI_EMBEDDING_MODEL:-BAAI/bge-m3} --port 8081
     ports:
       - "8081:8081"
