@@ -133,8 +133,8 @@ def sync_bulk_import_counters() -> int:
         result = conn.execute(
             text("""
                 UPDATE bulk_import_jobs bi SET
-                    processed_documents = sub.done,
-                    failed_documents = sub.failed,
+                    processed_documents = LEAST(sub.done, bi.total_documents),
+                    failed_documents = LEAST(sub.failed, bi.total_documents),
                     updated_at = now()
                 FROM (
                     SELECT bulk_import_job_id,
