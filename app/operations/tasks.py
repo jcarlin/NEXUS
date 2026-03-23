@@ -117,3 +117,39 @@ def poll_service_health() -> dict[str, str]:
         results={r[0]: r[1] for r in results},
     )
     return {r[0]: r[1] for r in results}
+
+
+@shared_task(name="app.operations.tasks.sync_bulk_import_counters")
+def sync_bulk_import_counters() -> int:
+    """Sync bulk_import_jobs counters from actual job status.
+
+    Runs every 30s via Celery Beat.  Reconciles the
+    ``processed_documents`` / ``failed_documents`` counters with
+    a ``count(*) FILTER`` over the ``jobs`` table so the polling
+    endpoint (which reads the counter columns directly) stays accurate.
+    """
+    engine = _get_sync_engine()
+    with engine.connect() as conn:
+        result = conn.execute(
+            text("""
+                UPDATE bulk_import_jobs bi SET
+                    processed_documents = sub.done,
+                    failed_documents = sub.failed,
+                    updated_at = now()
+                FROM (
+                    SELECT bulk_import_job_id,
+                        count(*) FILTER (WHERE status = 'complete') AS done,
+                        count(*) FILTER (WHERE status = 'failed') AS failed
+                    FROM jobs
+                    WHERE bulk_import_job_id IS NOT NULL
+                    GROUP BY bulk_import_job_id
+                ) sub
+                WHERE bi.id = sub.bulk_import_job_id
+                  AND bi.status = 'processing'
+            """)
+        )
+        conn.commit()
+        updated = result.rowcount
+    if updated:
+        logger.info("sync_bulk_import_counters.updated", count=updated)
+    return updated

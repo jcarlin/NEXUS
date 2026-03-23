@@ -64,6 +64,10 @@ celery_app.conf.update(
             "task": "ingestion.recover_orphan_jobs",
             "schedule": 300,  # Every 5 minutes
         },
+        "sync-bulk-import-counters": {
+            "task": "app.operations.tasks.sync_bulk_import_counters",
+            "schedule": 30,
+        },
     },
 )
 
