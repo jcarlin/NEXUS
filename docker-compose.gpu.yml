@@ -17,14 +17,8 @@ services:
               count: 1
               capabilities: [gpu]
 
-  tei-embedder:
-    image: ghcr.io/huggingface/text-embeddings-inference:turing-1.9
-    ports:
-      - "8081:80"
-    environment:
-      MODEL_ID: ${TEI_EMBEDDING_MODEL:-BAAI/bge-m3}
-      # Flash Attention off by default for Turing (precision issues on T4).
-      # For Ampere+ (A100/L4), switch to the :1.9 image and enable flash attn.
+  infinity:
+    image: michaelf34/infinity:latest-onnxruntime
     deploy:
       resources:
         reservations:
@@ -32,9 +26,17 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
+    environment:
+      INFINITY_MODEL_ID: "${INFINITY_EMBEDDING_MODEL:-BAAI/bge-m3};${INFINITY_RERANKER_MODEL:-BAAI/bge-reranker-v2-m3}"
+      INFINITY_BATCH_SIZE: "64;32"
+      INFINITY_ENGINE: "optimum;optimum"
+      INFINITY_DTYPE: "float16;float16"
+      INFINITY_PORT: "7997"
+    ports:
+      - "7997:7997"
     volumes:
-      - tei-models:/data
+      - infinity-models:/app/.cache
     restart: unless-stopped
 
 volumes:
-  tei-models:
+  infinity-models:
