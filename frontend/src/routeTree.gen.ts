@@ -37,6 +37,7 @@ import { Route as AdminKnowledgeGraphRouteImport } from './routes/admin/knowledg
 import { Route as AdminFeatureFlagsRouteImport } from './routes/admin/feature-flags'
 import { Route as AdminEvaluationRouteImport } from './routes/admin/evaluation'
 import { Route as AdminAuditLogRouteImport } from './routes/admin/audit-log'
+import { Route as AdminArchitectureRouteImport } from './routes/admin/architecture'
 import { Route as AuthOidcCallbackRouteImport } from './routes/auth/oidc/callback'
 
 const LoginRoute = LoginRouteImport.update({
@@ -219,6 +220,13 @@ const AdminAuditLogRoute = AdminAuditLogRouteImport.update({
 } as any).lazy(() =>
   import('./routes/admin/audit-log.lazy').then((d) => d.Route),
 )
+const AdminArchitectureRoute = AdminArchitectureRouteImport.update({
+  id: '/admin/architecture',
+  path: '/admin/architecture',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() =>
+  import('./routes/admin/architecture.lazy').then((d) => d.Route),
+)
 const AuthOidcCallbackRoute = AuthOidcCallbackRouteImport.update({
   id: '/auth/oidc/callback',
   path: '/auth/oidc/callback',
@@ -230,6 +238,7 @@ export interface FileRoutesByFullPath {
   '/case-setup': typeof CaseSetupRoute
   '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
+  '/admin/architecture': typeof AdminArchitectureRoute
   '/admin/audit-log': typeof AdminAuditLogRoute
   '/admin/evaluation': typeof AdminEvaluationRoute
   '/admin/feature-flags': typeof AdminFeatureFlagsRoute
@@ -261,6 +270,7 @@ export interface FileRoutesByTo {
   '/case-setup': typeof CaseSetupRoute
   '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
+  '/admin/architecture': typeof AdminArchitectureRoute
   '/admin/audit-log': typeof AdminAuditLogRoute
   '/admin/evaluation': typeof AdminEvaluationRoute
   '/admin/feature-flags': typeof AdminFeatureFlagsRoute
@@ -293,6 +303,7 @@ export interface FileRoutesById {
   '/case-setup': typeof CaseSetupRoute
   '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
+  '/admin/architecture': typeof AdminArchitectureRoute
   '/admin/audit-log': typeof AdminAuditLogRoute
   '/admin/evaluation': typeof AdminEvaluationRoute
   '/admin/feature-flags': typeof AdminFeatureFlagsRoute
@@ -326,6 +337,7 @@ export interface FileRouteTypes {
     | '/case-setup'
     | '/dashboard'
     | '/login'
+    | '/admin/architecture'
     | '/admin/audit-log'
     | '/admin/evaluation'
     | '/admin/feature-flags'
@@ -357,6 +369,7 @@ export interface FileRouteTypes {
     | '/case-setup'
     | '/dashboard'
     | '/login'
+    | '/admin/architecture'
     | '/admin/audit-log'
     | '/admin/evaluation'
     | '/admin/feature-flags'
@@ -388,6 +401,7 @@ export interface FileRouteTypes {
     | '/case-setup'
     | '/dashboard'
     | '/login'
+    | '/admin/architecture'
     | '/admin/audit-log'
     | '/admin/evaluation'
     | '/admin/feature-flags'
@@ -420,6 +434,7 @@ export interface RootRouteChildren {
   CaseSetupRoute: typeof CaseSetupRoute
   DashboardRoute: typeof DashboardRoute
   LoginRoute: typeof LoginRoute
+  AdminArchitectureRoute: typeof AdminArchitectureRoute
   AdminAuditLogRoute: typeof AdminAuditLogRoute
   AdminEvaluationRoute: typeof AdminEvaluationRoute
   AdminFeatureFlagsRoute: typeof AdminFeatureFlagsRoute
@@ -645,6 +660,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAuditLogRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/architecture': {
+      id: '/admin/architecture'
+      path: '/admin/architecture'
+      fullPath: '/admin/architecture'
+      preLoaderRoute: typeof AdminArchitectureRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth/oidc/callback': {
       id: '/auth/oidc/callback'
       path: '/auth/oidc/callback'
@@ -660,6 +682,7 @@ const rootRouteChildren: RootRouteChildren = {
   CaseSetupRoute: CaseSetupRoute,
   DashboardRoute: DashboardRoute,
   LoginRoute: LoginRoute,
+  AdminArchitectureRoute: AdminArchitectureRoute,
   AdminAuditLogRoute: AdminAuditLogRoute,
   AdminEvaluationRoute: AdminEvaluationRoute,
   AdminFeatureFlagsRoute: AdminFeatureFlagsRoute,

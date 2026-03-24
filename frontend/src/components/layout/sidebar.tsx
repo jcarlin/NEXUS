@@ -22,6 +22,7 @@ import {
   Gauge,
   ChevronsLeft,
   ChevronsRight,
+  GitBranch,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/stores/app-store";
@@ -69,6 +70,7 @@ const adminNav: NavItem[] = [
   { to: "/admin/feature-flags", label: "Feature Flags", icon: ToggleLeft, roles: ["admin"] },
   { to: "/admin/settings", label: "Settings", icon: SlidersHorizontal, roles: ["admin"] },
   { to: "/admin/operations", label: "Operations", icon: Activity, roles: ["admin"] },
+  { to: "/admin/architecture", label: "Architecture", icon: GitBranch, roles: ["admin"] },
 ];
 
 export function Sidebar() {
