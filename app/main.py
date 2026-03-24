@@ -539,6 +539,19 @@ def create_app() -> FastAPI:
         text_to_cypher: bool
         prompt_routing: bool
         question_decomposition: bool
+        page_dashboard: bool
+        page_chat: bool
+        page_documents: bool
+        page_ingest: bool
+        page_datasets: bool
+        page_entities: bool
+        page_comms_matrix: bool
+        page_timeline: bool
+        page_network_graph: bool
+        page_hot_docs: bool
+        page_result_set: bool
+        page_exports: bool
+        page_case_setup: bool
 
     @application.get("/api/v1/config/features", response_model=FeatureFlagsResponse, tags=["system"])
     async def get_feature_flags(
@@ -575,6 +588,19 @@ def create_app() -> FastAPI:
             text_to_cypher=settings.enable_text_to_cypher,
             prompt_routing=settings.enable_prompt_routing,
             question_decomposition=settings.enable_question_decomposition,
+            page_dashboard=settings.enable_page_dashboard,
+            page_chat=settings.enable_page_chat,
+            page_documents=settings.enable_page_documents,
+            page_ingest=settings.enable_page_ingest,
+            page_datasets=settings.enable_page_datasets,
+            page_entities=settings.enable_page_entities,
+            page_comms_matrix=settings.enable_page_comms_matrix,
+            page_timeline=settings.enable_page_timeline,
+            page_network_graph=settings.enable_page_network_graph,
+            page_hot_docs=settings.enable_page_hot_docs,
+            page_result_set=settings.enable_page_result_set,
+            page_exports=settings.enable_page_exports,
+            page_case_setup=settings.enable_page_case_setup,
         )
 
     return application

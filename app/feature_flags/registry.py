@@ -322,6 +322,85 @@ FLAG_REGISTRY: dict[str, FlagMeta] = {
         category=FlagCategory.INTEGRATIONS,
         risk_level=FlagRiskLevel.RESTART,
     ),
+    # --- Page Visibility ---
+    "enable_page_dashboard": FlagMeta(
+        display_name="Dashboard",
+        description="Show the Dashboard page in the sidebar navigation.",
+        category=FlagCategory.PAGES,
+        risk_level=FlagRiskLevel.SAFE,
+    ),
+    "enable_page_chat": FlagMeta(
+        display_name="Chat",
+        description="Show the Chat page in the sidebar navigation.",
+        category=FlagCategory.PAGES,
+        risk_level=FlagRiskLevel.SAFE,
+    ),
+    "enable_page_documents": FlagMeta(
+        display_name="Documents",
+        description="Show the Documents page in the sidebar navigation.",
+        category=FlagCategory.PAGES,
+        risk_level=FlagRiskLevel.SAFE,
+    ),
+    "enable_page_ingest": FlagMeta(
+        display_name="Ingest",
+        description="Show the Ingest page in the sidebar navigation.",
+        category=FlagCategory.PAGES,
+        risk_level=FlagRiskLevel.SAFE,
+    ),
+    "enable_page_datasets": FlagMeta(
+        display_name="Datasets",
+        description="Show the Datasets page in the sidebar navigation.",
+        category=FlagCategory.PAGES,
+        risk_level=FlagRiskLevel.SAFE,
+    ),
+    "enable_page_entities": FlagMeta(
+        display_name="Entities",
+        description="Show the Entities page in the sidebar navigation.",
+        category=FlagCategory.PAGES,
+        risk_level=FlagRiskLevel.SAFE,
+    ),
+    "enable_page_comms_matrix": FlagMeta(
+        display_name="Comms Matrix",
+        description="Show the Comms Matrix page in the sidebar navigation.",
+        category=FlagCategory.PAGES,
+        risk_level=FlagRiskLevel.SAFE,
+    ),
+    "enable_page_timeline": FlagMeta(
+        display_name="Timeline",
+        description="Show the Timeline page in the sidebar navigation.",
+        category=FlagCategory.PAGES,
+        risk_level=FlagRiskLevel.SAFE,
+    ),
+    "enable_page_network_graph": FlagMeta(
+        display_name="Network Graph",
+        description="Show the Network Graph page in the sidebar navigation.",
+        category=FlagCategory.PAGES,
+        risk_level=FlagRiskLevel.SAFE,
+    ),
+    "enable_page_hot_docs": FlagMeta(
+        display_name="Hot Docs",
+        description="Show the Hot Docs page in the sidebar navigation.",
+        category=FlagCategory.PAGES,
+        risk_level=FlagRiskLevel.SAFE,
+    ),
+    "enable_page_result_set": FlagMeta(
+        display_name="Result Set",
+        description="Show the Result Set page in the sidebar navigation.",
+        category=FlagCategory.PAGES,
+        risk_level=FlagRiskLevel.SAFE,
+    ),
+    "enable_page_exports": FlagMeta(
+        display_name="Exports",
+        description="Show the Exports page in the sidebar navigation.",
+        category=FlagCategory.PAGES,
+        risk_level=FlagRiskLevel.SAFE,
+    ),
+    "enable_page_case_setup": FlagMeta(
+        display_name="Case Setup",
+        description="Show the Case Setup page in the sidebar navigation.",
+        category=FlagCategory.PAGES,
+        risk_level=FlagRiskLevel.SAFE,
+    ),
 }
 
 

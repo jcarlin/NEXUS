@@ -17,6 +17,7 @@ class FlagCategory(StrEnum):
     INTELLIGENCE = "intelligence"
     AUDIT = "audit"
     INTEGRATIONS = "integrations"
+    PAGES = "pages"
 
 
 class FlagRiskLevel(StrEnum):

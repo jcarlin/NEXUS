@@ -1,6 +1,6 @@
 # Feature Flags Reference
 
-All 42 feature flags are defined in `app/config.py` (Settings class) and read from environment variables. 39 are registered in `app/feature_flags/registry.py` and toggleable at runtime via the admin UI. All default to `false` unless noted otherwise.
+All 55 feature flags are defined in `app/config.py` (Settings class) and read from environment variables. 52 are registered in `app/feature_flags/registry.py` and toggleable at runtime via the admin UI. Capability flags default to `false`; page visibility flags default to `true`.
 
 ## Runtime Toggling (Admin UI)
 
@@ -22,7 +22,7 @@ Each flag has a risk level that determines the toggle behavior:
 
 | Risk Level | Behavior | Count |
 |---|---|---|
-| **Safe** | Takes effect immediately, no side effects | 25 flags |
+| **Safe** | Takes effect immediately, no side effects | 38 flags |
 | **Cache Clear** | Clears DI singleton caches, may reload models on next request | 7 flags |
 | **Restart Required** | Saved to DB but requires server restart (router/middleware mounts) | 6 flags |
 
@@ -408,3 +408,27 @@ Celery workers run in separate processes with their own Settings singleton. They
 - **Resources gated**: SAML router mounted at startup when enabled.
 - **Runtime impact**: No startup cost beyond router registration. SAML assertion processing on auth requests.
 - **Related settings**: `SAML_ENTITY_ID`, `SAML_IDP_METADATA_URL`, `SAML_IDP_SSO_URL`, `SAML_IDP_CERT`
+
+### Page Visibility
+
+13 flags controlling which sidebar pages are visible to all users. All default to `true`. Managed via the dedicated admin page at `/admin/pages`. Admin pages are not toggleable.
+
+| Flag | Page | Sidebar Section |
+|---|---|---|
+| `ENABLE_PAGE_DASHBOARD` | Dashboard | Main |
+| `ENABLE_PAGE_CHAT` | Chat | Main |
+| `ENABLE_PAGE_DOCUMENTS` | Documents | Main |
+| `ENABLE_PAGE_INGEST` | Ingest | Main |
+| `ENABLE_PAGE_DATASETS` | Datasets | Main |
+| `ENABLE_PAGE_ENTITIES` | Entities | Main |
+| `ENABLE_PAGE_COMMS_MATRIX` | Comms Matrix | Analysis |
+| `ENABLE_PAGE_TIMELINE` | Timeline | Analysis |
+| `ENABLE_PAGE_NETWORK_GRAPH` | Network Graph | Analysis |
+| `ENABLE_PAGE_HOT_DOCS` | Hot Docs | Review |
+| `ENABLE_PAGE_RESULT_SET` | Result Set | Review |
+| `ENABLE_PAGE_EXPORTS` | Exports | Review |
+| `ENABLE_PAGE_CASE_SETUP` | Case Setup | Review |
+
+- **Risk level**: Safe (all flags)
+- **DI caches**: None
+- **Runtime impact**: Frontend-only — sidebar filters nav items based on flag state via `useFeatureFlags()` hook

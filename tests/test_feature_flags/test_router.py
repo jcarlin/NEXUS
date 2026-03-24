@@ -172,6 +172,16 @@ class TestConfigFeaturesEndpoint:
         assert "visual_embeddings" in data
         assert "agentic_pipeline" in data
         assert "google_drive" in data
+        # Page visibility flags
+        assert "page_dashboard" in data
+        assert "page_chat" in data
+        assert "page_comms_matrix" in data
+        assert "page_hot_docs" in data
+        assert "page_case_setup" in data
+        # All page flags default to True
+        page_keys = [k for k in data if k.startswith("page_")]
+        assert len(page_keys) == 13
+        assert all(data[k] is True for k in page_keys)
         # All values must be booleans
         assert all(isinstance(v, bool) for v in data.values())
         assert len(data) >= 23  # at least the original flags

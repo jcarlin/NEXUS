@@ -92,4 +92,5 @@ logs/
 scripts/fix_admin_password.py
 
 qa-sweep
+qa-screenshots
 .playwright-mcp

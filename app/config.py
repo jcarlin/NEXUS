@@ -132,6 +132,19 @@ class FeatureFlags(BaseModel):
     graphrag_communities: bool
     service_operations: bool
     agent_clarification: bool
+    page_dashboard: bool
+    page_chat: bool
+    page_documents: bool
+    page_ingest: bool
+    page_datasets: bool
+    page_entities: bool
+    page_comms_matrix: bool
+    page_timeline: bool
+    page_network_graph: bool
+    page_hot_docs: bool
+    page_result_set: bool
+    page_exports: bool
+    page_case_setup: bool
 
 
 def _detect_docker_socket() -> str:
@@ -438,6 +451,21 @@ class Settings(BaseSettings):
     # --- Automatic Graph Routing (T3-12) ---
     enable_agent_clarification: bool = False
     enable_auto_graph_routing: bool = False
+
+    # --- Page Visibility ---
+    enable_page_dashboard: bool = True
+    enable_page_chat: bool = True
+    enable_page_documents: bool = True
+    enable_page_ingest: bool = True
+    enable_page_datasets: bool = True
+    enable_page_entities: bool = True
+    enable_page_comms_matrix: bool = True
+    enable_page_timeline: bool = True
+    enable_page_network_graph: bool = True
+    enable_page_hot_docs: bool = True
+    enable_page_result_set: bool = True
+    enable_page_exports: bool = True
+    enable_page_case_setup: bool = True
     agentic_recursion_limit_fast: int = 24
     agentic_recursion_limit_standard: int = 40
     agentic_recursion_limit_deep: int = 40
@@ -606,5 +634,18 @@ class Settings(BaseSettings):
                 graphrag_communities=self.enable_graphrag_communities,
                 service_operations=self.enable_service_operations,
                 agent_clarification=self.enable_agent_clarification,
+                page_dashboard=self.enable_page_dashboard,
+                page_chat=self.enable_page_chat,
+                page_documents=self.enable_page_documents,
+                page_ingest=self.enable_page_ingest,
+                page_datasets=self.enable_page_datasets,
+                page_entities=self.enable_page_entities,
+                page_comms_matrix=self.enable_page_comms_matrix,
+                page_timeline=self.enable_page_timeline,
+                page_network_graph=self.enable_page_network_graph,
+                page_hot_docs=self.enable_page_hot_docs,
+                page_result_set=self.enable_page_result_set,
+                page_exports=self.enable_page_exports,
+                page_case_setup=self.enable_page_case_setup,
             )
         return self

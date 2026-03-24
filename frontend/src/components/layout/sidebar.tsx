@@ -23,10 +23,12 @@ import {
   ChevronsLeft,
   ChevronsRight,
   GitBranch,
+  PanelLeft,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/stores/app-store";
 import { useAuthStore } from "@/stores/auth-store";
+import { useFeatureFlags, type FeatureFlags } from "@/hooks/use-feature-flags";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -36,28 +38,29 @@ interface NavItem {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   roles?: string[];
+  pageFlag?: keyof FeatureFlags;
 }
 
 const mainNav: NavItem[] = [
-  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/chat", label: "Chat", icon: MessageSquare },
-  { to: "/documents", label: "Documents", icon: FileText },
-  { to: "/documents/import", label: "Ingest", icon: Upload },
-  { to: "/datasets", label: "Datasets", icon: FolderTree },
-  { to: "/entities", label: "Entities", icon: Users },
+  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, pageFlag: "page_dashboard" },
+  { to: "/chat", label: "Chat", icon: MessageSquare, pageFlag: "page_chat" },
+  { to: "/documents", label: "Documents", icon: FileText, pageFlag: "page_documents" },
+  { to: "/documents/import", label: "Ingest", icon: Upload, pageFlag: "page_ingest" },
+  { to: "/datasets", label: "Datasets", icon: FolderTree, pageFlag: "page_datasets" },
+  { to: "/entities", label: "Entities", icon: Users, pageFlag: "page_entities" },
 ];
 
 const analysisNav: NavItem[] = [
-  { to: "/analytics/comms", label: "Comms Matrix", icon: BarChart3 },
-  { to: "/analytics/timeline", label: "Timeline", icon: Clock },
-  { to: "/entities/network", label: "Network Graph", icon: Network },
+  { to: "/analytics/comms", label: "Comms Matrix", icon: BarChart3, pageFlag: "page_comms_matrix" },
+  { to: "/analytics/timeline", label: "Timeline", icon: Clock, pageFlag: "page_timeline" },
+  { to: "/entities/network", label: "Network Graph", icon: Network, pageFlag: "page_network_graph" },
 ];
 
 const reviewNav: NavItem[] = [
-  { to: "/review/hot-docs", label: "Hot Docs", icon: Flame },
-  { to: "/review/result-set", label: "Result Set", icon: ListChecks },
-  { to: "/review/exports", label: "Exports", icon: Package },
-  { to: "/case-setup", label: "Case Setup", icon: Settings, roles: ["admin", "attorney"] },
+  { to: "/review/hot-docs", label: "Hot Docs", icon: Flame, pageFlag: "page_hot_docs" },
+  { to: "/review/result-set", label: "Result Set", icon: ListChecks, pageFlag: "page_result_set" },
+  { to: "/review/exports", label: "Exports", icon: Package, pageFlag: "page_exports" },
+  { to: "/case-setup", label: "Case Setup", icon: Settings, roles: ["admin", "attorney"], pageFlag: "page_case_setup" },
 ];
 
 const adminNav: NavItem[] = [
@@ -68,6 +71,7 @@ const adminNav: NavItem[] = [
   { to: "/admin/knowledge-graph", label: "Graph Admin", icon: Network, roles: ["admin"] },
   { to: "/admin/llm-settings", label: "LLM Settings", icon: Settings, roles: ["admin"] },
   { to: "/admin/feature-flags", label: "Feature Flags", icon: ToggleLeft, roles: ["admin"] },
+  { to: "/admin/pages", label: "Pages", icon: PanelLeft, roles: ["admin"] },
   { to: "/admin/settings", label: "Settings", icon: SlidersHorizontal, roles: ["admin"] },
   { to: "/admin/operations", label: "Operations", icon: Activity, roles: ["admin"] },
   { to: "/admin/architecture", label: "Architecture", icon: GitBranch, roles: ["admin"] },
@@ -77,11 +81,14 @@ export function Sidebar() {
   const collapsed = useAppStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useAppStore((s) => s.toggleSidebar);
   const userRole = useAuthStore((s) => s.user?.role);
+  const { data: flags } = useFeatureFlags();
 
   const matchRoute = useMatchRoute();
 
-  function filterByRole(items: NavItem[]) {
-    return items.filter((item) => !item.roles || (userRole && item.roles.includes(userRole)));
+  function filterVisible(items: NavItem[]) {
+    return items
+      .filter((item) => !item.roles || (userRole && item.roles.includes(userRole)))
+      .filter((item) => !item.pageFlag || flags?.[item.pageFlag] !== false);
   }
 
   const allPaths = [...mainNav, ...analysisNav, ...reviewNav, ...adminNav].map((i) => i.to);
@@ -130,7 +137,7 @@ export function Sidebar() {
   }
 
   function NavSection({ title, items }: { title: string; items: NavItem[] }) {
-    const filtered = filterByRole(items);
+    const filtered = filterVisible(items);
     if (filtered.length === 0) return null;
     return (
       <div className="space-y-1">
@@ -173,7 +180,7 @@ export function Sidebar() {
           <NavSection title="Analysis" items={analysisNav} />
           <div className="mx-3 h-px bg-sidebar-border/30" />
           <NavSection title="Review" items={reviewNav} />
-          {filterByRole(adminNav).length > 0 && (
+          {filterVisible(adminNav).length > 0 && (
             <>
               <div className="mx-3 h-px bg-sidebar-border/30" />
               <NavSection title="Admin" items={adminNav} />

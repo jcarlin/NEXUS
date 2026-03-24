@@ -17,7 +17,7 @@ from app.feature_flags.schemas import (
 
 class TestFlagCategory:
     def test_all_values(self):
-        expected = {"retrieval", "ingestion", "query", "entity_graph", "intelligence", "audit", "integrations"}
+        expected = {"retrieval", "ingestion", "query", "entity_graph", "intelligence", "audit", "integrations", "pages"}
         assert set(FlagCategory) == expected
 
 

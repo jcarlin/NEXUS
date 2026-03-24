@@ -29,6 +29,19 @@ export interface FeatureFlags {
   text_to_cypher: boolean;
   prompt_routing: boolean;
   question_decomposition: boolean;
+  page_dashboard: boolean;
+  page_chat: boolean;
+  page_documents: boolean;
+  page_ingest: boolean;
+  page_datasets: boolean;
+  page_entities: boolean;
+  page_comms_matrix: boolean;
+  page_timeline: boolean;
+  page_network_graph: boolean;
+  page_hot_docs: boolean;
+  page_result_set: boolean;
+  page_exports: boolean;
+  page_case_setup: boolean;
 }
 
 export function useFeatureFlags() {
