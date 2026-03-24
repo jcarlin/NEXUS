@@ -2310,6 +2310,68 @@ def _infer_doc_type(filename: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Memory guard for NER workers
+# ---------------------------------------------------------------------------
+
+
+def _get_available_memory_gb() -> float:
+    """Read available memory from /proc/meminfo (Linux only)."""
+    try:
+        with open("/proc/meminfo") as f:
+            for line in f:
+                if line.startswith("MemAvailable:"):
+                    return int(line.split()[1]) / (1024 * 1024)  # kB → GB
+    except (FileNotFoundError, ValueError):
+        return 99.0  # Non-Linux (dev machine) — assume plenty
+    return 99.0
+
+
+def _wait_for_memory(
+    min_gb: float = 2.0,
+    critical_gb: float = 1.0,
+    task=None,
+    job_id: str = "",
+    max_wait: int = 300,
+) -> None:
+    """Block until available memory exceeds *min_gb*.
+
+    If memory drops below *critical_gb*, reject the task back to the queue
+    so another worker (or this one later) can pick it up.
+    """
+    import time as _time
+
+    waited = 0
+    while True:
+        avail = _get_available_memory_gb()
+        if avail >= min_gb:
+            return
+
+        if avail < critical_gb and task is not None:
+            logger.warning(
+                "ner.memory_critical",
+                available_gb=round(avail, 2),
+                threshold_gb=critical_gb,
+                job_id=job_id,
+                action="reject_requeue",
+            )
+            task.reject(requeue=True)
+            return
+
+        logger.info(
+            "ner.memory_low",
+            available_gb=round(avail, 2),
+            threshold_gb=min_gb,
+            job_id=job_id,
+            action="waiting",
+        )
+        _time.sleep(30)
+        waited += 30
+        if waited >= max_wait:
+            logger.warning("ner.memory_wait_timeout", waited=waited, job_id=job_id)
+            return  # Proceed anyway after max wait
+
+
+# ---------------------------------------------------------------------------
 # Deferred NER extraction task (dispatched to 'ner' queue)
 # ---------------------------------------------------------------------------
 
@@ -2326,9 +2388,15 @@ def extract_entities_for_job(self, job_id: str, matter_id: str | None = None) ->
 
     Reads chunk texts from Qdrant, runs batched GLiNER extraction, indexes
     entities to Neo4j, and updates ``entity_count`` in PostgreSQL.
+
+    Includes memory guard: pauses when available RAM drops below 2GB,
+    rejects the task back to queue below 1GB.
     """
     structlog.contextvars.clear_contextvars()
     structlog.contextvars.bind_contextvars(task_id=self.request.id, job_id=job_id)
+
+    # Memory guard — prevent OOM under high NER concurrency
+    _wait_for_memory(min_gb=2.0, critical_gb=1.0, task=self, job_id=job_id)
 
     from app.config import Settings
     from app.entities.extractor import EntityExtractor
