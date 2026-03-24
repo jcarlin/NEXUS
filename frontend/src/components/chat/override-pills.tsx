@@ -3,7 +3,7 @@ import { X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/api/client";
-import { useOverrideStore } from "@/stores/override-store";
+import { useOverrideStore, EMPTY_OVERRIDES } from "@/stores/override-store";
 import { useFeatureFlag } from "@/hooks/use-feature-flags";
 import { cn } from "@/lib/utils";
 
@@ -27,7 +27,7 @@ interface OverridePillsProps {
 
 export function OverridePills({ threadId }: OverridePillsProps) {
   const enabled = useFeatureFlag("retrieval_overrides");
-  const overrides = useOverrideStore((s) => s.threadOverrides[threadId] ?? {});
+  const overrides = useOverrideStore((s) => s.threadOverrides[threadId] ?? EMPTY_OVERRIDES);
   const setOverride = useOverrideStore((s) => s.setOverride);
 
   const { data } = useQuery({

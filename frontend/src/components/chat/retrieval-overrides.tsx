@@ -7,7 +7,7 @@ import { SlidersHorizontal, RotateCcw } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/api/client";
 import { useFeatureFlag } from "@/hooks/use-feature-flags";
-import { useOverrideStore } from "@/stores/override-store";
+import { useOverrideStore, EMPTY_OVERRIDES } from "@/stores/override-store";
 import { cn } from "@/lib/utils";
 
 interface OverrideFlagDetail {
@@ -31,25 +31,25 @@ interface RetrievalOverridesProps {
 const FLAG_GROUPS: { label: string; flags: string[] }[] = [
   {
     label: "Search",
-    flags: ["hyde", "multi_query", "retrieval_grading", "adaptive_depth"],
+    flags: ["enable_hyde", "enable_multi_query_expansion", "enable_retrieval_grading", "enable_adaptive_retrieval_depth"],
   },
   {
     label: "Analysis",
-    flags: ["citation_verification", "self_reflection", "question_decomposition", "prompt_routing"],
+    flags: ["enable_citation_verification", "enable_self_reflection", "enable_question_decomposition", "enable_prompt_routing"],
   },
   {
     label: "Data Sources",
-    flags: ["text_to_cypher", "text_to_sql"],
+    flags: ["enable_text_to_cypher", "enable_text_to_sql"],
   },
   {
     label: "Models",
-    flags: ["reranker", "sparse_embeddings", "visual_embeddings"],
+    flags: ["enable_reranker", "enable_sparse_embeddings", "enable_visual_embeddings"],
   },
 ];
 
 export function RetrievalOverrides({ threadId }: RetrievalOverridesProps) {
   const enabled = useFeatureFlag("retrieval_overrides");
-  const overrides = useOverrideStore((s) => s.threadOverrides[threadId] ?? {});
+  const overrides = useOverrideStore((s) => s.threadOverrides[threadId] ?? EMPTY_OVERRIDES);
   const setOverride = useOverrideStore((s) => s.setOverride);
   const clearOverrides = useOverrideStore((s) => s.clearOverrides);
 

@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
+export const EMPTY_OVERRIDES: Record<string, boolean> = {};
+
 interface OverrideStore {
   threadOverrides: Record<string, Record<string, boolean>>;
   setOverride: (threadId: string, flag: string, value: boolean | null) => void;
