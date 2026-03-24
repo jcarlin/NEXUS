@@ -5,36 +5,34 @@ Designed for datasets like ``svetfm/epstein-fbi-files`` and
 ``svetfm/epstein-files-nov11-25-house-post-ocr-embeddings`` that ship
 with pre-computed 768d nomic-embed-text vectors.
 
-Pipeline per document:
-  1. PostgreSQL: jobs + documents rows
-  2. MinIO: upload concatenated text
-  3. Qdrant: upsert pre-computed vectors (no embedding API call)
-  4. GLiNER NER: entity extraction on each chunk
-  5. Neo4j: Document, Entity, Chunk nodes + edges
+Pipeline (async, batched):
+  1. Read parquet → group chunks by source document
+  2. Batch embed via configured provider (Infinity BGE-M3 GPU)
+  3. Batch upsert to Qdrant (500 points per call)
+  4. Batch create Neo4j Document + Chunk nodes (UNWIND)
+  5. Batch insert PostgreSQL job + document rows
+  6. Optional: GLiNER NER (deferred to Celery queue)
 
 Usage::
 
     # Local test (50 docs)
     python scripts/import_fbi_dataset.py \\
-        --file ./data/epstein_fbi_files/epstein_fbi_files.parquet \\
+        --file ./data/epstein_fbi_files.parquet \\
         --matter-id 00000000-0000-0000-0000-000000000002 \\
         --limit 50
 
-    # Full GCP import (fast, skip NER for deferred pass)
+    # Full GPU import (fast, skip NER + MinIO)
     python scripts/import_fbi_dataset.py \\
-        --file ./data/epstein_fbi_files/epstein_fbi_files.parquet \\
+        --file ./data/epstein_fbi_files.parquet \\
         --matter-id 00000000-0000-0000-0000-000000000002 \\
-        --disable-hnsw --skip-ner --concurrency 4
+        --re-embed --disable-hnsw --skip-ner --skip-minio --concurrency 16
 
-    # House Oversight pre-embedded (auto-detects simpler schema)
+    # House Oversight pre-embedded
     python scripts/import_fbi_dataset.py \\
-        --file ./data/house_oversight/house_oversight.parquet \\
+        --file ./data/house_oversight.parquet \\
         --matter-id 00000000-0000-0000-0000-000000000002 \\
-        --dataset-name "House Oversight Pre-embedded"
-
-    # Re-embed with local Ollama instead of using pre-computed vectors
-    python scripts/import_fbi_dataset.py \\
-        --file ./data/fbi.parquet --matter-id ... --re-embed
+        --dataset-name "House Oversight Pre-embedded" \\
+        --citation-quality degraded --re-embed --skip-minio --skip-ner
 """
 
 from __future__ import annotations
@@ -44,10 +42,8 @@ import asyncio
 import hashlib
 import json
 import sys
-import threading
 import time
 import uuid
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -60,15 +56,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 logger = structlog.get_logger(__name__)
 
 # ---------------------------------------------------------------------------
-# Constants
+# Tuning constants
 # ---------------------------------------------------------------------------
 
-QDRANT_BATCH_SIZE = 100
+EMBED_BATCH_SIZE = 128  # Optimal for Infinity on T4 GPU
+QDRANT_BATCH_SIZE = 500  # Points per upsert call
+NEO4J_BATCH_SIZE = 100  # Nodes per UNWIND query
 NER_MAX_CHARS = 4_000
 
 
 # ---------------------------------------------------------------------------
-# Data classes
+# Data classes (unchanged from original)
 # ---------------------------------------------------------------------------
 
 
@@ -102,7 +100,6 @@ class DocumentGroup:
 
     @property
     def page_count(self) -> int:
-        # Prefer authoritative total_pages from dataset when available
         if self.chunks and self.chunks[0].total_pages is not None:
             return self.chunks[0].total_pages
         pages = [c.page_number for c in self.chunks if c.page_number is not None]
@@ -132,7 +129,7 @@ class DocumentGroup:
 
 
 # ---------------------------------------------------------------------------
-# Schema detection
+# Schema detection (unchanged)
 # ---------------------------------------------------------------------------
 
 _FBI_REQUIRED = {"text", "embedding"}
@@ -140,7 +137,6 @@ _FBI_RICH_COLS = {"page_number", "bates_number", "ocr_confidence", "volume", "do
 
 
 def _resolve_col(col_set: set[str], *candidates: str) -> str | None:
-    """Return the first column name from candidates found in the dataset."""
     for c in candidates:
         if c in col_set:
             return c
@@ -148,20 +144,10 @@ def _resolve_col(col_set: set[str], *candidates: str) -> str | None:
 
 
 def detect_schema(columns: list[str]) -> dict[str, str | None]:
-    """Map dataset columns to our internal field names.
-
-    Returns a dict of internal_name -> actual_column_name (or None if absent).
-    Supports the rich FBI JSONL schema (chunk_text, source_path, source_volume),
-    the FBI Parquet schema (text, source_file, volume), and the sparse House
-    Oversight schema.
-    """
     col_set = set(columns)
-
-    # Text column: "text" or "chunk_text" (FBI JSONL uses chunk_text)
     text_col = _resolve_col(col_set, "text", "chunk_text")
     if text_col is None:
         raise ValueError(f"Dataset must have a 'text' or 'chunk_text' column, got: {columns}")
-
     if "embedding" not in col_set:
         raise ValueError(f"Dataset must have an 'embedding' column, got: {columns}")
 
@@ -182,12 +168,11 @@ def detect_schema(columns: list[str]) -> dict[str, str | None]:
     schema_type = "rich (FBI-style)" if rich_count >= 3 else "sparse (House Oversight-style)"
     print(f"  Schema type: {schema_type}")
     print(f"  Mapped columns: { {k: v for k, v in mapping.items() if v} }")
-
     return mapping
 
 
 # ---------------------------------------------------------------------------
-# Parquet reader + grouping
+# Parquet reader + grouping (unchanged)
 # ---------------------------------------------------------------------------
 
 
@@ -196,7 +181,6 @@ def read_and_group(
     schema_map: dict[str, str | None],
     limit: int | None = None,
 ) -> list[DocumentGroup]:
-    """Read Parquet file and group chunks by source document."""
     import pandas as pd
 
     print(f"  Reading {file_path}...")
@@ -280,7 +264,6 @@ def read_and_group(
         chunk_count += 1
 
     doc_groups = list(groups.values())
-
     if limit is not None:
         doc_groups = doc_groups[:limit]
 
@@ -288,12 +271,11 @@ def read_and_group(
     print(f"  Documents: {len(doc_groups):,}")
     print(f"  Chunks:    {total_chunks:,}")
     print(f"  Embedding dim: {len(doc_groups[0].chunks[0].embedding) if doc_groups else 'N/A'}")
-
     return doc_groups
 
 
 # ---------------------------------------------------------------------------
-# DB helpers (sync, direct — no Celery)
+# Sync DB helpers (PostgreSQL — fast, not the bottleneck)
 # ---------------------------------------------------------------------------
 
 
@@ -303,7 +285,7 @@ def _get_engine():
     from app.config import Settings
 
     settings = Settings()
-    return create_engine(settings.postgres_url_sync, pool_pre_ping=True)
+    return create_engine(settings.postgres_url_sync, pool_pre_ping=True, pool_size=5)
 
 
 def _get_settings():
@@ -313,7 +295,6 @@ def _get_settings():
 
 
 def check_resume(engine, content_hash: str, matter_id: str) -> bool:
-    """Return True if a document with this content hash already exists."""
     from sqlalchemy import text
 
     with engine.connect() as conn:
@@ -331,7 +312,6 @@ def create_job_and_document(
     dataset_id: str | None,
     import_source: str,
 ) -> tuple[str, str]:
-    """Create a job row and a document row. Returns (job_id, doc_id)."""
     from sqlalchemy import text
 
     job_id = str(uuid.uuid4())
@@ -340,7 +320,6 @@ def create_job_and_document(
     metadata_json = json.dumps(doc_group.metadata, default=str)
 
     with engine.connect() as conn:
-        # Job row
         conn.execute(
             text("""
                 INSERT INTO jobs (id, filename, status, stage, progress, error,
@@ -354,16 +333,10 @@ def create_job_and_document(
                 "matter_id": matter_id,
                 "dataset_id": dataset_id,
                 "metadata_": metadata_json,
-                "progress": json.dumps(
-                    {
-                        "chunks_created": len(doc_group.chunks),
-                        "entities_extracted": 0,
-                    }
-                ),
+                "progress": json.dumps({"chunks_created": len(doc_group.chunks), "entities_extracted": 0}),
             },
         )
 
-        # Document row
         full_text = doc_group.full_text
         conn.execute(
             text("""
@@ -390,26 +363,12 @@ def create_job_and_document(
                 "metadata_": metadata_json,
             },
         )
-
         conn.commit()
 
     return job_id, doc_id
 
 
-def update_entity_count(engine, doc_id: str, count: int) -> None:
-    """Update the entity_count on a document row."""
-    from sqlalchemy import text
-
-    with engine.connect() as conn:
-        conn.execute(
-            text("UPDATE documents SET entity_count = :count WHERE id = :id"),
-            {"count": count, "id": doc_id},
-        )
-        conn.commit()
-
-
 def link_document_to_dataset(engine, doc_id: str, dataset_id: str) -> None:
-    """Insert into dataset_documents junction table."""
     from sqlalchemy import text
 
     with engine.connect() as conn:
@@ -425,7 +384,6 @@ def link_document_to_dataset(engine, doc_id: str, dataset_id: str) -> None:
 
 
 def lookup_dataset_id(engine, matter_id: str, dataset_name: str) -> str | None:
-    """Find a dataset ID by name within a matter."""
     from sqlalchemy import text
 
     with engine.connect() as conn:
@@ -442,13 +400,11 @@ def lookup_dataset_id(engine, matter_id: str, dataset_name: str) -> str | None:
 
 
 def upload_to_minio(settings, key: str, data: bytes) -> None:
-    """Upload bytes to MinIO."""
     import boto3
     from botocore.config import Config as BotoConfig
 
     scheme = "https" if settings.minio_use_ssl else "http"
     endpoint_url = f"{scheme}://{settings.minio_endpoint}"
-
     client = boto3.client(
         "s3",
         endpoint_url=endpoint_url,
@@ -458,184 +414,6 @@ def upload_to_minio(settings, key: str, data: bytes) -> None:
         region_name="us-east-1",
     )
     client.put_object(Bucket=settings.minio_bucket, Key=key, Body=data, ContentType="text/plain")
-
-
-# ---------------------------------------------------------------------------
-# Qdrant upsert
-# ---------------------------------------------------------------------------
-
-
-def _re_embed_texts(settings, texts: list[str]) -> list[list[float]]:
-    """Embed texts via the configured embedding provider (sync wrapper)."""
-    import asyncio
-
-    from app.dependencies import get_embedder
-
-    embedder = get_embedder()
-    return asyncio.run(embedder.embed_texts(texts))
-
-
-def upsert_chunks_to_qdrant(
-    settings,
-    doc_id: str,
-    doc_group: DocumentGroup,
-    matter_id: str,
-    citation_quality: str = "full",
-    use_named_vectors: bool = True,
-    re_embed: bool = False,
-) -> list[dict]:
-    """Upsert chunks to Qdrant. Returns chunk_data for Neo4j.
-
-    When *re_embed* is True, ignores pre-computed vectors and generates
-    fresh embeddings via the configured provider (e.g. Infinity BGE-M3).
-    """
-    from qdrant_client import QdrantClient
-    from qdrant_client.models import PointStruct
-
-    from app.common.vector_store import TEXT_COLLECTION
-
-    qdrant = QdrantClient(url=settings.qdrant_url)
-    sorted_chunks = sorted(doc_group.chunks, key=lambda c: c.chunk_index)
-
-    # Re-embed all chunk texts if requested
-    embeddings: list[list[float]] | None = None
-    if re_embed:
-        chunk_texts = [c.text for c in sorted_chunks]
-        if chunk_texts:
-            embeddings = _re_embed_texts(settings, chunk_texts)
-
-    points: list[PointStruct] = []
-    chunk_data_for_neo4j: list[dict] = []
-
-    for i, chunk in enumerate(sorted_chunks):
-        point_id = str(uuid.uuid4())
-
-        payload: dict[str, Any] = {
-            "source_file": doc_group.source_file,
-            "chunk_text": chunk.text,
-            "chunk_index": chunk.chunk_index,
-            "doc_id": doc_id,
-            "matter_id": matter_id,
-            "token_count": len(chunk.text.split()),
-            "citation_quality": citation_quality,
-        }
-
-        if chunk.page_number is not None:
-            payload["page_number"] = chunk.page_number
-        if chunk.bates_number:
-            payload["bates_number"] = chunk.bates_number
-        if chunk.ocr_confidence is not None:
-            payload["ocr_confidence"] = chunk.ocr_confidence
-
-        # Use re-embedded vectors or pre-computed vectors
-        embedding = embeddings[i] if embeddings else chunk.embedding
-
-        if use_named_vectors:
-            vector: Any = {"dense": embedding}
-        else:
-            vector = embedding
-
-        points.append(PointStruct(id=point_id, vector=vector, payload=payload))
-        chunk_data_for_neo4j.append(
-            {
-                "chunk_id": point_id,
-                "text_preview": chunk.text[:200],
-                "page_number": chunk.page_number or 1,
-                "qdrant_point_id": point_id,
-            }
-        )
-
-        # Batch upsert
-        if len(points) >= QDRANT_BATCH_SIZE:
-            qdrant.upsert(collection_name=TEXT_COLLECTION, points=points)
-            points = []
-
-    # Flush remaining
-    if points:
-        qdrant.upsert(collection_name=TEXT_COLLECTION, points=points)
-
-    return chunk_data_for_neo4j
-
-
-# ---------------------------------------------------------------------------
-# NER extraction
-# ---------------------------------------------------------------------------
-
-
-def extract_entities(chunks: list[ChunkRecord], extractor) -> list[dict]:
-    """Run GLiNER NER on all chunks, deduplicating entities."""
-    seen: set[tuple[str, str]] = set()
-    entities: list[dict] = []
-
-    for chunk in chunks:
-        extracted = extractor.extract(chunk.text[:NER_MAX_CHARS])
-        for ent in extracted:
-            key = (ent.text.strip().lower(), ent.type)
-            if key not in seen:
-                seen.add(key)
-                entities.append(
-                    {
-                        "name": ent.text.strip(),
-                        "type": ent.type,
-                        "page_number": chunk.page_number,
-                    }
-                )
-
-    return entities
-
-
-# ---------------------------------------------------------------------------
-# Neo4j indexing
-# ---------------------------------------------------------------------------
-
-
-async def index_to_neo4j(
-    settings,
-    doc_id: str,
-    doc_group: DocumentGroup,
-    entities: list[dict],
-    chunk_data: list[dict],
-    matter_id: str,
-) -> None:
-    """Create Document, Entity, and Chunk nodes in Neo4j."""
-    from neo4j import AsyncGraphDatabase
-
-    from app.entities.graph_service import GraphService
-
-    driver = AsyncGraphDatabase.driver(
-        settings.neo4j_uri,
-        auth=(settings.neo4j_user, settings.neo4j_password),
-    )
-    try:
-        gs = GraphService(driver)
-        filename = doc_group.source_file.split("/")[-1] if "/" in doc_group.source_file else doc_group.source_file
-
-        await gs.create_document_node(
-            doc_id=doc_id,
-            filename=filename,
-            doc_type="document",
-            page_count=doc_group.page_count,
-            minio_path=f"raw/{doc_id}/{filename}",
-            matter_id=matter_id,
-        )
-
-        if entities:
-            await gs.index_entities_for_document(
-                doc_id=doc_id,
-                entities=entities,
-                matter_id=matter_id,
-            )
-
-        for cd in chunk_data:
-            await gs.create_chunk_node(
-                chunk_id=cd["chunk_id"],
-                text_preview=cd["text_preview"],
-                page_number=cd.get("page_number", 1),
-                qdrant_point_id=cd["qdrant_point_id"],
-                doc_id=doc_id,
-            )
-    finally:
-        await driver.close()
 
 
 # ---------------------------------------------------------------------------
@@ -659,13 +437,7 @@ def rebuild_hnsw(settings) -> None:
     client.rebuild_hnsw_index(TEXT_COLLECTION)
 
 
-# ---------------------------------------------------------------------------
-# Qdrant collection introspection
-# ---------------------------------------------------------------------------
-
-
 def detect_named_vectors(settings) -> bool:
-    """Check if the nexus_text collection uses named vectors."""
     from qdrant_client import QdrantClient
 
     from app.common.vector_store import TEXT_COLLECTION
@@ -679,15 +451,226 @@ def detect_named_vectors(settings) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Per-document processing (used by both sequential and concurrent paths)
+# NER extraction (unchanged — sync, CPU-bound)
 # ---------------------------------------------------------------------------
 
-# Lock for thread-safe progress output
-_print_lock = threading.Lock()
+
+def extract_entities(chunks: list[ChunkRecord], extractor) -> list[dict]:
+    seen: set[tuple[str, str]] = set()
+    entities: list[dict] = []
+    for chunk in chunks:
+        extracted = extractor.extract(chunk.text[:NER_MAX_CHARS])
+        for ent in extracted:
+            key = (ent.text.strip().lower(), ent.type)
+            if key not in seen:
+                seen.add(key)
+                entities.append({"name": ent.text.strip(), "type": ent.type, "page_number": chunk.page_number})
+    return entities
 
 
-def _process_one_document(
-    doc_group: DocumentGroup,
+# ---------------------------------------------------------------------------
+# Async pipeline — the core rewrite
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class PreparedChunk:
+    """A chunk ready for Qdrant upsert (with fresh embedding)."""
+
+    point_id: str
+    doc_id: str
+    text: str
+    embedding: list[float]
+    chunk_index: int
+    source_file: str
+    matter_id: str
+    citation_quality: str
+    page_number: int | None = None
+    bates_number: str | None = None
+    ocr_confidence: float | None = None
+    token_count: int = 0
+
+
+async def batch_embed(
+    embedder,
+    chunks_with_doc: list[tuple[str, list[ChunkRecord]]],
+    use_named_vectors: bool,
+    matter_id: str,
+    citation_quality: str,
+) -> list[PreparedChunk]:
+    """Embed all chunks from multiple documents in GPU-optimal batches.
+
+    Returns PreparedChunk objects with fresh 1024d embeddings.
+    """
+    # Flatten all chunks across documents
+    flat: list[tuple[str, ChunkRecord]] = []
+    for doc_id, chunks in chunks_with_doc:
+        for chunk in sorted(chunks, key=lambda c: c.chunk_index):
+            flat.append((doc_id, chunk))
+
+    if not flat:
+        return []
+
+    # Embed in batches of EMBED_BATCH_SIZE
+    all_texts = [chunk.text for _, chunk in flat]
+    all_embeddings: list[list[float]] = []
+
+    for i in range(0, len(all_texts), EMBED_BATCH_SIZE):
+        batch = all_texts[i : i + EMBED_BATCH_SIZE]
+        batch_embeddings = await embedder.embed_texts(batch)
+        if len(batch_embeddings) != len(batch):
+            raise RuntimeError(
+                f"Embedding batch mismatch: sent {len(batch)} texts, got {len(batch_embeddings)} vectors"
+            )
+        all_embeddings.extend(batch_embeddings)
+
+    if len(all_embeddings) != len(flat):
+        raise RuntimeError(f"Total embedding mismatch: {len(flat)} chunks but {len(all_embeddings)} vectors")
+
+    # Build PreparedChunk objects
+    prepared: list[PreparedChunk] = []
+    for (doc_id, chunk), embedding in zip(flat, all_embeddings):
+        # Verify dimension
+        if len(embedding) < 512:
+            raise RuntimeError(f"Embedding dimension too small: {len(embedding)} (expected 1024)")
+
+        prepared.append(
+            PreparedChunk(
+                point_id=str(uuid.uuid4()),
+                doc_id=doc_id,
+                text=chunk.text,
+                embedding=embedding,
+                chunk_index=chunk.chunk_index,
+                source_file=chunk.source_file,
+                matter_id=matter_id,
+                citation_quality=citation_quality,
+                page_number=chunk.page_number,
+                bates_number=chunk.bates_number,
+                ocr_confidence=chunk.ocr_confidence,
+                token_count=len(chunk.text.split()),
+            )
+        )
+
+    return prepared
+
+
+async def batch_upsert_qdrant(
+    qdrant_client,
+    collection_name: str,
+    prepared_chunks: list[PreparedChunk],
+    use_named_vectors: bool,
+) -> None:
+    """Upsert prepared chunks to Qdrant in batches of QDRANT_BATCH_SIZE."""
+    from qdrant_client.models import PointStruct
+
+    points: list[PointStruct] = []
+
+    for pc in prepared_chunks:
+        vector: Any = {"dense": pc.embedding} if use_named_vectors else pc.embedding
+        payload: dict[str, Any] = {
+            "source_file": pc.source_file,
+            "chunk_text": pc.text,
+            "chunk_index": pc.chunk_index,
+            "doc_id": pc.doc_id,
+            "matter_id": pc.matter_id,
+            "token_count": pc.token_count,
+            "citation_quality": pc.citation_quality,
+        }
+        if pc.page_number is not None:
+            payload["page_number"] = pc.page_number
+        if pc.bates_number:
+            payload["bates_number"] = pc.bates_number
+        if pc.ocr_confidence is not None:
+            payload["ocr_confidence"] = pc.ocr_confidence
+
+        points.append(PointStruct(id=pc.point_id, vector=vector, payload=payload))
+
+        if len(points) >= QDRANT_BATCH_SIZE:
+            await qdrant_client.upsert(collection_name=collection_name, points=points)
+            points = []
+
+    if points:
+        await qdrant_client.upsert(collection_name=collection_name, points=points)
+
+
+async def batch_index_neo4j(
+    driver,
+    prepared_chunks: list[PreparedChunk],
+    doc_groups_by_id: dict[str, DocumentGroup],
+    matter_id: str,
+) -> None:
+    """Create Document and Chunk nodes in Neo4j using batched UNWIND queries."""
+    # Collect unique doc_ids from this batch
+    doc_ids_seen: set[str] = set()
+    doc_nodes: list[dict] = []
+    chunk_nodes: list[dict] = []
+
+    for pc in prepared_chunks:
+        if pc.doc_id not in doc_ids_seen:
+            doc_ids_seen.add(pc.doc_id)
+            dg = doc_groups_by_id.get(pc.doc_id)
+            if dg:
+                filename = dg.source_file.split("/")[-1] if "/" in dg.source_file else dg.source_file
+                doc_nodes.append(
+                    {
+                        "doc_id": pc.doc_id,
+                        "filename": filename,
+                        "doc_type": "document",
+                        "page_count": dg.page_count,
+                        "minio_path": f"raw/{pc.doc_id}/{filename}",
+                        "matter_id": matter_id,
+                    }
+                )
+
+        chunk_nodes.append(
+            {
+                "chunk_id": pc.point_id,
+                "text_preview": pc.text[:200],
+                "page_number": pc.page_number or 1,
+                "qdrant_point_id": pc.point_id,
+                "doc_id": pc.doc_id,
+            }
+        )
+
+    async with driver.session() as session:
+        # Batch create Document nodes
+        if doc_nodes:
+            for i in range(0, len(doc_nodes), NEO4J_BATCH_SIZE):
+                batch = doc_nodes[i : i + NEO4J_BATCH_SIZE]
+                await session.run(
+                    """
+                    UNWIND $docs AS d
+                    MERGE (doc:Document {id: d.doc_id})
+                    SET doc.filename = d.filename,
+                        doc.doc_type = d.doc_type,
+                        doc.page_count = d.page_count,
+                        doc.minio_path = d.minio_path,
+                        doc.matter_id = d.matter_id
+                    """,
+                    docs=batch,
+                )
+
+        # Batch create Chunk nodes + link to Documents
+        if chunk_nodes:
+            for i in range(0, len(chunk_nodes), NEO4J_BATCH_SIZE):
+                batch = chunk_nodes[i : i + NEO4J_BATCH_SIZE]
+                await session.run(
+                    """
+                    UNWIND $chunks AS c
+                    MERGE (chunk:Chunk {id: c.chunk_id})
+                    SET chunk.text_preview = c.text_preview,
+                        chunk.page_number = c.page_number,
+                        chunk.qdrant_point_id = c.qdrant_point_id
+                    WITH chunk, c
+                    MATCH (doc:Document {id: c.doc_id})
+                    MERGE (doc)-[:HAS_CHUNK]->(chunk)
+                    """,
+                    chunks=batch,
+                )
+
+
+async def run_async_pipeline(
+    doc_groups: list[DocumentGroup],
     engine,
     settings,
     matter_id: str,
@@ -695,64 +678,149 @@ def _process_one_document(
     import_source: str,
     citation_quality: str,
     use_named_vectors: bool,
-    extractor,
     skip_minio: bool,
     skip_neo4j: bool,
-    re_embed: bool = False,
-) -> tuple[int, int]:
-    """Process a single document through the full import pipeline.
+    re_embed: bool,
+    concurrency: int,
+) -> tuple[int, int, int]:
+    """Main async pipeline: embed → upsert → index in batches.
 
-    Returns (chunk_count, entity_count).
+    Returns (imported_docs, total_chunks, total_entities).
     """
-    # 1. PostgreSQL: job + document
-    job_id, doc_id = create_job_and_document(
-        engine,
-        doc_group,
-        matter_id,
-        dataset_id,
-        import_source,
-    )
+    from qdrant_client import AsyncQdrantClient
 
-    # 2. MinIO: upload concatenated text
-    if not skip_minio:
-        filename = doc_group.source_file.split("/")[-1] if "/" in doc_group.source_file else doc_group.source_file
-        minio_key = f"raw/{job_id}/{filename}"
-        upload_to_minio(settings, minio_key, doc_group.full_text.encode("utf-8"))
+    from app.common.vector_store import TEXT_COLLECTION
+    from app.dependencies import get_embedder
 
-    # 3. Qdrant: upsert vectors (pre-computed or re-embedded)
-    chunk_data = upsert_chunks_to_qdrant(
-        settings,
-        doc_id,
-        doc_group,
-        matter_id,
-        citation_quality=citation_quality,
-        use_named_vectors=use_named_vectors,
-        re_embed=re_embed,
-    )
+    # --- Shared async clients (created once, reused for all docs) ---
+    embedder = get_embedder() if re_embed else None
+    qdrant = AsyncQdrantClient(url=settings.qdrant_url)
 
-    # 4. NER
-    entities: list[dict] = []
-    if extractor:
-        entities = extract_entities(doc_group.chunks, extractor)
-        if entities:
-            update_entity_count(engine, doc_id, len(entities))
-
-    # 5. Neo4j
+    neo4j_driver = None
     if not skip_neo4j:
-        try:
-            asyncio.run(index_to_neo4j(settings, doc_id, doc_group, entities, chunk_data, matter_id))
-        except Exception:
-            logger.warning("neo4j.index_failed", doc_id=doc_id, exc_info=True)
+        from neo4j import AsyncGraphDatabase
 
-    # 6. Dataset link
-    if dataset_id:
-        link_document_to_dataset(engine, doc_id, dataset_id)
+        neo4j_driver = AsyncGraphDatabase.driver(
+            settings.neo4j_uri,
+            auth=(settings.neo4j_user, settings.neo4j_password),
+        )
 
-    return len(doc_group.chunks), len(entities)
+    imported = 0
+    total_chunks = 0
+    start_time = time.time()
+
+    # Process documents in batches of `concurrency` for pipeline efficiency
+    batch_size = concurrency
+    doc_groups_by_id: dict[str, DocumentGroup] = {}
+
+    try:
+        for batch_start in range(0, len(doc_groups), batch_size):
+            batch = doc_groups[batch_start : batch_start + batch_size]
+
+            # Phase 1: PostgreSQL inserts (sync, fast)
+            chunks_with_doc: list[tuple[str, list[ChunkRecord]]] = []
+            for doc_group in batch:
+                job_id, doc_id = create_job_and_document(
+                    engine,
+                    doc_group,
+                    matter_id,
+                    dataset_id,
+                    import_source,
+                )
+                doc_groups_by_id[doc_id] = doc_group
+                chunks_with_doc.append((doc_id, doc_group.chunks))
+
+                if dataset_id:
+                    link_document_to_dataset(engine, doc_id, dataset_id)
+
+                if not skip_minio:
+                    filename = (
+                        doc_group.source_file.split("/")[-1] if "/" in doc_group.source_file else doc_group.source_file
+                    )
+                    await asyncio.to_thread(
+                        upload_to_minio, settings, f"raw/{job_id}/{filename}", doc_group.full_text.encode("utf-8")
+                    )
+
+            # Phase 2: Batch embed (async, GPU)
+            if re_embed and embedder:
+                prepared = await batch_embed(
+                    embedder,
+                    chunks_with_doc,
+                    use_named_vectors,
+                    matter_id,
+                    citation_quality,
+                )
+            else:
+                # Use pre-computed vectors (no re-embedding)
+                prepared = []
+                for doc_id, chunks in chunks_with_doc:
+                    for chunk in sorted(chunks, key=lambda c: c.chunk_index):
+                        prepared.append(
+                            PreparedChunk(
+                                point_id=str(uuid.uuid4()),
+                                doc_id=doc_id,
+                                text=chunk.text,
+                                embedding=chunk.embedding,
+                                chunk_index=chunk.chunk_index,
+                                source_file=chunk.source_file,
+                                matter_id=matter_id,
+                                citation_quality=citation_quality,
+                                page_number=chunk.page_number,
+                                bates_number=chunk.bates_number,
+                                ocr_confidence=chunk.ocr_confidence,
+                                token_count=len(chunk.text.split()),
+                            )
+                        )
+
+            # Phase 3+4: Qdrant + Neo4j in parallel (independent targets)
+            coros: list = [batch_upsert_qdrant(qdrant, TEXT_COLLECTION, prepared, use_named_vectors)]
+            if neo4j_driver and not skip_neo4j:
+                coros.append(batch_index_neo4j(neo4j_driver, prepared, doc_groups_by_id, matter_id))
+
+            results = await asyncio.gather(*coros, return_exceptions=True)
+            for i, result in enumerate(results):
+                if isinstance(result, Exception):
+                    target = "qdrant" if i == 0 else "neo4j"
+                    logger.error(f"import.{target}_batch_failed", batch_start=batch_start, error=str(result))
+                    if i == 0:
+                        # Qdrant failure is critical — vectors didn't land
+                        raise RuntimeError(f"Qdrant upsert failed at batch {batch_start}: {result}") from result
+
+            # Clean up doc_groups_by_id to avoid unbounded memory growth
+            for doc_id, _ in chunks_with_doc:
+                doc_groups_by_id.pop(doc_id, None)
+
+            # Track progress
+            imported += len(batch)
+            batch_chunks = sum(len(dg.chunks) for dg in batch)
+            total_chunks += batch_chunks
+
+            if imported % 100 < batch_size or imported == len(batch):
+                elapsed = time.time() - start_time
+                rate = imported / elapsed if elapsed > 0 else 0
+                remaining = len(doc_groups) - imported
+                eta_min = (remaining / rate / 60) if rate > 0 else 0
+                chunks_per_sec = total_chunks / elapsed if elapsed > 0 else 0
+                print(
+                    f"  [{imported:,}/{len(doc_groups):,}] "
+                    f"{total_chunks:,} chunks, "
+                    f"{rate:.1f} docs/sec, "
+                    f"{chunks_per_sec:.0f} chunks/sec, "
+                    f"ETA {eta_min:.0f}min"
+                )
+
+    except KeyboardInterrupt:
+        print(f"\n  Interrupted at {imported} docs.")
+    finally:
+        await qdrant.close()
+        if neo4j_driver:
+            await neo4j_driver.close()
+
+    return imported, total_chunks, 0
 
 
 # ---------------------------------------------------------------------------
-# Main import loop
+# Main
 # ---------------------------------------------------------------------------
 
 
@@ -771,7 +839,9 @@ def main() -> int:  # noqa: C901
     parser.add_argument("--skip-ner", action="store_true", help="Skip GLiNER entity extraction")
     parser.add_argument("--skip-neo4j", action="store_true", help="Skip Neo4j graph indexing")
     parser.add_argument("--skip-minio", action="store_true", help="Skip MinIO upload")
-    parser.add_argument("--re-embed", action="store_true", help="Re-embed with local provider instead of pre-computed")
+    parser.add_argument(
+        "--re-embed", action="store_true", help="Re-embed with configured provider instead of pre-computed"
+    )
     parser.add_argument(
         "--citation-quality",
         default="full",
@@ -786,13 +856,12 @@ def main() -> int:  # noqa: C901
     parser.add_argument(
         "--concurrency",
         type=int,
-        default=1,
-        help="Number of threads for parallel import (I/O-bound, best with --skip-ner)",
+        default=16,
+        help="Documents per async batch (default: 16)",
     )
 
     args = parser.parse_args()
 
-    # Validate
     if not args.file.exists():
         print(f"Error: file '{args.file}' does not exist", file=sys.stderr)
         return 1
@@ -803,13 +872,15 @@ def main() -> int:  # noqa: C901
         print(f"Error: '{args.matter_id}' is not a valid UUID", file=sys.stderr)
         return 1
 
-    print("\n=== NEXUS Pre-Embedded Import ===")
-    print(f"  File:       {args.file}")
-    print(f"  Matter:     {args.matter_id}")
-    print(f"  Dataset:    {args.dataset_name}")
-    print(f"  Citation:   {args.citation_quality}")
+    print("\n=== NEXUS Pre-Embedded Import (async pipeline) ===")
+    print(f"  File:        {args.file}")
+    print(f"  Matter:      {args.matter_id}")
+    print(f"  Dataset:     {args.dataset_name}")
+    print(f"  Citation:    {args.citation_quality}")
+    print(f"  Re-embed:    {args.re_embed}")
+    print(f"  Concurrency: {args.concurrency} docs/batch")
     if args.limit:
-        print(f"  Limit:      {args.limit} documents")
+        print(f"  Limit:       {args.limit} documents")
 
     # --- Read and group ---
     import pandas as pd
@@ -834,8 +905,6 @@ def main() -> int:  # noqa: C901
         print(f"Embedding dim:  {dim}")
         print(f"Est. Qdrant:    ~{total_chunks * dim * 4 / 1024 / 1024:.0f} MB")
         print(f"Citation tier:  {args.citation_quality}")
-
-        # Schema sample
         sample = doc_groups[0]
         print(f"\nSample document: {sample.source_file}")
         print(f"  Chunks: {len(sample.chunks)}")
@@ -848,42 +917,20 @@ def main() -> int:  # noqa: C901
     settings = _get_settings()
     engine = _get_engine()
 
-    # Lookup dataset ID
     dataset_id = lookup_dataset_id(engine, args.matter_id, args.dataset_name)
     if dataset_id:
         print(f"  Dataset ID: {dataset_id}")
     else:
         print(f"  Warning: dataset '{args.dataset_name}' not found. Run seed_epstein_matter.py first.")
 
-    # Named vectors detection
     use_named = detect_named_vectors(settings)
     print(f"  Named vectors: {use_named}")
 
-    # HNSW control
     if args.disable_hnsw:
         disable_hnsw(settings)
 
-    # NER setup
-    extractor = None
-    if not args.skip_ner:
-        from app.entities.extractor import EntityExtractor
-
-        extractor = EntityExtractor(model_name=settings.gliner_model)
-        print("  GLiNER NER: enabled (loading model on first use)")
-    else:
-        print("  GLiNER NER: skipped")
-
-    # --- Import loop ---
-    start_time = time.time()
-    imported = 0
+    # --- Filter for resume ---
     skipped = 0
-    total_chunks_imported = 0
-    total_entities = 0
-
-    concurrency = args.concurrency
-    print(f"\n  Importing {len(doc_groups):,} documents (concurrency={concurrency})...")
-
-    # Filter out already-imported docs when resuming
     docs_to_process: list[DocumentGroup] = []
     for doc_group in doc_groups:
         if args.resume and check_resume(engine, doc_group.content_hash, args.matter_id):
@@ -894,84 +941,35 @@ def main() -> int:  # noqa: C901
     if skipped:
         print(f"  Skipped {skipped} already-imported documents (resume mode)")
 
-    def _print_progress() -> None:
-        elapsed = time.time() - start_time
-        rate = imported / elapsed if elapsed > 0 else 0
-        remaining = len(docs_to_process) - imported
-        eta_min = (remaining / rate / 60) if rate > 0 else 0
-        with _print_lock:
-            print(
-                f"  [{imported:,}/{len(docs_to_process):,}] "
-                f"{total_chunks_imported:,} chunks, "
-                f"{total_entities:,} entities — "
-                f"{rate:.1f} docs/sec, ETA {eta_min:.0f}min"
-            )
+    total_chunks_target = sum(len(g.chunks) for g in docs_to_process)
+    print(f"\n  Importing {len(docs_to_process):,} documents ({total_chunks_target:,} chunks)...")
+    print(f"  Batch sizes: embed={EMBED_BATCH_SIZE}, qdrant={QDRANT_BATCH_SIZE}, neo4j={NEO4J_BATCH_SIZE}")
 
-    try:
-        if concurrency <= 1:
-            # Sequential path (original behavior)
-            for doc_group in docs_to_process:
-                chunks, ents = _process_one_document(
-                    doc_group,
-                    engine,
-                    settings,
-                    args.matter_id,
-                    dataset_id,
-                    args.import_source,
-                    args.citation_quality,
-                    use_named,
-                    extractor,
-                    args.skip_minio,
-                    args.skip_neo4j,
-                    re_embed=args.re_embed,
-                )
-                imported += 1
-                total_chunks_imported += chunks
-                total_entities += ents
-                if imported % 100 == 0 or imported == 1:
-                    _print_progress()
-        else:
-            # Concurrent path (ThreadPoolExecutor for I/O-bound work)
-            with ThreadPoolExecutor(max_workers=concurrency) as pool:
-                futures = {
-                    pool.submit(
-                        _process_one_document,
-                        doc_group,
-                        engine,
-                        settings,
-                        args.matter_id,
-                        dataset_id,
-                        args.import_source,
-                        args.citation_quality,
-                        use_named,
-                        extractor,
-                        args.skip_minio,
-                        args.skip_neo4j,
-                        args.re_embed,
-                    ): doc_group
-                    for doc_group in docs_to_process
-                }
-                for future in as_completed(futures):
-                    try:
-                        chunks, ents = future.result()
-                        imported += 1
-                        total_chunks_imported += chunks
-                        total_entities += ents
-                        if imported % 100 == 0 or imported == 1:
-                            _print_progress()
-                    except Exception:
-                        doc = futures[future]
-                        logger.error("import.doc_failed", source_file=doc.source_file, exc_info=True)
-
-    except KeyboardInterrupt:
-        print(f"\n  Interrupted! Imported {imported}, skipped {skipped}.")
+    # --- Run async pipeline ---
+    start_time = time.time()
+    imported, total_chunks, total_entities = asyncio.run(
+        run_async_pipeline(
+            docs_to_process,
+            engine,
+            settings,
+            args.matter_id,
+            dataset_id,
+            args.import_source,
+            args.citation_quality,
+            use_named,
+            args.skip_minio,
+            args.skip_neo4j,
+            args.re_embed,
+            args.concurrency,
+        )
+    )
 
     # --- Rebuild HNSW ---
     if args.disable_hnsw:
         rebuild_hnsw(settings)
 
     # --- Post-ingestion hooks ---
-    if imported > 0 and not args.dry_run:
+    if imported > 0:
         print("\n  Dispatching post-ingestion hooks...")
         try:
             from app.ingestion.bulk_import import dispatch_post_ingestion_hooks
@@ -987,11 +985,11 @@ def main() -> int:  # noqa: C901
     print("\n=== Import Complete ===")
     print(f"  Imported:      {imported:,} documents")
     print(f"  Skipped:       {skipped:,}")
-    print(f"  Total chunks:  {total_chunks_imported:,}")
+    print(f"  Total chunks:  {total_chunks:,}")
     print(f"  Total entities:{total_entities:,}")
     print(f"  Elapsed:       {elapsed:.1f}s ({elapsed / 60:.1f}min)")
     if imported > 0:
-        print(f"  Rate:          {imported / elapsed:.1f} docs/sec")
+        print(f"  Rate:          {imported / elapsed:.1f} docs/sec ({total_chunks / elapsed:.0f} chunks/sec)")
 
     engine.dispose()
     return 0
