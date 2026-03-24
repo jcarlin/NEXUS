@@ -11,7 +11,7 @@ interface MessageInputProps {
   onStop?: () => void;
   isStreaming?: boolean;
   disabled?: boolean;
-  variant?: "default" | "standalone";
+  variant?: "default" | "standalone" | "hero";
 }
 
 type ActiveModelResponse = {
@@ -61,47 +61,99 @@ export function MessageInput({ onSend, onStop, isStreaming, disabled, variant = 
   };
 
   return (
-    <div className={cn("bg-background px-4 pt-4 pb-3", variant === "default" && "border-t")}>
-    {activeModel?.model && (
-      <Badge variant="outline" className="mb-2 text-[11px] font-normal text-muted-foreground">
-        {activeModel.model}
-      </Badge>
-    )}
-    <div className="flex items-end gap-2">
-      <textarea
-        ref={textareaRef}
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={handleKeyDown}
-        onInput={handleInput}
-        placeholder="Ask a question about the investigation..."
-        rows={1}
-        disabled={disabled}
-        className="flex-1 resize-none rounded-md border border-border/60 bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20 transition-colors disabled:opacity-50"
-      />
-      {isStreaming ? (
-        <Button
-          size="icon"
-          variant="destructive"
-          aria-label="Stop generating"
-          onClick={onStop}
-        >
-          <Square className="h-3.5 w-3.5" />
-        </Button>
-      ) : (
-        <Button
-          size="icon"
-          aria-label="Send"
-          onClick={handleSubmit}
-          disabled={disabled || !text.trim()}
-        >
-          <Send className="h-4 w-4" />
-        </Button>
+    <div
+      className={cn(
+        variant === "hero" ? "w-full" : "bg-background px-4 pt-4 pb-3",
+        variant === "default" && "border-t",
       )}
-    </div>
-    <p className="px-1 pt-1 text-[11px] text-muted-foreground/50">
-      Enter to send · Shift+Enter for new line
-    </p>
+    >
+      {variant !== "hero" && activeModel?.model && (
+        <Badge variant="outline" className="mb-2 text-[11px] font-normal text-muted-foreground">
+          {activeModel.model}
+        </Badge>
+      )}
+
+      {variant === "hero" ? (
+        <div className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-lg shadow-primary/5 transition-colors focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20">
+          <textarea
+            ref={textareaRef}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onInput={handleInput}
+            placeholder="Ask a question about the investigation..."
+            rows={4}
+            disabled={disabled}
+            className="w-full resize-none border-0 bg-transparent px-4 pt-4 pb-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none disabled:opacity-50"
+          />
+          <div className="flex items-center justify-between px-4 pb-3">
+            <div className="flex items-center gap-2">
+              {activeModel?.model && (
+                <Badge variant="outline" className="text-[11px] font-normal text-muted-foreground">
+                  {activeModel.model}
+                </Badge>
+              )}
+            </div>
+            {isStreaming ? (
+              <Button
+                size="icon-sm"
+                variant="destructive"
+                aria-label="Stop generating"
+                onClick={onStop}
+              >
+                <Square className="h-3.5 w-3.5" />
+              </Button>
+            ) : (
+              <Button
+                size="icon-sm"
+                aria-label="Send"
+                onClick={handleSubmit}
+                disabled={disabled || !text.trim()}
+              >
+                <Send className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="flex items-end gap-2">
+            <textarea
+              ref={textareaRef}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={handleKeyDown}
+              onInput={handleInput}
+              placeholder="Ask a question about the investigation..."
+              rows={1}
+              disabled={disabled}
+              className="flex-1 resize-none rounded-md border border-border/60 bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20 transition-colors disabled:opacity-50"
+            />
+            {isStreaming ? (
+              <Button
+                size="icon"
+                variant="destructive"
+                aria-label="Stop generating"
+                onClick={onStop}
+              >
+                <Square className="h-3.5 w-3.5" />
+              </Button>
+            ) : (
+              <Button
+                size="icon"
+                aria-label="Send"
+                onClick={handleSubmit}
+                disabled={disabled || !text.trim()}
+              >
+                <Send className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+          <p className="px-1 pt-1 text-[11px] text-muted-foreground/50">
+            Enter to send · Shift+Enter for new line
+          </p>
+        </>
+      )}
     </div>
   );
 }

@@ -117,10 +117,9 @@ describe("ChatPage", () => {
   });
 
   describe("welcome state (empty)", () => {
-    it("shows welcome text when no content", () => {
+    it("shows greeting text when no content", () => {
       render(<Component />);
-      expect(screen.getByText("Welcome to NEXUS")).toBeInTheDocument();
-      expect(screen.getByText("Your legal investigation assistant")).toBeInTheDocument();
+      expect(screen.getByText("What would you like to investigate?")).toBeInTheDocument();
     });
 
     it("shows example query buttons", () => {
@@ -129,9 +128,9 @@ describe("ChatPage", () => {
       expect(screen.getByText("Summarize the timeline of events")).toBeInTheDocument();
     });
 
-    it("renders message input with standalone variant", () => {
+    it("renders message input with hero variant", () => {
       render(<Component />);
-      expect(screen.getByTestId("message-input")).toHaveAttribute("data-variant", "standalone");
+      expect(screen.getByTestId("message-input")).toHaveAttribute("data-variant", "hero");
     });
 
     it("does not render message list or findings bar", () => {
@@ -167,9 +166,9 @@ describe("ChatPage", () => {
       expect(screen.getByTestId("message-input")).toHaveAttribute("data-variant", "default");
     });
 
-    it("does not show welcome text", () => {
+    it("does not show greeting text", () => {
       render(<Component />);
-      expect(screen.queryByText("Welcome to NEXUS")).not.toBeInTheDocument();
+      expect(screen.queryByText("What would you like to investigate?")).not.toBeInTheDocument();
     });
   });
 
@@ -177,7 +176,7 @@ describe("ChatPage", () => {
     mockStreamState.isStreaming = true;
     render(<Component />);
     expect(screen.getByTestId("message-list")).toBeInTheDocument();
-    expect(screen.queryByText("Welcome to NEXUS")).not.toBeInTheDocument();
+    expect(screen.queryByText("What would you like to investigate?")).not.toBeInTheDocument();
   });
 
   it("message input is not disabled when not streaming", () => {

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
 import { createLazyFileRoute, useNavigate } from "@tanstack/react-router";
-import { MessageSquare } from "lucide-react";
 import { ChatLayout } from "@/components/chat/chat-layout";
 import { MessageList, EXAMPLE_QUERIES } from "@/components/chat/message-list";
 import { MessageInput } from "@/components/chat/message-input";
@@ -81,40 +80,35 @@ function ChatPage() {
   return (
     <ChatLayout>
       {!hasContent ? (
-        <div className="flex h-full flex-col items-center justify-center px-4">
+        <div className="flex h-full flex-col items-center justify-center px-4 pb-16">
           <div className="w-full max-w-2xl">
-            <div className="mb-8 flex flex-col items-center text-center">
-              <div className="mb-4 rounded-full bg-primary/10 p-4">
-                <MessageSquare className="h-8 w-8 text-primary" />
-              </div>
-              <h2 className="text-xl font-semibold tracking-tight">Welcome to NEXUS</h2>
-              <p className="mt-1 text-sm font-medium text-muted-foreground/80">
-                Your legal investigation assistant
-              </p>
-              <p className="mt-2 max-w-md text-sm text-muted-foreground">
-                Ask questions about documents, people, timelines, and communication patterns
-                across your case.
-              </p>
-            </div>
-            <div className="mb-6 flex flex-wrap justify-center gap-2">
+            <h2 className="mb-2 text-center text-lg font-medium tracking-tight text-muted-foreground">
+              What would you like to investigate?
+            </h2>
+            <p className="mb-5 text-center text-sm text-muted-foreground/60">
+              Ask about documents, people, timelines, and communication patterns across your case.
+            </p>
+
+            <MessageInput
+              onSend={handleSend}
+              onStop={cancel}
+              isStreaming={isStreaming}
+              disabled={isStreaming}
+              variant="hero"
+            />
+
+            <div className="mt-4 flex flex-wrap justify-center gap-2">
               {EXAMPLE_QUERIES.map((q) => (
                 <button
                   key={q}
                   type="button"
-                  className="rounded-full border border-border bg-card px-4 py-2 text-sm transition-all duration-150 hover:border-primary/30 hover:bg-accent/60 active:scale-[0.97]"
+                  className="rounded-full border border-border/50 px-3 py-1.5 text-xs text-muted-foreground transition-all duration-150 hover:border-primary/30 hover:bg-accent/40 hover:text-foreground active:scale-[0.97]"
                   onClick={() => handleSend(q)}
                 >
                   {q}
                 </button>
               ))}
             </div>
-            <MessageInput
-              onSend={handleSend}
-              onStop={cancel}
-              isStreaming={isStreaming}
-              disabled={isStreaming}
-              variant="standalone"
-            />
           </div>
         </div>
       ) : (

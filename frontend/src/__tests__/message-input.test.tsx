@@ -165,6 +165,33 @@ describe("MessageInput", () => {
     expect(outer.className).not.toContain("border-t");
   });
 
+  describe("hero variant", () => {
+    it("renders textarea with rows=4", () => {
+      render(<MessageInput onSend={onSend} variant="hero" />, { wrapper: createWrapper() });
+      const textarea = screen.getByPlaceholderText("Ask a question about the investigation...");
+      expect(textarea).toHaveAttribute("rows", "4");
+    });
+
+    it("does not show border-t", () => {
+      const { container } = render(<MessageInput onSend={onSend} variant="hero" />, {
+        wrapper: createWrapper(),
+      });
+      const outer = container.firstElementChild as HTMLElement;
+      expect(outer.className).not.toContain("border-t");
+    });
+
+    it("shows model badge inside container", async () => {
+      render(<MessageInput onSend={onSend} variant="hero" />, { wrapper: createWrapper() });
+      const badge = await screen.findByText("gemini-2.0-flash");
+      expect(badge).toBeInTheDocument();
+    });
+
+    it("does not show Enter hint text", () => {
+      render(<MessageInput onSend={onSend} variant="hero" />, { wrapper: createWrapper() });
+      expect(screen.queryByText(/Enter to send/)).not.toBeInTheDocument();
+    });
+  });
+
   it("does not render badge when fetch fails", async () => {
     const { apiClient } = await import("@/api/client");
     vi.mocked(apiClient).mockRejectedValueOnce(new Error("Network error"));
