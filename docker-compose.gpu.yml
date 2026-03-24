@@ -24,7 +24,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: celery -A workers.celery_app worker -Q ner -l info -c ${NER_WORKER_CONCURRENCY:-6} --pool=prefork --max-tasks-per-child=50
+    command: celery -A workers.celery_app worker -Q ner -l info -c ${NER_WORKER_CONCURRENCY:-8} --pool=prefork --max-tasks-per-child=50
     env_file: .env
     environment:
       # Must match docker-compose.prod.yml worker environment (Docker service names)
