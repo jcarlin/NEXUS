@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useState } from "react";
+import { Fragment, useState } from "react";
 import {
   useReactTable,
   getCoreRowModel,
@@ -458,23 +458,6 @@ export function BulkImportTable() {
   const { isLive } = useLiveRefresh();
   const [page, setPage] = useState(0);
 
-  // Stable refetchInterval callback — prevents interval timer accumulation
-  const bulkRefetchInterval = useCallback(
-    (query: { state: { data: PaginatedResponse<BulkImport> | undefined } }) => {
-      if (!isLive) return false;
-      const d = query.state.data;
-      if (!d) return 10_000;
-      const hasActive = d.items.some((i) => {
-        if (i.status === "processing") return true;
-        const done =
-          i.processed_documents + i.failed_documents + i.skipped_documents;
-        return (i.total_documents ?? 0) > 0 && done < (i.total_documents ?? 0);
-      });
-      return hasActive ? 10_000 : false;
-    },
-    [isLive],
-  );
-
   const { data, isLoading } = useQuery({
     queryKey: ["pipeline-bulk-imports", matterId, page],
     queryFn: () =>
@@ -484,7 +467,7 @@ export function BulkImportTable() {
         params: { limit: PAGE_SIZE, offset: page * PAGE_SIZE },
       }),
     enabled: !!matterId,
-    refetchInterval: bulkRefetchInterval,
+    refetchInterval: isLive ? 10_000 : false,
     gcTime: 5 * 60_000,
   });
 

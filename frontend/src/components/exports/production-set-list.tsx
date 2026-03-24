@@ -35,6 +35,10 @@ interface Props {
   limit: number;
   onOffsetChange: (offset: number) => void;
   onRefresh: () => void;
+  initialSorting?: SortingState;
+  onSortingChange?: (sorting: SortingState) => void;
+  initialGlobalFilter?: string;
+  onGlobalFilterChange?: (filter: string) => void;
 }
 
 const statusColors: Record<string, string> = {
@@ -51,10 +55,14 @@ export function ProductionSetList({
   limit,
   onOffsetChange,
   onRefresh,
+  initialSorting,
+  onSortingChange,
+  initialGlobalFilter,
+  onGlobalFilterChange,
 }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [sorting, setSorting] = useState<SortingState>([]);
-  const [globalFilter, setGlobalFilter] = useState("");
+  const [sorting, setSorting] = useState<SortingState>(initialSorting ?? []);
+  const [globalFilter, setGlobalFilter] = useState(initialGlobalFilter ?? "");
 
   const batesMutation = useMutation({
     mutationFn: (psId: string) =>
@@ -137,8 +145,16 @@ export function ProductionSetList({
     data,
     columns,
     state: { sorting, globalFilter },
-    onSortingChange: setSorting,
-    onGlobalFilterChange: setGlobalFilter,
+    onSortingChange: (updater) => {
+      const next = typeof updater === "function" ? updater(sorting) : updater;
+      setSorting(next);
+      onSortingChange?.(next);
+    },
+    onGlobalFilterChange: (updater) => {
+      const next = typeof updater === "function" ? updater(globalFilter) : updater;
+      setGlobalFilter(next);
+      onGlobalFilterChange?.(next);
+    },
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),

@@ -1,6 +1,7 @@
 import { createLazyFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useViewState } from "@/hooks/use-view-state";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { apiClient } from "@/api/client";
 import { useAppStore } from "@/stores/app-store";
@@ -25,19 +26,30 @@ export const Route = createLazyFileRoute("/review/result-set")({
 
 function ResultSetPage() {
   const matterId = useAppStore((s) => s.matterId);
-  const [offset, setOffset] = useState(0);
+  const [vs, setVS] = useViewState("/review/result-set", {
+    offset: 0,
+    sorting: [],
+    globalFilter: "",
+  });
   const limit = 50;
 
   const { data, isLoading } = useQuery({
-    queryKey: ["result-set", matterId, offset],
+    queryKey: ["result-set", matterId, vs.offset],
     queryFn: () =>
       apiClient<PaginatedResponse<DocumentResponse>>({
         url: "/api/v1/documents",
         method: "GET",
-        params: { offset, limit },
+        params: { offset: vs.offset, limit },
       }),
     enabled: !!matterId,
   });
+
+  // Safety guard: reset offset if it points beyond available data
+  useEffect(() => {
+    if (data && data.items.length === 0 && data.total > 0 && vs.offset > 0) {
+      setVS({ offset: 0 });
+    }
+  }, [data, vs.offset, setVS]);
 
   return (
     <div className="space-y-4 animate-page-in">
@@ -48,9 +60,16 @@ function ResultSetPage() {
         </p>
       </div>
 
-      <ResultSetTable data={data?.items ?? []} loading={isLoading} />
+      <ResultSetTable
+        data={data?.items ?? []}
+        loading={isLoading}
+        initialSorting={vs.sorting}
+        onSortingChange={(s) => setVS({ sorting: s })}
+        initialGlobalFilter={vs.globalFilter}
+        onGlobalFilterChange={(f) => setVS({ globalFilter: f })}
+      />
 
-      {data && <Pagination total={data.total} offset={offset} limit={limit} onOffsetChange={setOffset} />}
+      {data && <Pagination total={data.total} offset={vs.offset} limit={limit} onOffsetChange={(o) => setVS({ offset: o })} />}
 
       <DuplicateClustersPanel />
     </div>

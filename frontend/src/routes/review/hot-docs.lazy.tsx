@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/api/client";
 import { useAppStore } from "@/stores/app-store";
 import { useFeatureFlag } from "@/hooks/use-feature-flags";
+import { useViewState } from "@/hooks/use-view-state";
 import { HotDocTable } from "@/components/review/hot-doc-table";
 import { FeatureDisabledBanner } from "@/components/ui/feature-disabled-banner";
 import type { DocumentDetail, PaginatedResponse } from "@/types";
@@ -14,6 +15,10 @@ export const Route = createLazyFileRoute("/review/hot-docs")({
 function HotDocsPage() {
   const matterId = useAppStore((s) => s.matterId);
   const hotDocEnabled = useFeatureFlag("hot_doc_detection");
+  const [vs, setVS] = useViewState("/review/hot-docs", {
+    sorting: [{ id: "hot_doc_score", desc: true }],
+    globalFilter: "",
+  });
 
   const { data, isLoading } = useQuery({
     queryKey: ["hot-docs", matterId],
@@ -41,7 +46,14 @@ function HotDocsPage() {
         </p>
       </div>
 
-      <HotDocTable data={data?.items ?? []} loading={isLoading} />
+      <HotDocTable
+        data={data?.items ?? []}
+        loading={isLoading}
+        initialSorting={vs.sorting}
+        onSortingChange={(s) => setVS({ sorting: s })}
+        initialGlobalFilter={vs.globalFilter}
+        onGlobalFilterChange={(f) => setVS({ globalFilter: f })}
+      />
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { createLazyFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { apiClient } from "@/api/client";
+import { useViewState } from "@/hooks/use-view-state";
 import type { User, PaginatedResponse } from "@/types";
 import { Button } from "@/components/ui/button";
 import { UserTable } from "@/components/admin/user-table";
@@ -14,6 +15,10 @@ export const Route = createLazyFileRoute("/admin/users")({
 
 function UsersPage() {
   const [createOpen, setCreateOpen] = useState(false);
+  const [vs, setVS] = useViewState("/admin/users", {
+    sorting: [],
+    globalFilter: "",
+  });
 
   const { data, isLoading } = useQuery({
     queryKey: ["admin-users"],
@@ -40,7 +45,14 @@ function UsersPage() {
         </Button>
       </div>
 
-      <UserTable data={data?.items ?? []} isLoading={isLoading} />
+      <UserTable
+        data={data?.items ?? []}
+        isLoading={isLoading}
+        initialSorting={vs.sorting}
+        onSortingChange={(s) => setVS({ sorting: s })}
+        initialGlobalFilter={vs.globalFilter}
+        onGlobalFilterChange={(f) => setVS({ globalFilter: f })}
+      />
 
       <UserCreateDialog open={createOpen} onOpenChange={setCreateOpen} />
     </div>

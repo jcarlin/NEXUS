@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   useReactTable,
   getCoreRowModel,
@@ -120,18 +120,6 @@ export function JobTable() {
   };
   if (statusParam) params.status = statusParam;
 
-  // Stable refetchInterval callback — prevents interval timer explosion
-  const refetchInterval = useCallback(
-    (query: { state: { data: PaginatedResponse<JobStatusResponse> | undefined } }) => {
-      if (!isLive) return false;
-      const d = query.state.data;
-      if (!d) return 5000;
-      const hasActive = d.items.some((j) => j.status === "processing");
-      return hasActive ? 5000 : false;
-    },
-    [isLive],
-  );
-
   const { data, isLoading } = useQuery({
     queryKey: ["pipeline-jobs-table", matterId, page, statusParam],
     queryFn: () =>
@@ -141,7 +129,7 @@ export function JobTable() {
         params,
       }),
     enabled: !!matterId,
-    refetchInterval,
+    refetchInterval: isLive ? 5_000 : false,
     gcTime: 5 * 60_000,
     placeholderData: keepPreviousData,
   });

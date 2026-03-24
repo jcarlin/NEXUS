@@ -1,8 +1,9 @@
 import { createLazyFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { apiClient } from "@/api/client";
 import { useDebounce } from "@/hooks/use-debounce";
+import { useViewState } from "@/hooks/use-view-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { TimelineView } from "@/components/analytics/timeline-view";
@@ -13,22 +14,29 @@ export const Route = createLazyFileRoute("/analytics/timeline")({
 });
 
 function TimelinePage() {
-  const [entity, setEntity] = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-
-  const trimmedEntity = entity.trim();
+  const [vs, setVS] = useViewState("/analytics/timeline", {
+    entity: "",
+    startDate: "",
+    endDate: "",
+  });
+  const [entityInput, setEntityInput] = useState(vs.entity);
+  const trimmedEntity = entityInput.trim();
   const debouncedEntity = useDebounce(trimmedEntity, 500);
 
+  // Sync debounced entity back to persisted view state
+  useEffect(() => {
+    setVS({ entity: debouncedEntity });
+  }, [debouncedEntity, setVS]);
+
   const { data, isLoading } = useQuery({
-    queryKey: ["timeline", debouncedEntity, startDate, endDate],
+    queryKey: ["timeline", debouncedEntity, vs.startDate, vs.endDate],
     queryFn: () =>
       apiClient<TimelineEvent[]>({
         url: `/api/v1/graph/timeline/${encodeURIComponent(debouncedEntity)}`,
         method: "GET",
         params: {
-          start_date: startDate || undefined,
-          end_date: endDate || undefined,
+          start_date: vs.startDate || undefined,
+          end_date: vs.endDate || undefined,
         },
       }),
     enabled: !!debouncedEntity,
@@ -52,8 +60,8 @@ function TimelinePage() {
           <Input
             id="entity-name"
             placeholder="e.g. Sarah Chen"
-            value={entity}
-            onChange={(e) => setEntity(e.target.value)}
+            value={entityInput}
+            onChange={(e) => setEntityInput(e.target.value)}
             className="w-[240px]"
           />
         </div>
@@ -62,8 +70,8 @@ function TimelinePage() {
           <Input
             id="start-date"
             type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
+            value={vs.startDate}
+            onChange={(e) => setVS({ startDate: e.target.value })}
             className="w-[170px]"
           />
         </div>
@@ -72,8 +80,8 @@ function TimelinePage() {
           <Input
             id="end-date"
             type="date"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
+            value={vs.endDate}
+            onChange={(e) => setVS({ endDate: e.target.value })}
             className="w-[170px]"
           />
         </div>

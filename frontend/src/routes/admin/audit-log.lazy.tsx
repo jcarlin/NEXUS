@@ -1,6 +1,7 @@
 import { createLazyFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/api/client";
+import { useViewState } from "@/hooks/use-view-state";
 import type { AuditLogEntry, PaginatedResponse } from "@/types";
 import { AuditLogTable } from "@/components/admin/audit-log-table";
 
@@ -9,6 +10,11 @@ export const Route = createLazyFileRoute("/admin/audit-log")({
 });
 
 function AuditLogPage() {
+  const [vs, setVS] = useViewState("/admin/audit-log", {
+    sorting: [],
+    globalFilter: "",
+  });
+
   const { data, isLoading } = useQuery({
     queryKey: ["admin-audit-log"],
     queryFn: () =>
@@ -28,7 +34,14 @@ function AuditLogPage() {
         </p>
       </div>
 
-      <AuditLogTable data={data?.items ?? []} isLoading={isLoading} />
+      <AuditLogTable
+        data={data?.items ?? []}
+        isLoading={isLoading}
+        initialSorting={vs.sorting}
+        onSortingChange={(s) => setVS({ sorting: s })}
+        initialGlobalFilter={vs.globalFilter}
+        onGlobalFilterChange={(f) => setVS({ globalFilter: f })}
+      />
     </div>
   );
 }

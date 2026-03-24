@@ -1,6 +1,7 @@
 import { createLazyFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useCallback, useState, useRef, useEffect } from "react";
+import { useViewState } from "@/hooks/use-view-state";
 import { Upload, AlertTriangle, ChevronDown, ChevronRight, RefreshCw, Loader2, FileUp, CheckCircle2, XCircle, Clock, X, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { apiClient } from "@/api/client";
@@ -512,28 +513,44 @@ function DocumentsPage() {
   const navigate = useNavigate();
   const matterId = useAppStore((s) => s.matterId);
   const datasetId = useAppStore((s) => s.datasetId);
-  const [search, setSearch] = useState("");
-  const debouncedSearch = useDebounce(search, 300);
-  const [fileExtension, setFileExtension] = useState("all");
-  const [offset, setOffset] = useState(0);
+  const [vs, setVS] = useViewState("/documents", {
+    search: "",
+    fileExtension: "all",
+    offset: 0,
+    sorting: [],
+  });
+  const [searchInput, setSearchInput] = useState(vs.search);
+  const debouncedSearch = useDebounce(searchInput, 300);
   const limit = 50;
 
+  // Sync debounced search back to persisted view state
+  useEffect(() => {
+    setVS({ search: debouncedSearch });
+  }, [debouncedSearch, setVS]);
+
   const { data, isLoading } = useQuery({
-    queryKey: ["documents", matterId, debouncedSearch, fileExtension, offset, datasetId],
+    queryKey: ["documents", matterId, debouncedSearch, vs.fileExtension, vs.offset, datasetId],
     queryFn: () =>
       apiClient<PaginatedResponse<DocumentResponse>>({
         url: "/api/v1/documents",
         method: "GET",
         params: {
           q: debouncedSearch || undefined,
-          file_extension: fileExtension !== "all" ? fileExtension : undefined,
+          file_extension: vs.fileExtension !== "all" ? vs.fileExtension : undefined,
           dataset_id: datasetId || undefined,
-          offset,
+          offset: vs.offset,
           limit,
         },
       }),
     enabled: !!matterId,
   });
+
+  // Safety guard: reset offset if it points beyond available data
+  useEffect(() => {
+    if (data && data.items.length === 0 && data.total > 0 && vs.offset > 0) {
+      setVS({ offset: 0 });
+    }
+  }, [data, vs.offset, setVS]);
 
   return (
     <div className="space-y-4 animate-page-in">
@@ -554,15 +571,20 @@ function DocumentsPage() {
       </div>
 
       <DocumentFilters
-        search={search}
-        onSearchChange={(v) => { setSearch(v); setOffset(0); }}
-        fileExtension={fileExtension}
-        onFileExtensionChange={(v) => { setFileExtension(v); setOffset(0); }}
+        search={searchInput}
+        onSearchChange={(v) => { setSearchInput(v); setVS({ offset: 0 }); }}
+        fileExtension={vs.fileExtension}
+        onFileExtensionChange={(v) => { setVS({ fileExtension: v, offset: 0 }); }}
       />
 
-      <DocumentTable data={data?.items ?? []} loading={isLoading} />
+      <DocumentTable
+        data={data?.items ?? []}
+        loading={isLoading}
+        initialSorting={vs.sorting}
+        onSortingChange={(s) => setVS({ sorting: s })}
+      />
 
-      {data && <Pagination total={data.total} offset={offset} limit={limit} onOffsetChange={setOffset} />}
+      {data && <Pagination total={data.total} offset={vs.offset} limit={limit} onOffsetChange={(o) => setVS({ offset: o })} />}
     </div>
   );
 }

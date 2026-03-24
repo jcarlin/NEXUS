@@ -31,10 +31,12 @@ function privilegeBadge(status: string | null | undefined) {
 interface DocumentTableProps {
   data: DocumentResponse[];
   loading?: boolean;
+  initialSorting?: SortingState;
+  onSortingChange?: (sorting: SortingState) => void;
 }
 
-export function DocumentTable({ data, loading }: DocumentTableProps) {
-  const [sorting, setSorting] = useState<SortingState>([]);
+export function DocumentTable({ data, loading, initialSorting, onSortingChange }: DocumentTableProps) {
+  const [sorting, setSorting] = useState<SortingState>(initialSorting ?? []);
 
   const columns = useMemo<ColumnDef<DocumentResponse>[]>(
     () => [
@@ -114,7 +116,11 @@ export function DocumentTable({ data, loading }: DocumentTableProps) {
     data,
     columns,
     state: { sorting },
-    onSortingChange: setSorting,
+    onSortingChange: (updater) => {
+      const next = typeof updater === "function" ? updater(sorting) : updater;
+      setSorting(next);
+      onSortingChange?.(next);
+    },
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
   });

@@ -2,6 +2,7 @@ import { createLazyFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { apiClient } from "@/api/client";
+import { useViewState } from "@/hooks/use-view-state";
 import { CommMatrix, type MatrixEntry } from "@/components/analytics/comm-matrix";
 import { CommDrilldown } from "@/components/analytics/comm-drilldown";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -36,6 +37,7 @@ export const Route = createLazyFileRoute("/analytics/comms")({
 });
 
 function CommsMatrixPage() {
+  const [vs, setVS] = useViewState("/analytics/comms", { activeTab: "matrix" });
   const [drilldown, setDrilldown] = useState<{ personA: string; personB: string } | null>(null);
 
   const { data, isLoading } = useQuery({
@@ -63,7 +65,7 @@ function CommsMatrixPage() {
         </p>
       </div>
 
-      <Tabs defaultValue="matrix">
+      <Tabs value={vs.activeTab} onValueChange={(v) => setVS({ activeTab: v })}>
         <TabsList>
           <TabsTrigger value="matrix">Matrix</TabsTrigger>
           <TabsTrigger value="threads">Email Threads</TabsTrigger>

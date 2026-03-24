@@ -29,13 +29,17 @@ export function hotDocScoreColor(score: number | null | undefined): string {
 interface HotDocTableProps {
   data: DocumentDetail[];
   loading?: boolean;
+  initialSorting?: SortingState;
+  onSortingChange?: (sorting: SortingState) => void;
+  initialGlobalFilter?: string;
+  onGlobalFilterChange?: (filter: string) => void;
 }
 
-export function HotDocTable({ data, loading }: HotDocTableProps) {
-  const [sorting, setSorting] = useState<SortingState>([
-    { id: "hot_doc_score", desc: true },
-  ]);
-  const [globalFilter, setGlobalFilter] = useState("");
+export function HotDocTable({ data, loading, initialSorting, onSortingChange, initialGlobalFilter, onGlobalFilterChange }: HotDocTableProps) {
+  const [sorting, setSorting] = useState<SortingState>(
+    initialSorting ?? [{ id: "hot_doc_score", desc: true }],
+  );
+  const [globalFilter, setGlobalFilter] = useState(initialGlobalFilter ?? "");
 
   const columns = useMemo<ColumnDef<DocumentDetail>[]>(
     () => [
@@ -123,8 +127,16 @@ export function HotDocTable({ data, loading }: HotDocTableProps) {
     data,
     columns,
     state: { sorting, globalFilter },
-    onSortingChange: setSorting,
-    onGlobalFilterChange: setGlobalFilter,
+    onSortingChange: (updater) => {
+      const next = typeof updater === "function" ? updater(sorting) : updater;
+      setSorting(next);
+      onSortingChange?.(next);
+    },
+    onGlobalFilterChange: (updater) => {
+      const next = typeof updater === "function" ? updater(globalFilter) : updater;
+      setGlobalFilter(next);
+      onGlobalFilterChange?.(next);
+    },
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),

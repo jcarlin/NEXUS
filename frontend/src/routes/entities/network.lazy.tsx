@@ -1,6 +1,7 @@
 import { createLazyFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState, useCallback, useRef, useMemo } from "react";
+import { useViewState } from "@/hooks/use-view-state";
 import { ArrowLeft } from "lucide-react";
 import { apiClient } from "@/api/client";
 import { useAppStore } from "@/stores/app-store";
@@ -48,8 +49,16 @@ type DialogType = "rename" | "changeType" | "merge" | "delete" | null;
 
 function NetworkGraphPage() {
   const matterId = useAppStore((s) => s.matterId);
-  const [activeTypes, setActiveTypes] = useState<Set<string>>(
-    () => new Set(DEFAULT_TYPES),
+  const [vs, setVS] = useViewState("/entities/network", {
+    activeTypes: [...DEFAULT_TYPES],
+  });
+  const activeTypes = useMemo(() => new Set(vs.activeTypes), [vs.activeTypes]);
+  const setActiveTypes = useCallback(
+    (updater: Set<string> | ((prev: Set<string>) => Set<string>)) => {
+      const next = typeof updater === "function" ? updater(activeTypes) : updater;
+      setVS({ activeTypes: [...next] });
+    },
+    [activeTypes, setVS],
   );
   const graphRef = useRef<NetworkGraphHandle>(null);
   const [editMode, setEditMode] = useState(false);

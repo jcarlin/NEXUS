@@ -65,18 +65,30 @@ const columns = [
 interface UserTableProps {
   data: User[];
   isLoading: boolean;
+  initialSorting?: SortingState;
+  onSortingChange?: (sorting: SortingState) => void;
+  initialGlobalFilter?: string;
+  onGlobalFilterChange?: (filter: string) => void;
 }
 
-export function UserTable({ data, isLoading }: UserTableProps) {
-  const [sorting, setSorting] = useState<SortingState>([]);
-  const [globalFilter, setGlobalFilter] = useState("");
+export function UserTable({ data, isLoading, initialSorting, onSortingChange, initialGlobalFilter, onGlobalFilterChange }: UserTableProps) {
+  const [sorting, setSorting] = useState<SortingState>(initialSorting ?? []);
+  const [globalFilter, setGlobalFilter] = useState(initialGlobalFilter ?? "");
 
   const table = useReactTable({
     data,
     columns,
     state: { sorting, globalFilter },
-    onSortingChange: setSorting,
-    onGlobalFilterChange: setGlobalFilter,
+    onSortingChange: (updater) => {
+      const next = typeof updater === "function" ? updater(sorting) : updater;
+      setSorting(next);
+      onSortingChange?.(next);
+    },
+    onGlobalFilterChange: (updater) => {
+      const next = typeof updater === "function" ? updater(globalFilter) : updater;
+      setGlobalFilter(next);
+      onGlobalFilterChange?.(next);
+    },
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),

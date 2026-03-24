@@ -42,10 +42,12 @@ function typeBadgeClass(type: string): string {
 interface EntityTableProps {
   data: EntityResponse[];
   loading?: boolean;
+  initialSorting?: SortingState;
+  onSortingChange?: (sorting: SortingState) => void;
 }
 
-export function EntityTable({ data, loading }: EntityTableProps) {
-  const [sorting, setSorting] = useState<SortingState>([]);
+export function EntityTable({ data, loading, initialSorting, onSortingChange }: EntityTableProps) {
+  const [sorting, setSorting] = useState<SortingState>(initialSorting ?? []);
 
   const columns = useMemo<ColumnDef<EntityResponse>[]>(
     () => [
@@ -121,7 +123,11 @@ export function EntityTable({ data, loading }: EntityTableProps) {
     data,
     columns,
     state: { sorting },
-    onSortingChange: setSorting,
+    onSortingChange: (updater) => {
+      const next = typeof updater === "function" ? updater(sorting) : updater;
+      setSorting(next);
+      onSortingChange?.(next);
+    },
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
   });

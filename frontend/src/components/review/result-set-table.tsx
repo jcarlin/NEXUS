@@ -24,12 +24,16 @@ import type { DocumentResponse } from "@/types";
 interface ResultSetTableProps {
   data: DocumentResponse[];
   loading?: boolean;
+  initialSorting?: SortingState;
+  onSortingChange?: (sorting: SortingState) => void;
+  initialGlobalFilter?: string;
+  onGlobalFilterChange?: (filter: string) => void;
 }
 
-export function ResultSetTable({ data, loading }: ResultSetTableProps) {
+export function ResultSetTable({ data, loading, initialSorting, onSortingChange, initialGlobalFilter, onGlobalFilterChange }: ResultSetTableProps) {
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
-  const [sorting, setSorting] = useState<SortingState>([]);
-  const [globalFilter, setGlobalFilter] = useState("");
+  const [sorting, setSorting] = useState<SortingState>(initialSorting ?? []);
+  const [globalFilter, setGlobalFilter] = useState(initialGlobalFilter ?? "");
 
   const columns = useMemo<ColumnDef<DocumentResponse>[]>(
     () => [
@@ -129,8 +133,16 @@ export function ResultSetTable({ data, loading }: ResultSetTableProps) {
     columns,
     state: { rowSelection, sorting, globalFilter },
     onRowSelectionChange: setRowSelection,
-    onSortingChange: setSorting,
-    onGlobalFilterChange: setGlobalFilter,
+    onSortingChange: (updater) => {
+      const next = typeof updater === "function" ? updater(sorting) : updater;
+      setSorting(next);
+      onSortingChange?.(next);
+    },
+    onGlobalFilterChange: (updater) => {
+      const next = typeof updater === "function" ? updater(globalFilter) : updater;
+      setGlobalFilter(next);
+      onGlobalFilterChange?.(next);
+    },
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),

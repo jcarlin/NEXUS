@@ -4,6 +4,7 @@ import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { Loader2, AlertCircle } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { apiClient } from "@/api/client";
+import { useViewState } from "@/hooks/use-view-state";
 import { QueryPipeline } from "@/components/admin/architecture/query-pipeline";
 import { IngestionPipeline } from "@/components/admin/architecture/ingestion-pipeline";
 import { ModelConfigTable } from "@/components/admin/architecture/model-config-table";
@@ -50,6 +51,7 @@ interface SettingDetail {
 
 function ArchitecturePage() {
   const queryClient = useQueryClient();
+  const [vs, setVS] = useViewState("/admin/architecture", { activeTab: "query" });
 
   const { data: flags, isLoading: flagsLoading, isError: flagsError } = useQuery({
     queryKey: ["admin-feature-flags"],
@@ -146,7 +148,7 @@ function ArchitecturePage() {
         </p>
       </div>
 
-      <Tabs defaultValue="query">
+      <Tabs value={vs.activeTab} onValueChange={(v) => setVS({ activeTab: v })}>
         <TabsList>
           <TabsTrigger value="query">Query Pipeline</TabsTrigger>
           <TabsTrigger value="ingestion">Ingestion Pipeline</TabsTrigger>

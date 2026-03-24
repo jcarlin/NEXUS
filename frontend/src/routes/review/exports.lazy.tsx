@@ -1,8 +1,8 @@
-import { useState } from "react";
 import { createLazyFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/api/client";
 import { useAppStore } from "@/stores/app-store";
+import { useViewState } from "@/hooks/use-view-state";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ProductionSetList } from "@/components/exports/production-set-list";
 import { ExportJobList } from "@/components/exports/export-job-list";
@@ -17,28 +17,31 @@ export const Route = createLazyFileRoute("/review/exports")({
 
 function ExportsPage() {
   const matterId = useAppStore((s) => s.matterId);
-  const [psOffset, setPsOffset] = useState(0);
-  const [jobOffset, setJobOffset] = useState(0);
+  const [vs, setVS] = useViewState("/review/exports", {
+    activeTab: "production-sets",
+    psOffset: 0,
+    jobOffset: 0,
+  });
   const limit = 50;
 
   const productionSets = useQuery({
-    queryKey: ["production-sets", matterId, psOffset],
+    queryKey: ["production-sets", matterId, vs.psOffset],
     queryFn: () =>
       apiClient<PaginatedResponse<ProductionSetResponse>>({
         url: "/api/v1/exports/production-sets",
         method: "GET",
-        params: { offset: psOffset, limit },
+        params: { offset: vs.psOffset, limit },
       }),
     enabled: !!matterId,
   });
 
   const exportJobs = useQuery({
-    queryKey: ["export-jobs", matterId, jobOffset],
+    queryKey: ["export-jobs", matterId, vs.jobOffset],
     queryFn: () =>
       apiClient<PaginatedResponse<ExportJobResponse>>({
         url: "/api/v1/exports/jobs",
         method: "GET",
-        params: { offset: jobOffset, limit },
+        params: { offset: vs.jobOffset, limit },
       }),
     enabled: !!matterId,
   });
@@ -61,7 +64,7 @@ function ExportsPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="production-sets">
+      <Tabs value={vs.activeTab} onValueChange={(v) => setVS({ activeTab: v })}>
         <TabsList>
           <TabsTrigger value="production-sets">
             Production Sets ({productionSets.data?.total ?? 0})
@@ -76,9 +79,9 @@ function ExportsPage() {
             data={productionSets.data?.items ?? []}
             loading={productionSets.isLoading}
             total={productionSets.data?.total ?? 0}
-            offset={psOffset}
+            offset={vs.psOffset}
             limit={limit}
-            onOffsetChange={setPsOffset}
+            onOffsetChange={(o) => setVS({ psOffset: o })}
             onRefresh={() => productionSets.refetch()}
           />
         </TabsContent>
@@ -88,9 +91,9 @@ function ExportsPage() {
             data={exportJobs.data?.items ?? []}
             loading={exportJobs.isLoading}
             total={exportJobs.data?.total ?? 0}
-            offset={jobOffset}
+            offset={vs.jobOffset}
             limit={limit}
-            onOffsetChange={setJobOffset}
+            onOffsetChange={(o) => setVS({ jobOffset: o })}
           />
         </TabsContent>
       </Tabs>

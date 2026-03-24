@@ -1,7 +1,8 @@
 import { createLazyFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Network } from "lucide-react";
+import { useViewState } from "@/hooks/use-view-state";
 import { apiClient } from "@/api/client";
 import { useAppStore } from "@/stores/app-store";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -36,27 +37,43 @@ const ENTITY_TYPES = [
 
 function EntitiesPage() {
   const matterId = useAppStore((s) => s.matterId);
-  const [search, setSearch] = useState("");
-  const debouncedSearch = useDebounce(search, 300);
-  const [entityType, setEntityType] = useState("all");
-  const [offset, setOffset] = useState(0);
+  const [vs, setVS] = useViewState("/entities", {
+    search: "",
+    entityType: "all",
+    offset: 0,
+    sorting: [],
+  });
+  const [searchInput, setSearchInput] = useState(vs.search);
+  const debouncedSearch = useDebounce(searchInput, 300);
   const limit = 50;
 
+  // Sync debounced search back to persisted view state
+  useEffect(() => {
+    setVS({ search: debouncedSearch });
+  }, [debouncedSearch, setVS]);
+
   const { data, isLoading } = useQuery({
-    queryKey: ["entities", matterId, debouncedSearch, entityType, offset],
+    queryKey: ["entities", matterId, debouncedSearch, vs.entityType, vs.offset],
     queryFn: () =>
       apiClient<PaginatedResponse<EntityResponse>>({
         url: "/api/v1/entities",
         method: "GET",
         params: {
           q: debouncedSearch || undefined,
-          entity_type: entityType !== "all" ? entityType : undefined,
-          offset,
+          entity_type: vs.entityType !== "all" ? vs.entityType : undefined,
+          offset: vs.offset,
           limit,
         },
       }),
     enabled: !!matterId,
   });
+
+  // Safety guard: reset offset if it points beyond available data
+  useEffect(() => {
+    if (data && data.items.length === 0 && data.total > 0 && vs.offset > 0) {
+      setVS({ offset: 0 });
+    }
+  }, [data, vs.offset, setVS]);
 
   return (
     <div className="space-y-4 animate-page-in">
@@ -78,18 +95,17 @@ function EntitiesPage() {
       <div className="flex items-center gap-3">
         <Input
           placeholder="Search entities..."
-          value={search}
+          value={searchInput}
           onChange={(e) => {
-            setSearch(e.target.value);
-            setOffset(0);
+            setSearchInput(e.target.value);
+            setVS({ offset: 0 });
           }}
           className="max-w-sm"
         />
         <Select
-          value={entityType}
+          value={vs.entityType}
           onValueChange={(v) => {
-            setEntityType(v);
-            setOffset(0);
+            setVS({ entityType: v, offset: 0 });
           }}
         >
           <SelectTrigger className="w-[180px]">
@@ -105,9 +121,14 @@ function EntitiesPage() {
         </Select>
       </div>
 
-      <EntityTable data={data?.items ?? []} loading={isLoading} />
+      <EntityTable
+        data={data?.items ?? []}
+        loading={isLoading}
+        initialSorting={vs.sorting}
+        onSortingChange={(s) => setVS({ sorting: s })}
+      />
 
-      {data && <Pagination total={data.total} offset={offset} limit={limit} onOffsetChange={setOffset} />}
+      {data && <Pagination total={data.total} offset={vs.offset} limit={limit} onOffsetChange={(o) => setVS({ offset: o })} />}
     </div>
   );
 }

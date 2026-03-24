@@ -1,6 +1,7 @@
 import { createLazyFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
+import { useViewState } from "@/hooks/use-view-state";
 import {
   ChevronRight,
   ChevronDown,
@@ -145,14 +146,20 @@ function DatasetsPage() {
   const matterId = useAppStore((s) => s.matterId);
   const userRole = useAuthStore((s) => s.user?.role);
   const queryClient = useQueryClient();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [vs, setVS] = useViewState("/datasets", {
+    selectedId: null,
+    docOffset: 0,
+  });
+  const selectedId = vs.selectedId;
+  const setSelectedId = (id: string | null) => setVS({ selectedId: id, docOffset: 0 });
+  const docOffset = vs.docOffset;
+  const setDocOffset = (offset: number) => setVS({ docOffset: offset });
   const [createOpen, setCreateOpen] = useState(false);
   const [accessOpen, setAccessOpen] = useState(false);
   const [ingestOpen, setIngestOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newDescription, setNewDescription] = useState("");
   const [ingestAfterCreate, setIngestAfterCreate] = useState(false);
-  const [docOffset, setDocOffset] = useState(0);
   const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
   const docLimit = 50;
 
