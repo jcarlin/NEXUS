@@ -42,6 +42,11 @@ def main() -> int:
     parser.add_argument("--batch-size", type=int, default=500, help="Docs per dispatch batch (default: 500)")
     parser.add_argument("--pause", type=float, default=2.0, help="Seconds to pause between batches (default: 2)")
     parser.add_argument("--dry-run", action="store_true", help="Count only, don't dispatch")
+    parser.add_argument(
+        "--force-all",
+        action="store_true",
+        help="Re-dispatch all docs (including those with entities) for Neo4j backfill",
+    )
     args = parser.parse_args()
 
     from sqlalchemy import create_engine, text
@@ -60,10 +65,10 @@ def main() -> int:
                 JOIN jobs j ON j.id = d.job_id
                 WHERE d.matter_id = :mid
                   AND d.import_source = :src
-                  AND d.entity_count = 0
+                  AND (d.entity_count = 0 OR :force_all)
                 ORDER BY d.created_at
             """),
-            {"mid": args.matter_id, "src": args.import_source},
+            {"mid": args.matter_id, "src": args.import_source, "force_all": args.force_all},
         ).fetchall()
 
     total_docs = len(rows)
