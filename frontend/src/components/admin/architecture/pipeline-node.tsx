@@ -6,6 +6,7 @@ interface NodeFlag {
   name: string;
   enabled: boolean;
   label?: string;
+  onToggle?: (flagName: string, newValue: boolean) => void;
 }
 
 interface PipelineNodeProps {
@@ -34,9 +35,10 @@ export function PipelineNode({
   return (
     <div
       className={cn(
-        "rounded-lg border border-border bg-card p-4 transition-colors",
+        "rounded-lg border border-border bg-card p-4 transition-all duration-150",
+        "hover:border-primary/40 hover:shadow-sm",
         variantStyles[variant],
-        disabled && "border-dashed opacity-50",
+        disabled && "border-dashed opacity-45 cursor-not-allowed hover:shadow-none hover:border-border",
         className,
       )}
     >

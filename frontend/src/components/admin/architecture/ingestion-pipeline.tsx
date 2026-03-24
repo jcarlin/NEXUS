@@ -5,11 +5,15 @@ interface IngestionPipelineProps {
   flagMap: Map<string, boolean>;
   embeddingInfo: { provider: string; model: string; dimensions: number } | null;
   settings: Map<string, string | number>;
+  onToggleFlag?: (flagName: string, newValue: boolean) => void;
 }
 
-export function IngestionPipeline({ flagMap, embeddingInfo, settings }: IngestionPipelineProps) {
+export function IngestionPipeline({ flagMap, embeddingInfo, settings, onToggleFlag }: IngestionPipelineProps) {
   const flag = (name: string) => flagMap.get(name) ?? false;
   const setting = (name: string) => settings.get(name);
+  const fb = (name: string, label?: string) => ({
+    name, enabled: flag(name), label, onToggle: onToggleFlag,
+  });
 
   const chunkSize = setting("chunk_size") ?? 512;
   const chunkOverlap = setting("chunk_overlap") ?? 64;
@@ -105,12 +109,12 @@ export function IngestionPipeline({ flagMap, embeddingInfo, settings }: Ingestio
       >
         <span className="inline-flex items-center gap-1.5">
           Document summary: 2-3 sentences
-          <FlagBadge name="enable_document_summarization" enabled={flag("enable_document_summarization")} label="DOC" />
+          <FlagBadge {...fb("enable_document_summarization", "DOC")} />
         </span>
         <br />
         <span className="inline-flex items-center gap-1.5">
           Chunk summaries: 1 sentence each &rarr; summary vector for triple RRF
-          <FlagBadge name="enable_multi_representation" enabled={flag("enable_multi_representation")} label="MULTI-REPR" />
+          <FlagBadge {...fb("enable_multi_representation", "MULTI-REPR")} />
         </span>
       </PipelineNode>
       <Arrow />
@@ -179,10 +183,15 @@ export function IngestionPipeline({ flagMap, embeddingInfo, settings }: Ingestio
         <br /><br />
         <span className="inline-flex items-center gap-1.5">
           <span className="font-medium text-foreground">Tier 2 &mdash; LLM Relationship Extraction</span>
-          <FlagBadge name="enable_relationship_extraction" enabled={flag("enable_relationship_extraction")} />
+          <FlagBadge {...fb("enable_relationship_extraction")} />
         </span>
         <br />
         Instructor + LLM for chunks with 2+ entities &rarr; RELATED_TO, REPORTS_TO edges
+        <br />
+        <span className="inline-flex items-center gap-1.5">
+          Coreference resolution: pronoun &rarr; entity linking
+          <FlagBadge {...fb("enable_coreference_resolution", "COREF")} />
+        </span>
       </PipelineNode>
       <Arrow />
 
@@ -196,25 +205,25 @@ export function IngestionPipeline({ flagMap, embeddingInfo, settings }: Ingestio
       </PipelineNode>
       <Arrow />
 
-      {/* Stage 6: Completion */}
-      <PipelineNode title="Stage 6: Completion">
+      {/* Stage 5: Completion */}
+      <PipelineNode title="Stage 5: Completion">
         <span className="font-medium text-foreground">Document record:</span> PostgreSQL upsert
         <br />
         <span className="inline-flex items-center gap-1.5">
           <span className="font-medium text-foreground">Email threading:</span> RFC 5322 Message-ID / In-Reply-To / References
-          <FlagBadge name="enable_email_threading" enabled={flag("enable_email_threading")} />
+          <FlagBadge {...fb("enable_email_threading")} />
         </span>
         <br />
         <span className="font-medium text-foreground">Communication pairs:</span> Analytics sender-recipient graph
         <br />
         <span className="inline-flex items-center gap-1.5">
           <span className="font-medium text-foreground">Near-duplicate:</span> MinHash + Jaccard &ge; 0.80
-          <FlagBadge name="enable_near_duplicate_detection" enabled={flag("enable_near_duplicate_detection")} label="DEDUP" />
+          <FlagBadge {...fb("enable_near_duplicate_detection", "DEDUP")} />
         </span>
         <br />
         <span className="inline-flex items-center gap-1.5">
           <span className="font-medium text-foreground">Hot doc scan:</span> 7 sentiment dims + 3 signals + anomaly
-          <FlagBadge name="enable_hot_doc_detection" enabled={flag("enable_hot_doc_detection")} label="HOT DOC" />
+          <FlagBadge {...fb("enable_hot_doc_detection", "HOT DOC")} />
         </span>
         <br />
         <span className="font-medium text-foreground">Entity resolution:</span> Fuzzy match &ge; 90 + transitive merge
@@ -247,7 +256,7 @@ export function IngestionPipeline({ flagMap, embeddingInfo, settings }: Ingestio
           <br />
           <span className="inline-flex items-center gap-1.5">
             &bull; <code className="rounded bg-muted px-1 text-[11px]">google_drive</code> &mdash; OAuth connector
-            <FlagBadge name="enable_google_drive" enabled={flag("enable_google_drive")} />
+            <FlagBadge {...fb("enable_google_drive")} />
           </span>
           <br /><br />
           <span className="font-medium text-foreground">Optimizations:</span>

@@ -43,7 +43,7 @@ export function ModelConfigTable({ tiers, embedding }: ModelConfigTableProps) {
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={row.role} className="border-b border-border last:border-0">
+            <tr key={row.role} className="border-b border-border last:border-0 transition-colors hover:bg-muted/30">
               <td className="px-4 py-2 font-medium">{row.role}</td>
               <td className="px-4 py-2 text-muted-foreground">{row.provider ?? "—"}</td>
               <td className="px-4 py-2">

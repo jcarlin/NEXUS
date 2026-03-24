@@ -10,7 +10,7 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 const mockFlags = {
-  flags: [
+  items: [
     { flag_name: "enable_agentic_pipeline", enabled: true, display_name: "Agentic Pipeline", description: "", category: "query", risk_level: "safe" },
     { flag_name: "enable_citation_verification", enabled: true, display_name: "Citation Verification", description: "", category: "query", risk_level: "safe" },
     { flag_name: "enable_self_reflection", enabled: false, display_name: "Self Reflection", description: "", category: "query", risk_level: "safe" },
@@ -31,7 +31,7 @@ const mockLLMConfig = {
 };
 
 const mockSettings = {
-  settings: [
+  items: [
     { setting_name: "chunk_size", value: 512, category: "ingestion", unit: "tokens" },
     { setting_name: "chunk_overlap", value: 64, category: "ingestion", unit: "tokens" },
   ],
@@ -90,7 +90,7 @@ describe("ArchitecturePage", () => {
     const reflectTitle = await screen.findByText("reflect");
     // Walk up to the PipelineNode wrapper div
     const node = reflectTitle.closest(".rounded-lg");
-    expect(node?.className).toContain("opacity-50");
+    expect(node?.className).toContain("opacity-45");
     expect(node?.className).toContain("border-dashed");
   });
 

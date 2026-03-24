@@ -7,10 +7,14 @@ interface QueryPipelineProps {
   queryModel: string | null;
   embeddingInfo: { provider: string; model: string; dimensions: number } | null;
   settings: Map<string, string | number>;
+  onToggleFlag?: (flagName: string, newValue: boolean) => void;
 }
 
-export function QueryPipeline({ flagMap, queryModel, embeddingInfo }: QueryPipelineProps) {
+export function QueryPipeline({ flagMap, queryModel, embeddingInfo, onToggleFlag }: QueryPipelineProps) {
   const flag = (name: string) => flagMap.get(name) ?? false;
+  const fb = (name: string, label?: string) => ({
+    name, enabled: flag(name), label, onToggle: onToggleFlag,
+  });
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col items-center">
@@ -29,8 +33,8 @@ export function QueryPipeline({ flagMap, queryModel, embeddingInfo }: QueryPipel
         <br />
         <span className="inline-flex items-center gap-1.5">
           Graph: Agentic pipeline
-          <FlagBadge name="enable_agentic_pipeline" enabled={flag("enable_agentic_pipeline")} />
-          <FlagBadge name="enable_auto_graph_routing" enabled={flag("enable_auto_graph_routing")} label="AUTO ROUTE" />
+          <FlagBadge {...fb("enable_agentic_pipeline")} />
+          <FlagBadge {...fb("enable_auto_graph_routing", "AUTO ROUTE")} />
         </span>
       </PipelineNode>
       <Arrow />
@@ -39,17 +43,17 @@ export function QueryPipeline({ flagMap, queryModel, embeddingInfo }: QueryPipel
       <PipelineNode title="case_context_resolve">
         <span className="inline-flex flex-wrap items-center gap-1.5">
           Load claims, parties, terms, timeline
-          <FlagBadge name="enable_case_setup_agent" enabled={flag("enable_case_setup_agent")} label="CASE CTX" />
+          <FlagBadge {...fb("enable_case_setup_agent", "CASE CTX")} />
         </span>
         <br />
         <span className="inline-flex flex-wrap items-center gap-1.5">
           Prompt routing: factual | analytical | exploratory | timeline
-          <FlagBadge name="enable_prompt_routing" enabled={flag("enable_prompt_routing")} label="ROUTING" />
+          <FlagBadge {...fb("enable_prompt_routing", "ROUTING")} />
         </span>
         <br />
         <span className="inline-flex flex-wrap items-center gap-1.5">
           Adaptive retrieval depth by query type
-          <FlagBadge name="enable_adaptive_retrieval_depth" enabled={flag("enable_adaptive_retrieval_depth")} label="ADAPTIVE" />
+          <FlagBadge {...fb("enable_adaptive_retrieval_depth", "ADAPTIVE")} />
         </span>
       </PipelineNode>
       <Arrow />
@@ -65,7 +69,10 @@ export function QueryPipeline({ flagMap, queryModel, embeddingInfo }: QueryPipel
         <br />
         Iterative tool loop &bull; System prompt = base + query-type addendum + case context
         <br />
-        Max 30 steps &bull; Tool budget: ~5 per investigation
+        <span className="inline-flex flex-wrap items-center gap-1.5">
+          Max 30 steps &bull; Tool budget: ~5 per investigation
+          <FlagBadge {...fb("enable_ai_audit_logging", "AI AUDIT")} />
+        </span>
         <ToolGrid flagMap={flagMap} />
       </PipelineNode>
       <Arrow />
@@ -73,7 +80,7 @@ export function QueryPipeline({ flagMap, queryModel, embeddingInfo }: QueryPipel
       {/* post_agent_extract */}
       <PipelineNode
         title="post_agent_extract"
-        flags={[{ name: "enable_hallugraph_alignment", enabled: flag("enable_hallugraph_alignment"), label: "HALLUGRAPH" }]}
+        flags={[fb("enable_hallugraph_alignment", "HALLUGRAPH")]}
       >
         Extract response, source documents, entities, atomic claims
         <br />
@@ -85,7 +92,7 @@ export function QueryPipeline({ flagMap, queryModel, embeddingInfo }: QueryPipel
       <PipelineNode
         title="verify_citations"
         disabled={!flag("enable_citation_verification")}
-        flags={[{ name: "enable_citation_verification", enabled: flag("enable_citation_verification"), label: "VERIFY" }]}
+        flags={[fb("enable_citation_verification", "VERIFY")]}
       >
         Chain-of-Verification: decompose &rarr; re-retrieve &rarr; LLM judge
         <br />
@@ -97,7 +104,7 @@ export function QueryPipeline({ flagMap, queryModel, embeddingInfo }: QueryPipel
       <PipelineNode
         title="reflect"
         disabled={!flag("enable_self_reflection")}
-        flags={[{ name: "enable_self_reflection", enabled: flag("enable_self_reflection") }]}
+        flags={[fb("enable_self_reflection")]}
       >
         Self-reflection loop: retry when faithfulness &lt; 0.6
         <br />
@@ -108,6 +115,16 @@ export function QueryPipeline({ flagMap, queryModel, embeddingInfo }: QueryPipel
       {/* generate_follow_ups */}
       <PipelineNode title="generate_follow_ups">
         LLM generates 3 follow-up questions based on query + response + entities
+      </PipelineNode>
+      <Arrow />
+
+      {/* quality_monitoring (optional) */}
+      <PipelineNode
+        title="quality_monitoring"
+        disabled={!flag("enable_production_quality_monitoring")}
+        flags={[fb("enable_production_quality_monitoring", "QUALITY")]}
+      >
+        Fire-and-forget: sample-based scoring of retrieval relevance + faithfulness
       </PipelineNode>
       <Arrow />
 
@@ -130,28 +147,28 @@ export function QueryPipeline({ flagMap, queryModel, embeddingInfo }: QueryPipel
             </>
           ) : "loading..."}
           <span className="ml-2 inline-flex gap-1">
-            <FlagBadge name="enable_hyde" enabled={flag("enable_hyde")} label="HyDE" />
-            <FlagBadge name="enable_multi_query_expansion" enabled={flag("enable_multi_query_expansion")} label="MULTI-Q" />
+            <FlagBadge {...fb("enable_hyde", "HyDE")} />
+            <FlagBadge {...fb("enable_multi_query_expansion", "MULTI-Q")} />
           </span>
           <br />
           <span className="font-medium text-foreground">Sparse:</span>{" "}
           FastEmbed BM42
-          <FlagBadge name="enable_sparse_embeddings" enabled={flag("enable_sparse_embeddings")} />
+          <FlagBadge {...fb("enable_sparse_embeddings")} />
           <br />
           <span className="font-medium text-foreground">Fusion:</span>{" "}
           Qdrant native RRF (prefetch dense + sparse &rarr; FusionQuery)
           <br /><br />
           <span className="font-medium text-foreground">Post-retrieval:</span>
           <br />
-          &bull; Near-duplicate dedup <FlagBadge name="enable_near_duplicate_detection" enabled={flag("enable_near_duplicate_detection")} label="DEDUP" />
+          &bull; Near-duplicate dedup <FlagBadge {...fb("enable_near_duplicate_detection", "DEDUP")} />
           <br />
-          &bull; Cross-encoder rerank (BGE v2-m3) <FlagBadge name="enable_reranker" enabled={flag("enable_reranker")} label="RERANK" />
+          &bull; Cross-encoder rerank (BGE v2-m3) <FlagBadge {...fb("enable_reranker", "RERANK")} />
           <br />
-          &bull; Visual rerank blend: 70% text + 30% ColQwen2.5 <FlagBadge name="enable_visual_embeddings" enabled={flag("enable_visual_embeddings")} label="VISUAL" />
+          &bull; Visual rerank blend: 70% text + 30% ColQwen2.5 <FlagBadge {...fb("enable_visual_embeddings", "VISUAL")} />
           <br />
           <span className="inline-flex gap-1 pt-1">
-            <FlagBadge name="enable_retrieval_grading" enabled={flag("enable_retrieval_grading")} label="CRAG" />
-            <FlagBadge name="enable_multi_representation" enabled={flag("enable_multi_representation")} label="MULTI-REPR" />
+            <FlagBadge {...fb("enable_retrieval_grading", "CRAG")} />
+            <FlagBadge {...fb("enable_multi_representation", "MULTI-REPR")} />
           </span>
         </PipelineNode>
       </div>

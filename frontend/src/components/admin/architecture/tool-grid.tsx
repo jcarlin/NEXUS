@@ -75,10 +75,10 @@ export function ToolGrid({ flagMap }: ToolGridProps) {
                     <TooltipTrigger asChild>
                       <div
                         className={cn(
-                          "rounded-md border border-border bg-muted/30 px-2.5 py-1.5 text-[11px] transition-colors",
-                          "border-l-[3px]",
+                          "cursor-help rounded-md border border-border bg-muted/30 px-2.5 py-1.5 text-[11px] transition-all duration-150",
+                          "border-l-[3px] hover:bg-muted/60 hover:shadow-xs",
                           enabled ? categoryStyles[tool.category] : "border-l-muted-foreground/30",
-                          !enabled && "border-dashed opacity-45",
+                          !enabled && "border-dashed opacity-45 hover:opacity-55",
                         )}
                       >
                         <span className="font-semibold">{tool.name}</span>
