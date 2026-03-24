@@ -404,19 +404,23 @@ export function JobTable() {
           <PopoverContent className="w-[200px] p-2" align="start">
             <div className="space-y-1">
               {STATUS_OPTIONS.map((opt) => (
-                <label
+                <div
                   key={opt.value}
+                  role="option"
+                  aria-selected={selectedStatuses.has(opt.value)}
                   className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
+                  onClick={() => toggleStatus(opt.value)}
                 >
                   <Checkbox
                     checked={selectedStatuses.has(opt.value)}
+                    onClick={(e) => e.stopPropagation()}
                     onCheckedChange={() => toggleStatus(opt.value)}
                   />
                   <span>{opt.label}</span>
                   {selectedStatuses.has(opt.value) && (
                     <Check className="ml-auto h-3 w-3" />
                   )}
-                </label>
+                </div>
               ))}
               {selectedStatuses.size > 0 && (
                 <Button
