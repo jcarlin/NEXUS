@@ -12,6 +12,15 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { PaginatedResponse, JobStatusResponse } from "@/types";
 
+const TASK_LABELS: Record<string, string> = {
+  ingestion: "Ingestion",
+  entity_resolution: "Entity Resolution",
+  reprocess_neo4j: "Neo4j Reindex",
+  analysis_sentiment: "Sentiment Analysis",
+  analysis_matter_scan: "Hot Doc Scan",
+  case_setup: "Case Setup",
+};
+
 function statusColor(status: string) {
   switch (status) {
     case "complete":
@@ -93,7 +102,7 @@ export function PipelineStatus() {
               {data?.items.map((job) => (
                 <div key={job.job_id} className="space-y-1 rounded-md border p-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium truncate max-w-[200px]">{job.filename ?? job.job_id.slice(0, 8)}</span>
+                    <span className="text-sm font-medium truncate max-w-[200px]">{job.filename ?? (job.task_type ? TASK_LABELS[job.task_type] : null) ?? job.label ?? "Job"}</span>
                     <div className="flex items-center gap-1.5">
                       <Badge variant={statusColor(job.status)} className="text-[10px]">
                         {job.status}

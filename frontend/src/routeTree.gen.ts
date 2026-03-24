@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as CaseSetupRouteImport } from './routes/case-setup'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as EntitiesIndexRouteImport } from './routes/entities/index'
@@ -43,6 +44,11 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DashboardRoute = DashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() => import('./routes/dashboard.lazy').then((d) => d.Route))
 const CaseSetupRoute = CaseSetupRouteImport.update({
   id: '/case-setup',
   path: '/case-setup',
@@ -222,6 +228,7 @@ const AuthOidcCallbackRoute = AuthOidcCallbackRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/case-setup': typeof CaseSetupRoute
+  '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
   '/admin/audit-log': typeof AdminAuditLogRoute
   '/admin/evaluation': typeof AdminEvaluationRoute
@@ -252,6 +259,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/case-setup': typeof CaseSetupRoute
+  '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
   '/admin/audit-log': typeof AdminAuditLogRoute
   '/admin/evaluation': typeof AdminEvaluationRoute
@@ -283,6 +291,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/case-setup': typeof CaseSetupRoute
+  '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
   '/admin/audit-log': typeof AdminAuditLogRoute
   '/admin/evaluation': typeof AdminEvaluationRoute
@@ -315,6 +324,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/case-setup'
+    | '/dashboard'
     | '/login'
     | '/admin/audit-log'
     | '/admin/evaluation'
@@ -345,6 +355,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/case-setup'
+    | '/dashboard'
     | '/login'
     | '/admin/audit-log'
     | '/admin/evaluation'
@@ -375,6 +386,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/case-setup'
+    | '/dashboard'
     | '/login'
     | '/admin/audit-log'
     | '/admin/evaluation'
@@ -406,6 +418,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   CaseSetupRoute: typeof CaseSetupRoute
+  DashboardRoute: typeof DashboardRoute
   LoginRoute: typeof LoginRoute
   AdminAuditLogRoute: typeof AdminAuditLogRoute
   AdminEvaluationRoute: typeof AdminEvaluationRoute
@@ -441,6 +454,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard': {
+      id: '/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/case-setup': {
@@ -638,6 +658,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CaseSetupRoute: CaseSetupRoute,
+  DashboardRoute: DashboardRoute,
   LoginRoute: LoginRoute,
   AdminAuditLogRoute: AdminAuditLogRoute,
   AdminEvaluationRoute: AdminEvaluationRoute,

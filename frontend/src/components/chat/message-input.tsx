@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from "react";
 import { Send, Square } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { apiClient } from "@/api/client";
@@ -10,6 +11,7 @@ interface MessageInputProps {
   onStop?: () => void;
   isStreaming?: boolean;
   disabled?: boolean;
+  variant?: "default" | "standalone";
 }
 
 type ActiveModelResponse = {
@@ -18,7 +20,7 @@ type ActiveModelResponse = {
   provider_type: string | null;
 };
 
-export function MessageInput({ onSend, onStop, isStreaming, disabled }: MessageInputProps) {
+export function MessageInput({ onSend, onStop, isStreaming, disabled, variant = "default" }: MessageInputProps) {
   const [text, setText] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -59,7 +61,7 @@ export function MessageInput({ onSend, onStop, isStreaming, disabled }: MessageI
   };
 
   return (
-    <div className="border-t bg-background px-4 pt-4 pb-3">
+    <div className={cn("bg-background px-4 pt-4 pb-3", variant === "default" && "border-t")}>
     {activeModel?.model && (
       <Badge variant="outline" className="mb-2 text-[11px] font-normal text-muted-foreground">
         {activeModel.model}

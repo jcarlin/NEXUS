@@ -132,7 +132,7 @@ describe("MessageList", () => {
 
   it("shows empty state when no messages", () => {
     render(<MessageList messages={[]} />);
-    expect(screen.getByText("Start an Investigation")).toBeInTheDocument();
+    expect(screen.getByText("Welcome to NEXUS")).toBeInTheDocument();
   });
 
   it("shows description text in empty state", () => {
@@ -306,7 +306,7 @@ describe("MessageList", () => {
       <MessageList messages={[makeUserMessage("Hi")]} />,
     );
     expect(
-      screen.queryByText("Start an Investigation"),
+      screen.queryByText("Welcome to NEXUS"),
     ).not.toBeInTheDocument();
   });
 

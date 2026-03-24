@@ -16,7 +16,7 @@ import type {
   ToolCallEntry,
 } from "@/types";
 
-const EXAMPLE_QUERIES = [
+export const EXAMPLE_QUERIES = [
   "Who are the key parties in this matter?",
   "Summarize the timeline of events",
   "Which documents mention financial transactions?",
@@ -120,9 +120,10 @@ export function MessageList({
               <div className="rounded-full bg-primary/10 p-4 mb-4">
                 <MessageSquare className="h-8 w-8 text-primary" />
               </div>
-              <h2 className="text-xl font-semibold tracking-tight">Start an Investigation</h2>
+              <h2 className="text-xl font-semibold tracking-tight">Welcome to NEXUS</h2>
+              <p className="mt-1 text-sm font-medium text-muted-foreground/80">Your legal investigation assistant</p>
               <p className="mt-2 max-w-md text-sm text-muted-foreground">
-                Ask questions about documents, entities, timelines, or communication patterns across your corpus.
+                Ask questions about documents, people, timelines, and communication patterns across your case.
               </p>
               {onExampleClick && (
                 <div className="mt-6 flex flex-wrap justify-center gap-2">

@@ -151,6 +151,20 @@ describe("MessageInput", () => {
     expect(badge).toBeInTheDocument();
   });
 
+  it("renders with border-t by default", () => {
+    const { container } = render(<MessageInput onSend={onSend} />, { wrapper: createWrapper() });
+    const outer = container.firstElementChild as HTMLElement;
+    expect(outer.className).toContain("border-t");
+  });
+
+  it("renders without border-t when variant is standalone", () => {
+    const { container } = render(<MessageInput onSend={onSend} variant="standalone" />, {
+      wrapper: createWrapper(),
+    });
+    const outer = container.firstElementChild as HTMLElement;
+    expect(outer.className).not.toContain("border-t");
+  });
+
   it("does not render badge when fetch fails", async () => {
     const { apiClient } = await import("@/api/client");
     vi.mocked(apiClient).mockRejectedValueOnce(new Error("Network error"));

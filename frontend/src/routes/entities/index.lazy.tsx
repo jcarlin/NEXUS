@@ -29,6 +29,9 @@ const ENTITY_TYPES = [
   { value: "location", label: "Location" },
   { value: "date", label: "Date" },
   { value: "monetary_amount", label: "Money" },
+  { value: "email_address", label: "Email" },
+  { value: "phone_number", label: "Phone" },
+  { value: "address", label: "Address" },
 ];
 
 function EntitiesPage() {

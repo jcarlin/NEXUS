@@ -111,7 +111,7 @@ function KnowledgeGraphPage() {
   return (
     <div className="space-y-6 animate-page-in">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Knowledge Graph</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Graph Admin</h1>
         <p className="text-sm text-muted-foreground">
           Monitor graph health, reprocess documents, and run entity resolution.
         </p>

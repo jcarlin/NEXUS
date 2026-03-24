@@ -250,7 +250,7 @@ function isTerminal(status: string): boolean {
 }
 
 function getJobDisplayName(job: JobStatus): string {
-  return job.label ?? job.filename ?? job.task_type;
+  return job.label ?? job.filename ?? TASK_TYPE_LABELS[job.task_type] ?? job.task_type;
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -379,16 +379,14 @@ function BackgroundTasks() {
     prevJobsRef.current = nextMap;
   }, [allJobs, queryClient]);
 
-  if (allJobs.length === 0) return null;
+  const activeJobs = allJobs.filter((j) => !isTerminal(j.status));
+  const terminalJobs = allJobs.filter((j) => isTerminal(j.status));
+  const hasActive = activeJobs.length > 0;
 
-  // Group jobs by task_type
-  const grouped = new Map<string, JobStatus[]>();
-  for (const job of allJobs) {
-    const key = job.task_type ?? "ingestion";
-    const list = grouped.get(key) ?? [];
-    list.push(job);
-    grouped.set(key, list);
-  }
+  // Auto-collapse when no active jobs
+  const [expanded, setExpanded] = useState(false);
+
+  if (allJobs.length === 0) return null;
 
   const processingCount = allJobs.filter((j) => j.status === "processing").length;
   const completeCount = allJobs.filter((j) => j.status === "complete" || j.status === "completed").length;
@@ -400,6 +398,18 @@ function BackgroundTasks() {
   if (queuedCount > 0) summaryParts.push(`${queuedCount} queued`);
   if (completeCount > 0) summaryParts.push(`${completeCount} complete`);
   if (failedCount > 0) summaryParts.push(`${failedCount} failed`);
+
+  // Show active jobs always; show terminal only when expanded
+  const visibleJobs = hasActive ? activeJobs : (expanded ? allJobs : []);
+
+  // Group visible jobs by task_type
+  const grouped = new Map<string, JobStatus[]>();
+  for (const job of visibleJobs) {
+    const key = job.task_type ?? "ingestion";
+    const list = grouped.get(key) ?? [];
+    list.push(job);
+    grouped.set(key, list);
+  }
 
   return (
     <div className="rounded-lg border bg-card p-3 space-y-2">
@@ -414,6 +424,16 @@ function BackgroundTasks() {
           <span className="text-xs font-normal text-muted-foreground">
             — {summaryParts.join(", ")}
           </span>
+        )}
+        {!hasActive && terminalJobs.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setExpanded(!expanded)}
+            className="ml-auto text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+          >
+            {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+            {expanded ? "Hide" : "Show"} details
+          </button>
         )}
       </div>
       {Array.from(grouped.entries()).map(([taskType, taskJobs]) => (

@@ -2,6 +2,7 @@ import { createLazyFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { apiClient } from "@/api/client";
+import { useDebounce } from "@/hooks/use-debounce";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { TimelineView } from "@/components/analytics/timeline-view";
@@ -17,20 +18,24 @@ function TimelinePage() {
   const [endDate, setEndDate] = useState("");
 
   const trimmedEntity = entity.trim();
+  const debouncedEntity = useDebounce(trimmedEntity, 500);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["timeline", trimmedEntity, startDate, endDate],
+    queryKey: ["timeline", debouncedEntity, startDate, endDate],
     queryFn: () =>
       apiClient<TimelineEvent[]>({
-        url: `/api/v1/graph/timeline/${encodeURIComponent(trimmedEntity)}`,
+        url: `/api/v1/graph/timeline/${encodeURIComponent(debouncedEntity)}`,
         method: "GET",
         params: {
           start_date: startDate || undefined,
           end_date: endDate || undefined,
         },
       }),
-    enabled: !!trimmedEntity,
+    enabled: !!debouncedEntity,
+    retry: false,
   });
+
+  const events = Array.isArray(data) ? data : [];
 
   return (
     <div className="space-y-6 animate-page-in">
@@ -46,7 +51,7 @@ function TimelinePage() {
           <Label htmlFor="entity-name">Entity name</Label>
           <Input
             id="entity-name"
-            placeholder="e.g. John Smith"
+            placeholder="e.g. Sarah Chen"
             value={entity}
             onChange={(e) => setEntity(e.target.value)}
             className="w-[240px]"
@@ -79,7 +84,7 @@ function TimelinePage() {
           Enter an entity name above to view their timeline of events.
         </p>
       ) : (
-        <TimelineView events={data ?? []} loading={isLoading} />
+        <TimelineView events={events} loading={isLoading} />
       )}
     </div>
   );

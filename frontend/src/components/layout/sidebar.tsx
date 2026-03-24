@@ -38,7 +38,7 @@ interface NavItem {
 }
 
 const mainNav: NavItem[] = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/chat", label: "Chat", icon: MessageSquare },
   { to: "/documents", label: "Documents", icon: FileText },
   { to: "/documents/import", label: "Ingest", icon: Upload },
@@ -64,7 +64,7 @@ const adminNav: NavItem[] = [
   { to: "/admin/users", label: "Users", icon: Shield, roles: ["admin"] },
   { to: "/admin/audit-log", label: "Audit Log", icon: ScrollText, roles: ["admin"] },
   { to: "/admin/evaluation", label: "Evaluation", icon: FlaskConical, roles: ["admin"] },
-  { to: "/admin/knowledge-graph", label: "Knowledge Graph", icon: Network, roles: ["admin"] },
+  { to: "/admin/knowledge-graph", label: "Graph Admin", icon: Network, roles: ["admin"] },
   { to: "/admin/llm-settings", label: "LLM Settings", icon: Settings, roles: ["admin"] },
   { to: "/admin/feature-flags", label: "Feature Flags", icon: ToggleLeft, roles: ["admin"] },
   { to: "/admin/settings", label: "Settings", icon: SlidersHorizontal, roles: ["admin"] },

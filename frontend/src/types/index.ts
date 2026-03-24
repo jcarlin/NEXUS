@@ -250,6 +250,8 @@ export interface JobStatusResponse {
   job_id: string;
   status: string;
   filename?: string | null;
+  label?: string | null;
+  task_type?: string | null;
   document_type?: string | null;
   error?: string | null;
   progress?: {

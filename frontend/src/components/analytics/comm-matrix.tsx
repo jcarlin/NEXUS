@@ -20,6 +20,7 @@ interface CommMatrixProps {
 const LABEL_WIDTH = 120;
 const LABEL_HEIGHT = 120;
 const MIN_CELL_SIZE = 20;
+const MAX_CELL_SIZE = 60;
 
 export function CommMatrix({ matrix, entities, loading, onCellClick }: CommMatrixProps) {
   const { ref: containerRef, width: containerWidth } = useContainerSize();
@@ -43,7 +44,7 @@ export function CommMatrix({ matrix, entities, loading, onCellClick }: CommMatri
   const cellSize = useMemo(() => {
     if (containerWidth === 0 || entities.length === 0) return 40;
     const available = containerWidth - LABEL_WIDTH;
-    return Math.max(MIN_CELL_SIZE, Math.floor(available / entities.length));
+    return Math.min(MAX_CELL_SIZE, Math.max(MIN_CELL_SIZE, Math.floor(available / entities.length)));
   }, [containerWidth, entities.length]);
 
   if (loading) {
