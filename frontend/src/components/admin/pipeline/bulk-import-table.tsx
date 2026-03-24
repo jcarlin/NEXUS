@@ -6,7 +6,7 @@ import {
   flexRender,
   createColumnHelper,
 } from "@tanstack/react-table";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight, ChevronDown, EyeOff, Info, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { apiClient } from "@/api/client";
@@ -469,6 +469,7 @@ export function BulkImportTable() {
     enabled: !!matterId,
     refetchInterval: isLive ? 10_000 : false,
     gcTime: 5 * 60_000,
+    placeholderData: keepPreviousData,
   });
 
   const table = useReactTable({

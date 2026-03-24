@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import {
   useReactTable,
   getCoreRowModel,
@@ -129,7 +129,7 @@ export function JobTable() {
         params,
       }),
     enabled: !!matterId,
-    refetchInterval: isLive ? 5_000 : false,
+    refetchInterval: isLive && !statusParam ? 5_000 : false,
     gcTime: 5 * 60_000,
     placeholderData: keepPreviousData,
   });
@@ -179,14 +179,18 @@ export function JobTable() {
     onError: () => toast.error("Failed to dismiss job"),
   });
 
+  const [, startTransition] = useTransition();
+
   function toggleStatus(value: string) {
-    setSelectedStatuses((prev) => {
-      const next = new Set(prev);
-      if (next.has(value)) next.delete(value);
-      else next.add(value);
-      return next;
+    startTransition(() => {
+      setSelectedStatuses((prev) => {
+        const next = new Set(prev);
+        if (next.has(value)) next.delete(value);
+        else next.add(value);
+        return next;
+      });
+      setPage(0);
     });
-    setPage(0);
   }
 
   const columns = useMemo(() => [
