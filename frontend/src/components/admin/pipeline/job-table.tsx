@@ -16,7 +16,6 @@ import { useLiveRefresh } from "@/hooks/use-live-refresh";
 import { formatDateTime, formatFileSize } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Popover,
   PopoverContent,
@@ -403,25 +402,27 @@ export function JobTable() {
           </PopoverTrigger>
           <PopoverContent className="w-[200px] p-2" align="start">
             <div className="space-y-1">
-              {STATUS_OPTIONS.map((opt) => (
-                <div
-                  key={opt.value}
-                  role="option"
-                  aria-selected={selectedStatuses.has(opt.value)}
-                  className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
-                  onClick={() => toggleStatus(opt.value)}
-                >
-                  <Checkbox
-                    checked={selectedStatuses.has(opt.value)}
-                    onClick={(e) => e.stopPropagation()}
-                    onCheckedChange={() => toggleStatus(opt.value)}
-                  />
-                  <span>{opt.label}</span>
-                  {selectedStatuses.has(opt.value) && (
-                    <Check className="ml-auto h-3 w-3" />
-                  )}
-                </div>
-              ))}
+              {STATUS_OPTIONS.map((opt) => {
+                const isSelected = selectedStatuses.has(opt.value);
+                return (
+                  <div
+                    key={opt.value}
+                    role="option"
+                    aria-selected={isSelected}
+                    className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
+                    onClick={() => toggleStatus(opt.value)}
+                  >
+                    <div
+                      className={`h-4 w-4 shrink-0 rounded-sm border shadow ${isSelected ? "bg-primary border-primary" : "border-primary"}`}
+                    >
+                      {isSelected && (
+                        <Check className="h-4 w-4 text-primary-foreground" />
+                      )}
+                    </div>
+                    <span>{opt.label}</span>
+                  </div>
+                );
+              })}
               {selectedStatuses.size > 0 && (
                 <Button
                   variant="ghost"
