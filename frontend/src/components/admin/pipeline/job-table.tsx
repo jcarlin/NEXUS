@@ -1,4 +1,4 @@
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState } from "react";
 import {
   useReactTable,
   getCoreRowModel,
@@ -179,18 +179,14 @@ export function JobTable() {
     onError: () => toast.error("Failed to dismiss job"),
   });
 
-  const [, startTransition] = useTransition();
-
   function toggleStatus(value: string) {
-    startTransition(() => {
-      setSelectedStatuses((prev) => {
-        const next = new Set(prev);
-        if (next.has(value)) next.delete(value);
-        else next.add(value);
-        return next;
-      });
-      setPage(0);
+    setSelectedStatuses((prev) => {
+      const next = new Set(prev);
+      if (next.has(value)) next.delete(value);
+      else next.add(value);
+      return next;
     });
+    setPage(0);
   }
 
   const columns = useMemo(() => [
