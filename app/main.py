@@ -539,7 +539,6 @@ def create_app() -> FastAPI:
         text_to_cypher: bool
         prompt_routing: bool
         question_decomposition: bool
-        page_dashboard: bool
         page_chat: bool
         page_documents: bool
         page_ingest: bool
@@ -588,7 +587,6 @@ def create_app() -> FastAPI:
             text_to_cypher=settings.enable_text_to_cypher,
             prompt_routing=settings.enable_prompt_routing,
             question_decomposition=settings.enable_question_decomposition,
-            page_dashboard=settings.enable_page_dashboard,
             page_chat=settings.enable_page_chat,
             page_documents=settings.enable_page_documents,
             page_ingest=settings.enable_page_ingest,

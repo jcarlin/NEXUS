@@ -323,12 +323,6 @@ FLAG_REGISTRY: dict[str, FlagMeta] = {
         risk_level=FlagRiskLevel.RESTART,
     ),
     # --- Page Visibility ---
-    "enable_page_dashboard": FlagMeta(
-        display_name="Dashboard",
-        description="Show the Dashboard page in the sidebar navigation.",
-        category=FlagCategory.PAGES,
-        risk_level=FlagRiskLevel.SAFE,
-    ),
     "enable_page_chat": FlagMeta(
         display_name="Chat",
         description="Show the Chat page in the sidebar navigation.",

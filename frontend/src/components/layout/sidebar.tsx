@@ -42,7 +42,6 @@ interface NavItem {
 }
 
 const mainNav: NavItem[] = [
-  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, pageFlag: "page_dashboard" },
   { to: "/chat", label: "Chat", icon: MessageSquare, pageFlag: "page_chat" },
   { to: "/documents", label: "Documents", icon: FileText, pageFlag: "page_documents" },
   { to: "/documents/import", label: "Ingest", icon: Upload, pageFlag: "page_ingest" },
@@ -64,6 +63,7 @@ const reviewNav: NavItem[] = [
 ];
 
 const adminNav: NavItem[] = [
+  { to: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["admin"] },
   { to: "/admin/pipeline", label: "Pipeline", icon: Gauge, roles: ["admin"] },
   { to: "/admin/users", label: "Users", icon: Shield, roles: ["admin"] },
   { to: "/admin/audit-log", label: "Audit Log", icon: ScrollText, roles: ["admin"] },

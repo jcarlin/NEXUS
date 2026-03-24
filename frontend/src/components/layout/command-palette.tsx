@@ -31,7 +31,7 @@ interface CommandPaletteProps {
 }
 
 const pages = [
-  { label: "Dashboard", to: "/dashboard", icon: LayoutDashboard },
+  { label: "Dashboard", to: "/admin/dashboard", icon: LayoutDashboard },
   { label: "Chat", to: "/chat", icon: MessageSquare },
   { label: "Documents", to: "/documents", icon: FileText },
   { label: "Entities", to: "/entities", icon: Users },

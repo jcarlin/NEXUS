@@ -4,6 +4,7 @@ import React from "react";
 
 vi.mock("@tanstack/react-router", () => ({
   createFileRoute: () => (routeOptions: Record<string, unknown>) => routeOptions,
+  createLazyFileRoute: () => (routeOptions: Record<string, unknown>) => routeOptions,
   Link: ({
     children,
     ...props
@@ -47,7 +48,7 @@ vi.mock("@tanstack/react-query", () => ({
 }));
 
 // Import after mocks so the route file picks up mocked dependencies
-import { Route } from "@/routes/index";
+import { Route } from "@/routes/admin/dashboard.lazy";
 
 const Component = (Route as unknown as { component: React.ComponentType }).component;
 
@@ -125,7 +126,7 @@ describe("DashboardPage", () => {
     render(<Component />);
     expect(screen.getByTestId("recent-activity")).toBeInTheDocument();
     expect(screen.getByTestId("pipeline-status")).toBeInTheDocument();
-    expect(screen.getByText("Knowledge Graph")).toBeInTheDocument();
+    expect(screen.getByText("Entity Graph")).toBeInTheDocument();
   });
 
   it("shows descriptions for each stat card", () => {
@@ -136,9 +137,9 @@ describe("DashboardPage", () => {
     expect(screen.getByText("Active pipeline jobs")).toBeInTheDocument();
   });
 
-  it("makes 6 useQuery calls (doc-count, graph-stats, active-jobs, hot-docs, corpus-stats, system-metrics)", () => {
+  it("makes 5 useQuery calls (doc-count, graph-stats, active-jobs, hot-docs, corpus-stats)", () => {
     render(<Component />);
-    expect(mockUseQuery).toHaveBeenCalledTimes(6);
+    expect(mockUseQuery).toHaveBeenCalledTimes(5);
   });
 
   it("passes matterId-based query keys", () => {

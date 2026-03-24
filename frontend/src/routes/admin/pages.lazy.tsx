@@ -38,7 +38,6 @@ const PAGE_GROUPS = [
   {
     title: "Main",
     flags: [
-      "enable_page_dashboard",
       "enable_page_chat",
       "enable_page_documents",
       "enable_page_ingest",

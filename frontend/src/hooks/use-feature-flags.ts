@@ -29,7 +29,6 @@ export interface FeatureFlags {
   text_to_cypher: boolean;
   prompt_routing: boolean;
   question_decomposition: boolean;
-  page_dashboard: boolean;
   page_chat: boolean;
   page_documents: boolean;
   page_ingest: boolean;

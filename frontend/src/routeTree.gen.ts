@@ -10,7 +10,6 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as LoginRouteImport } from './routes/login'
-import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as CaseSetupRouteImport } from './routes/case-setup'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as EntitiesIndexRouteImport } from './routes/entities/index'
@@ -37,6 +36,7 @@ import { Route as AdminLlmSettingsRouteImport } from './routes/admin/llm-setting
 import { Route as AdminKnowledgeGraphRouteImport } from './routes/admin/knowledge-graph'
 import { Route as AdminFeatureFlagsRouteImport } from './routes/admin/feature-flags'
 import { Route as AdminEvaluationRouteImport } from './routes/admin/evaluation'
+import { Route as AdminDashboardRouteImport } from './routes/admin/dashboard'
 import { Route as AdminAuditLogRouteImport } from './routes/admin/audit-log'
 import { Route as AdminArchitectureRouteImport } from './routes/admin/architecture'
 import { Route as AuthOidcCallbackRouteImport } from './routes/auth/oidc/callback'
@@ -46,11 +46,6 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const DashboardRoute = DashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
-  getParentRoute: () => rootRouteImport,
-} as any).lazy(() => import('./routes/dashboard.lazy').then((d) => d.Route))
 const CaseSetupRoute = CaseSetupRouteImport.update({
   id: '/case-setup',
   path: '/case-setup',
@@ -219,6 +214,13 @@ const AdminEvaluationRoute = AdminEvaluationRouteImport.update({
 } as any).lazy(() =>
   import('./routes/admin/evaluation.lazy').then((d) => d.Route),
 )
+const AdminDashboardRoute = AdminDashboardRouteImport.update({
+  id: '/admin/dashboard',
+  path: '/admin/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() =>
+  import('./routes/admin/dashboard.lazy').then((d) => d.Route),
+)
 const AdminAuditLogRoute = AdminAuditLogRouteImport.update({
   id: '/admin/audit-log',
   path: '/admin/audit-log',
@@ -242,10 +244,10 @@ const AuthOidcCallbackRoute = AuthOidcCallbackRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/case-setup': typeof CaseSetupRoute
-  '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
   '/admin/architecture': typeof AdminArchitectureRoute
   '/admin/audit-log': typeof AdminAuditLogRoute
+  '/admin/dashboard': typeof AdminDashboardRoute
   '/admin/evaluation': typeof AdminEvaluationRoute
   '/admin/feature-flags': typeof AdminFeatureFlagsRoute
   '/admin/knowledge-graph': typeof AdminKnowledgeGraphRoute
@@ -275,10 +277,10 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/case-setup': typeof CaseSetupRoute
-  '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
   '/admin/architecture': typeof AdminArchitectureRoute
   '/admin/audit-log': typeof AdminAuditLogRoute
+  '/admin/dashboard': typeof AdminDashboardRoute
   '/admin/evaluation': typeof AdminEvaluationRoute
   '/admin/feature-flags': typeof AdminFeatureFlagsRoute
   '/admin/knowledge-graph': typeof AdminKnowledgeGraphRoute
@@ -309,10 +311,10 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/case-setup': typeof CaseSetupRoute
-  '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
   '/admin/architecture': typeof AdminArchitectureRoute
   '/admin/audit-log': typeof AdminAuditLogRoute
+  '/admin/dashboard': typeof AdminDashboardRoute
   '/admin/evaluation': typeof AdminEvaluationRoute
   '/admin/feature-flags': typeof AdminFeatureFlagsRoute
   '/admin/knowledge-graph': typeof AdminKnowledgeGraphRoute
@@ -344,10 +346,10 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/case-setup'
-    | '/dashboard'
     | '/login'
     | '/admin/architecture'
     | '/admin/audit-log'
+    | '/admin/dashboard'
     | '/admin/evaluation'
     | '/admin/feature-flags'
     | '/admin/knowledge-graph'
@@ -377,10 +379,10 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/case-setup'
-    | '/dashboard'
     | '/login'
     | '/admin/architecture'
     | '/admin/audit-log'
+    | '/admin/dashboard'
     | '/admin/evaluation'
     | '/admin/feature-flags'
     | '/admin/knowledge-graph'
@@ -410,10 +412,10 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/case-setup'
-    | '/dashboard'
     | '/login'
     | '/admin/architecture'
     | '/admin/audit-log'
+    | '/admin/dashboard'
     | '/admin/evaluation'
     | '/admin/feature-flags'
     | '/admin/knowledge-graph'
@@ -444,10 +446,10 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   CaseSetupRoute: typeof CaseSetupRoute
-  DashboardRoute: typeof DashboardRoute
   LoginRoute: typeof LoginRoute
   AdminArchitectureRoute: typeof AdminArchitectureRoute
   AdminAuditLogRoute: typeof AdminAuditLogRoute
+  AdminDashboardRoute: typeof AdminDashboardRoute
   AdminEvaluationRoute: typeof AdminEvaluationRoute
   AdminFeatureFlagsRoute: typeof AdminFeatureFlagsRoute
   AdminKnowledgeGraphRoute: typeof AdminKnowledgeGraphRoute
@@ -482,13 +484,6 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/dashboard': {
-      id: '/dashboard'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/case-setup': {
@@ -673,6 +668,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminEvaluationRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/dashboard': {
+      id: '/admin/dashboard'
+      path: '/admin/dashboard'
+      fullPath: '/admin/dashboard'
+      preLoaderRoute: typeof AdminDashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/audit-log': {
       id: '/admin/audit-log'
       path: '/admin/audit-log'
@@ -700,10 +702,10 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CaseSetupRoute: CaseSetupRoute,
-  DashboardRoute: DashboardRoute,
   LoginRoute: LoginRoute,
   AdminArchitectureRoute: AdminArchitectureRoute,
   AdminAuditLogRoute: AdminAuditLogRoute,
+  AdminDashboardRoute: AdminDashboardRoute,
   AdminEvaluationRoute: AdminEvaluationRoute,
   AdminFeatureFlagsRoute: AdminFeatureFlagsRoute,
   AdminKnowledgeGraphRoute: AdminKnowledgeGraphRoute,

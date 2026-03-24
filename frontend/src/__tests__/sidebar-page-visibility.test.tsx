@@ -54,7 +54,6 @@ describe("Sidebar page visibility", () => {
   it("shows all pages when all flags are true", () => {
     mockUseFeatureFlags.mockReturnValue({
       data: {
-        page_dashboard: true,
         page_chat: true,
         page_documents: true,
         page_ingest: true,
@@ -71,7 +70,7 @@ describe("Sidebar page visibility", () => {
     });
     render(<Sidebar />);
 
-    expect(screen.getByText("Dashboard")).toBeInTheDocument();
+    expect(screen.getByText("Dashboard")).toBeInTheDocument(); // admin section
     expect(screen.getByText("Chat")).toBeInTheDocument();
     expect(screen.getByText("Comms Matrix")).toBeInTheDocument();
     expect(screen.getByText("Hot Docs")).toBeInTheDocument();
@@ -81,7 +80,6 @@ describe("Sidebar page visibility", () => {
   it("hides pages when their flag is false", () => {
     mockUseFeatureFlags.mockReturnValue({
       data: {
-        page_dashboard: true,
         page_chat: false,
         page_documents: true,
         page_ingest: true,
@@ -98,11 +96,11 @@ describe("Sidebar page visibility", () => {
     });
     render(<Sidebar />);
 
-    expect(screen.getByText("Dashboard")).toBeInTheDocument();
     expect(screen.queryByText("Chat")).not.toBeInTheDocument();
     expect(screen.queryByText("Comms Matrix")).not.toBeInTheDocument();
     expect(screen.queryByText("Case Setup")).not.toBeInTheDocument();
     // Other pages still visible
+    expect(screen.getByText("Dashboard")).toBeInTheDocument(); // admin section
     expect(screen.getByText("Hot Docs")).toBeInTheDocument();
     expect(screen.getByText("Timeline")).toBeInTheDocument();
   });
@@ -111,7 +109,7 @@ describe("Sidebar page visibility", () => {
     mockUseFeatureFlags.mockReturnValue({ data: undefined });
     render(<Sidebar />);
 
-    expect(screen.getByText("Dashboard")).toBeInTheDocument();
+    expect(screen.getByText("Dashboard")).toBeInTheDocument(); // admin section
     expect(screen.getByText("Chat")).toBeInTheDocument();
     expect(screen.getByText("Comms Matrix")).toBeInTheDocument();
     expect(screen.getByText("Hot Docs")).toBeInTheDocument();
@@ -120,7 +118,6 @@ describe("Sidebar page visibility", () => {
   it("always shows admin nav items regardless of flags", () => {
     mockUseFeatureFlags.mockReturnValue({
       data: {
-        page_dashboard: false,
         page_chat: false,
         page_documents: false,
         page_ingest: false,
@@ -137,7 +134,8 @@ describe("Sidebar page visibility", () => {
     });
     render(<Sidebar />);
 
-    // Admin pages have no pageFlag — always visible
+    // Admin pages have no pageFlag — always visible (Dashboard is now admin)
+    expect(screen.getByText("Dashboard")).toBeInTheDocument();
     expect(screen.getByText("Pipeline")).toBeInTheDocument();
     expect(screen.getByText("Feature Flags")).toBeInTheDocument();
     expect(screen.getByText("Pages")).toBeInTheDocument();

@@ -5,7 +5,6 @@ import { FileText, Users, Flame, Loader2, Network, ChevronDown, ChevronRight } f
 import { apiClient } from "@/api/client";
 import { formatFileSize } from "@/lib/utils";
 import { useAppStore } from "@/stores/app-store";
-import { useAuthStore } from "@/stores/auth-store";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { RecentActivity } from "@/components/dashboard/recent-activity";
 import { PipelineStatus } from "@/components/dashboard/pipeline-status";
@@ -15,13 +14,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { PaginatedResponse, DocumentResponse, GraphStats } from "@/types";
 
-export const Route = createLazyFileRoute("/dashboard")({
+export const Route = createLazyFileRoute("/admin/dashboard")({
   component: DashboardPage,
 });
 
 function DashboardPage() {
   const matterId = useAppStore((s) => s.matterId);
-  const userRole = useAuthStore((s) => s.user?.role);
   const [systemExpanded, setSystemExpanded] = useState(false);
 
   const { data: docs, isLoading: docsLoading } = useQuery({
@@ -172,24 +170,22 @@ function DashboardPage() {
         </Card>
       </div>
 
-      {userRole === "admin" && (
-        <div className="space-y-2">
-          <button
-            type="button"
-            onClick={() => setSystemExpanded(!systemExpanded)}
-            className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
-          >
-            {systemExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-            System Status
-          </button>
-          {systemExpanded && (
-            <div className="flex gap-4">
-              <ServiceHealth />
-              <SystemMetrics />
-            </div>
-          )}
-        </div>
-      )}
+      <div className="space-y-2">
+        <button
+          type="button"
+          onClick={() => setSystemExpanded(!systemExpanded)}
+          className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+        >
+          {systemExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+          System Status
+        </button>
+        {systemExpanded && (
+          <div className="flex gap-4">
+            <ServiceHealth />
+            <SystemMetrics />
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -37,19 +37,6 @@ const Component = (Route as unknown as { component: React.ComponentType }).compo
 const SAMPLE_FLAGS = {
   items: [
     {
-      flag_name: "enable_page_dashboard",
-      display_name: "Dashboard",
-      description: "Show the Dashboard page in the sidebar navigation.",
-      category: "pages",
-      risk_level: "safe",
-      enabled: true,
-      is_override: false,
-      env_default: true,
-      depends_on: [],
-      updated_at: null,
-      updated_by: null,
-    },
-    {
       flag_name: "enable_page_chat",
       display_name: "Chat",
       description: "Show the Chat page in the sidebar navigation.",
@@ -130,7 +117,6 @@ describe("PagesPage", () => {
     mockUseQuery.mockReturnValue({ data: SAMPLE_FLAGS, isLoading: false });
     render(<Component />);
     // Page flags should be visible
-    expect(screen.getByText("Dashboard")).toBeInTheDocument();
     expect(screen.getByText("Chat")).toBeInTheDocument();
     expect(screen.getByText("Comms Matrix")).toBeInTheDocument();
     expect(screen.getByText("Hot Docs")).toBeInTheDocument();
@@ -150,8 +136,8 @@ describe("PagesPage", () => {
     await userEvent.click(switches[0]);
 
     expect(mutateFn).toHaveBeenCalledWith({
-      flagName: "enable_page_dashboard",
-      enabled: false,
+      flagName: "enable_page_chat",
+      enabled: true,
     });
   });
 });
