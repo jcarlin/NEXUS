@@ -2472,9 +2472,9 @@ def extract_entities_for_job(self, job_id: str, matter_id: str | None = None) ->
                 neo4j_driver = _get_neo4j_driver(settings)
                 graph_svc = GraphService(neo4j_driver)
                 asyncio.run(
-                    graph_svc.index_entities(
-                        entities=all_entities,
+                    graph_svc.index_entities_for_document(
                         doc_id=job_id,
+                        entities=all_entities,
                         matter_id=matter_id,
                     )
                 )
