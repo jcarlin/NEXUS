@@ -132,6 +132,7 @@ class FeatureFlags(BaseModel):
     graphrag_communities: bool
     service_operations: bool
     agent_clarification: bool
+    retrieval_overrides: bool
     page_chat: bool
     page_documents: bool
     page_ingest: bool
@@ -450,6 +451,8 @@ class Settings(BaseSettings):
     # --- Automatic Graph Routing (T3-12) ---
     enable_agent_clarification: bool = False
     enable_auto_graph_routing: bool = False
+    # --- Per-Chat Retrieval Overrides ---
+    enable_retrieval_overrides: bool = False
 
     # --- Page Visibility ---
     enable_page_chat: bool = True
@@ -632,6 +635,7 @@ class Settings(BaseSettings):
                 graphrag_communities=self.enable_graphrag_communities,
                 service_operations=self.enable_service_operations,
                 agent_clarification=self.enable_agent_clarification,
+                retrieval_overrides=self.enable_retrieval_overrides,
                 page_chat=self.enable_page_chat,
                 page_documents=self.enable_page_documents,
                 page_ingest=self.enable_page_ingest,

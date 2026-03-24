@@ -1,9 +1,58 @@
 """Pydantic schemas for the query / chat domain."""
 
 from datetime import datetime
+from enum import StrEnum
 from uuid import UUID
 
 from pydantic import BaseModel, Field
+
+
+class RetrievalOverrides(BaseModel):
+    """Per-request overrides for retrieval strategy flags.
+
+    Each field corresponds to one ``ENABLE_*`` flag on Settings.
+    ``None`` means "use the global default".  ``True``/``False`` overrides
+    the global setting for this request only.
+    """
+
+    enable_hyde: bool | None = None
+    enable_multi_query_expansion: bool | None = None
+    enable_retrieval_grading: bool | None = None
+    enable_citation_verification: bool | None = None
+    enable_self_reflection: bool | None = None
+    enable_text_to_cypher: bool | None = None
+    enable_text_to_sql: bool | None = None
+    enable_question_decomposition: bool | None = None
+    enable_prompt_routing: bool | None = None
+    enable_adaptive_retrieval_depth: bool | None = None
+    enable_reranker: bool | None = None
+    enable_sparse_embeddings: bool | None = None
+    enable_visual_embeddings: bool | None = None
+
+
+class OverrideFlagCategory(StrEnum):
+    """Override flag categories."""
+
+    LOGIC = "logic"
+    DI_GATED = "di_gated"
+
+
+class OverrideFlagDetail(BaseModel):
+    """Metadata for a single overridable flag (returned by retrieval-options endpoint)."""
+
+    flag_name: str
+    display_name: str
+    description: str
+    category: OverrideFlagCategory
+    global_enabled: bool
+    can_enable: bool
+    can_disable: bool
+
+
+class AvailableOverridesResponse(BaseModel):
+    """Response for GET /query/retrieval-options."""
+
+    flags: list[OverrideFlagDetail]
 
 
 class QueryRequest(BaseModel):
@@ -15,6 +64,10 @@ class QueryRequest(BaseModel):
         default=None, description="Optional metadata filters (document_type, date_range, etc.)."
     )
     dataset_id: UUID | None = Field(default=None, description="Scope query to documents in this dataset.")
+    retrieval_overrides: RetrievalOverrides | None = Field(
+        default=None,
+        description="Per-chat overrides for retrieval strategy flags. Omit or set fields to null for global defaults.",
+    )
 
 
 class SourceDocument(BaseModel):

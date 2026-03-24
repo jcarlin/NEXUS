@@ -266,6 +266,12 @@ FLAG_REGISTRY: dict[str, FlagMeta] = {
         risk_level=FlagRiskLevel.CACHE_CLEAR,
         di_caches=["get_query_graph_v1"],
     ),
+    "enable_retrieval_overrides": FlagMeta(
+        display_name="Per-Chat Retrieval Overrides",
+        description="Allow users to toggle retrieval strategies (HyDE, reranker, etc.) per conversation via the chat input.",
+        category=FlagCategory.QUERY,
+        risk_level=FlagRiskLevel.SAFE,
+    ),
     "enable_ocr_correction": FlagMeta(
         display_name="OCR Error Correction",
         description="Regex-based ligature and legal term correction for scanned documents, with optional LLM cleanup.",

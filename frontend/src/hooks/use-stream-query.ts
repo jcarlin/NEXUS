@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef } from "react";
 import { useStreamStore, initialStreamState } from "@/stores/stream-store";
+import { useOverrideStore } from "@/stores/override-store";
 import type { StreamState } from "@/stores/stream-store";
 
 /**
@@ -43,7 +44,10 @@ export function useStreamQuery(threadId?: string) {
 
   const send = useCallback(
     (query: string) => {
-      const key = startStream(query, threadId);
+      const { getOverrides } = useOverrideStore.getState();
+      const overrides = getOverrides(threadId ?? "_new");
+      const hasOverrides = Object.keys(overrides).length > 0;
+      const key = startStream(query, threadId, hasOverrides ? overrides : undefined);
       if (!threadId) {
         tempKeyRef.current = key;
       }

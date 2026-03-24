@@ -27,7 +27,15 @@ from app.auth.schemas import UserRecord
 from app.common.db_utils import parse_jsonb
 from app.common.rate_limit import rate_limit_queries
 from app.dependencies import get_db, get_query_graph
+from app.query.overrides import (
+    OVERRIDABLE_FLAGS,
+    OVERRIDE_DESCRIPTIONS,
+    OVERRIDE_LABELS,
+    get_override_category,
+    validate_overrides,
+)
 from app.query.schemas import (
+    AvailableOverridesResponse,
     ChatHistoryResponse,
     ChatMessage,
     ChatThread,
@@ -35,6 +43,8 @@ from app.query.schemas import (
     ClarificationResponse,
     EntityGrounding,
     EntityMention,
+    OverrideFlagCategory,
+    OverrideFlagDetail,
     QueryRequest,
     QueryResponse,
     SourceDocument,
@@ -138,6 +148,14 @@ async def query(
 
     exclude_privilege = ["privileged", "work_product"] if current_user.role not in ("admin", "attorney") else []
 
+    # Validate per-chat retrieval overrides (if enabled)
+    retrieval_overrides: dict[str, bool] = {}
+    if settings.enable_retrieval_overrides and request.retrieval_overrides:
+        overrides_dict = request.retrieval_overrides.model_dump(exclude_none=True)
+        retrieval_overrides = validate_overrides(overrides_dict, settings)
+        if retrieval_overrides:
+            logger.info("query.retrieval_overrides", overrides=retrieval_overrides, thread_id=thread_id)
+
     # Resolve dataset_id to document IDs for Qdrant filtering
     dataset_doc_ids: list[str] | None = None
     if request.dataset_id:
@@ -173,6 +191,7 @@ async def query(
             filters=request.filters,
             exclude_privilege=exclude_privilege,
             dataset_doc_ids=dataset_doc_ids,
+            retrieval_overrides=retrieval_overrides or None,
         )
     else:
         initial_state = await QueryService.build_v1_state(
@@ -186,6 +205,7 @@ async def query(
             db=db,
             settings=settings,
             dataset_doc_ids=dataset_doc_ids,
+            retrieval_overrides=retrieval_overrides or None,
         )
 
     config = QueryService.build_graph_config(thread_id, settings, request.query)
@@ -369,6 +389,43 @@ async def _score_and_record_quality(
 
 
 # ------------------------------------------------------------------
+# GET /query/retrieval-options — available per-chat overrides
+# ------------------------------------------------------------------
+
+
+@router.get("/query/retrieval-options", response_model=AvailableOverridesResponse)
+async def list_retrieval_options(
+    current_user: UserRecord = Depends(get_current_user),
+):
+    """List retrieval flags available for per-chat override with current defaults."""
+    from app.dependencies import get_settings
+
+    settings = get_settings()
+
+    if not settings.enable_retrieval_overrides:
+        raise HTTPException(status_code=403, detail="Per-chat retrieval overrides are not enabled.")
+
+    flags = []
+    for flag_name in sorted(OVERRIDABLE_FLAGS):
+        global_val = getattr(settings, flag_name)
+        category = get_override_category(flag_name)
+
+        flags.append(
+            OverrideFlagDetail(
+                flag_name=flag_name,
+                display_name=OVERRIDE_LABELS.get(flag_name, flag_name),
+                description=OVERRIDE_DESCRIPTIONS.get(flag_name, ""),
+                category=OverrideFlagCategory(category),
+                global_enabled=global_val,
+                can_enable=category == "logic" or global_val,
+                can_disable=True,
+            )
+        )
+
+    return AvailableOverridesResponse(flags=flags)
+
+
+# ------------------------------------------------------------------
 # POST /query/stream — SSE streaming endpoint
 # ------------------------------------------------------------------
 
@@ -400,6 +457,14 @@ async def query_stream(
         messages = [{"role": r["role"], "content": r["content"]} for r in rows]
 
     exclude_privilege = ["privileged", "work_product"] if current_user.role not in ("admin", "attorney") else []
+
+    # Validate per-chat retrieval overrides (if enabled)
+    retrieval_overrides: dict[str, bool] = {}
+    if settings.enable_retrieval_overrides and request.retrieval_overrides:
+        overrides_dict = request.retrieval_overrides.model_dump(exclude_none=True)
+        retrieval_overrides = validate_overrides(overrides_dict, settings)
+        if retrieval_overrides:
+            logger.info("query_stream.retrieval_overrides", overrides=retrieval_overrides, thread_id=thread_id)
 
     # Resolve dataset_id to document IDs for Qdrant filtering
     dataset_doc_ids: list[str] | None = None
@@ -436,6 +501,7 @@ async def query_stream(
             filters=request.filters,
             exclude_privilege=exclude_privilege,
             dataset_doc_ids=dataset_doc_ids,
+            retrieval_overrides=retrieval_overrides or None,
         )
     else:
         initial_state = await QueryService.build_v1_state(
@@ -449,6 +515,7 @@ async def query_stream(
             db=db,
             settings=settings,
             dataset_doc_ids=dataset_doc_ids,
+            retrieval_overrides=retrieval_overrides or None,
         )
 
     config = QueryService.build_graph_config(thread_id, settings, request.query)

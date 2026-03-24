@@ -92,6 +92,9 @@ class InvestigationState(TypedDict, total=False):
     retrieval_confidence: float
     _grading_triggered: bool
 
+    # Per-request retrieval overrides (injected by router)
+    _retrieval_overrides: dict[str, bool]
+
 
 # ---------------------------------------------------------------------------
 # Agentic state schema (M10)
@@ -150,6 +153,9 @@ class AgentState(TypedDict, total=False):
 
     # HalluGraph entity-graph alignment (T3-9)
     entity_grounding: Annotated[list[dict[str, Any]], _replace]
+
+    # Per-request retrieval overrides (injected by router)
+    _retrieval_overrides: dict[str, bool]
 
 
 # ---------------------------------------------------------------------------
@@ -235,9 +241,11 @@ def _route_after_verification(state: dict) -> str:
     Otherwise, route to "end".
     """
     from app.dependencies import get_settings
+    from app.query.overrides import resolve_flag
 
     settings = get_settings()
-    if not settings.enable_self_reflection:
+    overrides = state.get("_retrieval_overrides")
+    if not resolve_flag("enable_self_reflection", settings, overrides):
         return "end"
 
     cited_claims = state.get("cited_claims", [])

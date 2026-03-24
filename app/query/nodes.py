@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any
 
 import structlog
 
+from app.query.overrides import resolve_flag
 from app.query.prompts import (
     CLASSIFY_PROMPT,
     FOLLOWUP_PROMPT,
@@ -189,7 +190,8 @@ def create_nodes_v1(
         # improvement; falling back to score-based sorting still
         # returns valid results.
         sorted_results = None
-        if settings.enable_reranker:
+        overrides = state.get("_retrieval_overrides")
+        if resolve_flag("enable_reranker", settings, overrides):
             try:
                 reranker = get_reranker()
                 if reranker is not None:
@@ -220,7 +222,7 @@ def create_nodes_v1(
         # that supplements text-based results.  Failure falls back to
         # text-only ranking which is fully functional.
         visual_results: list[dict[str, Any]] = []
-        if settings.enable_visual_embeddings:
+        if resolve_flag("enable_visual_embeddings", settings, overrides):
             try:
                 query = state.get("rewritten_query") or state.get("original_query", "")
                 sorted_results = await retriever.rerank_visual(
@@ -482,7 +484,8 @@ def create_nodes_v1(
 
         settings = get_settings()
 
-        if not settings.enable_retrieval_grading:
+        overrides = state.get("_retrieval_overrides")
+        if not resolve_flag("enable_retrieval_grading", settings, overrides):
             return {}
 
         from app.query.grader import grade_retrieval
@@ -490,7 +493,7 @@ def create_nodes_v1(
         query = state.get("rewritten_query") or state["original_query"]
         text_results = state.get("text_results", [])
 
-        grading_llm = llm if settings.enable_retrieval_grading else None
+        grading_llm = llm if resolve_flag("enable_retrieval_grading", settings, overrides) else None
 
         results, confidence, triggered = await grade_retrieval(
             query=query,
@@ -631,11 +634,12 @@ async def case_context_resolve(state: dict) -> dict:
     from app.dependencies import get_settings
 
     settings = get_settings()
-    skip_verification = tier == "fast" or not settings.enable_citation_verification
+    overrides = state.get("_retrieval_overrides")
+    skip_verification = tier == "fast" or not resolve_flag("enable_citation_verification", settings, overrides)
 
     # Classify query type for prompt routing (T1-6)
     query_type = "factual"  # default
-    if settings.enable_prompt_routing and original_query:
+    if resolve_flag("enable_prompt_routing", settings, overrides) and original_query:
         try:
             from app.dependencies import get_llm
 
@@ -664,7 +668,7 @@ async def case_context_resolve(state: dict) -> dict:
     # Adaptive retrieval depth (T3-13)
     adaptive_text_limit = None
     adaptive_graph_limit = None
-    if settings.enable_adaptive_retrieval_depth and query_type:
+    if resolve_flag("enable_adaptive_retrieval_depth", settings, overrides) and query_type:
         adaptive_text_limit = (
             getattr(settings, f"retrieval_depth_{query_type}_text", None) or settings.retrieval_text_limit
         )

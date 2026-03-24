@@ -52,7 +52,7 @@ interface StreamStore {
   streams: Map<string, ActiveStream>;
 
   /** Start a stream. Returns the stream key (threadId or temp id). */
-  startStream: (query: string, threadId?: string) => string;
+  startStream: (query: string, threadId?: string, overrides?: Record<string, boolean>) => string;
   /** Explicitly cancel a stream. */
   cancelStream: (streamKey: string) => void;
   /** Resume a paused stream after clarification. */
@@ -74,7 +74,7 @@ let tempCounter = 0;
 export const useStreamStore = create<StreamStore>()((set, get) => ({
   streams: new Map(),
 
-  startStream: (query: string, threadId?: string) => {
+  startStream: (query: string, threadId?: string, overrides?: Record<string, boolean>) => {
     const streamKey = threadId ?? `_new_${++tempCounter}`;
 
     // Abort any existing stream on this key
@@ -120,6 +120,10 @@ export const useStreamStore = create<StreamStore>()((set, get) => ({
         query,
         ...(threadId ? { thread_id: threadId } : {}),
         dataset_id: datasetId || undefined,
+        retrieval_overrides:
+          overrides && Object.keys(overrides).length > 0
+            ? overrides
+            : undefined,
       }),
       signal: ctrl.signal,
 

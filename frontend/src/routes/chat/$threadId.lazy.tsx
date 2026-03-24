@@ -111,6 +111,7 @@ function ChatThreadPage() {
           onStop={cancel}
           isStreaming={isStreaming}
           disabled={isStreaming}
+          threadId={threadId}
         />
       </div>
     </ChatLayout>

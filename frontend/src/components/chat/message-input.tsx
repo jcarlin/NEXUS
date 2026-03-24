@@ -5,6 +5,8 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { apiClient } from "@/api/client";
+import { RetrievalOverrides } from "@/components/chat/retrieval-overrides";
+import { OverridePills } from "@/components/chat/override-pills";
 
 interface MessageInputProps {
   onSend: (text: string) => void;
@@ -12,6 +14,7 @@ interface MessageInputProps {
   isStreaming?: boolean;
   disabled?: boolean;
   variant?: "default" | "standalone" | "hero";
+  threadId?: string;
 }
 
 type ActiveModelResponse = {
@@ -20,7 +23,7 @@ type ActiveModelResponse = {
   provider_type: string | null;
 };
 
-export function MessageInput({ onSend, onStop, isStreaming, disabled, variant = "default" }: MessageInputProps) {
+export function MessageInput({ onSend, onStop, isStreaming, disabled, variant = "default", threadId }: MessageInputProps) {
   const [text, setText] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -67,10 +70,16 @@ export function MessageInput({ onSend, onStop, isStreaming, disabled, variant = 
         variant === "default" && "border-t",
       )}
     >
-      {variant !== "hero" && activeModel?.model && (
-        <Badge variant="outline" className="mb-2 text-[11px] font-normal text-muted-foreground">
-          {activeModel.model}
-        </Badge>
+      {variant !== "hero" && (
+        <div className="mb-2 flex items-center gap-2">
+          <RetrievalOverrides threadId={threadId ?? "_new"} />
+          {activeModel?.model && (
+            <Badge variant="outline" className="text-[11px] font-normal text-muted-foreground">
+              {activeModel.model}
+            </Badge>
+          )}
+          <OverridePills threadId={threadId ?? "_new"} />
+        </div>
       )}
 
       {variant === "hero" ? (
@@ -88,11 +97,13 @@ export function MessageInput({ onSend, onStop, isStreaming, disabled, variant = 
           />
           <div className="flex items-center justify-between px-4 pb-3">
             <div className="flex items-center gap-2">
+              <RetrievalOverrides threadId={threadId ?? "_new"} />
               {activeModel?.model && (
                 <Badge variant="outline" className="text-[11px] font-normal text-muted-foreground">
                   {activeModel.model}
                 </Badge>
               )}
+              <OverridePills threadId={threadId ?? "_new"} />
             </div>
             {isStreaming ? (
               <Button

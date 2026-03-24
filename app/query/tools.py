@@ -17,6 +17,8 @@ from langchain_core.tools import tool
 from langgraph.prebuilt.tool_node import InjectedState
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.query.overrides import resolve_flag
+
 logger = structlog.get_logger(__name__)
 
 
@@ -63,13 +65,14 @@ async def vector_search(
         settings = get_settings()
 
         # Adaptive retrieval depth (T3-13)
-        if settings.enable_adaptive_retrieval_depth:
+        overrides = state.get("_retrieval_overrides")
+        if resolve_flag("enable_adaptive_retrieval_depth", settings, overrides):
             adaptive_limit = state.get("_adaptive_text_limit")
             if adaptive_limit:
                 limit = adaptive_limit
 
         hyde_vector: list[float] | None = None
-        if settings.enable_hyde:
+        if resolve_flag("enable_hyde", settings, overrides):
             from app.dependencies import get_embedder, get_llm
             from app.query.hyde import generate_hypothetical_document
 
@@ -94,7 +97,7 @@ async def vector_search(
                 logger.warning("tool.vector_search.hyde_failed", exc_info=True)
 
         # Multi-query expansion (T1-1)
-        if settings.enable_multi_query_expansion:
+        if resolve_flag("enable_multi_query_expansion", settings, overrides):
             from app.dependencies import get_llm
             from app.query.multi_query import expand_query
 
@@ -190,7 +193,8 @@ async def graph_query(
         from app.dependencies import get_settings
 
         settings = get_settings()
-        if settings.enable_adaptive_retrieval_depth:
+        overrides = state.get("_retrieval_overrides")
+        if resolve_flag("enable_adaptive_retrieval_depth", settings, overrides):
             adaptive_limit = state.get("_adaptive_graph_limit")
             if adaptive_limit:
                 limit = adaptive_limit
@@ -666,7 +670,8 @@ async def decompose_query(
     from app.dependencies import get_settings
 
     settings = get_settings()
-    if not settings.enable_question_decomposition:
+    overrides = state.get("_retrieval_overrides")
+    if not resolve_flag("enable_question_decomposition", settings, overrides):
         return json.dumps({"info": "Question decomposition is not enabled."})
 
     from app.dependencies import get_llm, get_retriever
@@ -739,7 +744,8 @@ async def cypher_query(
     from app.dependencies import get_settings
 
     settings = get_settings()
-    if not settings.enable_text_to_cypher:
+    overrides = state.get("_retrieval_overrides")
+    if not resolve_flag("enable_text_to_cypher", settings, overrides):
         return json.dumps({"info": "Text-to-Cypher generation is not enabled."})
 
     from app.dependencies import get_graph_service, get_llm
@@ -809,7 +815,8 @@ async def structured_query(
     from app.dependencies import get_settings
 
     settings = get_settings()
-    if not settings.enable_text_to_sql:
+    overrides = state.get("_retrieval_overrides")
+    if not resolve_flag("enable_text_to_sql", settings, overrides):
         return json.dumps({"info": "Text-to-SQL generation is not enabled."})
 
     from app.dependencies import get_llm

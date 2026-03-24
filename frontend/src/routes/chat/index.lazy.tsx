@@ -95,6 +95,7 @@ function ChatPage() {
               isStreaming={isStreaming}
               disabled={isStreaming}
               variant="hero"
+              threadId={undefined}
             />
 
             <div className="mt-4 flex flex-wrap justify-center gap-2">
