@@ -2488,7 +2488,7 @@ def extract_entities_for_job(self, job_id: str, matter_id: str | None = None) ->
                 text(
                     """
                     UPDATE documents SET entity_count = :count, updated_at = now()
-                    WHERE id = (SELECT document_id FROM jobs WHERE id = :job_id)
+                    WHERE job_id = CAST(:job_id AS uuid)
                        OR id = CAST(:job_id AS uuid)
                     """
                 ),
