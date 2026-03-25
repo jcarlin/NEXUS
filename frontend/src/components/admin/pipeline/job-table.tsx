@@ -333,15 +333,18 @@ export function JobTable() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [cancelMutation.isPending, retryMutation.isPending, dismissMutation.isPending]);
 
-  // Client-side filename search on already-fetched page
-  const items = (data?.items ?? []).filter((job) => {
-    if (!search) return true;
+  // Client-side filename search on already-fetched page — memoized to prevent
+  // new array references from triggering TanStack Table re-renders
+  const items = useMemo(() => {
+    const raw = data?.items ?? [];
+    if (!search) return raw;
     const term = search.toLowerCase();
-    return (
-      job.filename?.toLowerCase().includes(term) ||
-      job.job_id.toLowerCase().includes(term)
+    return raw.filter(
+      (job) =>
+        job.filename?.toLowerCase().includes(term) ||
+        job.job_id.toLowerCase().includes(term),
     );
-  });
+  }, [data?.items, search]);
 
   const table = useReactTable({
     data: items,
