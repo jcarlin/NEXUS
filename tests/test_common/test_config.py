@@ -96,6 +96,18 @@ class TestNestedConfig:
         assert s.processing.chunk_overlap == 64
         assert s.processing.celery_concurrency == 1
         assert s.processing.enable_relationship_extraction is False
+        assert s.processing.ner_batch_size == 8
+        assert s.processing.quality_score_threshold == 0.2
+
+    def test_ner_batch_size_override(self, monkeypatch):
+        monkeypatch.setenv("NER_BATCH_SIZE", "24")
+        s = Settings(anthropic_api_key="k", openai_api_key="k")
+        assert s.processing.ner_batch_size == 24
+
+    def test_quality_score_threshold_override(self, monkeypatch):
+        monkeypatch.setenv("QUALITY_SCORE_THRESHOLD", "0.4")
+        s = Settings(anthropic_api_key="k", openai_api_key="k")
+        assert s.processing.quality_score_threshold == 0.4
 
 
 class TestBGEM3Config:

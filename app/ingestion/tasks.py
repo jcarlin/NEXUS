@@ -794,6 +794,7 @@ def _stage_contextualize(ctx: _PipelineContext) -> None:
                 doc_type=ctx.document_type or ctx.doc_type,
                 doc_author=doc_meta.get("author"),
                 doc_date=doc_meta.get("date"),
+                min_quality_score=ctx.settings.quality_score_threshold,
             )
         )
 
@@ -1006,7 +1007,7 @@ def _stage_extract(ctx: _PipelineContext) -> None:
 
     # Batch extraction: process all chunks in batched forward passes
     chunk_texts = [chunk.text for chunk in ctx.chunks]
-    batch_results = extractor.extract_batch(chunk_texts)
+    batch_results = extractor.extract_batch(chunk_texts, batch_size=ctx.settings.ner_batch_size)
 
     for chunk, extracted in zip(ctx.chunks, batch_results):
         for ent in extracted:
@@ -2438,7 +2439,7 @@ def extract_entities_for_job(self, job_id: str, matter_id: str | None = None) ->
 
         # Batch NER extraction
         extractor = EntityExtractor(model_name=settings.gliner_model)
-        batch_results = extractor.extract_batch(chunk_texts)
+        batch_results = extractor.extract_batch(chunk_texts, batch_size=settings.ner_batch_size)
 
         all_entities: list[dict] = []
         seen: set[tuple[str, str]] = set()

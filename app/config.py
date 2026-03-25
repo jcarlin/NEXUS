@@ -84,6 +84,8 @@ class ProcessingConfig(BaseModel):
     gliner_model: str
     enable_relationship_extraction: bool
     defer_ner_to_queue: bool
+    ner_batch_size: int
+    quality_score_threshold: float
 
 
 class FeatureFlags(BaseModel):
@@ -230,6 +232,10 @@ class Settings(BaseSettings):
     gliner_model: str = "urchade/gliner_multi_pii-v1"
     enable_relationship_extraction: bool = False  # Tier-2 Instructor+LLM extraction off by default
     defer_ner_to_queue: bool = False  # Deferred NER: dispatch to separate 'ner' queue instead of inline
+    ner_batch_size: int = 8  # GLiNER batch size (texts per forward pass); 24 for short emails
+    quality_score_threshold: float = (
+        0.2  # Chunks below this skip contextual enrichment; 0.4 for email boilerplate filtering
+    )
 
     # --- Rate Limiting ---
     rate_limit_queries_per_minute: int = 30
@@ -587,6 +593,8 @@ class Settings(BaseSettings):
                 gliner_model=self.gliner_model,
                 enable_relationship_extraction=self.enable_relationship_extraction,
                 defer_ner_to_queue=self.defer_ner_to_queue,
+                ner_batch_size=self.ner_batch_size,
+                quality_score_threshold=self.quality_score_threshold,
             )
         if self.features is None:
             self.features = FeatureFlags(
