@@ -8,6 +8,7 @@ import { useViewState } from "@/hooks/use-view-state";
 import { QueryPipeline } from "@/components/admin/architecture/query-pipeline";
 import { IngestionPipeline } from "@/components/admin/architecture/ingestion-pipeline";
 import { ModelConfigTable } from "@/components/admin/architecture/model-config-table";
+import { SystemArchitecture } from "@/components/admin/architecture/system-architecture";
 
 export const Route = createLazyFileRoute("/admin/architecture")({
   component: ArchitecturePage,
@@ -51,7 +52,7 @@ interface SettingDetail {
 
 function ArchitecturePage() {
   const queryClient = useQueryClient();
-  const [vs, setVS] = useViewState("/admin/architecture", { activeTab: "query" });
+  const [vs, setVS] = useViewState("/admin/architecture", { activeTab: "system" });
 
   const { data: flags, isLoading: flagsLoading, isError: flagsError } = useQuery({
     queryKey: ["admin-feature-flags"],
@@ -142,17 +143,21 @@ function ArchitecturePage() {
   return (
     <div className="space-y-6 animate-page-in">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Pipeline Architecture</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Architecture</h1>
         <p className="text-sm text-muted-foreground">
-          Live system configuration — reflects current feature flags, models, and settings
+          System architecture and live pipeline configuration
         </p>
       </div>
 
       <Tabs value={vs.activeTab} onValueChange={(v) => setVS({ activeTab: v })}>
         <TabsList>
+          <TabsTrigger value="system">System Architecture</TabsTrigger>
           <TabsTrigger value="query">Query Pipeline</TabsTrigger>
           <TabsTrigger value="ingestion">Ingestion Pipeline</TabsTrigger>
         </TabsList>
+        <TabsContent value="system" className="mt-6">
+          <SystemArchitecture flagMap={flagMap} />
+        </TabsContent>
         <TabsContent value="query" className="mt-6">
           <QueryPipeline
             flagMap={flagMap}
