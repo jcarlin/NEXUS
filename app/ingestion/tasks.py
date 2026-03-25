@@ -2468,10 +2468,15 @@ def extract_entities_for_job(self, job_id: str, matter_id: str | None = None) ->
         # Index to Neo4j
         if all_entities:
             try:
+                from neo4j import AsyncGraphDatabase
+
                 from app.entities.graph_service import GraphService
 
-                neo4j_driver = _get_neo4j_driver(settings)
-                graph_svc = GraphService(neo4j_driver)
+                async_driver = AsyncGraphDatabase.driver(
+                    settings.neo4j_uri,
+                    auth=(settings.neo4j_user, settings.neo4j_password),
+                )
+                graph_svc = GraphService(async_driver)
                 asyncio.run(
                     graph_svc.index_entities_for_document(
                         doc_id=job_id,
@@ -2479,7 +2484,7 @@ def extract_entities_for_job(self, job_id: str, matter_id: str | None = None) ->
                         matter_id=matter_id,
                     )
                 )
-                neo4j_driver.close()
+                asyncio.run(async_driver.close())
             except Exception:
                 logger.warning("task.deferred_ner.neo4j_failed", exc_info=True)
 
