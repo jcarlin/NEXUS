@@ -1,284 +1,152 @@
-# DOJ EFTA Full Corpus Ingestion Plan
+# DOJ EFTA Full Corpus Ingestion Plan (v2 — Revised)
 
 ## Context
 
-Ingest ~222GB of DOJ EFTA datasets (DS 1-7+12, DS 8, DS 9, DS 11) into NEXUS on the T4 GPU VM (`nexus-gpu`, n1-standard-8, 30GB RAM, 200GB SSD, us-west1-a). Excludes DS 10 (images/videos). Goal: maximize investigation accuracy, keep extra GCP spend under ~$50, complete in 3-4 days. Every phase has a validation gate — no money committed until the previous phase proves out.
+Ingest ~222GB of DOJ EFTA datasets (DS 1-7+12, DS 8, DS 9, DS 11) into NEXUS on the T4 GPU VM (`nexus-gpu`, n1-standard-8, 30GB RAM, 200GB SSD, us-west1-a). Excludes DS 10 (images/videos). Goal: maximize investigation accuracy, keep extra GCP spend under ~$50, complete in 3-4 days. Every phase has a validation gate.
 
-**Current state**: 18,681 docs / 259,584 chunks already ingested (Tiers 1-2 from `docs/epstein-ingestion-gpu.md`). The DOJ EFTA datasets are the "Tier 4: GATE" items.
+**Current state**: 18,681 docs / 259,584 chunks already ingested (Tiers 1-2). 15K+ NER tasks still in queue (draining via on-VM ner-worker, concurrency 5).
 
-**Source**: DOJ EFTA torrent (`magnet:?xt=urn:btih:f5cbe5026b1f86617c520d0a9cd610d6254cbe85`, ~222GB). Also on Internet Archive. Needs fresh download.
+**Storage**: All raw data lives permanently in GCS (`gs://nexus-epstein-data/`). GCS Standard class in us-west1 (~$4.50/mo for 222GB). VM reads via gcsfuse for DS 1-8+11+12. DS 9 staged locally in batches (see below).
 
-**Storage**: All raw data lives permanently in GCS (`gs://nexus-epstein-data/`), not on the VM. The VM reads via gcsfuse mount. GCS Standard class in us-west1 (~$0.02/GB/mo = ~$4.50/mo for 222GB). Data persists for future re-ingestion, re-embedding, or new pipeline runs.
+**Download strategy**: Per-dataset torrents from [yung-megafone/Epstein-Files](https://github.com/yung-megafone/Epstein-Files) repo — NOT the monolithic `.tar.zst` archive. Individual `.torrent` files give immediate access without decompression.
 
 ---
 
-## Phase 0: Sample Download & Format Validation (~3-4 hours, ~$2)
+## Dataset Reality (Format Corrections)
 
-**Goal**: Download a small sample from each dataset, inspect file formats, run 100-doc pipeline test. Catch format surprises before committing 222GB and $50.
+| Dataset | What it actually is | Format | Adapter | Size |
+|---|---|---|---|---|
+| DS 1-7 | FBI interviews, Palm Beach police reports | Text-native PDFs | `import_pdf_directory.py` | ~3.0GB |
+| DS 8 | FBI interviews, police reports (more) | PDFs, some scanned | `import_pdf_directory.py` | ~10.7GB |
+| DS 9 | Emails flattened to PDF via Concordance export | PDFs + VOL00009.OPT/.DAT load files + NATIVE media (skip) | `ConcordanceDATAdapter` | ~180GB (incomplete, ~10GB video removed by DOJ) |
+| DS 11 | Financial ledgers, flight manifests, property records | Scanned PDFs | `import_pdf_directory.py` | ~25.5GB |
+| DS 12 | Supplemental docs | PDFs | `import_pdf_directory.py` | ~114MB |
 
-### 0.1 — Staging Infrastructure
+**Key corrections from v1:**
+- **DS 9 is NOT native .eml files.** It's a Concordance litigation support export with `VOL00009.OPT` and `VOL00009.DAT` load files + 528K PDF images + 2.3K native files (many video/media — skip these). Use existing `ConcordanceDATAdapter`, NOT a new `EMLFileAdapter`.
+- **DS 11 is NOT structured CSV/XLSX.** It's scanned PDFs of paper records. No `FlightManifestAdapter` needed — Docling's table-aware chunking handles it.
+- **DS 9 is known incomplete.** ~10GB of video removed from DOJ site, never re-added.
+- **DS 9 OCR quality is degraded.** Concordance-to-PDF export introduces encoding artifacts (e.g., `=9` instead of `19`). Use `QUALITY_SCORE_THRESHOLD=0.5`.
+- **DS 9 email threading will be limited.** PDFs don't expose RFC 5322 headers. Threading depends on OPT/DAT metadata fields.
+- **No new adapters needed.** Phase 1 code changes shrink from 4-6 hours to ~30 minutes.
+
+---
+
+## Phase 0: Download & Validate (~4-6 hours, ~$2)
+
+### 0.1 — Infrastructure (done)
+
+- [x] GCS bucket created: `gs://nexus-epstein-data/`
+- [x] Downloader VM running: `nexus-downloader` (e2-medium, 500GB, us-west1-a, spot)
+- [x] aria2 installed
+- [x] Per-dataset `.torrent` files available from GitHub index repo
+
+### 0.2 — Download DS 1-7+12 First (smallest, validates pipeline)
 
 ```bash
-# Create permanent GCS bucket (us-west1, same region as VM — free intra-region egress)
-# Standard storage class — data stays here permanently for future use
-gsutil mb -l us-west1 -c standard gs://nexus-epstein-data/
+# On nexus-downloader VM:
+cd /data
 
-# On local machine: start torrent, let it download just enough to inspect
-# OR: spin up a cheap e2-medium download VM with 500GB pd-standard
-gcloud compute instances create nexus-downloader \
-  --machine-type=e2-medium --zone=us-west1-a \
-  --boot-disk-size=500GB --boot-disk-type=pd-standard \
-  --image-family=debian-12 --image-project=debian-cloud \
-  --preemptible
-# Cost: ~$0.01/hr + $0.02/GB/mo disk = ~$1/day
+# Download DS 1-7 via individual torrent files (~3GB total, should be fast)
+for ds in 1 2 3 4 5 6 7; do
+    aria2c --seed-time=0 "/tmp/Epstein-Files/Torrent Files/DataSet $ds.torrent" -d /data/ds$ds/ &
+done
+wait
+
+# DS 12 — download from DOJ directly (114MB, still accessible)
+mkdir -p /data/ds12
+curl -sfL "https://www.justice.gov/epstein/doj-disclosures/data-set-12-files" | \
+  grep -oP 'href="https://www.justice.gov/epstein/files/[^"]*\.pdf"' | \
+  sed 's/href="//;s/"$//' | xargs -P4 -I{} wget -q -P /data/ds12/ {}
+
+# Upload to GCS
+gsutil -m rsync -r /data/ds1/ gs://nexus-epstein-data/ds1/
+gsutil -m rsync -r /data/ds2/ gs://nexus-epstein-data/ds2/
+# ... repeat for ds3-7, ds12
 ```
 
-### 0.2 — Download & Inspect Sample
-
-On the downloader VM (or local machine):
-```bash
-# Install aria2 or transmission-cli for torrent
-sudo apt-get install -y aria2
-
-# Download torrent — select only first few files from each DS
-# aria2c supports file selection from torrent
-aria2c --select-file=<DS1_files>,<DS8_files>,<DS9_files>,<DS11_files> \
-  "magnet:?xt=urn:btih:f5cbe5026b1f86617c520d0a9cd610d6254cbe85" \
-  --max-overall-download-limit=50M --seed-time=0
-
-# Inspect file types
-find ds1/ -type f | head -20           # What extensions?
-file ds9/* | head -20                  # PDF? EML? MSG? TXT?
-find ds11/ -type f -name "*.xlsx" -o -name "*.csv" | head  # Structured?
-ls -la ds9/ | head -20                 # File sizes — many small or few large?
-```
-
-**Key questions to answer**:
-- DS 9: PDF scans? .eml files? .txt? This determines adapter choice.
-- DS 11: Structured data (CSV/XLSX) or scanned PDFs?
-- DS 1-7: Text-native PDFs or scanned?
-- File naming conventions (for dataset/source tracking)
-
-### 0.3 — Upload Sample to GCS & Mount on VM
+### 0.3 — Pipeline Smoke Test (100 docs)
 
 ```bash
-# Upload ~1GB sample from each DS to GCS
-gsutil -m cp -r ds1-sample/ gs://nexus-epstein-data/sample/ds1/
-gsutil -m cp -r ds8-sample/ gs://nexus-epstein-data/sample/ds8/
-gsutil -m cp -r ds9-sample/ gs://nexus-epstein-data/sample/ds9/
-gsutil -m cp -r ds11-sample/ gs://nexus-epstein-data/sample/ds11/
-
-# On nexus-gpu VM: mount GCS
-sudo apt-get install -y gcsfuse
-sudo mkdir -p /mnt/epstein
+# On nexus-gpu VM (start it first):
 gcsfuse --implicit-dirs nexus-epstein-data /mnt/epstein
-```
 
-### 0.4 — Pipeline Smoke Test (100 docs from each DS)
-
-```bash
 COMPOSE='sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.cloud.yml -f docker-compose.gpu.yml'
 
-# Test DS 1-7 sample (PDF pipeline)
 $COMPOSE exec api python scripts/import_pdf_directory.py \
-  --dir /mnt/epstein/sample/ds1 \
+  --dir /mnt/epstein/ds1 \
   --matter-id 00000000-0000-0000-0000-000000000002 \
   --dataset-name "DOJ EFTA Sample DS1" \
   --limit 100 --disable-hnsw
-
-# Test DS 9 sample (adapter TBD based on format inspection)
-# If PDFs:
-$COMPOSE exec api python scripts/import_pdf_directory.py \
-  --dir /mnt/epstein/sample/ds9 \
-  --matter-id 00000000-0000-0000-0000-000000000002 \
-  --dataset-name "DOJ EFTA Sample DS9" \
-  --limit 100 --disable-hnsw
-
-# If .eml files: may need new adapter (see Code Changes section)
 ```
 
-### GATE 0: Validation Checklist
+### GATE 0: Validation
 
-- [ ] File formats identified for all 4 dataset groups
-- [ ] 100 docs from each DS ingested successfully
-- [ ] Qdrant chunks created with embeddings (spot-check vector dimensions = 1024)
-- [ ] NER entities extracted and visible in Neo4j
-- [ ] No Docling crashes, OOM, or disk issues
-- [ ] Embedding throughput: >100 chunks/sec on Infinity GPU
-- [ ] Sample query returns results from sample docs
-- [ ] GCS FUSE mount stable (no hangs, acceptable read speed)
-
-**If Gate 0 fails**: Fix issues on the 100-doc sample before downloading the full 222GB. Total cost so far: ~$2 (downloader VM + GCS).
-
-**Decision point**: Based on DS 9/DS 11 format inspection, determine:
-- Which adapter to use for each dataset
-- Whether FlightManifestAdapter is needed for DS 11
-- Whether a new .eml adapter is needed for DS 9
+- [ ] 100 docs ingested successfully
+- [ ] Qdrant chunks at 1024d
+- [ ] NER entities in Neo4j
+- [ ] No Docling crashes
+- [ ] Embedding throughput >100 chunks/sec
+- [ ] GCS FUSE read speed acceptable for DS 1-8 (small files OK over FUSE)
 
 ---
 
-## Phase 1: Code Changes (~4-6 hours)
+## Phase 1: Code Changes (~30 minutes) — DONE
 
-### 1.1 — NER_BATCH_SIZE config (15 min)
+- [x] `NER_BATCH_SIZE` config wired into `_stage_extract()` and `extract_entities_for_job()` (commit `9b2263e`)
+- [x] `QUALITY_SCORE_THRESHOLD` config wired into contextualizer (commit `9b2263e`)
+- [x] NER worker VM scripts: `create_ner_workers.sh`, `delete_ner_workers.sh`, `ner_worker_startup.sh` (commit `9b2263e`)
+- [x] Tests passing
 
-**Files**: `app/config.py`, `app/ingestion/tasks.py`
-
-- Add `ner_batch_size: int = 8` to `ProcessingConfig` in `app/config.py`
-- Add `NER_BATCH_SIZE=8` to `.env.example` and `.env.gpu.example`
-- Wire into `_stage_extract()` (line ~981 in tasks.py): pass `batch_size=settings.ner_batch_size` to `extract_batch()`
-- Wire into `extract_entities_for_job()` deferred NER task (line ~2324)
-- For DS 9 short emails: set `NER_BATCH_SIZE=24` at runtime
-
-### 1.2 — QUALITY_SCORE_THRESHOLD config (15 min)
-
-**Files**: `app/config.py`, `app/ingestion/contextualizer.py`
-
-- Add `quality_score_threshold: float = 0.2` to `ProcessingConfig`
-- Replace hardcoded `0.2` in contextualizer with `settings.quality_score_threshold`
-- Add `QUALITY_SCORE_THRESHOLD=0.2` to `.env.example`
-- For DS 9: set `QUALITY_SCORE_THRESHOLD=0.4` to filter email boilerplate
-
-### 1.3 — NER Worker VM Infrastructure (~1.5 hours)
-
-**New files**: `scripts/ner_worker_startup.sh`, `scripts/infra/create_ner_workers.sh`, `scripts/infra/delete_ner_workers.sh`
-
-`scripts/ner_worker_startup.sh`:
-```bash
-#!/bin/bash
-# Startup script for NER worker spot VMs
-# Pulls NEXUS Docker image, starts Celery worker on ner queue
-
-set -euo pipefail
-
-# Install Docker
-curl -fsSL https://get.docker.com | sh
-
-# Pull pre-built image from GCR (or build from source)
-# Option A: GCR image (requires `docker push` from main VM first)
-docker pull gcr.io/vault-ai-487703/nexus-api:latest
-
-# Option B: Build from source (slower but no GCR setup needed)
-# git clone ... && docker build -t nexus-api .
-
-# Start NER worker
-docker run -d --restart=unless-stopped \
-  --name nexus-ner-worker \
-  -e POSTGRES_URL_SYNC=postgresql://nexus:${PG_PASS}@${MAIN_VM_IP}:5432/nexus \
-  -e REDIS_URL=redis://${MAIN_VM_IP}:6379/0 \
-  -e CELERY_BROKER_URL=amqp://nexus:${RABBITMQ_PASS}@${MAIN_VM_IP}:5672/nexus \
-  -e QDRANT_URL=http://${MAIN_VM_IP}:6333 \
-  -e NEO4J_URI=bolt://${MAIN_VM_IP}:7687 \
-  -e NEO4J_USER=neo4j \
-  -e NEO4J_PASSWORD=${NEO4J_PASS} \
-  gcr.io/vault-ai-487703/nexus-api:latest \
-  celery -A workers.celery_app worker -l info -Q ner -c 4 -P prefork --max-tasks-per-child=50
-```
-
-`scripts/infra/create_ner_workers.sh`:
-```bash
-#!/bin/bash
-# Create 6 spot NER worker VMs
-NUM_WORKERS=${1:-6}
-# ... instance template + create commands
-```
-
-`scripts/infra/delete_ner_workers.sh`:
-```bash
-#!/bin/bash
-# Tear down all NER workers
-gcloud compute instances delete nexus-ner-{1,2,3,4,5,6} --zone=us-west1-a --quiet
-```
-
-**Prerequisites**:
-- Push Docker image to GCR: `docker tag nexus-api gcr.io/vault-ai-487703/nexus-api && docker push`
-- Open firewall rules for RabbitMQ (5672), PostgreSQL (5432), Redis (6379), Qdrant (6333), Neo4j (7687) from internal VPC only
-- Credentials passed via instance metadata or startup script env vars
-
-### 1.4 — DS-Specific Adapters (TBD after Phase 0)
-
-**Conditional on Phase 0 format inspection**:
-
-- If DS 9 is .eml files → new `EMLFileAdapter` in `app/ingestion/adapters/eml_files.py` (~2 hours)
-  - Parse .eml with Python `email` stdlib
-  - Extract headers (from, to, cc, subject, date), body (plain text or HTML→text)
-  - Yield `ImportDocument(doc_type="email", email_headers={...})`
-  - Register in `ADAPTER_REGISTRY`
-
-- If DS 11 has CSV/XLSX flight records → `FlightManifestAdapter` in `app/ingestion/adapters/flight_manifest.py` (~2-3 hours)
-  - Each table row → self-contained chunk with header context prefix
-  - Metadata: `record_type=flight_manifest`, date, origin, destination
-  - Register in `ADAPTER_REGISTRY`
-
-- If both are just PDFs → no new adapters needed, use `import_pdf_directory.py`
-
-### 1.5 — Tests
-
-- Unit test for NER_BATCH_SIZE config wiring
-- Unit test for QUALITY_SCORE_THRESHOLD config wiring
-- Unit test for any new adapter (EMLFileAdapter / FlightManifestAdapter)
-- Integration test: 10-doc import with deferred NER queue (mock Celery)
+**Removed from v1 (not needed):**
+- ~~EMLFileAdapter~~ — DS 9 is Concordance PDFs, not .eml files
+- ~~FlightManifestAdapter~~ — DS 11 is scanned PDFs, not CSV/XLSX
 
 ---
 
-## Phase 2: Full Download & DS 1-7+12 Ingestion (~3 hours ingest, download overlaps)
-
-### 2.1 — Full Torrent Download
-
-On the downloader VM (already running from Phase 0):
-```bash
-# Download full torrent, excluding DS 10 (images/videos)
-aria2c --select-file=<all-except-DS10> \
-  "magnet:?xt=urn:btih:f5cbe5026b1f86617c520d0a9cd610d6254cbe85" \
-  --seed-time=0
-
-# Upload to GCS as files complete (can overlap with ingestion)
-gsutil -m rsync -r ds1-7/ gs://nexus-epstein-data/ds1-7/
-gsutil -m rsync -r ds8/    gs://nexus-epstein-data/ds8/
-gsutil -m rsync -r ds9/    gs://nexus-epstein-data/ds9/
-gsutil -m rsync -r ds11/   gs://nexus-epstein-data/ds11/
-gsutil -m rsync -r ds12/   gs://nexus-epstein-data/ds12/
-```
-
-### 2.2 — DS 1-7+12 Ingestion (~4.3GB, ~3 hours)
+## Phase 2: DS 1-7+12 Ingestion (~4.3GB, ~3 hours)
 
 Highest signal density. Contextual chunks enabled (foundational docs).
 
 ```bash
-# Set env vars on VM
 ENABLE_CONTEXTUAL_CHUNKS=true
 ENABLE_CHUNK_QUALITY_SCORING=true
 DEFER_NER_TO_QUEUE=true
 
 $COMPOSE exec api python scripts/import_pdf_directory.py \
-  --dir /mnt/epstein/ds1-7 \
+  --dir /mnt/epstein/ds1 \
   --matter-id 00000000-0000-0000-0000-000000000002 \
-  --dataset-name "DOJ EFTA DS 1-7" \
+  --dataset-name "DOJ EFTA DS 1" \
   --disable-hnsw --resume
 
-$COMPOSE exec api python scripts/import_pdf_directory.py \
-  --dir /mnt/epstein/ds12 \
-  --matter-id 00000000-0000-0000-0000-000000000002 \
-  --dataset-name "DOJ EFTA DS 12" \
-  --disable-hnsw --resume
+# Repeat for ds2-7, ds12 (or write a loop)
+for ds in 2 3 4 5 6 7 12; do
+  $COMPOSE exec api python scripts/import_pdf_directory.py \
+    --dir /mnt/epstein/ds$ds \
+    --matter-id 00000000-0000-0000-0000-000000000002 \
+    --dataset-name "DOJ EFTA DS $ds" \
+    --disable-hnsw --resume
+done
 ```
 
 ### GATE 2: Validation
 
-- [ ] Doc count matches expected for DS 1-7+12
-- [ ] Contextual chunk prefixes populated (spot-check in Qdrant payload)
-- [ ] Quality scores computed (check `quality_score` in chunk metadata)
+- [ ] Doc count matches expected
+- [ ] Contextual chunk prefixes populated
+- [ ] Quality scores computed
 - [ ] NER queue draining at expected rate
-- [ ] Sample query: "Jeffrey Epstein financial transactions" returns DS 1-7 docs
-- [ ] No errors in Celery worker logs
+- [ ] Sample query returns DS 1-7 docs
 
 ---
 
 ## Phase 3: DS 8 Ingestion (~10.7GB, ~6 hours)
 
-Validates OCR at medium scale. Docling is the bottleneck.
-
 ```bash
-# Disable contextual chunks (not worth the LLM cost for DS 8 volume)
+# Download DS 8 on downloader VM
+aria2c --seed-time=0 "/tmp/Epstein-Files/Torrent Files/DataSet 8.torrent" -d /data/ds8/
+gsutil -m rsync -r /data/ds8/ gs://nexus-epstein-data/ds8/
+
+# Ingest (contextual chunks OFF — not worth LLM cost at this volume)
 ENABLE_CONTEXTUAL_CHUNKS=false
 
 $COMPOSE exec api python scripts/import_pdf_directory.py \
@@ -290,10 +158,9 @@ $COMPOSE exec api python scripts/import_pdf_directory.py \
 
 ### GATE 3: Validation
 
-- [ ] All formats parsed (no Docling crashes on exotic PDFs)
-- [ ] OCR quality acceptable (spot-check 10 random scanned docs)
-- [ ] NER backlog size manageable
-- [ ] Disk usage healthy (GCS FUSE should prevent local disk pressure)
+- [ ] Docling parsed all formats without crashes
+- [ ] OCR quality acceptable (spot-check 10 docs)
+- [ ] NER backlog manageable
 
 ---
 
@@ -302,97 +169,109 @@ $COMPOSE exec api python scripts/import_pdf_directory.py \
 **Only after Gates 2-3 pass and NER backlog is confirmed large.**
 
 ```bash
-# Check NER queue depth
 $COMPOSE exec rabbitmq rabbitmqctl list_queues name messages consumers
 ```
 
-If NER backlog > 50K chunks:
-
-### 4.1 — Push Docker Image to GCR
+If NER backlog > 50K: spin up 6 spot VMs.
 
 ```bash
-# On nexus-gpu VM
+# Push Docker image to GCR first
 sudo docker tag nexus-api:latest gcr.io/vault-ai-487703/nexus-api:latest
 sudo docker push gcr.io/vault-ai-487703/nexus-api:latest
-```
 
-### 4.2 — Open Internal Firewall Rules
-
-```bash
-gcloud compute firewall-rules create nexus-internal-services \
-  --allow=tcp:5432,tcp:5672,tcp:6333,tcp:6379,tcp:7687 \
-  --source-tags=nexus-internal \
-  --target-tags=nexus-internal \
-  --network=default
-```
-
-### 4.3 — Create NER Workers
-
-```bash
+# Create workers
 bash scripts/infra/create_ner_workers.sh 6
 ```
 
 ### GATE 4: NER Worker Validation
 
-- [ ] All 6 workers connected (RabbitMQ shows 6+1 consumers on `ner` queue)
-- [ ] NER drain rate ~6x faster than single-worker baseline
-- [ ] No task errors in first 30 minutes
-- [ ] Spot preemption rate acceptable (check every few hours)
+- [ ] 6+1 consumers on `ner` queue
+- [ ] NER drain rate ~6x faster
+- [ ] No task errors in first 30 min
 
-**If Gate 4 fails**: `bash scripts/infra/delete_ner_workers.sh` — fall back to on-VM NER.
+**If Gate 4 fails**: `bash scripts/infra/delete_ner_workers.sh`
 
 ---
 
-## Phase 5: DS 9 — Emails (~180GB, ~50-55 hours)
+## Phase 5: DS 9 — Concordance Email Production (~180GB, ~50-55 hours)
 
-The bulk of the work. Only start after all gates pass.
+### Critical DS 9 notes:
+- **Format**: Concordance export — `VOL00009.OPT` + `VOL00009.DAT` load files + 528K PDF images + 2.3K native files
+- **Skip**: Native media files (.wmv, .ts, .db) — filter by extension before ingesting
+- **OCR quality**: Degraded from Concordance-to-PDF export. Use `QUALITY_SCORE_THRESHOLD=0.5`
+- **Known incomplete**: ~10GB video removed by DOJ, never restored
+- **Threading**: Limited — PDFs don't have RFC 5322 headers. Check OPT/DAT for thread metadata
+- **GCS FUSE WARNING**: 528K small PDFs over FUSE = latency nightmare. Stage batches locally.
+
+### 5.1 — Download DS 9
 
 ```bash
-# Aggressive email boilerplate filtering
-QUALITY_SCORE_THRESHOLD=0.4
-NER_BATCH_SIZE=24
-ENABLE_CONTEXTUAL_CHUNKS=false  # Not worth LLM cost at this volume
+# On downloader VM — DS 9 is the big one (~181GB)
+aria2c --seed-time=0 "/tmp/Epstein-Files/Torrent Files/dataset-09 (Incomplete).torrent" -d /data/ds9/
 
-# Adapter depends on Phase 0 format inspection:
-# If PDFs:
-$COMPOSE exec api python scripts/import_pdf_directory.py \
-  --dir /mnt/epstein/ds9 \
+# Upload to GCS in parallel as it downloads
+gsutil -m rsync -r /data/ds9/ gs://nexus-epstein-data/ds9/
+```
+
+### 5.2 — Identify DS 9 Structure
+
+```bash
+# After download, find the OPT/DAT load files
+find /data/ds9 -name "*.OPT" -o -name "*.DAT" -o -name "*.opt" -o -name "*.dat" | head
+find /data/ds9 -name "*.pdf" | wc -l   # Should be ~528K
+find /data/ds9 -name "*.wmv" -o -name "*.ts" -o -name "*.db" | wc -l  # Media to skip
+```
+
+### 5.3 — Ingest via ConcordanceDATAdapter (batched, not FUSE)
+
+DS 9's 528K small PDFs will kill performance over GCS FUSE. Stage locally in batches:
+
+```bash
+# Stage 20K PDFs at a time to local SSD, ingest, clean up, repeat
+QUALITY_SCORE_THRESHOLD=0.5  # Higher threshold for OCR artifacts
+NER_BATCH_SIZE=24
+ENABLE_CONTEXTUAL_CHUNKS=false
+
+# If OPT/DAT load files exist and are well-formed:
+$COMPOSE exec api python scripts/import_dataset.py concordance_dat \
+  --file /mnt/epstein/ds9/VOL00009.DAT \
+  --content-dir /local-staging/ds9-batch/ \
   --matter-id 00000000-0000-0000-0000-000000000002 \
-  --dataset-name "DOJ EFTA DS 9 - Emails/Correspondence" \
   --disable-hnsw --resume
 
-# If .eml files (and EMLFileAdapter was built):
-$COMPOSE exec api python scripts/import_dataset.py eml_directory \
-  --data-dir /mnt/epstein/ds9 \
+# If OPT/DAT are missing or corrupt, fall back to PDF directory import:
+$COMPOSE exec api python scripts/import_pdf_directory.py \
+  --dir /local-staging/ds9-batch/ \
   --matter-id 00000000-0000-0000-0000-000000000002 \
+  --dataset-name "DOJ EFTA DS 9 - Emails" \
   --disable-hnsw --resume
 ```
 
-**Monitoring cadence**: Check every 12 hours:
-- `$COMPOSE exec rabbitmq rabbitmqctl list_queues name messages` — NER backlog
-- `SELECT count(*) FROM documents WHERE matter_id = '...-0002'` — doc count
-- `df -h` — disk usage (should be minimal with GCS FUSE)
-- `$COMPOSE logs --tail=50 worker ner-worker` — error scan
+### GATE 5: DS 9 Progress Check (every 12 hours)
 
-### GATE 5: DS 9 Progress Check (at 25%, 50%, 75%)
-
-- [ ] Ingestion rate sustainable (docs/hour not degrading)
-- [ ] NER workers still connected and draining
-- [ ] No disk pressure
+- [ ] Ingestion rate sustainable
+- [ ] NER workers draining
 - [ ] Error rate < 1%
+- [ ] Expected doc count: ~530K PDFs (minus ~10GB video gap)
 
 ---
 
-## Phase 6: DS 11 — Flight Logs & Financial (~27.5GB, ~10 hours)
+## Phase 6: DS 11 — Financial/Flight Records (~25.5GB, ~10 hours)
 
-Can overlap with DS 9's NER tail. Highest investigation value per byte.
+Can overlap with DS 9's NER tail.
 
 ```bash
-ENABLE_RELATIONSHIP_EXTRACTION=true  # Worth LLM cost here
-ENABLE_CONTEXTUAL_CHUNKS=true        # Worth it for evidentiary docs
-QUALITY_SCORE_THRESHOLD=0.2          # Default — don't filter structured data
+# Download DS 11
+aria2c --seed-time=0 "/tmp/Epstein-Files/Torrent Files/DataSet 11.zip.torrent" -d /data/ds11/
+# Extract if zipped
+cd /data/ds11 && unzip "DataSet 11.zip" -d extracted/
+gsutil -m rsync -r /data/ds11/extracted/ gs://nexus-epstein-data/ds11/
 
-# Adapter depends on Phase 0 format inspection:
+# Ingest — relationship extraction ON (high investigation value)
+ENABLE_RELATIONSHIP_EXTRACTION=true
+ENABLE_CONTEXTUAL_CHUNKS=true
+QUALITY_SCORE_THRESHOLD=0.2
+
 $COMPOSE exec api python scripts/import_pdf_directory.py \
   --dir /mnt/epstein/ds11 \
   --matter-id 00000000-0000-0000-0000-000000000002 \
@@ -404,69 +283,15 @@ $COMPOSE exec api python scripts/import_pdf_directory.py \
 
 ## Phase 7: Post-Ingestion Passes (~6-8 hours)
 
-Run after all datasets indexed. NER workers can still be draining while these run.
-
-### 7.1 — HNSW Rebuild (auto-triggered, verify)
-```bash
-# Verify HNSW is active
-$COMPOSE exec api python -c "
-from qdrant_client import QdrantClient
-c = QdrantClient('http://localhost:6333')
-info = c.get_collection('nexus_text')
-print(f'HNSW: {info.config.hnsw_config}')
-print(f'Points: {info.points_count}')
-"
-```
-
-### 7.2 — Email Threading (DS 9, batched)
-Post-ingestion hooks auto-dispatch `ingestion.detect_inclusive_emails`. Verify it ran:
-```bash
-$COMPOSE logs worker | grep "email_threading"
-```
-
-### 7.3 — Entity Resolution Agent
-```bash
-# Run with looser thresholds for this corpus
-$COMPOSE exec api python -c "
-from app.entities.tasks import resolve_entities
-resolve_entities.delay('00000000-0000-0000-0000-000000000002')
-"
-```
-
-### 7.4 — GraphRAG Community Summaries
-```bash
-# Enable and trigger
-ENABLE_GRAPHRAG_COMMUNITIES=true
-# Dispatched by post-ingestion hooks, or trigger manually via admin API
-```
-
-### 7.5 — Graph Centrality (PageRank)
-```bash
-ENABLE_GRAPH_CENTRALITY=true
-# Auto-runs on next entity query, or trigger via admin API
-```
-
-### 7.6 — Hot Doc Scoring (overnight batch)
-```bash
-ENABLE_HOT_DOC_DETECTION=true
-# Dispatched by post-ingestion hooks
-```
-
-### 7.7 — Tear Down NER Workers
-```bash
-bash scripts/infra/delete_ner_workers.sh
-# Also delete instance template and firewall rule
-gcloud compute instance-templates delete nexus-ner-worker --quiet
-gcloud compute firewall-rules delete nexus-internal-services --quiet
-```
-
-### 7.8 — Delete Downloader VM (GCS stays permanently)
-```bash
-gcloud compute instances delete nexus-downloader --zone=us-west1-a --quiet
-# GCS bucket is PERMANENT — raw data stays for future re-ingestion/re-embedding
-# Ongoing cost: ~$4.50/mo for 222GB Standard storage in us-west1
-# To reduce cost later: gsutil rewrite -s nearline gs://nexus-epstein-data/** (~$2.50/mo)
-```
+1. **HNSW Rebuild** — verify active after import scripts auto-trigger
+2. **Email Threading** — limited for DS 9 (PDF-only, no headers). Check OPT/DAT for thread metadata
+3. **Entity Resolution Agent** — critical for merging "J. Epstein" / "Jeffrey Epstein" / "JE"
+4. **GraphRAG Community Summaries** — Louvain → LLM summaries
+5. **Graph Centrality** — PageRank to surface key entities
+6. **Hot Doc Scoring** — overnight batch
+7. **Tear Down NER Workers**: `bash scripts/infra/delete_ner_workers.sh`
+8. **Delete Downloader VM**: `gcloud compute instances delete nexus-downloader --zone=us-west1-a --quiet`
+   - GCS bucket is PERMANENT (~$4.50/mo, or ~$2.50/mo on Nearline after ingestion)
 
 ---
 
@@ -476,16 +301,12 @@ gcloud compute instances delete nexus-downloader --zone=us-west1-a --quiet
 |------|-----------|------|------|-------|------|
 | DEFER_NER_TO_QUEUE | true | true | true | true | false |
 | ENABLE_CHUNK_QUALITY_SCORING | true | true | true | true | — |
-| QUALITY_SCORE_THRESHOLD | 0.2 | 0.2 | **0.4** | 0.2 | — |
+| QUALITY_SCORE_THRESHOLD | 0.2 | 0.2 | **0.5** | 0.2 | — |
 | NER_BATCH_SIZE | 8 | 8 | **24** | 8 | — |
 | ENABLE_CONTEXTUAL_CHUNKS | **true** | false | false | **true** | — |
 | ENABLE_RELATIONSHIP_EXTRACTION | false | false | false | **true** | — |
 | ENABLE_SPARSE_EMBEDDINGS | true | true | true | true | — |
 | ENABLE_NEAR_DUPLICATE_DETECTION | true | true | true | true | — |
-| ENABLE_GRAPHRAG_COMMUNITIES | — | — | — | — | true |
-| ENABLE_GRAPH_CENTRALITY | — | — | — | — | true |
-| ENABLE_HOT_DOC_DETECTION | — | — | — | — | true |
-| ENABLE_EMAIL_THREADING | — | — | — | — | true |
 
 ---
 
@@ -493,70 +314,46 @@ gcloud compute instances delete nexus-downloader --zone=us-west1-a --quiet
 
 | Phase | Duration | Overlap | Cumulative |
 |-------|----------|---------|------------|
-| 0: Sample & validate | ~4 hours | — | 4h |
-| 1: Code changes | ~4-6 hours | — | ~10h |
-| 2: DS 1-7+12 (4.3GB) | ~3 hours | Download DS 8/9/11 in parallel | ~13h |
-| 3: DS 8 (10.7GB) | ~6 hours | — | ~19h |
-| 4: Spin up NER workers | ~1 hour | — | ~20h |
-| 5: DS 9 (180GB) | ~50-55 hours | — | ~72h |
-| 6: DS 11 (27.5GB) | ~10 hours | Overlaps DS 9 NER tail | ~75h |
-| 7: Post-ingestion + teardown | ~6-8 hours | — | ~82h |
-| **Total wall clock** | | | **~3.5 days** |
+| 0: Download DS 1-7+12 & validate | ~4 hours | — | 4h |
+| 2: DS 1-7+12 ingestion (4.3GB) | ~3 hours | Download DS 8/9/11 in parallel | ~7h |
+| 3: DS 8 ingestion (10.7GB) | ~6 hours | — | ~13h |
+| 4: Spin up NER workers | ~1 hour | — | ~14h |
+| 5: DS 9 ingestion (180GB) | ~50-55 hours | — | ~66h |
+| 6: DS 11 ingestion (25.5GB) | ~10 hours | Overlaps DS 9 NER tail | ~69h |
+| 7: Post-ingestion + teardown | ~6-8 hours | — | ~76h |
+| **Total wall clock** | | | **~3.2 days** |
 
 ## Cost Estimate
 
 | Item | Cost |
 |------|------|
-| nexus-gpu VM (3.5 days @ $0.26/hr spot) | ~$22 |
-| Downloader VM (e2-medium, ~2 days) | ~$1 |
+| nexus-gpu VM (3.2 days @ $0.26/hr spot) | ~$20 |
+| Downloader VM (e2-medium, ~3 days) | ~$1 |
 | 6x NER spot VMs (55 hrs x $0.048/hr x 6) | ~$16 |
 | GCS permanent bucket (222GB Standard, first month) | ~$4.50 |
 | Gemini API (contextual chunks DS 1-7+11, relationship extraction DS 11) | ~$3 |
-| **Total ingestion run** | **~$47** |
-| **Ongoing GCS storage** | **~$4.50/mo** (or ~$2.50/mo if moved to Nearline after ingestion) |
+| **Total ingestion run** | **~$45** |
+| **Ongoing GCS storage** | **~$4.50/mo** (or ~$2.50/mo on Nearline) |
 
 ## Risk Mitigation
 
 | Risk | Mitigation |
 |------|-----------|
-| Format surprise (DS 9/11 not what we expect) | Phase 0 sample inspection before committing |
-| Spot VM preemption mid-ingestion | `--resume` flag, content hash dedup, Celery task auto-retry |
-| DS 9 too large for disk | GCS FUSE mount — data never lands on local SSD |
-| NER queue grows unbounded | Monitor every 12h; NER workers scale drain rate 6x |
-| Docling crashes on corrupt PDFs | Celery retry 3x, skip on final failure, log doc ID for manual review |
-| RabbitMQ memory pressure from large queue | Monitor; set `x-max-length` if needed; prefetch_count=1 on workers |
-| Budget overrun | Validation gates at each phase; NER workers only spun up after Phase 3 |
-| NER worker can't connect to services | Gate 4 validates connectivity before DS 9 starts |
-| Gemini rate limits | Contextual chunks only for DS 1-7+11 (~32GB, well within rate limits) |
-| Download stalls/corruption | aria2c supports resume; verify file counts + sizes before ingesting |
-| GCS cost creep | Standard class = ~$4.50/mo; switch to Nearline ($2.50/mo) after ingestion complete; set lifecycle policy to auto-transition |
-
-## Code Changes Summary
-
-| Change | Files | Effort |
-|--------|-------|--------|
-| NER_BATCH_SIZE config | `app/config.py`, `app/ingestion/tasks.py`, `.env.example` | 15 min |
-| QUALITY_SCORE_THRESHOLD config | `app/config.py`, `app/ingestion/contextualizer.py`, `.env.example` | 15 min |
-| NER worker startup script | `scripts/ner_worker_startup.sh` (new) | 30 min |
-| NER worker create/delete scripts | `scripts/infra/create_ner_workers.sh`, `delete_ner_workers.sh` (new) | 30 min |
-| GCR Docker image push | One-time manual step on VM | 15 min |
-| Firewall rule for internal VPC | One-time gcloud command | 5 min |
-| EMLFileAdapter (conditional) | `app/ingestion/adapters/eml_files.py` (new) | ~2 hours |
-| FlightManifestAdapter (conditional) | `app/ingestion/adapters/flight_manifest.py` (new) | ~2-3 hours |
-| Tests for above | `tests/test_ingestion/` | ~1 hour |
-| **Total** | | **~4-6 hours** |
+| DS 9 format surprise | Confirmed: Concordance production with OPT/DAT + PDFs. ConcordanceDATAdapter handles it. |
+| DS 9 OCR artifacts | QUALITY_SCORE_THRESHOLD=0.5 filters garbled chunks |
+| DS 9 over GCS FUSE = latency | Stage 20K PDFs at a time to local SSD, ingest, delete, repeat |
+| DS 9 incomplete (10GB video gap) | Documented. Validation checklist accounts for missing files. |
+| DS 9 threading limited | PDFs lack RFC 5322 headers. Check OPT/DAT for threading metadata. |
+| Spot VM preemption | `--resume` + content hash dedup + Celery retry |
+| NER queue unbounded | Monitor every 12h; 6 NER workers scale drain 6x |
+| Docling crashes on corrupt PDFs | Celery retry 3x, skip on final failure |
+| Budget overrun | Validation gates; NER workers only after Phase 3 |
 
 ## Verification (Final)
 
-After all phases complete:
 1. `SELECT count(*) FROM documents WHERE matter_id = '...-0002'` — expect 100K+ additional docs
-2. `SELECT count(*) FROM documents WHERE entity_count > 0 AND matter_id = '...-0002'` — NER coverage >95%
-3. Neo4j: `MATCH (n) WHERE n.matter_id = '...-0002' RETURN labels(n)[0], count(n)` — entity distribution
-4. Neo4j: `MATCH ()-[r]-() RETURN type(r), count(r)` — relationship types (CO_OCCURS, PARTICIPATED_IN)
-5. Sample queries:
-   - "Lolita Express passenger manifest"
-   - "financial transactions between Epstein and Deutsche Bank"
-   - "DOJ correspondence about plea agreement"
-   - "flight logs Palm Beach to Little St. James"
-6. Frontend: entity network graph shows new clusters, email threading for DS 9, hot docs panel populated
-7. GraphRAG: community summaries visible (Palm Beach network, financiers, etc.)
+2. `SELECT count(*) FROM documents WHERE entity_count > 0 AND matter_id = '...-0002'` — NER >95%
+3. Neo4j entity distribution and relationship types
+4. Sample queries: "Lolita Express manifest", "DOJ plea agreement", "Deutsche Bank transactions"
+5. Frontend: entity graph clusters, hot docs panel, DS 9 docs retrievable
+6. GraphRAG community summaries (Palm Beach network, financiers, etc.)
