@@ -7,8 +7,8 @@ import {
   createColumnHelper,
   type SortingState,
 } from "@tanstack/react-table";
-import { keepPreviousData, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronsUpDown, EyeOff, RotateCcw, X } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { EyeOff, RotateCcw, X } from "lucide-react";
 import { toast } from "sonner";
 import { apiClient } from "@/api/client";
 import { useAppStore } from "@/stores/app-store";
@@ -16,11 +16,6 @@ import { useLiveRefresh } from "@/hooks/use-live-refresh";
 import { formatDateTime, formatFileSize } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
@@ -130,7 +125,6 @@ export function JobTable() {
     enabled: !!matterId,
     refetchInterval: isLive && !statusParam ? 5_000 : false,
     gcTime: 5 * 60_000,
-    placeholderData: keepPreviousData,
   });
 
   const cancelMutation = useMutation({
@@ -370,13 +364,6 @@ export function JobTable() {
     );
   }
 
-  const filterLabel =
-    selectedStatuses.size === 0
-      ? "All statuses"
-      : selectedStatuses.size === 1
-        ? STATUS_OPTIONS.find((o) => selectedStatuses.has(o.value))?.label ??
-          "1 selected"
-        : `${selectedStatuses.size} selected`;
 
   return (
     <div className="space-y-4">
@@ -389,56 +376,37 @@ export function JobTable() {
           className="max-w-xs"
         />
 
-        {/* Multi-select status filter */}
-        <Popover>
-          <PopoverTrigger asChild>
+        {/* Status filter toggle buttons */}
+        <div className="flex items-center gap-1">
+          {STATUS_OPTIONS.map((opt) => {
+            const isSelected = selectedStatuses.has(opt.value);
+            return (
+              <Button
+                key={opt.value}
+                size="sm"
+                variant={isSelected ? "default" : "outline"}
+                className="h-7 text-xs"
+                onClick={() => toggleStatus(opt.value)}
+              >
+                {opt.label}
+              </Button>
+            );
+          })}
+          {selectedStatuses.size > 0 && (
             <Button
-              variant="outline"
-              className="w-[180px] justify-between font-normal"
+              size="sm"
+              variant="ghost"
+              className="h-7 text-xs text-muted-foreground"
+              onClick={() => {
+                setSelectedStatuses(new Set());
+                setPage(0);
+              }}
             >
-              <span className="truncate">{filterLabel}</span>
-              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+              <X className="mr-1 h-3 w-3" />
+              Clear
             </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-[200px] p-2" align="start">
-            <div className="space-y-1">
-              {STATUS_OPTIONS.map((opt) => {
-                const isSelected = selectedStatuses.has(opt.value);
-                return (
-                  <div
-                    key={opt.value}
-                    role="option"
-                    aria-selected={isSelected}
-                    className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
-                    onClick={() => toggleStatus(opt.value)}
-                  >
-                    <div
-                      className={`h-4 w-4 shrink-0 rounded-sm border shadow ${isSelected ? "bg-primary border-primary" : "border-primary"}`}
-                    >
-                      {isSelected && (
-                        <Check className="h-4 w-4 text-primary-foreground" />
-                      )}
-                    </div>
-                    <span>{opt.label}</span>
-                  </div>
-                );
-              })}
-              {selectedStatuses.size > 0 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="w-full mt-1 text-xs"
-                  onClick={() => {
-                    setSelectedStatuses(new Set());
-                    setPage(0);
-                  }}
-                >
-                  Clear filters
-                </Button>
-              )}
-            </div>
-          </PopoverContent>
-        </Popover>
+          )}
+        </div>
       </div>
 
       {/* Table */}

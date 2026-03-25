@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { createRootRoute, Outlet, useMatches } from "@tanstack/react-router";
 import { Menu } from "lucide-react";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -27,8 +27,9 @@ function RootLayout() {
   const [commandOpen, setCommandOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
+  const openCommandPalette = useCallback(() => setCommandOpen(true), []);
   const { shortcutsHelpOpen, setShortcutsHelpOpen } = useKeyboardShortcuts({
-    onOpenCommandPalette: () => setCommandOpen(true),
+    onOpenCommandPalette: openCommandPalette,
   });
 
   if (isLoginPage) {

@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback } from "react";
+import { createContext, useContext, useState, useCallback, useMemo } from "react";
 import type { ReactNode } from "react";
 
 interface LiveRefreshContextValue {
@@ -11,8 +11,9 @@ const LiveRefreshContext = createContext<LiveRefreshContextValue | null>(null);
 export function LiveRefreshProvider({ children }: { children: ReactNode }) {
   const [isLive, setIsLive] = useState(true);
   const toggleLive = useCallback(() => setIsLive((prev) => !prev), []);
+  const value = useMemo(() => ({ isLive, toggleLive }), [isLive, toggleLive]);
   return (
-    <LiveRefreshContext.Provider value={{ isLive, toggleLive }}>
+    <LiveRefreshContext.Provider value={value}>
       {children}
     </LiveRefreshContext.Provider>
   );
