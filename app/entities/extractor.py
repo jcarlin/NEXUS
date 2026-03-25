@@ -29,6 +29,96 @@ GLINER_ENTITY_TYPES: list[str] = [
     "address",
 ]
 
+# Entities to discard — pronouns, stopwords, and common garbage extracted
+# from conversational text (emails, chat logs). Case-insensitive.
+_STOPWORD_ENTITIES: set[str] = {
+    "i",
+    "me",
+    "my",
+    "mine",
+    "myself",
+    "you",
+    "your",
+    "yours",
+    "yourself",
+    "he",
+    "him",
+    "his",
+    "himself",
+    "she",
+    "her",
+    "hers",
+    "herself",
+    "it",
+    "its",
+    "itself",
+    "we",
+    "us",
+    "our",
+    "ours",
+    "ourselves",
+    "they",
+    "them",
+    "their",
+    "theirs",
+    "themselves",
+    "this",
+    "that",
+    "these",
+    "those",
+    "who",
+    "whom",
+    "whose",
+    "which",
+    "what",
+    "the",
+    "a",
+    "an",
+    "here",
+    "there",
+    "where",
+    "when",
+    "how",
+    "all",
+    "each",
+    "every",
+    "both",
+    "few",
+    "many",
+    "some",
+    "any",
+    "no",
+    "not",
+    "none",
+    "yes",
+    "ok",
+    "okay",
+    "re",
+    "fw",
+    "fwd",  # email prefixes
+    "n/a",
+    "na",
+    "tbd",
+    "tba",
+    "unknown",
+}
+
+# Minimum entity text length (after whitespace normalization)
+_MIN_ENTITY_LENGTH = 2
+
+
+def _is_garbage_entity(text: str) -> bool:
+    """Return True if the entity text is a pronoun, stopword, or too short."""
+    normalized = " ".join(text.split()).strip()
+    if len(normalized) < _MIN_ENTITY_LENGTH:
+        return True
+    if normalized.lower() in _STOPWORD_ENTITIES:
+        return True
+    # All-numeric single tokens that aren't dates or case numbers (e.g. "1", "23")
+    if normalized.isdigit() and len(normalized) < 4:
+        return True
+    return False
+
 
 @dataclass
 class ExtractedEntity:
@@ -106,20 +196,27 @@ class EntityExtractor:
                 threshold=threshold,
             )
 
-            results: list[ExtractedEntity] = [
-                ExtractedEntity(
-                    text=ent["text"],
-                    type=ent["label"],
-                    score=round(ent["score"], 4),
-                    start=ent["start"],
-                    end=ent["end"],
+            results: list[ExtractedEntity] = []
+            filtered = 0
+            for ent in raw_entities:
+                clean_text = " ".join(ent["text"].split())
+                if _is_garbage_entity(clean_text):
+                    filtered += 1
+                    continue
+                results.append(
+                    ExtractedEntity(
+                        text=clean_text,
+                        type=ent["label"],
+                        score=round(ent["score"], 4),
+                        start=ent["start"],
+                        end=ent["end"],
+                    )
                 )
-                for ent in raw_entities
-            ]
 
             logger.debug(
                 "extractor.extracted",
                 count=len(results),
+                filtered=filtered,
                 text_len=len(truncated),
             )
             return results
@@ -170,18 +267,21 @@ class EntityExtractor:
                     threshold=threshold,
                 )
                 for preds in batch_preds:
-                    all_results.append(
-                        [
+                    chunk_results: list[ExtractedEntity] = []
+                    for ent in preds:
+                        clean_text = " ".join(ent["text"].split())
+                        if _is_garbage_entity(clean_text):
+                            continue
+                        chunk_results.append(
                             ExtractedEntity(
-                                text=ent["text"],
+                                text=clean_text,
                                 type=ent["label"],
                                 score=round(ent["score"], 4),
                                 start=ent["start"],
                                 end=ent["end"],
                             )
-                            for ent in preds
-                        ]
-                    )
+                        )
+                    all_results.append(chunk_results)
 
             logger.debug(
                 "extractor.batch_extracted",
