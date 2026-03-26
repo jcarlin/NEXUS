@@ -9,6 +9,7 @@ import { QueryPipeline } from "@/components/admin/architecture/query-pipeline";
 import { IngestionPipeline } from "@/components/admin/architecture/ingestion-pipeline";
 import { ModelConfigTable } from "@/components/admin/architecture/model-config-table";
 import { SystemArchitecture } from "@/components/admin/architecture/system-architecture";
+import { DataStores } from "@/components/admin/architecture/data-stores";
 
 export const Route = createLazyFileRoute("/admin/architecture")({
   component: ArchitecturePage,
@@ -154,6 +155,7 @@ function ArchitecturePage() {
           <TabsTrigger value="system">System Architecture</TabsTrigger>
           <TabsTrigger value="query">Query Pipeline</TabsTrigger>
           <TabsTrigger value="ingestion">Ingestion Pipeline</TabsTrigger>
+          <TabsTrigger value="data">Data</TabsTrigger>
         </TabsList>
         <TabsContent value="system" className="mt-6">
           <SystemArchitecture flagMap={flagMap} />
@@ -174,6 +176,9 @@ function ArchitecturePage() {
             settings={settingsMap}
             onToggleFlag={handleToggle}
           />
+        </TabsContent>
+        <TabsContent value="data" className="mt-6">
+          <DataStores />
         </TabsContent>
       </Tabs>
 
