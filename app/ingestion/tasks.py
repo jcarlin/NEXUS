@@ -432,15 +432,8 @@ async def _index_to_neo4j(
             matter_id=matter_id,
         )
 
-        # Bulk-index entities (with dual labels + matter_id)
-        if entities:
-            await gs.index_entities_for_document(
-                doc_id=doc_id,
-                entities=entities,
-                matter_id=matter_id,
-            )
-
-        # Create chunk nodes
+        # Create chunk nodes BEFORE entities (entities need Chunk nodes
+        # to exist for EXTRACTED_FROM edges)
         for cd in chunk_data:
             await gs.create_chunk_node(
                 chunk_id=cd["chunk_id"],
@@ -448,6 +441,14 @@ async def _index_to_neo4j(
                 page_number=cd.get("page_number", 1),
                 qdrant_point_id=cd["qdrant_point_id"],
                 doc_id=doc_id,
+            )
+
+        # Bulk-index entities (with dual labels + matter_id + chunk edges)
+        if entities:
+            await gs.index_entities_for_document(
+                doc_id=doc_id,
+                entities=entities,
+                matter_id=matter_id,
             )
 
         # M11: Email-as-node modeling
@@ -1009,9 +1010,11 @@ def _stage_extract(ctx: _PipelineContext) -> None:
     chunk_texts = [chunk.text for chunk in ctx.chunks]
     batch_results = extractor.extract_batch(chunk_texts, batch_size=ctx.settings.ner_batch_size)
 
+    from app.entities.extractor import normalize_entity_name
+
     for chunk, extracted in zip(ctx.chunks, batch_results):
         for ent in extracted:
-            _name = " ".join(ent.text.split())  # collapse all whitespace into single space
+            _name = normalize_entity_name(ent.text)
             key = (_name.lower(), ent.type)
             if key not in seen_entities:
                 seen_entities.add(key)
@@ -1020,6 +1023,7 @@ def _stage_extract(ctx: _PipelineContext) -> None:
                         "name": _name,
                         "type": ent.type,
                         "page_number": chunk.metadata.get("page_number"),
+                        "chunk_index": chunk.chunk_index,
                     }
                 )
 
@@ -1153,7 +1157,17 @@ def _stage_index(ctx: _PipelineContext) -> None:
         except Exception:
             logger.warning("task.visual_indexing_failed", exc_info=True)
 
-    # 5c. Neo4j graph indexing
+    # 5c. Map chunk_index → point_id so entities get chunk_id for EXTRACTED_FROM edges
+    chunk_index_to_point_id: dict[int, str] = {}
+    for i, chunk in enumerate(ctx.chunks):
+        if i < len(points):
+            chunk_index_to_point_id[chunk.chunk_index] = points[i].id
+    for ent in ctx.all_entities:
+        ci = ent.pop("chunk_index", None)
+        if ci is not None:
+            ent["chunk_id"] = chunk_index_to_point_id.get(ci)
+
+    # 5d. Neo4j graph indexing
     # M11: Pass email metadata for email-as-node modeling
     email_meta = None
     if ctx.document_type == "email":
@@ -1339,10 +1353,9 @@ def _stage_complete(ctx: _PipelineContext) -> None:
         embeddings=len(ctx.embeddings),
     )
 
-    # Trigger entity resolution (async, non-blocking)
-    from app.entities.tasks import resolve_entities
-
-    resolve_entities.delay(matter_id=ctx.matter_id)
+    # Entity resolution runs as a batch operation (scripts/run_ner_pass.py
+    # or admin endpoint), not per-document.  Per-document triggering caused
+    # 70K+ redundant runs during EFTA ingestion.
 
 
 # ---------------------------------------------------------------------------
@@ -2435,7 +2448,6 @@ def extract_entities_for_job(self, job_id: str, matter_id: str | None = None) ->
         points.sort(key=lambda p: p.payload.get("chunk_index", 0))
 
         chunk_texts = [p.payload.get("chunk_text", "") for p in points]
-        page_numbers = [p.payload.get("page_number", 1) for p in points]
 
         # Batch NER extraction
         extractor = EntityExtractor(model_name=settings.gliner_model)
@@ -2444,9 +2456,12 @@ def extract_entities_for_job(self, job_id: str, matter_id: str | None = None) ->
         all_entities: list[dict] = []
         seen: set[tuple[str, str]] = set()
 
-        for page_num, extracted in zip(page_numbers, batch_results):
+        from app.entities.extractor import normalize_entity_name
+
+        for point, extracted in zip(points, batch_results):
+            page_num = point.payload.get("page_number", 1)
             for ent in extracted:
-                _name = " ".join(ent.text.split())
+                _name = normalize_entity_name(ent.text)
                 key = (_name.lower(), ent.type)
                 if key not in seen:
                     seen.add(key)
@@ -2455,6 +2470,7 @@ def extract_entities_for_job(self, job_id: str, matter_id: str | None = None) ->
                             "name": _name,
                             "type": ent.type,
                             "page_number": page_num,
+                            "chunk_id": point.id,
                         }
                     )
 

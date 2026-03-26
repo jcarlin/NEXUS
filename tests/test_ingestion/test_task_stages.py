@@ -42,6 +42,7 @@ def _make_mock_settings() -> MagicMock:
     s.chunk_size = 512
     s.chunk_overlap = 64
     s.enable_visual_embeddings = False
+    s.defer_ner_to_queue = False
     s.enable_sparse_embeddings = False
     s.enable_relationship_extraction = False
     s.enable_email_threading = False
@@ -191,7 +192,10 @@ class TestStageExtract:
 
         with (
             patch("app.ingestion.tasks._update_stage"),
-            patch("app.entities.extractor.EntityExtractor.extract", return_value=fake_entities),
+            patch(
+                "app.entities.extractor.EntityExtractor.extract_batch",
+                return_value=[fake_entities],
+            ),
         ):
             _stage_extract(ctx)
 
@@ -214,7 +218,10 @@ class TestStageExtract:
 
         with (
             patch("app.ingestion.tasks._update_stage"),
-            patch("app.entities.extractor.EntityExtractor.extract", return_value=fake_entities),
+            patch(
+                "app.entities.extractor.EntityExtractor.extract_batch",
+                return_value=[fake_entities],
+            ),
         ):
             _stage_extract(ctx)
 
@@ -236,7 +243,10 @@ class TestStageExtract:
 
         with (
             patch("app.ingestion.tasks._update_stage"),
-            patch("app.entities.extractor.EntityExtractor.extract", return_value=fake_entities),
+            patch(
+                "app.entities.extractor.EntityExtractor.extract_batch",
+                return_value=[fake_entities],
+            ),
         ):
             _stage_extract(ctx)
 

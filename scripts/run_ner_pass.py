@@ -106,6 +106,7 @@ def fetch_chunks_from_qdrant(settings, doc_id: str) -> list[dict]:
                     "text": point.payload.get("chunk_text", ""),
                     "page_number": point.payload.get("page_number"),
                     "chunk_index": point.payload.get("chunk_index", 0),
+                    "qdrant_point_id": point.id,
                 }
             )
         if next_offset is None:
@@ -138,7 +139,7 @@ def _run_ner_on_doc(doc_id: str, doc_filename: str, matter_id: str) -> tuple[str
     Each worker loads its own GLiNER model. Returns (doc_id, entity_count).
     """
     from app.config import Settings
-    from app.entities.extractor import EntityExtractor
+    from app.entities.extractor import EntityExtractor, normalize_entity_name
 
     settings = Settings()
     extractor = EntityExtractor(model_name=settings.gliner_model)
@@ -158,14 +159,16 @@ def _run_ner_on_doc(doc_id: str, doc_filename: str, matter_id: str) -> tuple[str
             continue
         extracted = extractor.extract(text)
         for ent in extracted:
-            key = (ent.text.strip().lower(), ent.type)
+            name = normalize_entity_name(ent.text)
+            key = (name.lower(), ent.type)
             if key not in seen:
                 seen.add(key)
                 entities.append(
                     {
-                        "name": ent.text.strip(),
+                        "name": name,
                         "type": ent.type,
                         "page_number": chunk.get("page_number"),
+                        "chunk_id": chunk.get("qdrant_point_id"),
                     }
                 )
 
@@ -224,6 +227,7 @@ def main() -> int:
     parser.add_argument("--limit", type=int, default=None, help="Process first N docs only")
     parser.add_argument("--dry-run", action="store_true", help="Count docs needing NER, don't process")
     parser.add_argument("--resume", action="store_true", help="Skip docs that already have entities (default behavior)")
+    parser.add_argument("--resolve", action="store_true", help="Run batch entity resolution after NER extraction")
 
     args = parser.parse_args()
 
@@ -322,6 +326,25 @@ def main() -> int:
         print(f"  Rate:            {processed / elapsed:.1f} docs/sec")
 
     engine.dispose()
+
+    # Optional: run batch entity resolution
+    if args.resolve and processed > 0:
+        print("\n=== Running Batch Entity Resolution ===")
+        try:
+            from app.entities.resolution_agent import run_resolution_agent
+
+            res_start = time.time()
+            result = asyncio.run(run_resolution_agent(args.matter_id))
+            res_elapsed = time.time() - res_start
+            print(f"  Merges performed:   {result.get('merges_performed', 0):,}")
+            print(f"  Uncertain merges:   {len(result.get('uncertain_merges', [])):,}")
+            print(f"  Hierarchy edges:    {result.get('hierarchy_edges_created', 0):,}")
+            print(f"  Linked terms:       {result.get('linked_terms', 0):,}")
+            print(f"  Elapsed:            {res_elapsed:.1f}s")
+        except Exception:
+            logger.error("ner_pass.resolution_failed", exc_info=True)
+            print("  Resolution failed — see logs for details")
+
     return 0
 
 

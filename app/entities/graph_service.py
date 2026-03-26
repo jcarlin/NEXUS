@@ -279,6 +279,10 @@ class GraphService:
             MATCH (d:Document {{id: $doc_id}})
             MERGE (e)-[r:MENTIONED_IN]->(d)
             SET r.page_number = ent.page_number
+            WITH e, ent
+            WHERE ent.chunk_id IS NOT NULL
+            MATCH (c:Chunk {{id: ent.chunk_id}})
+            MERGE (e)-[:EXTRACTED_FROM]->(c)
             """
             try:
                 await self._run_write(
@@ -308,17 +312,22 @@ class GraphService:
         return total
 
     async def _create_co_occurrence_edges(self, doc_id: str) -> None:
-        """Create ``CO_OCCURS`` edges between entities sharing a document.
+        """Create ``CO_OCCURS`` edges between entities sharing a **chunk**.
 
-        Uses internal Neo4j IDs (``id(e1) < id(e2)``) to create each
-        pair only once.  Weight increments when entities co-occur across
-        multiple documents.
+        Chunk-level co-occurrence (~500 tokens) is far more meaningful than
+        document-level (entire multi-page file).  Weight increments when
+        entities co-occur across multiple chunks.
+
+        Falls back to document-level if no EXTRACTED_FROM edges exist
+        (backward compatibility with entities indexed before chunk linking).
         """
         query = """
-        MATCH (e1:Entity)-[:MENTIONED_IN]->(d:Document {id: $doc_id})<-[:MENTIONED_IN]-(e2:Entity)
+        MATCH (e1:Entity)-[:EXTRACTED_FROM]->(c:Chunk)-[:PART_OF]->(d:Document {id: $doc_id})
+        WITH c, e1
+        MATCH (e2:Entity)-[:EXTRACTED_FROM]->(c)
         WHERE id(e1) < id(e2)
         MERGE (e1)-[r:CO_OCCURS]->(e2)
-        ON CREATE SET r.weight = 1, r.first_doc = $doc_id
+        ON CREATE SET r.weight = 1
         ON MATCH  SET r.weight = r.weight + 1
         """
         try:

@@ -7,6 +7,7 @@ case_number, court, vehicle, phone_number, email_address, flight_number, address
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 import structlog
@@ -101,21 +102,81 @@ _STOPWORD_ENTITIES: set[str] = {
     "tbd",
     "tba",
     "unknown",
+    # Relative dates — meaningless without temporal grounding
+    "today",
+    "tomorrow",
+    "yesterday",
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+    "sunday",
+    "saturdays",
+    "this weekend",
+    "next week",
+    "last week",
+    # Generic monetary noise
+    "money",
+    "cash",
+    "funds",
+    "dollars",
 }
 
 # Minimum entity text length (after whitespace normalization)
 _MIN_ENTITY_LENGTH = 2
 
+# Maximum entity name length — rejects URL slugs, sentence fragments, descriptive phrases
+_MAX_ENTITY_LENGTH = 60
+
+# URL slug pattern: 3+ consecutive hyphen-separated lowercase words (article slugs)
+_URL_SLUG_RE = re.compile(r"^[a-z]+-[a-z]+-[a-z]+-")
+
+# OCR garbled text: alternating case runs like "PaWeRhiR" (3+ transitions)
+_OCR_GARBLE_RE = re.compile(r"[A-Z]{2}[a-z][A-Z]{2}")
+
+
+def normalize_entity_name(raw: str) -> str:
+    """Normalize an entity name: strip OCR artifacts, rejoin hyphenation, collapse whitespace.
+
+    This is the single normalization point — used by the extractor, ingestion
+    tasks, and the NER pass script to ensure consistent entity names.
+    """
+    # Replace newlines/carriage returns with spaces
+    name = raw.replace("\r\n", " ").replace("\r", " ").replace("\n", " ")
+    # Rejoin OCR hyphenation at line breaks: "Ep- stein" → "Epstein"
+    name = re.sub(r"(\w)- (\w)", r"\1\2", name)
+    name = re.sub(r"(\w) -(\w)", r"\1\2", name)
+    # Collapse all whitespace to single spaces
+    name = " ".join(name.split()).strip()
+    return name
+
 
 def _is_garbage_entity(text: str) -> bool:
     """Return True if the entity text is a pronoun, stopword, or too short."""
-    normalized = " ".join(text.split()).strip()
+    normalized = normalize_entity_name(text)
     if len(normalized) < _MIN_ENTITY_LENGTH:
         return True
     if normalized.lower() in _STOPWORD_ENTITIES:
         return True
     # All-numeric single tokens that aren't dates or case numbers (e.g. "1", "23")
     if normalized.isdigit() and len(normalized) < 4:
+        return True
+    # Too long — URL slugs, sentence fragments, descriptive phrases
+    if len(normalized) > _MAX_ENTITY_LENGTH:
+        return True
+    # URL slug pattern (consecutive hyphen-separated lowercase words)
+    if _URL_SLUG_RE.match(normalized.lower()):
+        return True
+    # Contains URL/email indicators
+    if any(x in normalized.lower() for x in ("http", "www.", "mailto:")):
+        return True
+    # Starts with hashtag or mention
+    if normalized.startswith(("#", "@")):
+        return True
+    # OCR garbled text (alternating case runs)
+    if _OCR_GARBLE_RE.search(normalized):
         return True
     return False
 
@@ -199,7 +260,7 @@ class EntityExtractor:
             results: list[ExtractedEntity] = []
             filtered = 0
             for ent in raw_entities:
-                clean_text = " ".join(ent["text"].split())
+                clean_text = normalize_entity_name(ent["text"])
                 if _is_garbage_entity(clean_text):
                     filtered += 1
                     continue
@@ -269,7 +330,7 @@ class EntityExtractor:
                 for preds in batch_preds:
                     chunk_results: list[ExtractedEntity] = []
                     for ent in preds:
-                        clean_text = " ".join(ent["text"].split())
+                        clean_text = normalize_entity_name(ent["text"])
                         if _is_garbage_entity(clean_text):
                             continue
                         chunk_results.append(

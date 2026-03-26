@@ -141,11 +141,12 @@ async def test_index_entities_dual_labels(gs):
     )
 
     assert count == 3
-    # Should have been called twice (once per type batch)
-    assert gs._run_write.call_count == 2
+    # Called once per type batch (2) + once for CO_OCCURS edges (3 total)
+    assert gs._run_write.call_count == 3
 
     calls = gs._run_write.call_args_list
-    cyphers = [c[0][0] for c in calls]
+    # First 2 calls are entity batches, last is CO_OCCURS
+    cyphers = [c[0][0] for c in calls[:2]]
 
     # One batch should have :Person, the other :Organization
     labels_found = set()

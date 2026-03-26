@@ -6,6 +6,7 @@ into a single canonical entity node in the knowledge graph.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 import networkx as nx
@@ -92,31 +93,26 @@ class EntityResolver:
             if len(unique_names) < 2:
                 continue
 
-            # First-character blocking: bucket names by first letter to reduce
-            # O(n²) comparisons.  Compare within each bucket AND with adjacent
-            # buckets (±1 in alphabet) to catch typos like "Keffrey" / "Jeffrey".
-            buckets: dict[str, list[int]] = {}
+            # Token-based blocking: bucket names by each lowercase token.
+            # "Jeffrey Epstein" → tokens {"jeffrey", "epstein"}
+            # "Epstein, Jeffrey" → tokens {"epstein", "jeffrey"}
+            # Both land in the "epstein" bucket → compared.
+            # This replaces first-char blocking which missed cross-initial
+            # duplicates (e.g. "Jeffrey Epstein" vs "Epstein, Jeffrey").
+            token_to_indices: dict[str, list[int]] = {}
             for idx, name in enumerate(unique_names):
-                key = name.strip()[0].lower() if name.strip() else ""
-                buckets.setdefault(key, []).append(idx)
+                tokens = set(re.sub(r"[^a-z0-9\s]", "", name.lower()).split())
+                for tok in tokens:
+                    if len(tok) >= 3:  # skip very short tokens
+                        token_to_indices.setdefault(tok, []).append(idx)
 
-            # Build comparison pairs: within bucket + adjacent buckets
-            bucket_keys = sorted(buckets.keys())
             comparison_pairs: set[tuple[int, int]] = set()
-
-            for bk_idx, bk in enumerate(bucket_keys):
-                indices = buckets[bk]
-                # Intra-bucket pairs
+            for indices in token_to_indices.values():
+                if len(indices) > 200:  # skip extremely common tokens
+                    continue
                 for ii in range(len(indices)):
                     for jj in range(ii + 1, len(indices)):
                         comparison_pairs.add((indices[ii], indices[jj]))
-                # Adjacent-bucket pairs (next bucket only, avoids duplicates)
-                if bk_idx + 1 < len(bucket_keys):
-                    next_indices = buckets[bucket_keys[bk_idx + 1]]
-                    for ii in indices:
-                        for jj in next_indices:
-                            pair = (min(ii, jj), max(ii, jj))
-                            comparison_pairs.add(pair)
 
             for i, j in comparison_pairs:
                 name_a = unique_names[i]
