@@ -66,9 +66,9 @@ def find_docs_needing_ner(engine, matter_id: str, limit: int | None = None) -> l
     from sqlalchemy import text
 
     query = """
-        SELECT id, filename, chunk_count
+        SELECT job_id, filename, chunk_count
         FROM documents
-        WHERE matter_id = :mid AND entity_count = 0
+        WHERE matter_id = :mid AND entity_count = 0 AND job_id IS NOT NULL
         ORDER BY created_at
     """
     if limit:
@@ -76,7 +76,7 @@ def find_docs_needing_ner(engine, matter_id: str, limit: int | None = None) -> l
 
     with engine.connect() as conn:
         rows = conn.execute(text(query), {"mid": matter_id}).fetchall()
-        return [{"id": str(r.id), "filename": r.filename, "chunk_count": r.chunk_count} for r in rows]
+        return [{"id": str(r.job_id), "filename": r.filename, "chunk_count": r.chunk_count} for r in rows]
 
 
 def fetch_chunks_from_qdrant(settings, doc_id: str) -> list[dict]:
@@ -122,7 +122,7 @@ def update_entity_count(engine, doc_id: str, count: int) -> None:
 
     with engine.connect() as conn:
         conn.execute(
-            text("UPDATE documents SET entity_count = :count WHERE id = :id"),
+            text("UPDATE documents SET entity_count = :count, updated_at = now() WHERE job_id = CAST(:id AS uuid)"),
             {"count": count, "id": doc_id},
         )
         conn.commit()
