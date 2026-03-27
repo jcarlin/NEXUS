@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -9,6 +10,18 @@ vi.mock("@tanstack/react-router", () => ({
   createLazyFileRoute: () => (routeOptions: Record<string, unknown>) => routeOptions,
 }));
 
+// Mock useViewState so tab switching works without store setup
+vi.mock("@/hooks/use-view-state", () => ({
+  useViewState: (_key: string, defaults: Record<string, unknown>) => {
+    const [state, setState] = React.useState(defaults);
+    const setter = React.useCallback(
+      (patch: Record<string, unknown>) => setState((prev: Record<string, unknown>) => ({ ...prev, ...patch })),
+      [],
+    );
+    return [state, setter];
+  },
+}));
+
 vi.mock("@xyflow/react", () => ({
   ReactFlow: () => null,
   Background: () => null,
@@ -16,6 +29,7 @@ vi.mock("@xyflow/react", () => ({
   MiniMap: () => null,
   useReactFlow: () => ({ fitView: vi.fn() }),
   BackgroundVariant: { Dots: "dots" },
+  MarkerType: { ArrowClosed: "arrowclosed" },
 }));
 
 const mockFlags = {
@@ -87,7 +101,11 @@ describe("ArchitecturePage", () => {
   });
 
   it("renders query pipeline nodes", async () => {
+    const user = userEvent.setup();
     render(<Component />, { wrapper: createWrapper() });
+    // Wait for data to load, then switch to query tab
+    const queryTab = await screen.findByRole("tab", { name: "Query Pipeline" });
+    await user.click(queryTab);
     expect(await screen.findByText("investigation_agent")).toBeInTheDocument();
     expect(screen.getByText("case_context_resolve")).toBeInTheDocument();
     expect(screen.getByText("verify_citations")).toBeInTheDocument();
@@ -95,7 +113,10 @@ describe("ArchitecturePage", () => {
   });
 
   it("shows reflect node as disabled when self_reflection is off", async () => {
+    const user = userEvent.setup();
     render(<Component />, { wrapper: createWrapper() });
+    const queryTab = await screen.findByRole("tab", { name: "Query Pipeline" });
+    await user.click(queryTab);
     const reflectTitle = await screen.findByText("reflect");
     // Walk up to the PipelineNode wrapper div
     const node = reflectTitle.closest(".rounded-lg");
@@ -111,14 +132,19 @@ describe("ArchitecturePage", () => {
   });
 
   it("has ingestion pipeline tab", async () => {
+    const user = userEvent.setup();
     render(<Component />, { wrapper: createWrapper() });
-    await screen.findByText("Pipeline Architecture");
-    const tab = screen.getByRole("tab", { name: "Ingestion Pipeline" });
-    expect(tab).toBeInTheDocument();
+    const ingestionTab = await screen.findByRole("tab", { name: "Ingestion Pipeline" });
+    await user.click(ingestionTab);
+    // Verify ingestion pipeline content renders (Path A entry point)
+    expect(await screen.findByText("Path A: File Upload")).toBeInTheDocument();
   });
 
   it("displays tool grid with all 17 tools", async () => {
+    const user = userEvent.setup();
     render(<Component />, { wrapper: createWrapper() });
+    const queryTab = await screen.findByRole("tab", { name: "Query Pipeline" });
+    await user.click(queryTab);
     await screen.findByText("investigation_agent");
     expect(screen.getByText("vector_search")).toBeInTheDocument();
     expect(screen.getByText("graph_query")).toBeInTheDocument();

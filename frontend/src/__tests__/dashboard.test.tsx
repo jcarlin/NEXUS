@@ -41,6 +41,10 @@ vi.mock("@/components/dashboard/service-health", () => ({
   ServiceHealth: () => <div data-testid="service-health">Service Health</div>,
 }));
 
+vi.mock("@/components/dashboard/system-metrics", () => ({
+  SystemMetrics: () => <div data-testid="system-metrics">System Metrics</div>,
+}));
+
 // Track useQuery calls
 const mockUseQuery = vi.fn();
 vi.mock("@tanstack/react-query", () => ({
