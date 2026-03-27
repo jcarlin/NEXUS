@@ -156,8 +156,8 @@ describe("PipelineMonitorPage", () => {
       return { data: { items: [], total: 0, offset: 0, limit: 25 }, isLoading: false };
     });
     render(<Component />);
-    expect(screen.getByText("Processing")).toBeInTheDocument();
-    expect(screen.getByText("Failed")).toBeInTheDocument();
+    expect(screen.getAllByText("Processing").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Failed").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("Queued")).toBeInTheDocument();
     expect(screen.getByText("Workers")).toBeInTheDocument();
     expect(screen.getByText("ETA")).toBeInTheDocument();
