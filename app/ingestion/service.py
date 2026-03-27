@@ -183,6 +183,8 @@ class IngestionService:
                 SELECT j.id, j.filename, j.status, j.stage, j.progress, j.error,
                        j.parent_job_id, j.matter_id, j.metadata_,
                        j.task_type, j.label, j.created_at, j.updated_at,
+                       j.error_category, j.retry_count, j.worker_hostname,
+                       j.started_at, j.completed_at,
                        d.file_size_bytes, d.page_count,
                        d.document_type
                 FROM jobs j
@@ -238,6 +240,8 @@ class IngestionService:
                 SELECT j.id, j.filename, j.status, j.stage, j.progress, j.error,
                        j.parent_job_id, j.matter_id, j.metadata_,
                        j.task_type, j.label, j.created_at, j.updated_at,
+                       j.error_category, j.retry_count, j.worker_hostname,
+                       j.started_at, j.completed_at,
                        d.file_size_bytes, d.page_count,
                        d.document_type
                 FROM jobs j
@@ -721,3 +725,164 @@ class IngestionService:
             count=count,
         )
         return count
+
+    # ------------------------------------------------------------------
+    # PIPELINE MONITORING
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    async def get_pipeline_throughput(db: AsyncSession) -> dict:
+        """Compute jobs/min and avg duration over the last hour."""
+        result = await db.execute(
+            text("""
+                SELECT
+                    count(*) AS jobs_last_hour,
+                    CASE WHEN count(*) > 0 THEN
+                        count(*)::float / GREATEST(
+                            EXTRACT(EPOCH FROM (now() - min(completed_at))) / 60.0, 1
+                        )
+                    ELSE 0 END AS jobs_per_minute,
+                    coalesce(
+                        avg(EXTRACT(EPOCH FROM (completed_at - started_at))), 0
+                    ) AS avg_duration_seconds
+                FROM jobs
+                WHERE status IN ('complete', 'completed')
+                  AND completed_at > now() - interval '1 hour'
+                  AND started_at IS NOT NULL
+            """)
+        )
+        row = result.one()
+        return {
+            "jobs_per_minute": round(float(row[1] or 0), 2),
+            "jobs_last_hour": int(row[0] or 0),
+            "avg_duration_seconds": round(float(row[2] or 0), 1),
+        }
+
+    @staticmethod
+    async def get_failure_analysis(db: AsyncSession, matter_id: UUID, hours: int = 168) -> dict:
+        """Aggregate failure analysis."""
+        params: dict = {"matter_id": matter_id, "hours": hours}
+
+        cat_result = await db.execute(
+            text("""
+                SELECT coalesce(error_category, 'UNKNOWN') AS category, count(*) AS count
+                FROM jobs
+                WHERE status = 'failed' AND matter_id = :matter_id
+                  AND updated_at > now() - make_interval(hours => :hours)
+                GROUP BY category ORDER BY count DESC
+            """),
+            params,
+        )
+        category_breakdown = [{"category": r[0], "count": r[1]} for r in cat_result.all()]
+
+        rate_result = await db.execute(
+            text("""
+                SELECT date_trunc('hour', updated_at) AS bucket,
+                    count(*) FILTER (WHERE status IN ('complete', 'completed')) AS completed,
+                    count(*) FILTER (WHERE status = 'failed') AS failed
+                FROM jobs WHERE matter_id = :matter_id
+                  AND updated_at > now() - make_interval(hours => :hours)
+                  AND status IN ('complete', 'completed', 'failed')
+                GROUP BY bucket ORDER BY bucket
+            """),
+            params,
+        )
+        failure_rate = [{"timestamp": r[0], "completed": r[1], "failed": r[2]} for r in rate_result.all()]
+
+        top_result = await db.execute(
+            text("""
+                SELECT left(error, 200) AS error_summary,
+                    coalesce(error_category, 'UNKNOWN') AS category,
+                    count(*) AS count, max(updated_at) AS last_seen
+                FROM jobs WHERE status = 'failed' AND matter_id = :matter_id
+                  AND updated_at > now() - make_interval(hours => :hours) AND error IS NOT NULL
+                GROUP BY error_summary, category ORDER BY count DESC LIMIT 10
+            """),
+            params,
+        )
+        top_errors = [
+            {"error_summary": r[0], "category": r[1], "count": r[2], "last_seen": r[3]} for r in top_result.all()
+        ]
+
+        stage_result = await db.execute(
+            text("""
+                SELECT stage, count(*) AS count FROM jobs
+                WHERE status = 'failed' AND matter_id = :matter_id
+                  AND updated_at > now() - make_interval(hours => :hours)
+                GROUP BY stage ORDER BY count DESC
+            """),
+            params,
+        )
+        stage_distribution = [{"stage": r[0], "count": r[1]} for r in stage_result.all()]
+
+        totals_result = await db.execute(
+            text("""
+                SELECT count(*) FILTER (WHERE status = 'failed') AS total_failed,
+                    count(*) FILTER (WHERE status IN ('complete', 'completed')) AS total_completed
+                FROM jobs WHERE matter_id = :matter_id
+                  AND updated_at > now() - make_interval(hours => :hours)
+            """),
+            params,
+        )
+        totals = totals_result.one()
+
+        return {
+            "category_breakdown": category_breakdown,
+            "failure_rate": failure_rate,
+            "top_errors": top_errors,
+            "stage_distribution": stage_distribution,
+            "total_failed": totals[0] or 0,
+            "total_completed": totals[1] or 0,
+        }
+
+    @staticmethod
+    async def list_pipeline_events(
+        db: AsyncSession,
+        offset: int = 0,
+        limit: int = 50,
+        job_id: UUID | None = None,
+        event_type: str | None = None,
+    ) -> tuple[list[dict], int]:
+        """Paginated event listing with optional filters."""
+        clauses: list[str] = []
+        params: dict = {"offset": offset, "limit": limit}
+        if job_id is not None:
+            clauses.append("pe.job_id = :job_id")
+            params["job_id"] = job_id
+        if event_type is not None:
+            clauses.append("pe.event_type = :event_type")
+            params["event_type"] = event_type
+        where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+
+        count_result = await db.execute(text(f"SELECT count(*) FROM pipeline_events pe {where}"), params)
+        total = count_result.scalar_one()
+
+        result = await db.execute(
+            text(f"""
+                SELECT pe.id, pe.job_id, pe.event_type, pe.timestamp,
+                       pe.worker, pe.detail, pe.duration_ms, j.filename
+                FROM pipeline_events pe
+                LEFT JOIN jobs j ON j.id = pe.job_id
+                {where}
+                ORDER BY pe.timestamp DESC
+                OFFSET :offset LIMIT :limit
+            """),
+            params,
+        )
+        items = [row_to_dict(r) for r in result.all()]
+        return items, total
+
+    @staticmethod
+    async def list_events_for_job(db: AsyncSession, job_id: UUID, limit: int = 50) -> list[dict]:
+        """All events for a specific job, ordered chronologically."""
+        result = await db.execute(
+            text("""
+                SELECT pe.id, pe.job_id, pe.event_type, pe.timestamp,
+                       pe.worker, pe.detail, pe.duration_ms
+                FROM pipeline_events pe
+                WHERE pe.job_id = :job_id
+                ORDER BY pe.timestamp ASC LIMIT :limit
+            """),
+            {"job_id": job_id, "limit": limit},
+        )
+        return [row_to_dict(r) for r in result.all()]

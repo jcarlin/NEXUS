@@ -208,6 +208,8 @@ This project uses [Semantic Versioning](https://semver.org/) with `v`-prefixed g
 - **Privilege at data layer**: Qdrant filter + SQL WHERE + Neo4j Cypher — never API-layer-only
 - **Frontend** (`frontend/`): React 19 + TanStack Router + orval (OpenAPI → TanStack Query hooks) + shadcn/ui + Zustand. Types generated from FastAPI OpenAPI spec
 - **Evaluation** (`app/evaluation/`, `scripts/evaluate.py`): Ground-truth Q&A dataset, retrieval metrics (MRR/Recall/NDCG), faithfulness scoring, citation accuracy
+- **Pipeline monitoring** (`app/ingestion/router.py`): Error classification (8 categories), pipeline events log, failure analysis, throughput metrics. Jobs table stores `error_category`, `retry_count`, `worker_hostname`, `started_at`, `completed_at`
+- **External script tracking** (`app/scripts/`): REST API for ad-hoc scripts to register as tracked tasks. Visible in Pipeline Monitor > Scripts tab. See below for usage.
 
 ---
 
@@ -286,6 +288,37 @@ Use the LangSmith MCP tools to debug pipeline internals. The `nexus` project log
 - `mcp__langsmith__list_projects()` — verify project exists
 
 **When NOT to use:** Unit tests (mocked, no LangSmith traces), code review, planning.
+
+### External Script Tracking (`scripts/lib/task_tracker.py`)
+
+Ad-hoc scripts (NER passes, bulk operations, data migrations) can register as tracked tasks that appear in the **Pipeline Monitor > Scripts** tab.
+
+**How to use in a script:**
+```python
+from scripts.lib.task_tracker import TaskTracker
+
+with TaskTracker("NER Backfill", "run_ner_pass.py", total=len(docs)) as tracker:
+    for i, doc in enumerate(docs):
+        process(doc)
+        tracker.update(processed=i + 1)
+# Automatically marked complete on exit (or failed if an exception is raised)
+```
+
+**API endpoints** (`app/scripts/router.py`):
+- `POST /api/v1/scripts/tasks` — Register a new task (returns task ID)
+- `PATCH /api/v1/scripts/tasks/{task_id}` — Update progress (`processed`, `failed`, `status`, `error`)
+- `GET /api/v1/scripts/tasks` — List tasks (paginated, filter by `status`)
+- `GET /api/v1/scripts/tasks/{task_id}` — Get single task
+
+**Configuration:**
+- `TaskTracker` reads `NEXUS_API_URL` and `NEXUS_API_KEY` from environment (defaults to `http://localhost:8000`)
+- Updates are throttled to 1 API call per 5 seconds (configurable via `update_interval`)
+- Tasks with no update for 30 minutes are automatically marked as `stale`
+
+**When to add tracking to a script:**
+- Long-running operations (>1 minute)
+- Batch operations with clear progress counts
+- Scripts run during ingestion campaigns
 
 ---
 

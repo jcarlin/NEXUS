@@ -1,11 +1,25 @@
 """Pydantic schemas for the ingestion domain."""
 
 from datetime import datetime
+from enum import StrEnum
 from uuid import UUID
 
 from pydantic import BaseModel, Field
 
 from app.common.models import JobStatus, PaginatedResponse
+
+
+class ErrorCategory(StrEnum):
+    """Auto-classified error categories for failed pipeline jobs."""
+
+    TIMEOUT = "TIMEOUT"
+    OOM = "OOM"
+    PARSE_ERROR = "PARSE_ERROR"
+    NETWORK = "NETWORK"
+    LLM_API = "LLM_API"
+    VALIDATION = "VALIDATION"
+    STORAGE = "STORAGE"
+    UNKNOWN = "UNKNOWN"
 
 
 class IngestResponse(BaseModel):
@@ -38,8 +52,13 @@ class JobStatusResponse(BaseModel):
     label: str | None = None
     progress: JobProgress = Field(default_factory=JobProgress)
     error: str | None = None
+    error_category: str | None = None
+    retry_count: int = 0
+    worker_hostname: str | None = None
     created_at: datetime
     updated_at: datetime
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
     file_size_bytes: int | None = None
     page_count: int | None = None
     document_type: str | None = None
@@ -192,3 +211,80 @@ class ReindexRequest(BaseModel):
 
 class BulkImportListResponse(PaginatedResponse[BulkImportStatusResponse]):
     """Paginated list of bulk import jobs."""
+
+
+# ---------------------------------------------------------------------------
+# Pipeline monitoring schemas
+# ---------------------------------------------------------------------------
+
+
+class PipelineThroughputResponse(BaseModel):
+    """Throughput metrics for the pipeline health strip."""
+
+    jobs_per_minute: float = 0.0
+    jobs_last_hour: int = 0
+    avg_duration_seconds: float = 0.0
+
+
+class ErrorCategoryBreakdown(BaseModel):
+    """Single row in error category breakdown."""
+
+    category: str
+    count: int
+
+
+class FailureRatePoint(BaseModel):
+    """Single data point in the failure rate timeline."""
+
+    timestamp: datetime
+    completed: int
+    failed: int
+
+
+class TopError(BaseModel):
+    """Deduplicated error entry with count."""
+
+    error_summary: str
+    category: str | None
+    count: int
+    last_seen: datetime
+
+
+class StageFailure(BaseModel):
+    """Stage failure count for distribution chart."""
+
+    stage: str
+    count: int
+
+
+class FailureAnalysisResponse(BaseModel):
+    """Aggregate failure analysis for the Health tab."""
+
+    category_breakdown: list[ErrorCategoryBreakdown]
+    failure_rate: list[FailureRatePoint]
+    top_errors: list[TopError]
+    stage_distribution: list[StageFailure]
+    total_failed: int
+    total_completed: int
+
+
+# ---------------------------------------------------------------------------
+# Pipeline events schemas
+# ---------------------------------------------------------------------------
+
+
+class PipelineEventResponse(BaseModel):
+    """Single pipeline lifecycle event."""
+
+    id: UUID
+    job_id: UUID | None
+    event_type: str
+    timestamp: datetime
+    worker: str | None
+    detail: dict = Field(default_factory=dict)
+    duration_ms: int | None = None
+    filename: str | None = None
+
+
+class PipelineEventListResponse(PaginatedResponse[PipelineEventResponse]):
+    """Paginated list of pipeline events."""

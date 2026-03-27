@@ -353,6 +353,11 @@ def create_app() -> FastAPI:
 
     application.include_router(settings_registry_router, prefix="/api/v1")
 
+    # External script task tracking
+    from app.scripts.router import router as scripts_router
+
+    application.include_router(scripts_router, prefix="/api/v1")
+
     # --- Health endpoint ---
     @application.get("/api/v1/health", tags=["system"])
     async def health(request: Request) -> JSONResponse:

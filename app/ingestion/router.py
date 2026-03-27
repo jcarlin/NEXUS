@@ -28,10 +28,13 @@ from app.ingestion.schemas import (
     BulkImportStatusResponse,
     DryRunRequest,
     DryRunResponse,
+    FailureAnalysisResponse,
     IngestResponse,
     JobListResponse,
     JobProgress,
     JobStatusResponse,
+    PipelineEventListResponse,
+    PipelineThroughputResponse,
     PresignedUploadRequest,
     PresignedUploadResponse,
     ProcessUploadedRequest,
@@ -79,8 +82,13 @@ def _job_row_to_status_response(row: dict) -> JobStatusResponse:
             embeddings_generated=progress_raw.get("embeddings_generated", 0),
         ),
         error=row.get("error"),
+        error_category=row.get("error_category"),
+        retry_count=row.get("retry_count", 0),
+        worker_hostname=row.get("worker_hostname"),
         created_at=row["created_at"],
         updated_at=row["updated_at"],
+        started_at=row.get("started_at"),
+        completed_at=row.get("completed_at"),
         file_size_bytes=row.get("file_size_bytes"),
         page_count=row.get("page_count"),
         document_type=row.get("document_type"),
@@ -977,3 +985,58 @@ async def dismiss_failed_bulk_import_jobs(
         dismissed=count,
     )
     return {"dismissed": count}
+
+
+# -----------------------------------------------------------------------
+# Pipeline monitoring endpoints
+# -----------------------------------------------------------------------
+
+
+@router.get(
+    "/admin/pipeline/throughput",
+    response_model=PipelineThroughputResponse,
+    tags=["admin", "pipeline"],
+)
+async def get_pipeline_throughput(
+    db: AsyncSession = Depends(get_db),
+    current_user: UserRecord = Depends(get_current_user),
+):
+    """Pipeline throughput metrics for the health strip."""
+    data = await IngestionService.get_pipeline_throughput(db=db)
+    return PipelineThroughputResponse(**data)
+
+
+@router.get(
+    "/admin/pipeline/failure-analysis",
+    response_model=FailureAnalysisResponse,
+    tags=["admin", "pipeline"],
+)
+async def get_failure_analysis(
+    hours: int = Query(default=168, ge=1, le=720),
+    db: AsyncSession = Depends(get_db),
+    current_user: UserRecord = Depends(get_current_user),
+    matter_id: UUID = Depends(get_matter_id),
+):
+    """Aggregate failure analysis for the Health tab."""
+    data = await IngestionService.get_failure_analysis(db=db, matter_id=matter_id, hours=hours)
+    return FailureAnalysisResponse(**data)
+
+
+@router.get(
+    "/admin/pipeline/events",
+    response_model=PipelineEventListResponse,
+    tags=["admin", "pipeline"],
+)
+async def list_pipeline_events(
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=200),
+    job_id: UUID | None = Query(default=None),
+    event_type: str | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+    current_user: UserRecord = Depends(get_current_user),
+):
+    """Paginated pipeline event listing."""
+    items, total = await IngestionService.list_pipeline_events(
+        db=db, offset=offset, limit=limit, job_id=job_id, event_type=event_type
+    )
+    return PipelineEventListResponse(items=items, total=total)

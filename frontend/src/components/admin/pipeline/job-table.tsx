@@ -1,14 +1,16 @@
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import {
   useReactTable,
   getCoreRowModel,
+  getExpandedRowModel,
   getSortedRowModel,
   flexRender,
   createColumnHelper,
   type SortingState,
+  type ExpandedState,
 } from "@tanstack/react-table";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { EyeOff, RotateCcw, X } from "lucide-react";
+import { ChevronDown, ChevronRight, EyeOff, RotateCcw, X } from "lucide-react";
 import { toast } from "sonner";
 import { apiClient } from "@/api/client";
 import { useAppStore } from "@/stores/app-store";
@@ -28,6 +30,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
+import { JobErrorPanel } from "@/components/admin/pipeline/job-error-panel";
 import type { PaginatedResponse, JobStatusResponse } from "@/types";
 
 const PAGE_SIZE = 25;
@@ -102,6 +105,7 @@ export function JobTable() {
   );
   const [search, setSearch] = useState("");
   const [sorting, setSorting] = useState<SortingState>([]);
+  const [expanded, setExpanded] = useState<ExpandedState>({});
 
   const statusParam =
     selectedStatuses.size > 0
@@ -183,6 +187,29 @@ export function JobTable() {
   }
 
   const columns = useMemo(() => [
+    columnHelper.display({
+      id: "expand",
+      header: "",
+      enableSorting: false,
+      cell: ({ row }) => {
+        const job = row.original;
+        if (job.status !== "failed" && job.status !== "dismissed") return null;
+        return (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 w-6 p-0"
+            onClick={() => row.toggleExpanded()}
+          >
+            {row.getIsExpanded() ? (
+              <ChevronDown className="h-3.5 w-3.5" />
+            ) : (
+              <ChevronRight className="h-3.5 w-3.5" />
+            )}
+          </Button>
+        );
+      },
+    }),
     columnHelper.accessor("filename", {
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title="Filename" />
@@ -349,10 +376,14 @@ export function JobTable() {
   const table = useReactTable({
     data: items,
     columns,
-    state: { sorting },
+    state: { sorting, expanded },
     onSortingChange: setSorting,
+    onExpandedChange: setExpanded,
+    getRowCanExpand: (row) =>
+      row.original.status === "failed" || row.original.status === "dismissed",
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
+    getExpandedRowModel: getExpandedRowModel(),
   });
 
   const totalPages = data ? Math.ceil(data.total / PAGE_SIZE) : 0;
@@ -434,16 +465,27 @@ export function JobTable() {
           <TableBody>
             {table.getRowModel().rows.length ? (
               table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id}>
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext(),
-                      )}
-                    </TableCell>
-                  ))}
-                </TableRow>
+                <Fragment key={row.id}>
+                  <TableRow>
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id}>
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext(),
+                        )}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                  {row.getIsExpanded() && (
+                    <TableRow>
+                      <TableCell colSpan={columns.length} className="p-0">
+                        <div className="px-4 py-3">
+                          <JobErrorPanel job={row.original} />
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </Fragment>
               ))
             ) : (
               <TableRow>
