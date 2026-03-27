@@ -119,6 +119,114 @@ def _store_celery_task_id(engine, job_id: str, celery_task_id: str) -> None:
         conn.commit()
 
 
+# ---------------------------------------------------------------------------
+# Error classification & task metadata
+# ---------------------------------------------------------------------------
+
+_CATEGORY_PATTERNS: list[tuple[str, list[str]]] = [
+    ("TIMEOUT", ["timed out", "softtimelimitexceeded", "deadline exceeded", "task timed out"]),
+    ("OOM", ["memoryerror", "cannot allocate memory", "killed", "oom"]),
+    (
+        "PARSE_ERROR",
+        [
+            "parseerror",
+            "pdfsyntaxerror",
+            "invalid pdf",
+            "corrupt",
+            "unicodedecodeerror",
+            "doclingerror",
+            "conversionerror",
+        ],
+    ),
+    (
+        "NETWORK",
+        [
+            "connectionerror",
+            "timeouterror",
+            "remotedisconnected",
+            "econnrefused",
+            "connectionrefused",
+            "connectionreset",
+        ],
+    ),
+    (
+        "LLM_API",
+        [
+            "anthropic",
+            "openai",
+            "rate_limit",
+            "apierror",
+            "insufficient_quota",
+            "ratelimit",
+            "overloaded",
+        ],
+    ),
+    ("VALIDATION", ["validationerror", "pydantic", "typeerror", "valueerror"]),
+    ("STORAGE", ["nosuchkey", "nosuchbucket", "s3error", "minio"]),
+]
+
+
+def _classify_error(error_text: str) -> str:
+    """Classify an error message into a category for the pipeline UI."""
+    lower = error_text.lower()
+    for category, patterns in _CATEGORY_PATTERNS:
+        for pattern in patterns:
+            if pattern in lower:
+                return category
+    return "UNKNOWN"
+
+
+def _store_task_metadata(engine, job_id: str, worker_hostname: str | None, retry_count: int) -> None:
+    """Store worker hostname, retry count, and started_at on the job row."""
+    with engine.connect() as conn:
+        conn.execute(
+            text(
+                """
+                UPDATE jobs
+                SET worker_hostname = :worker_hostname,
+                    retry_count = :retry_count,
+                    started_at = COALESCE(started_at, now()),
+                    updated_at = now()
+                WHERE id = :job_id
+                """
+            ),
+            {
+                "job_id": job_id,
+                "worker_hostname": worker_hostname,
+                "retry_count": retry_count,
+            },
+        )
+        conn.commit()
+
+
+def _mark_job_completed(engine, job_id: str) -> None:
+    """Set completed_at timestamp on a job."""
+    with engine.connect() as conn:
+        conn.execute(
+            text("UPDATE jobs SET completed_at = now() WHERE id = :job_id"),
+            {"job_id": job_id},
+        )
+        conn.commit()
+
+
+def _mark_job_failed_with_category(engine, job_id: str, error: str, error_category: str) -> None:
+    """Set error_category and completed_at on a failed job."""
+    with engine.connect() as conn:
+        conn.execute(
+            text(
+                """
+                UPDATE jobs
+                SET error_category = :error_category,
+                    completed_at = now(),
+                    updated_at = now()
+                WHERE id = :job_id
+                """
+            ),
+            {"job_id": job_id, "error_category": error_category},
+        )
+        conn.commit()
+
+
 def _create_document_record(
     engine,
     job_id: str,
@@ -1594,6 +1702,7 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
     engine = _get_sync_engine(settings)
     load_overrides_sync_safe(settings, engine)
     _store_celery_task_id(engine, job_id, self.request.id)
+    _store_task_metadata(engine, job_id, self.request.hostname, self.request.retries)
     filename = minio_path.rsplit("/", 1)[-1]
 
     import time as _time
@@ -1649,6 +1758,8 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
         except Exception:
             pass  # Metrics are best-effort
 
+        _mark_job_completed(engine, job_id)
+
         return {
             "job_id": job_id,
             "status": "complete",
@@ -1660,6 +1771,7 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
     except SoftTimeLimitExceeded:
         logger.error("task.process_document.timeout", job_id=job_id)
         _update_stage(engine, job_id, "failed", "failed", error="Task timed out (soft time limit exceeded)")
+        _mark_job_failed_with_category(engine, job_id, "timeout", "TIMEOUT")
         try:
             from app.common.metrics import INGESTION_JOBS_TOTAL
 
@@ -1682,6 +1794,7 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
         # the original error is still raised/retried below.
         try:
             _update_stage(engine, job_id, "failed", "failed", error=str(exc))
+            _mark_job_failed_with_category(engine, job_id, str(exc), _classify_error(str(exc)))
         except Exception:
             logger.error("task.failed_to_update_status", exc_info=True)
 
@@ -2686,6 +2799,8 @@ def run_bulk_import(
             dispatched=dispatched,
             skipped=skipped,
         )
+
+        complete_bulk_job(engine, bulk_job_id, "complete")
 
         return {
             "bulk_job_id": bulk_job_id,

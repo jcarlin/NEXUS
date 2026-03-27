@@ -9,6 +9,15 @@ vi.mock("@tanstack/react-router", () => ({
   createLazyFileRoute: () => (routeOptions: Record<string, unknown>) => routeOptions,
 }));
 
+vi.mock("@xyflow/react", () => ({
+  ReactFlow: () => null,
+  Background: () => null,
+  Controls: () => null,
+  MiniMap: () => null,
+  useReactFlow: () => ({ fitView: vi.fn() }),
+  BackgroundVariant: { Dots: "dots" },
+}));
+
 const mockFlags = {
   items: [
     { flag_name: "enable_agentic_pipeline", enabled: true, display_name: "Agentic Pipeline", description: "", category: "query", risk_level: "safe" },
@@ -68,7 +77,7 @@ describe("ArchitecturePage", () => {
 
   it("renders page title", async () => {
     render(<Component />, { wrapper: createWrapper() });
-    expect(await screen.findByText("Pipeline Architecture")).toBeInTheDocument();
+    expect(await screen.findByText("Architecture")).toBeInTheDocument();
   });
 
   it("shows query and ingestion tabs", async () => {
