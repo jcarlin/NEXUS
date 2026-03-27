@@ -145,7 +145,7 @@ describe("DashboardPage", () => {
   it("passes matterId-based query keys", () => {
     render(<Component />);
     const queryKeys = mockUseQuery.mock.calls.map(
-      (call: [{ queryKey: string[] }]) => call[0].queryKey[0],
+      (call: { queryKey: string[] }[]) => call[0].queryKey[0],
     );
     expect(queryKeys).toContain("doc-count");
     expect(queryKeys).toContain("graph-stats-summary");

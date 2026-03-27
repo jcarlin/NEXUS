@@ -1,7 +1,7 @@
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import { createLazyFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { FileText, Users, Flame, Loader2, Network, ChevronDown, ChevronRight } from "lucide-react";
+import { FileText, Users, Flame, Loader2, Network } from "lucide-react";
 import { apiClient } from "@/api/client";
 import { formatFileSize } from "@/lib/utils";
 import { useAppStore } from "@/stores/app-store";
@@ -20,7 +20,6 @@ export const Route = createLazyFileRoute("/admin/dashboard")({
 
 function DashboardPage() {
   const matterId = useAppStore((s) => s.matterId);
-  const [systemExpanded, setSystemExpanded] = useState(false);
 
   const { data: docs, isLoading: docsLoading } = useQuery({
     queryKey: ["doc-count", matterId],
@@ -84,6 +83,11 @@ function DashboardPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
         <p className="text-muted-foreground">Overview of your investigation workspace.</p>
+      </div>
+
+      <div className="flex gap-4">
+        <ServiceHealth />
+        <SystemMetrics />
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 animate-stagger-in" data-tour="stat-cards">
@@ -170,22 +174,6 @@ function DashboardPage() {
         </Card>
       </div>
 
-      <div className="space-y-2">
-        <button
-          type="button"
-          onClick={() => setSystemExpanded(!systemExpanded)}
-          className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
-        >
-          {systemExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-          System Status
-        </button>
-        {systemExpanded && (
-          <div className="flex gap-4">
-            <ServiceHealth />
-            <SystemMetrics />
-          </div>
-        )}
-      </div>
     </div>
   );
 }
