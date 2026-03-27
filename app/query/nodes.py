@@ -635,7 +635,7 @@ async def case_context_resolve(state: dict) -> dict:
 
     settings = get_settings()
     overrides = state.get("_retrieval_overrides")
-    skip_verification = tier == "fast" or not resolve_flag("enable_citation_verification", settings, overrides)
+    skip_verification = not resolve_flag("enable_citation_verification", settings, overrides)
 
     # Classify query type for prompt routing (T1-6)
     query_type = "factual"  # default
