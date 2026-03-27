@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any
 
 import structlog
 
-from app.query.overrides import resolve_flag
+from app.query.overrides import resolve_flag, resolve_param
 from app.query.prompts import (
     CLASSIFY_PROMPT,
     FOLLOWUP_PROMPT,
@@ -31,6 +31,7 @@ from app.query.prompts import (
     VERIFY_CLAIMS_PROMPT,
     VERIFY_JUDGMENT_PROMPT,
 )
+from app.query.trace import trace_step
 
 if TYPE_CHECKING:
     from app.common.llm import LLMClient
@@ -156,14 +157,15 @@ def create_nodes_v1(
         exclude_privilege = state.get("_exclude_privilege", [])
 
         settings = get_settings()
+        overrides = state.get("_retrieval_overrides")
         text_results, graph_results = await retriever.retrieve_all(
             query,
-            text_limit=settings.retrieval_text_limit,
-            graph_limit=settings.retrieval_graph_limit,
+            text_limit=int(resolve_param("retrieval_text_limit", settings, overrides)),
+            graph_limit=int(resolve_param("retrieval_graph_limit", settings, overrides)),
             filters=filters,
             exclude_privilege_statuses=exclude_privilege or None,
             prefetch_multiplier=settings.retrieval_prefetch_multiplier,
-            entity_threshold=settings.query_entity_threshold,
+            entity_threshold=float(resolve_param("query_entity_threshold", settings, overrides)),
         )
 
         logger.info(
@@ -199,7 +201,7 @@ def create_nodes_v1(
                     result = reranker.rerank(
                         query,
                         text_results,
-                        top_n=settings.reranker_top_n,
+                        top_n=int(resolve_param("reranker_top_n", settings, overrides)),
                     )
                     if inspect.isawaitable(result):
                         sorted_results = await result
@@ -215,7 +217,7 @@ def create_nodes_v1(
                 text_results,
                 key=lambda r: r.get("score", 0),
                 reverse=True,
-            )[: settings.reranker_top_n]
+            )[: int(resolve_param("reranker_top_n", settings, overrides))]
 
         # Visual reranking (feature-flagged, experimental).
         # Acceptable degradation: visual reranking is optional enrichment
@@ -586,6 +588,7 @@ def build_system_prompt(state: dict) -> list:
     return [SystemMessage(content=system_text)] + messages
 
 
+@trace_step("Resolving case context")
 async def case_context_resolve(state: dict) -> dict:
     """Load case context for the matter and classify query tier.
 
@@ -931,6 +934,7 @@ def _extract_basic_citations_from_response(
     return cited_claims
 
 
+@trace_step("Verifying citations")
 async def verify_citations(state: dict) -> dict:
     """Decompose the agent's response into cited claims and verify each.
 
@@ -1023,6 +1027,7 @@ async def verify_citations(state: dict) -> dict:
     return {"cited_claims": verified_claims}
 
 
+@trace_step("Reflecting on answer quality")
 async def reflect(state: dict) -> dict:
     """Self-reflection node: append flagged claims as a retry message (T2-8).
 
@@ -1079,6 +1084,7 @@ def _parse_claims(raw: str) -> list[dict[str, Any]]:
     return []
 
 
+@trace_step("Generating follow-up questions")
 async def generate_follow_ups_agentic(state: dict) -> dict:
     """Generate follow-up questions for the agentic pipeline.
 
@@ -1138,6 +1144,7 @@ async def generate_follow_ups_agentic(state: dict) -> dict:
     return {"follow_up_questions": follow_ups}
 
 
+@trace_step("Extracting results")
 async def post_agent_extract(state: dict) -> dict:
     """Extract response, sources, and entities from agent messages.
 

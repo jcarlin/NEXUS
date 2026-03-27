@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { SlidersHorizontal, RotateCcw } from "lucide-react";
@@ -20,8 +21,20 @@ interface OverrideFlagDetail {
   can_disable: boolean;
 }
 
+interface OverrideParamDetail {
+  param_name: string;
+  display_name: string;
+  description: string;
+  param_type: "int" | "float";
+  default_value: number;
+  min_value: number;
+  max_value: number;
+  step: number | null;
+}
+
 interface AvailableOverridesResponse {
   flags: OverrideFlagDetail[];
+  params: OverrideParamDetail[];
 }
 
 interface RetrievalOverridesProps {
@@ -47,6 +60,14 @@ const FLAG_GROUPS: { label: string; flags: string[] }[] = [
   },
 ];
 
+/** Maps numeric params to their parent boolean flag (disabled when parent is off). */
+const PARAM_DEPENDENCIES: Record<string, string> = {
+  hyde_blend_ratio: "enable_hyde",
+  multi_query_count: "enable_multi_query_expansion",
+  reranker_top_n: "enable_reranker",
+  self_reflection_faithfulness_threshold: "enable_self_reflection",
+};
+
 export function RetrievalOverrides({ threadId }: RetrievalOverridesProps) {
   const enabled = useFeatureFlag("retrieval_overrides");
   const overrides = useOverrideStore((s) => s.threadOverrides[threadId] ?? EMPTY_OVERRIDES);
@@ -69,6 +90,11 @@ export function RetrievalOverrides({ threadId }: RetrievalOverridesProps) {
     return new Map(data.flags.map((f) => [f.flag_name, f]));
   }, [data]);
 
+  const paramMap = useMemo(() => {
+    if (!data?.params) return new Map<string, OverrideParamDetail>();
+    return new Map(data.params.map((p) => [p.param_name, p]));
+  }, [data]);
+
   const overrideCount = Object.keys(overrides).length;
 
   if (!enabled) return null;
@@ -76,15 +102,23 @@ export function RetrievalOverrides({ threadId }: RetrievalOverridesProps) {
   const handleToggle = (flagName: string, detail: OverrideFlagDetail) => {
     const current = overrides[flagName];
     if (current === undefined) {
-      // No override yet -> set to opposite of global
       setOverride(threadId, flagName, !detail.global_enabled);
     } else if (current !== detail.global_enabled) {
-      // Overridden to opposite -> flip to same as global (which means remove)
       setOverride(threadId, flagName, null);
     } else {
-      // Overridden to same as global -> flip to opposite
       setOverride(threadId, flagName, !current);
     }
+  };
+
+  const isParamDisabled = (paramName: string): boolean => {
+    const dep = PARAM_DEPENDENCIES[paramName];
+    if (!dep) return false;
+    const flagDetail = flagMap.get(dep);
+    if (!flagDetail) return false;
+    // Check if the flag is effectively off (override or global)
+    const overrideVal = overrides[dep];
+    const effectiveVal = overrideVal !== undefined ? overrideVal : flagDetail.global_enabled;
+    return !effectiveVal;
   };
 
   return (
@@ -108,11 +142,12 @@ export function RetrievalOverrides({ threadId }: RetrievalOverridesProps) {
         <div className="border-b px-3 py-2">
           <h3 className="text-sm font-medium">Retrieval Overrides</h3>
           <p className="text-[11px] text-muted-foreground">
-            Override pipeline flags for this chat
+            Override pipeline flags and parameters for this chat
           </p>
         </div>
-        <ScrollArea className="max-h-80">
+        <ScrollArea className="max-h-96">
           <div className="space-y-3 p-3">
+            {/* Boolean flag groups */}
             {FLAG_GROUPS.map((group) => {
               const groupFlags = group.flags
                 .map((name) => flagMap.get(name))
@@ -161,7 +196,7 @@ export function RetrievalOverrides({ threadId }: RetrievalOverridesProps) {
                           </div>
                           <Switch
                             size="sm"
-                            checked={effectiveValue}
+                            checked={!!effectiveValue}
                             onCheckedChange={() => handleToggle(flag.flag_name, flag)}
                             disabled={isDiGatedOff}
                             className={cn(!isOverridden && "opacity-50")}
@@ -173,6 +208,72 @@ export function RetrievalOverrides({ threadId }: RetrievalOverridesProps) {
                 </div>
               );
             })}
+
+            {/* Numeric parameters */}
+            {paramMap.size > 0 && (
+              <div>
+                <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">
+                  Parameters
+                </p>
+                <div className="space-y-2.5">
+                  {Array.from(paramMap.values()).map((param) => {
+                    const override = overrides[param.param_name];
+                    const isOverridden = override !== undefined;
+                    const effectiveValue = typeof override === "number" ? override : param.default_value;
+                    const disabled = isParamDisabled(param.param_name);
+                    const step = param.step ?? (param.param_type === "int" ? 1 : 0.1);
+
+                    return (
+                      <div
+                        key={param.param_name}
+                        className={cn(
+                          "rounded-md px-2 py-1.5 transition-colors",
+                          isOverridden && "bg-accent/50",
+                          disabled && "opacity-40",
+                        )}
+                      >
+                        <div className="mb-1 flex items-center justify-between">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-medium">{param.display_name}</span>
+                            {isOverridden && (
+                              <span className="size-1.5 rounded-full bg-primary" />
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            className={cn(
+                              "rounded px-1.5 py-0.5 text-[11px] font-mono tabular-nums",
+                              isOverridden
+                                ? "bg-primary/10 text-primary cursor-pointer hover:bg-primary/20"
+                                : "text-muted-foreground",
+                            )}
+                            onClick={() => isOverridden && setOverride(threadId, param.param_name, null)}
+                            title={isOverridden ? "Click to reset" : "Default value"}
+                          >
+                            {param.param_type === "float" ? effectiveValue.toFixed(2) : effectiveValue}
+                          </button>
+                        </div>
+                        <Slider
+                          value={[effectiveValue]}
+                          min={param.min_value}
+                          max={param.max_value}
+                          step={step}
+                          disabled={disabled}
+                          onValueChange={([val]: number[]) => {
+                            if (val === param.default_value) {
+                              setOverride(threadId, param.param_name, null);
+                            } else {
+                              setOverride(threadId, param.param_name, val!);
+                            }
+                          }}
+                          className={cn("h-1.5", !isOverridden && "opacity-50")}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </ScrollArea>
         {overrideCount > 0 && (

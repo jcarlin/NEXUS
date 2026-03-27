@@ -93,7 +93,7 @@ class InvestigationState(TypedDict, total=False):
     _grading_triggered: bool
 
     # Per-request retrieval overrides (injected by router)
-    _retrieval_overrides: dict[str, bool]
+    _retrieval_overrides: dict[str, bool | int | float]
 
 
 # ---------------------------------------------------------------------------
@@ -155,7 +155,7 @@ class AgentState(TypedDict, total=False):
     entity_grounding: Annotated[list[dict[str, Any]], _replace]
 
     # Per-request retrieval overrides (injected by router)
-    _retrieval_overrides: dict[str, bool]
+    _retrieval_overrides: dict[str, bool | int | float]
 
 
 # ---------------------------------------------------------------------------
@@ -241,7 +241,7 @@ def _route_after_verification(state: dict) -> str:
     Otherwise, route to "end".
     """
     from app.dependencies import get_settings
-    from app.query.overrides import resolve_flag
+    from app.query.overrides import resolve_flag, resolve_param
 
     settings = get_settings()
     overrides = state.get("_retrieval_overrides")
@@ -259,7 +259,7 @@ def _route_after_verification(state: dict) -> str:
 
     reflection_count = state.get("_reflection_count", 0)
     max_retries = settings.self_reflection_max_retries
-    threshold = settings.self_reflection_faithfulness_threshold
+    threshold = float(resolve_param("self_reflection_faithfulness_threshold", settings, overrides))
     min_claims = settings.self_reflection_min_claims
 
     # Don't trigger reflection if too few claims to judge faithfulness reliably

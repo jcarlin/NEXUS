@@ -1,14 +1,17 @@
 """Per-request retrieval strategy override resolution.
 
-Allows users to override retrieval-related feature flags on a per-chat basis.
-Overrides travel in graph state, never mutate the Settings singleton.
+Allows users to override retrieval-related feature flags and numeric
+parameters on a per-chat basis.  Overrides travel in graph state, never
+mutate the Settings singleton.
 
 Precedence: request override > global setting, with DI-gate guard.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from enum import StrEnum
+from typing import Any
 
 import structlog
 
@@ -90,6 +93,91 @@ OVERRIDE_DESCRIPTIONS: dict[str, str] = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Numeric parameter overrides
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ParamMeta:
+    """Metadata for an overridable numeric parameter."""
+
+    display_name: str
+    description: str
+    param_type: str  # "int" | "float"
+    default_attr: str  # attribute name on Settings
+    min_value: int | float
+    max_value: int | float
+    step: float | None = None
+
+
+OVERRIDABLE_PARAMS: dict[str, ParamMeta] = {
+    "retrieval_text_limit": ParamMeta(
+        display_name="Text Result Limit",
+        description="Maximum number of text/vector results to retrieve",
+        param_type="int",
+        default_attr="retrieval_text_limit",
+        min_value=5,
+        max_value=100,
+        step=5,
+    ),
+    "retrieval_graph_limit": ParamMeta(
+        display_name="Graph Result Limit",
+        description="Maximum number of graph traversal results",
+        param_type="int",
+        default_attr="retrieval_graph_limit",
+        min_value=5,
+        max_value=50,
+        step=5,
+    ),
+    "multi_query_count": ParamMeta(
+        display_name="Query Variants",
+        description="Number of expanded query variants for multi-query",
+        param_type="int",
+        default_attr="multi_query_count",
+        min_value=1,
+        max_value=10,
+        step=1,
+    ),
+    "hyde_blend_ratio": ParamMeta(
+        display_name="HyDE Blend Ratio",
+        description="Blend weight between HyDE and raw query embeddings (1.0 = pure HyDE)",
+        param_type="float",
+        default_attr="hyde_blend_ratio",
+        min_value=0.0,
+        max_value=1.0,
+        step=0.1,
+    ),
+    "reranker_top_n": ParamMeta(
+        display_name="Reranker Top-N",
+        description="Number of results to keep after cross-encoder reranking",
+        param_type="int",
+        default_attr="reranker_top_n",
+        min_value=3,
+        max_value=50,
+        step=1,
+    ),
+    "query_entity_threshold": ParamMeta(
+        display_name="Entity Threshold",
+        description="Confidence threshold for entity extraction (lower = more entities)",
+        param_type="float",
+        default_attr="query_entity_threshold",
+        min_value=0.0,
+        max_value=1.0,
+        step=0.05,
+    ),
+    "self_reflection_faithfulness_threshold": ParamMeta(
+        display_name="Faithfulness Threshold",
+        description="Faithfulness score below which self-reflection retries",
+        param_type="float",
+        default_attr="self_reflection_faithfulness_threshold",
+        min_value=0.0,
+        max_value=1.0,
+        step=0.1,
+    ),
+}
+
+
 def get_override_category(flag_name: str) -> OverrideCategory:
     """Return the override category for a flag."""
     if flag_name in _DI_GATED_FLAGS:
@@ -100,7 +188,7 @@ def get_override_category(flag_name: str) -> OverrideCategory:
 def resolve_flag(
     flag_name: str,
     settings: Settings,
-    overrides: dict[str, bool] | None,
+    overrides: dict[str, Any] | None,
 ) -> bool:
     """Resolve a single flag value with per-request override precedence.
 
@@ -126,36 +214,82 @@ def resolve_flag(
         )
         return False
 
+    # Track that this override was applied (for trace panel)
+    if requested != global_value:
+        from app.query.trace import track_override_usage
+
+        track_override_usage(flag_name)
+
     return requested
 
 
-def validate_overrides(
-    overrides: dict[str, bool | None] | None,
+def resolve_param(
+    param_name: str,
     settings: Settings,
-) -> dict[str, bool]:
+    overrides: dict[str, Any] | None,
+) -> int | float:
+    """Resolve a numeric parameter with per-request override precedence.
+
+    Returns the override value if present, otherwise the global setting.
+    """
+    global_value: int | float = getattr(settings, param_name)
+
+    if not overrides or param_name not in overrides:
+        return global_value
+
+    override_value = overrides[param_name]
+
+    # Track that this override was applied (for trace panel)
+    if override_value != global_value:
+        from app.query.trace import track_override_usage
+
+        track_override_usage(param_name)
+
+    return override_value
+
+
+def validate_overrides(
+    overrides: dict[str, Any] | None,
+    settings: Settings,
+) -> dict[str, bool | int | float]:
     """Validate and normalize an overrides dict.
 
-    Strips None values, rejects unknown flags, applies DI-gate rules.
+    Handles both boolean flags and numeric parameters.
+    Strips None values, rejects unknown keys, applies DI-gate rules and range checks.
     Returns a clean dict with only effective overrides.
     """
     if not overrides:
         return {}
 
-    effective: dict[str, bool] = {}
-    for flag_name, value in overrides.items():
+    effective: dict[str, bool | int | float] = {}
+    for key, value in overrides.items():
         if value is None:
             continue
-        if flag_name not in OVERRIDABLE_FLAGS:
-            continue
 
-        # DI-gate: reject enabling a flag whose model isn't loaded
-        if flag_name in _DI_GATED_FLAGS and value and not getattr(settings, flag_name):
-            logger.warning(
-                "override.di_gate_rejected",
-                flag=flag_name,
-            )
-            continue
+        # Boolean flag
+        if key in OVERRIDABLE_FLAGS:
+            if not isinstance(value, bool):
+                continue
+            # DI-gate: reject enabling a flag whose model isn't loaded
+            if key in _DI_GATED_FLAGS and value and not getattr(settings, key):
+                logger.warning("override.di_gate_rejected", flag=key)
+                continue
+            effective[key] = value
 
-        effective[flag_name] = value
+        # Numeric parameter
+        elif key in OVERRIDABLE_PARAMS:
+            meta = OVERRIDABLE_PARAMS[key]
+            if not isinstance(value, int | float):
+                continue
+            # Clamp to valid range
+            clamped = max(meta.min_value, min(meta.max_value, value))
+            # Cast to correct type
+            if meta.param_type == "int":
+                clamped = int(clamped)
+            else:
+                clamped = float(clamped)
+            effective[key] = clamped
+
+        # Unknown key — silently skip
 
     return effective

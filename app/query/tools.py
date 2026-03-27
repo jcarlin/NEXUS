@@ -17,7 +17,8 @@ from langchain_core.tools import tool
 from langgraph.prebuilt.tool_node import InjectedState
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.query.overrides import resolve_flag
+from app.query.overrides import resolve_flag, resolve_param
+from app.query.trace import emit_tool_trace, reset_override_usage
 
 logger = structlog.get_logger(__name__)
 
@@ -54,8 +55,12 @@ async def vector_search(
     Use for content questions, finding mentions of specific topics, locating
     evidence about events, agreements, or communications.
     """
+    import time as _time
+
     from app.dependencies import get_retriever
 
+    _t0 = _time.perf_counter()
+    reset_override_usage()
     try:
         retriever = get_retriever()
 
@@ -87,7 +92,7 @@ async def vector_search(
                 raw_hyde_vector = await embedder.embed_query(hypothetical)
                 # Blend HyDE embedding with original query embedding to reduce
                 # semantic drift from the hypothetical document.
-                blend = settings.hyde_blend_ratio
+                blend = resolve_param("hyde_blend_ratio", settings, overrides)
                 if blend < 1.0:
                     query_vector = await embedder.embed_query(query)
                     hyde_vector = [blend * h + (1.0 - blend) * q for h, q in zip(raw_hyde_vector, query_vector)]
@@ -106,7 +111,7 @@ async def vector_search(
                 query,
                 llm,
                 term_map=state.get("_term_map"),
-                count=settings.multi_query_count,
+                count=int(resolve_param("multi_query_count", settings, overrides)),
             )
             if variants:
                 import asyncio
@@ -172,6 +177,18 @@ async def vector_search(
         }
         for r in results[:limit]
     ]
+    _duration = round((_time.perf_counter() - _t0) * 1000, 1)
+    emit_tool_trace(
+        name="vector_search",
+        label=f"Searched {len(formatted)} chunks",
+        duration_ms=_duration,
+        args_summary={
+            "limit": limit,
+            "hyde": resolve_flag("enable_hyde", settings, overrides),
+            "multi_query": resolve_flag("enable_multi_query_expansion", settings, overrides),
+        },
+        result_summary={"chunks_returned": len(formatted)},
+    )
     return json.dumps(formatted, default=str)
 
 
@@ -186,8 +203,12 @@ async def graph_query(
     Use for questions like "Who communicated with X?", "What entities are
     connected to Y?", or "Show relationships for Z".
     """
+    import time as _time
+
     from app.dependencies import get_graph_service
 
+    _t0 = _time.perf_counter()
+    reset_override_usage()
     try:
         # Adaptive retrieval depth (T3-13)
         from app.dependencies import get_settings
@@ -211,6 +232,15 @@ async def graph_query(
     except Exception as exc:
         logger.warning("tool.error", tool="graph_query", error=str(exc))
         return json.dumps({"error": f"Tool failed: {type(exc).__name__}: {exc}"})
+    _duration = round((_time.perf_counter() - _t0) * 1000, 1)
+    result_count = len(connections) if isinstance(connections, list) else 0
+    emit_tool_trace(
+        name="graph_query",
+        label=f"Queried graph for '{entity_name}'",
+        duration_ms=_duration,
+        args_summary={"entity": entity_name, "limit": limit},
+        result_summary={"connections_returned": result_count},
+    )
     return json.dumps(connections, default=str)
 
 

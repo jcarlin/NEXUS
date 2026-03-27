@@ -224,6 +224,8 @@ describe("MessageList", () => {
           entities: [],
           citedClaims: [],
           toolCalls: [{ tool: "vector_search", label: "Searched documents" }],
+          traceSteps: [],
+          traceSummary: null,
         }}
       />,
     );
@@ -241,6 +243,8 @@ describe("MessageList", () => {
           entities: [],
           citedClaims: [],
           toolCalls: [],
+          traceSteps: [],
+          traceSummary: null,
         }}
       />,
     );
@@ -295,6 +299,8 @@ describe("MessageList", () => {
           entities: [],
           citedClaims: [],
           toolCalls: [],
+          traceSteps: [],
+          traceSummary: null,
         }}
       />,
     );

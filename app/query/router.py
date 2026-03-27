@@ -29,6 +29,7 @@ from app.common.rate_limit import rate_limit_queries
 from app.dependencies import get_db, get_query_graph
 from app.query.overrides import (
     OVERRIDABLE_FLAGS,
+    OVERRIDABLE_PARAMS,
     OVERRIDE_DESCRIPTIONS,
     OVERRIDE_LABELS,
     get_override_category,
@@ -45,6 +46,7 @@ from app.query.schemas import (
     EntityMention,
     OverrideFlagCategory,
     OverrideFlagDetail,
+    OverrideParamDetail,
     QueryRequest,
     QueryResponse,
     SourceDocument,
@@ -149,7 +151,7 @@ async def query(
     exclude_privilege = ["privileged", "work_product"] if current_user.role not in ("admin", "attorney") else []
 
     # Validate per-chat retrieval overrides (if enabled)
-    retrieval_overrides: dict[str, bool] = {}
+    retrieval_overrides: dict[str, bool | int | float] = {}
     if settings.enable_retrieval_overrides and request.retrieval_overrides:
         overrides_dict = request.retrieval_overrides.model_dump(exclude_none=True)
         retrieval_overrides = validate_overrides(overrides_dict, settings)
@@ -422,7 +424,22 @@ async def list_retrieval_options(
             )
         )
 
-    return AvailableOverridesResponse(flags=flags)
+    params = []
+    for param_name, meta in sorted(OVERRIDABLE_PARAMS.items()):
+        params.append(
+            OverrideParamDetail(
+                param_name=param_name,
+                display_name=meta.display_name,
+                description=meta.description,
+                param_type=meta.param_type,
+                default_value=getattr(settings, meta.default_attr),
+                min_value=meta.min_value,
+                max_value=meta.max_value,
+                step=meta.step,
+            )
+        )
+
+    return AvailableOverridesResponse(flags=flags, params=params)
 
 
 # ------------------------------------------------------------------
@@ -459,7 +476,7 @@ async def query_stream(
     exclude_privilege = ["privileged", "work_product"] if current_user.role not in ("admin", "attorney") else []
 
     # Validate per-chat retrieval overrides (if enabled)
-    retrieval_overrides: dict[str, bool] = {}
+    retrieval_overrides: dict[str, bool | int | float] = {}
     if settings.enable_retrieval_overrides and request.retrieval_overrides:
         overrides_dict = request.retrieval_overrides.model_dump(exclude_none=True)
         retrieval_overrides = validate_overrides(overrides_dict, settings)
@@ -522,7 +539,9 @@ async def query_stream(
 
     if use_agentic:
         return EventSourceResponse(
-            _agentic_event_generator(active_graph, initial_state, config, db, thread_id, request.query, matter_id)
+            _agentic_event_generator(
+                active_graph, initial_state, config, db, thread_id, request.query, matter_id, debug=request.debug
+            )
         )
     else:
         return EventSourceResponse(
@@ -601,7 +620,9 @@ async def _v1_event_generator(graph, initial_state, config, db, thread_id, query
     }
 
 
-async def _agentic_event_generator(graph, initial_state, config, db, thread_id, query_text, matter_id):
+async def _agentic_event_generator(
+    graph, initial_state, config, db, thread_id, query_text, matter_id, *, debug: bool = False
+):
     """SSE event generator for the agentic graph.
 
     Uses ``stream_mode=["messages", "updates", "custom"]``:
@@ -609,6 +630,11 @@ async def _agentic_event_generator(graph, initial_state, config, db, thread_id, 
     - "updates": yields node completion events → SSE status events
     - "custom": yields progress events from verify_citations / case_context_resolve
     """
+    from app.query.trace import set_debug_mode
+
+    _debug_mode = debug
+    set_debug_mode(debug)
+
     final_state: dict[str, Any] = {}
     sources_emitted = False
     interrupt_pending = False
@@ -616,6 +642,7 @@ async def _agentic_event_generator(graph, initial_state, config, db, thread_id, 
     graph_error = False
     stream_completed = False
     tool_calls_log: list[dict[str, str]] = []
+    _trace_steps: list[dict[str, Any]] = []
     # Track current message ID to detect when a "thinking" message turns into
     # a tool call.  When that happens we emit a ``clear`` SSE event so the
     # frontend discards the tokens that were prematurely streamed.
@@ -733,8 +760,12 @@ async def _agentic_event_generator(graph, initial_state, config, db, thread_id, 
                         _emitted_tokens_for_cur_msg = True
 
             elif stream_mode == "custom":
-                if isinstance(chunk, dict) and chunk.get("type") == "token":
-                    yield {"event": "token", "data": json.dumps({"text": chunk["text"]})}
+                if isinstance(chunk, dict):
+                    if chunk.get("type") == "token":
+                        yield {"event": "token", "data": json.dumps({"text": chunk["text"]})}
+                    elif "trace_step" in chunk and _debug_mode:
+                        _trace_steps.append(chunk["trace_step"])
+                        yield {"event": "trace_step", "data": json.dumps(chunk["trace_step"])}
         stream_completed = True
     except GeneratorExit:
         logger.info("query_stream.client_disconnected", thread_id=thread_id)
@@ -792,6 +823,20 @@ async def _agentic_event_generator(graph, initial_state, config, db, thread_id, 
             "data": json.dumps({"message": "An error occurred while processing your query. Please try again."}),
         }
         return
+
+    # Emit trace summary before done (if debug mode)
+    if _debug_mode and _trace_steps:
+        total_ms = round(sum(s.get("duration_ms", 0) for s in _trace_steps), 1)
+        yield {
+            "event": "trace_summary",
+            "data": json.dumps(
+                {
+                    "steps": _trace_steps,
+                    "total_ms": total_ms,
+                    "step_count": len(_trace_steps),
+                }
+            ),
+        }
 
     yield {
         "event": "done",

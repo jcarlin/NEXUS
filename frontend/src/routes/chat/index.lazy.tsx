@@ -21,6 +21,8 @@ function ChatPage() {
     entities,
     followUps,
     toolCalls,
+    traceSteps,
+    traceSummary,
     threadId,
     pendingUserMessage,
     error,
@@ -118,7 +120,7 @@ function ChatPage() {
             messages={[]}
             streaming={
               streamingText || isStreaming
-                ? { text: streamingText, sources, entities, citedClaims, toolCalls }
+                ? { text: streamingText, sources, entities, citedClaims, toolCalls, traceSteps, traceSummary }
                 : null
             }
             stage={stage}

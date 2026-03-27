@@ -10,15 +10,16 @@ import { cn } from "@/lib/utils";
 interface OverrideFlagDetail {
   flag_name: string;
   display_name: string;
-  description: string;
-  category: "logic" | "di_gated";
-  global_enabled: boolean;
-  can_enable: boolean;
-  can_disable: boolean;
+}
+
+interface OverrideParamDetail {
+  param_name: string;
+  display_name: string;
 }
 
 interface AvailableOverridesResponse {
   flags: OverrideFlagDetail[];
+  params: OverrideParamDetail[];
 }
 
 interface OverridePillsProps {
@@ -41,9 +42,15 @@ export function OverridePills({ threadId }: OverridePillsProps) {
     enabled,
   });
 
-  const flagMap = useMemo(() => {
-    if (!data?.flags) return new Map<string, OverrideFlagDetail>();
-    return new Map(data.flags.map((f) => [f.flag_name, f]));
+  const labelMap = useMemo(() => {
+    const m = new Map<string, string>();
+    if (data?.flags) {
+      for (const f of data.flags) m.set(f.flag_name, f.display_name);
+    }
+    if (data?.params) {
+      for (const p of data.params) m.set(p.param_name, p.display_name);
+    }
+    return m;
   }, [data]);
 
   const entries = Object.entries(overrides);
@@ -51,24 +58,29 @@ export function OverridePills({ threadId }: OverridePillsProps) {
 
   return (
     <div className="flex flex-wrap items-center gap-1">
-      {entries.map(([flag, value]) => {
-        const detail = flagMap.get(flag);
-        const label = detail?.display_name ?? flag;
+      {entries.map(([key, value]) => {
+        const label = labelMap.get(key) ?? key;
+        const isBoolean = typeof value === "boolean";
+        const displayText = isBoolean
+          ? value
+            ? label
+            : `No ${label}`
+          : `${label}: ${typeof value === "number" && !Number.isInteger(value) ? value.toFixed(2) : value}`;
 
         return (
           <Badge
-            key={flag}
-            variant={value ? "default" : "secondary"}
+            key={key}
+            variant={isBoolean && !value ? "secondary" : "default"}
             className={cn(
               "gap-1 py-0 pr-1 text-[10px] font-normal",
-              !value && "text-muted-foreground",
+              isBoolean && !value && "text-muted-foreground",
             )}
           >
-            {value ? label : `No ${label}`}
+            {displayText}
             <button
               type="button"
               className="ml-0.5 rounded-full p-0.5 hover:bg-background/20"
-              onClick={() => setOverride(threadId, flag, null)}
+              onClick={() => setOverride(threadId, key, null)}
               aria-label={`Remove ${label} override`}
             >
               <X className="size-2.5" />

@@ -8,13 +8,14 @@ from pydantic import BaseModel, Field
 
 
 class RetrievalOverrides(BaseModel):
-    """Per-request overrides for retrieval strategy flags.
+    """Per-request overrides for retrieval strategy flags and parameters.
 
-    Each field corresponds to one ``ENABLE_*`` flag on Settings.
-    ``None`` means "use the global default".  ``True``/``False`` overrides
-    the global setting for this request only.
+    Each boolean field corresponds to one ``ENABLE_*`` flag on Settings.
+    Each numeric field corresponds to a retrieval parameter on Settings.
+    ``None`` means "use the global default".
     """
 
+    # Boolean flags
     enable_hyde: bool | None = None
     enable_multi_query_expansion: bool | None = None
     enable_retrieval_grading: bool | None = None
@@ -28,6 +29,21 @@ class RetrievalOverrides(BaseModel):
     enable_reranker: bool | None = None
     enable_sparse_embeddings: bool | None = None
     enable_visual_embeddings: bool | None = None
+
+    # Numeric parameters
+    retrieval_text_limit: int | None = Field(None, ge=5, le=100, description="Max text/vector results to retrieve.")
+    retrieval_graph_limit: int | None = Field(None, ge=5, le=50, description="Max graph traversal results.")
+    multi_query_count: int | None = Field(None, ge=1, le=10, description="Number of query expansion variants.")
+    hyde_blend_ratio: float | None = Field(
+        None, ge=0.0, le=1.0, description="HyDE vs raw query blend (1.0 = pure HyDE)."
+    )
+    reranker_top_n: int | None = Field(None, ge=3, le=50, description="Results to keep after reranking.")
+    query_entity_threshold: float | None = Field(
+        None, ge=0.0, le=1.0, description="Entity extraction confidence threshold."
+    )
+    self_reflection_faithfulness_threshold: float | None = Field(
+        None, ge=0.0, le=1.0, description="Faithfulness score below which self-reflection triggers."
+    )
 
 
 class OverrideFlagCategory(StrEnum):
@@ -49,10 +65,24 @@ class OverrideFlagDetail(BaseModel):
     can_disable: bool
 
 
+class OverrideParamDetail(BaseModel):
+    """Metadata for a single overridable numeric parameter."""
+
+    param_name: str
+    display_name: str
+    description: str
+    param_type: str  # "int" | "float"
+    default_value: int | float
+    min_value: int | float
+    max_value: int | float
+    step: float | None = None
+
+
 class AvailableOverridesResponse(BaseModel):
     """Response for GET /query/retrieval-options."""
 
     flags: list[OverrideFlagDetail]
+    params: list[OverrideParamDetail] = Field(default_factory=list)
 
 
 class QueryRequest(BaseModel):
@@ -66,8 +96,9 @@ class QueryRequest(BaseModel):
     dataset_id: UUID | None = Field(default=None, description="Scope query to documents in this dataset.")
     retrieval_overrides: RetrievalOverrides | None = Field(
         default=None,
-        description="Per-chat overrides for retrieval strategy flags. Omit or set fields to null for global defaults.",
+        description="Per-chat overrides for retrieval strategy flags and parameters. Omit or set fields to null for global defaults.",
     )
+    debug: bool = Field(default=False, description="When true, emit detailed trace events for the dev trace panel.")
 
 
 class SourceDocument(BaseModel):

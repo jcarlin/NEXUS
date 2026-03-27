@@ -3,7 +3,9 @@ import { fetchEventSource } from "@microsoft/fetch-event-source";
 import { useAuthStore } from "@/stores/auth-store";
 import { useAppStore } from "@/stores/app-store";
 import { queryClient } from "@/main";
-import type { SourceDocument, EntityMention, CitedClaim, ToolCallEntry } from "@/types";
+import type { SourceDocument, EntityMention, CitedClaim, ToolCallEntry, TraceStep, TraceSummary } from "@/types";
+import type { OverrideValue } from "@/stores/override-store";
+import { useDevModeStore } from "@/stores/dev-mode-store";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
@@ -19,6 +21,8 @@ export interface StreamState {
   entities: EntityMention[];
   followUps: string[];
   toolCalls: ToolCallEntry[];
+  traceSteps: TraceStep[];
+  traceSummary: TraceSummary | null;
   threadId: string | null;
   error: string | null;
   clarificationQuestion: string | null;
@@ -35,6 +39,8 @@ export const initialStreamState: StreamState = {
   entities: [],
   followUps: [],
   toolCalls: [],
+  traceSteps: [],
+  traceSummary: null,
   threadId: null,
   error: null,
   clarificationQuestion: null,
@@ -52,7 +58,7 @@ interface StreamStore {
   streams: Map<string, ActiveStream>;
 
   /** Start a stream. Returns the stream key (threadId or temp id). */
-  startStream: (query: string, threadId?: string, overrides?: Record<string, boolean>) => string;
+  startStream: (query: string, threadId?: string, overrides?: Record<string, OverrideValue>) => string;
   /** Explicitly cancel a stream. */
   cancelStream: (streamKey: string) => void;
   /** Resume a paused stream after clarification. */
@@ -74,7 +80,7 @@ let tempCounter = 0;
 export const useStreamStore = create<StreamStore>()((set, get) => ({
   streams: new Map(),
 
-  startStream: (query: string, threadId?: string, overrides?: Record<string, boolean>) => {
+  startStream: (query: string, threadId?: string, overrides?: Record<string, OverrideValue>) => {
     const streamKey = threadId ?? `_new_${++tempCounter}`;
 
     // Abort any existing stream on this key
@@ -113,6 +119,8 @@ export const useStreamStore = create<StreamStore>()((set, get) => ({
     if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
     if (matterId) headers["X-Matter-ID"] = matterId;
 
+    const devMode = useDevModeStore.getState().enabled;
+
     fetchEventSource(`${API_BASE}/api/v1/query/stream`, {
       method: "POST",
       headers,
@@ -124,6 +132,7 @@ export const useStreamStore = create<StreamStore>()((set, get) => ({
           overrides && Object.keys(overrides).length > 0
             ? overrides
             : undefined,
+        ...(devMode ? { debug: true } : {}),
       }),
       signal: ctrl.signal,
 
@@ -176,6 +185,19 @@ export const useStreamStore = create<StreamStore>()((set, get) => ({
                   ...(get().streams.get(currentKey)?.state.toolCalls ?? []),
                   { tool: parsed.tool, label: parsed.label },
                 ],
+              });
+              break;
+            case "trace_step":
+              get()._updateStreamState(currentKey, {
+                traceSteps: [
+                  ...(get().streams.get(currentKey)?.state.traceSteps ?? []),
+                  parsed as TraceStep,
+                ],
+              });
+              break;
+            case "trace_summary":
+              get()._updateStreamState(currentKey, {
+                traceSummary: parsed as TraceSummary,
               });
               break;
             case "interrupt": {
@@ -383,6 +405,19 @@ export const useStreamStore = create<StreamStore>()((set, get) => ({
                   ...(get().streams.get(currentKey)?.state.toolCalls ?? []),
                   { tool: parsed.tool, label: parsed.label },
                 ],
+              });
+              break;
+            case "trace_step":
+              get()._updateStreamState(currentKey, {
+                traceSteps: [
+                  ...(get().streams.get(currentKey)?.state.traceSteps ?? []),
+                  parsed as TraceStep,
+                ],
+              });
+              break;
+            case "trace_summary":
+              get()._updateStreamState(currentKey, {
+                traceSummary: parsed as TraceSummary,
               });
               break;
             case "interrupt": {

@@ -146,6 +146,23 @@ export interface ToolCallEntry {
   kind?: "tool" | "step";
 }
 
+export interface TraceStep {
+  node: string;
+  label: string;
+  duration_ms: number;
+  args_summary?: Record<string, unknown>;
+  result_summary?: Record<string, unknown>;
+  overrides_active?: string[];
+  tokens?: { input: number; output: number };
+  kind: "step" | "tool" | "llm";
+}
+
+export interface TraceSummary {
+  steps: TraceStep[];
+  total_ms: number;
+  step_count: number;
+}
+
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
@@ -254,6 +271,9 @@ export interface JobStatusResponse {
   task_type?: string | null;
   document_type?: string | null;
   error?: string | null;
+  error_category?: string | null;
+  retry_count?: number;
+  worker_hostname?: string | null;
   progress?: {
     stage: string;
     pages_parsed: number;
@@ -263,6 +283,7 @@ export interface JobStatusResponse {
   } | null;
   created_at: string;
   updated_at?: string | null;
+  started_at?: string | null;
   completed_at?: string | null;
   file_size_bytes?: number | null;
   page_count?: number | null;

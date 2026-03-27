@@ -4,7 +4,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { UserMessage } from "./user-message";
 import { AssistantMessage } from "./assistant-message";
-import { ActivityLog } from "./activity-log";
+import { SmartActivityLog } from "./smart-activity-log";
 import { ErrorMessage } from "./error-message";
 import { ClarificationPrompt } from "./clarification-prompt";
 import { FollowUpChips } from "./follow-up-chips";
@@ -14,6 +14,8 @@ import type {
   EntityMention,
   CitedClaim,
   ToolCallEntry,
+  TraceStep,
+  TraceSummary,
 } from "@/types";
 
 export const EXAMPLE_QUERIES = [
@@ -29,6 +31,8 @@ interface StreamingMessage {
   entities: EntityMention[];
   citedClaims: CitedClaim[];
   toolCalls: ToolCallEntry[];
+  traceSteps: TraceStep[];
+  traceSummary: TraceSummary | null;
 }
 
 interface MessageListProps {
@@ -149,7 +153,7 @@ export function MessageList({
               <div key={idx}>
                 {msg.tool_calls && msg.tool_calls.length > 0 && (
                   <div className="mb-2">
-                    <ActivityLog toolCalls={msg.tool_calls} stage={null} isStreaming={false} />
+                    <SmartActivityLog toolCalls={msg.tool_calls} traceSteps={[]} traceSummary={null} stage={null} isStreaming={false} />
                   </div>
                 )}
                 <AssistantMessage
@@ -166,8 +170,10 @@ export function MessageList({
           {pendingUserMessage && <UserMessage content={pendingUserMessage} />}
 
           {(stage || (streaming?.toolCalls && streaming.toolCalls.length > 0)) && (
-            <ActivityLog
+            <SmartActivityLog
               toolCalls={streaming?.toolCalls ?? []}
+              traceSteps={streaming?.traceSteps ?? []}
+              traceSummary={streaming?.traceSummary ?? null}
               stage={stage ?? null}
               isStreaming={!!stage}
             />

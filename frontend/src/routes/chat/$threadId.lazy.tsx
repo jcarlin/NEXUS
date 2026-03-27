@@ -37,6 +37,8 @@ function ChatThreadPage() {
     entities,
     followUps,
     toolCalls,
+    traceSteps,
+    traceSummary,
     pendingUserMessage,
     error,
     clarificationQuestion,
@@ -90,7 +92,7 @@ function ChatThreadPage() {
           messages={messages}
           streaming={
             (streamingText || isStreaming) && !dbHasCaughtUp
-              ? { text: streamingText, sources, entities, citedClaims, toolCalls }
+              ? { text: streamingText, sources, entities, citedClaims, toolCalls, traceSteps, traceSummary }
               : null
           }
           stage={stage}

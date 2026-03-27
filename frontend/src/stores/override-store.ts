@@ -1,12 +1,13 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-export const EMPTY_OVERRIDES: Record<string, boolean> = {};
+export type OverrideValue = boolean | number;
+export const EMPTY_OVERRIDES: Record<string, OverrideValue> = {};
 
 interface OverrideStore {
-  threadOverrides: Record<string, Record<string, boolean>>;
-  setOverride: (threadId: string, flag: string, value: boolean | null) => void;
-  getOverrides: (threadId: string) => Record<string, boolean>;
+  threadOverrides: Record<string, Record<string, OverrideValue>>;
+  setOverride: (threadId: string, flag: string, value: OverrideValue | null) => void;
+  getOverrides: (threadId: string) => Record<string, OverrideValue>;
   clearOverrides: (threadId: string) => void;
 }
 
