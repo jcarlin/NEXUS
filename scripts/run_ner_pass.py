@@ -282,6 +282,15 @@ def main() -> int:
         engine.dispose()
         return 0
 
+    # Initialize task tracker for Pipeline Monitor > Scripts tab
+    tracker = None
+    try:
+        from scripts.lib.task_tracker import TaskTracker
+
+        tracker = TaskTracker("NER Backfill", "run_ner_pass.py", total=len(docs))
+    except Exception:
+        print("  (TaskTracker unavailable — progress won't appear in UI)")
+
     start_time = time.time()
     processed = 0
     total_entities = 0
@@ -297,12 +306,16 @@ def main() -> int:
                     doc_id, ent_count = _run_ner_on_doc(doc["id"], doc["neo4j_id"], doc["filename"], args.matter_id)
                     processed += 1
                     total_entities += ent_count
+                    if tracker:
+                        tracker.update(processed=processed, failed=errors)
                     if processed % 10 == 0 or processed == 1:
                         elapsed = time.time() - start_time
                         rate = processed / elapsed if elapsed > 0 else 0
                         print(f"  [{processed}/{len(docs)}] {total_entities:,} entities, {rate:.1f} docs/sec")
                 except Exception:
                     errors += 1
+                    if tracker:
+                        tracker.update(processed=processed, failed=errors)
                     logger.error("ner_pass.doc_failed", doc_id=doc["id"], exc_info=True)
         else:
             # Parallel (ProcessPoolExecutor for true CPU parallelism)
@@ -316,12 +329,16 @@ def main() -> int:
                         doc_id, ent_count = future.result()
                         processed += 1
                         total_entities += ent_count
+                        if tracker:
+                            tracker.update(processed=processed, failed=errors)
                         if processed % 10 == 0 or processed == 1:
                             elapsed = time.time() - start_time
                             rate = processed / elapsed if elapsed > 0 else 0
                             print(f"  [{processed}/{len(docs)}] {total_entities:,} entities, {rate:.1f} docs/sec")
                     except Exception:
                         errors += 1
+                        if tracker:
+                            tracker.update(processed=processed, failed=errors)
                         doc = futures[future]
                         logger.error("ner_pass.doc_failed", doc_id=doc["id"], exc_info=True)
 
@@ -336,6 +353,13 @@ def main() -> int:
     print(f"  Elapsed:         {elapsed:.1f}s ({elapsed / 60:.1f}min)")
     if processed > 0:
         print(f"  Rate:            {processed / elapsed:.1f} docs/sec")
+
+    if tracker:
+        if errors > 0 and processed == 0:
+            tracker.fail(f"{errors} errors, 0 processed")
+        else:
+            tracker.update(processed=processed, failed=errors, force=True)
+            tracker.complete()
 
     engine.dispose()
 
