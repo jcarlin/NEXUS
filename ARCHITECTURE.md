@@ -76,7 +76,7 @@ React SPA ──── HTTPS ──── Nginx/Caddy ──── FastAPI ─�
 | Task Queue | Celery 5.5+ / RabbitMQ | Durable message broker; Redis fallback via `CELERY_BROKER_URL` |
 | Object Storage | MinIO (S3-compat) | Bucket webhook triggers ingestion |
 | Metadata DB | PostgreSQL 16 | Users, matters, jobs, documents, chat, audit, LangGraph checkpointer |
-| Vector DB | Qdrant v1.13.2 | Named dense+sparse vectors, native RRF fusion |
+| Vector DB | Qdrant v1.17.1 | Named dense+sparse vectors, native RRF fusion |
 | Knowledge Graph | Neo4j 5.x | Entity graph, multi-hop traversal, path-finding, temporal queries |
 | Message Broker | RabbitMQ 3.x | Celery broker — durable queues, publisher confirms, dead-letter handling |
 | Cache | Redis 7+ | Rate limiting, Celery result backend, response cache |

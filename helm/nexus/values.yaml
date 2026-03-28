@@ -103,7 +103,7 @@ redis:
 # --- Qdrant ---
 qdrant:
   enabled: true
-  image: qdrant/qdrant:v1.13.2
+  image: qdrant/qdrant:v1.17.1
   storage: 10Gi
   storageClassName: ""
   resources:

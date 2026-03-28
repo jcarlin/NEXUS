@@ -2,7 +2,7 @@
 name = "nexus"
 version = "0.1.0"
 description = "Multimodal RAG Investigation Platform for Legal Document Intelligence"
-requires-python = ">=3.12"
+requires-python = ">=3.12,<3.13"
 dependencies = [
     # API
     "fastapi>=0.115",
@@ -33,7 +33,7 @@ dependencies = [
     "FlagEmbedding>=1.2",
 
     # Vector DB & Graph
-    "qdrant-client>=1.12",
+    "qdrant-client>=1.17,<2",
     "neo4j>=5.25",
     "graphiti-core>=0.17",
 

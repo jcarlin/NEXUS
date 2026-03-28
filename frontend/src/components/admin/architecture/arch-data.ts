@@ -369,7 +369,7 @@ function storageNode(
 export const storageNodes: StorageNodeType[] = [
   // Row 0
   storageNode("st-postgres", "PostgreSQL", "v16 · SQLAlchemy · Alembic", "36 tables · users · audit · chat", 0, 0, "database"),
-  storageNode("st-qdrant", "Qdrant", "v1.13 · qdrant-client", "Dense+sparse RRF · visual", 1, 0, "database"),
+  storageNode("st-qdrant", "Qdrant", "v1.17 · qdrant-client", "Dense+sparse RRF · visual", 1, 0, "database"),
   storageNode("st-neo4j", "Neo4j", "v5 · neo4j-driver", "Entities · relationships · paths", 2, 0, "database"),
   // Row 1
   storageNode("st-minio", "MinIO", "S3 · boto3", "Raw files · parsed · pages", 0, 1, "drive"),

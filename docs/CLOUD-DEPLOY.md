@@ -17,7 +17,7 @@ Vercel (CDN)                    GCP Compute Engine VM
                                 │   ├── ollama (embeddings, CPU)  │
                                 │   ├── postgres (16-alpine)      │
                                 │   ├── redis (7-alpine)          │
-                                │   ├── qdrant (v1.13.2)          │
+                                │   ├── qdrant (v1.17.1)          │
                                 │   ├── neo4j (5-community)       │
                                 │   ├── minio                     │
                                 │   └── caddy (TLS termination)   │

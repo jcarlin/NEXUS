@@ -531,7 +531,7 @@ The NER Celery worker is being SIGKILL'd (OOM) during GLiNER model loading:
 
 ### Qdrant Client Version Mismatch
 
-Client v1.17.1 vs server v1.13.2. Generating warnings but functional. May cause subtle issues with newer API features.
+~~Client v1.17.1 vs server v1.13.2. Generating warnings but functional.~~ **Resolved:** Both server and client upgraded to v1.17.1 (2026-03-28).
 
 ### Resolution Agent Inefficiency
 
