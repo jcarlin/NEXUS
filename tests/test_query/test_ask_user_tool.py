@@ -363,9 +363,12 @@ def test_system_prompt_with_query_type_and_clarification():
 # ---------------------------------------------------------------------------
 
 
-async def test_resume_endpoint_exists(client):
+async def test_resume_endpoint_exists(client, _test_app):
     """POST /api/v1/query/resume should exist and return 422 when the body
     is empty (route exists but payload validation fails)."""
+    from app.dependencies import get_query_graph
+
+    _test_app.dependency_overrides[get_query_graph] = lambda: MagicMock()
     response = await client.post("/api/v1/query/resume", json={})
     # 422 = route found, request body failed validation
     assert response.status_code == 422

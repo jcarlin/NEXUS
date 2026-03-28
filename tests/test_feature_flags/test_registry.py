@@ -67,10 +67,12 @@ class TestFlagRegistry:
                 assert hasattr(dependencies, cache_name), f"{flag_name} references non-existent DI cache: {cache_name}"
 
     def test_expected_flag_count(self):
-        """Registry should have one entry per enable_* Settings field (excluding aliases)."""
+        """Registry should have one entry per toggleable Settings field (excluding aliases)."""
         # enable_visual is an alias for enable_visual_embeddings, not a standalone flag
-        enable_fields = {k for k in Settings.model_fields if k.startswith("enable_") and k != "enable_visual"}
-        assert len(FLAG_REGISTRY) == len(enable_fields)
+        flag_fields = {k for k in Settings.model_fields if k.startswith("enable_") and k != "enable_visual"}
+        # Non-enable_* flags that are registered (e.g. defer_ner_to_queue)
+        flag_fields |= {k for k in Settings.model_fields if k in FLAG_REGISTRY}
+        assert len(FLAG_REGISTRY) == len(flag_fields)
 
     @pytest.mark.parametrize(
         "flag_name,expected_risk",
