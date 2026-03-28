@@ -10,6 +10,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follo
 
 ## [Unreleased]
 
+## [1.16.1] - 2026-03-28
+
+### Fixed
+- Drop `[redis]` extra from celery to resolve redis>=7.0 vs kombu<6.5 dependency conflict (99d8e68)
+- Fix flag count test to account for non-`enable_*` registered flags like `defer_ner_to_queue` (99d8e68)
+- Add missing `get_query_graph` mock to `test_resume_endpoint_exists` broken by langgraph-checkpoint-postgres 3.x (99d8e68)
+- Regenerate frontend lockfile after package.json version bumps (99d8e68)
+
 ## [1.16.0] - 2026-03-28
 
 ### Added
