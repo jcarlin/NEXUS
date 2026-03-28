@@ -10,14 +10,69 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follo
 
 ## [Unreleased]
 
+## [1.16.0] - 2026-03-28
+
 ### Added
-- RabbitMQ as Celery message broker — durable queues, publisher confirms, guaranteed redelivery on worker crash (b241664)
-- `CELERY_BROKER_URL` config: set to `amqp://...` for RabbitMQ, leave empty for Redis fallback (backwards compatible)
-- `docker-compose.gpu.yml` overlay for NVIDIA GPU passthrough (Ollama + TEI embedder)
-- TEI embedding server (HuggingFace Text Embeddings Inference) with GPU support in GPU overlay
-- `docs/celery-scaling.md` operational runbook for Celery worker scaling (hot-scaling, pool_grow, memory limits)
-- GPU VM provisioning guide in `docs/CLOUD-DEPLOY.md` (T4/L4, spot pricing, disk snapshots)
-- Weekly disk snapshot schedule for GPU VM backup (30-day retention)
+- Pipeline monitoring overhaul — error details, health strip, failure analysis, events log, script tracker (1b3ef73)
+- TaskTracker for external script visibility in Pipeline Monitor > Scripts tab (97dee42)
+- Per-chat retrieval strategy overrides with numeric tuning + inline dev trace panel (185678e, f63b9d4)
+- Admin page visibility toggles — toggle sidebar pages on/off (1d1568a)
+- Dynamic pipeline architecture diagram admin page with Data tab (PostgreSQL, Qdrant, Neo4j schemas) (93416b8, e8f5d7b, 12db992)
+- Redesigned chat empty state — hero input centered on page, moves to bottom on send (70082c5, f532289)
+- Persist view state across navigation — filters, sorting, pagination, tabs (956dc62)
+- Bulk import drill-down with expandable rows, per-job tracking, bulk retry + dismiss (33a9d1d, a164ec4)
+- Live toggle and semantic status badges to Pipeline Monitor (1f5dd87)
+- Host system metrics card on dashboard (CPU, memory, disk) + GPU metrics (ba26dd4, 76b9189)
+- Document size and page count stats in dashboard, documents table, and pipeline monitor (2fcc29b, 9706292, c71b55d)
+- NER memory guard + deferred NER dispatch script with `--force-all` flag (d4664d0, dd4aa32)
+- DOJ EFTA ingestion infra — configurable NER batch size, quality threshold, worker VM scripts (9b2263e)
+- PDF bulk import and download scripts for Phases 5-6 (977faca)
+- `--re-embed` flag for pre-embedded dataset import (24352b7)
+- CO_OCCURS edges between entities sharing a document (f9792f7)
+- Infinity embedding + reranker providers for GPU inference, replacing TEI (eee5333, c347ee6)
+- vLLM service in GPU overlay (profile-gated, opt-in) (78161a5)
+- RabbitMQ as Celery message broker — durable queues, publisher confirms, guaranteed redelivery (b241664)
+- Celery Beat service for periodic orphan job recovery (117a5db, 9b4b251)
+- Celery worker autoscaler based on CPU load (c149f3a)
+- Manual VM control workflow (start/stop/status) (530fd44)
+- `docker-compose.gpu.yml` overlay for NVIDIA GPU passthrough (Ollama + Infinity)
+- GPU VM provisioning guide, celery scaling runbook, local LLM feasibility analysis (docs)
+
+### Changed
+- Dashboard moved to admin section (956dc62)
+- Vercel API rewrites point to GPU VM (d78181d)
+- NER_WORKER_CONCURRENCY default set to 5 (8374a41)
+
+### Fixed
+- Use documents.id instead of job_id for Qdrant/Neo4j indexing (03e508a)
+- Validate matter_id FK before job INSERT to prevent IntegrityError (493ea58)
+- Database hardening — injection allowlists, Qdrant indexes, pool configs, Neo4j scoping (c2bfbfa)
+- Always verify citations regardless of query tier (fb80cf0)
+- Entity detail graph shows only entity nodes, not documents (2339143)
+- Overhaul entity extraction pipeline — OCR normalization, garbage filtering, entity→chunk edges (d9c71c0)
+- Filter pronoun/stopword entities from GLiNER extraction (1cb7b2f)
+- Pipeline page freeze and infinite re-render loops (db3027d, b61451a, c977894, 4a85a93, 428fe21, 3afb2ba, a6c66b6)
+- Chat navigation bugs — New button redirect + history click race (dc7b3fb)
+- Bulk import progress: mark complete only when all subtasks finish, counter sync cap, idempotent doc creation (91adade, 940200f, 4f8eb0a, 4be39d9, a67ff6d)
+- Architecture page — API key bug fix, CSS polish, inline toggles (5f2de16)
+- GPU metrics reading via aiodocker exec (cc834d8, 7f64bba)
+- Queue controls cards showing 0 + add NER queue to admin UI (c764ac3)
+- Reconcile Qdrant doc_id for bulk-imported documents (74327c9)
+- Add libgl1 + libglib2.0 to Docker runtime for Docling OCR (3f77afc)
+- Address memory audit findings — blob URL leak, polling dedup, D3 graph stability (abb0734)
+- Resolve 4 CI failures (f63b9d4)
+- Bump API container memory limit to 3G for GLiNER warmup (35650a7)
+- AsyncGraphDatabase driver in deferred NER task (66005ee)
+- Infinity GPU image fixes — torch engine, CUDA config, runtime selection (94c8645, 16999cc, 257bf23, c4b9cbbf)
+- TEI turing-1.9 image for T4 GPU compute cap 75 (af7b3f1)
+
+### Performance
+- NER worker concurrency bump to 8 (94ee88b)
+- Jobs status indexes + reduced frontend polling intervals (b0bc073)
+- Scale Celery to 3 worker replicas with concurrency 3 (b9a73fb, c172889)
+
+### Removed
+- Docker resource limits (except Neo4j heap cap) — let Docker use available host memory (6f4d033)
 
 ## [1.15.1] - 2026-03-20
 
