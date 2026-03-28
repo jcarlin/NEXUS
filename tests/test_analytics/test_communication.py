@@ -37,7 +37,7 @@ async def test_compute_communication_pairs_from_email_metadata():
                 "from_email": "alice@example.com",
                 "to": "Bob Jones <bob@example.com>, charlie@example.com",
                 "cc": "Diana <diana@example.com>",
-                "date": "2024-03-15",
+                "date": "Fri, 15 Mar 2024 10:00:00 +0000",
             },
         ),
         SimpleNamespace(
@@ -46,7 +46,7 @@ async def test_compute_communication_pairs_from_email_metadata():
                 "from_name": "Bob Jones",
                 "from_email": "bob@example.com",
                 "to": "alice@example.com",
-                "date": "2024-03-16",
+                "date": "Sat, 16 Mar 2024 14:30:00 +0000",
             },
         ),
     ]
@@ -85,7 +85,10 @@ async def test_compute_communication_pairs_from_email_metadata():
     assert upsert_params["sender_email"] == "alice@example.com"
     assert upsert_params["recipient_email"] == "bob@example.com"
     assert upsert_params["rel_type"] == "to"
-    assert upsert_params["email_date"] == "2024-03-15"
+    assert isinstance(upsert_params["email_date"], datetime)
+    assert upsert_params["email_date"].year == 2024
+    assert upsert_params["email_date"].month == 3
+    assert upsert_params["email_date"].day == 15
 
     # Verify the cc recipient (diana) was processed
     upsert_4_params = all_calls[3][0][1]

@@ -22,6 +22,7 @@ from app.analytics.schemas import (
     OrgChartEntry,
     OrgChartImportResponse,
 )
+from app.common.db_utils import parse_email_date
 from app.entities.graph_service import GraphService
 
 logger = structlog.get_logger(__name__)
@@ -86,7 +87,7 @@ class AnalyticsService:
             if not sender_email:
                 continue
 
-            email_date = meta.get("date")
+            email_date = parse_email_date(meta.get("date"))
 
             # Process to/cc/bcc recipients
             for rel_type, field in [("to", "to"), ("cc", "cc"), ("bcc", "bcc")]:

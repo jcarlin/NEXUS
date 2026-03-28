@@ -1,28 +1,40 @@
 # GCP Health Check & Error Report
 
-Run a comprehensive health check on the production GCP instance. Checks VM status, all Docker services, resource usage, API health, error logs, and LangSmith traces. Compiles findings into a structured report.
+Run a comprehensive health check on a production GCP instance. Checks VM status, all Docker services, resource usage, API health, error logs, and LangSmith traces. Compiles findings into a structured report.
+
+**Usage:** `/health-check <vm-name>`
+
+**Required argument:** `$ARGUMENTS` must be a VM name from the table below. If `$ARGUMENTS` is empty or not recognized, **stop and ask the user** which VM to check, listing the available options.
+
+## VM Registry
+
+| VM Name | Zone | Static IP | Notes |
+|---------|------|-----------|-------|
+| `nexus-ingest` | `us-west1-a` | `34.169.203.200` | Primary instance (e2-standard-16, 16 vCPU / 64GB) |
+| `nexus-demo` | `us-central1-a` | `34.70.34.2` | Demo instance (e2-custom-8-24576, often TERMINATED) |
 
 ## Constants
 
 - **GCP Project:** `vault-ai-487703`
-- **VM:** `nexus-demo`
-- **Zone:** `us-central1-a`
-- **Static IP:** `34.70.34.2`
+- **VM:** `$ARGUMENTS`
+- **Zone:** (look up from VM Registry above)
 - **Compose prefix:** `cd ~/nexus && sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.cloud.yml`
-- **SSH prefix:** `gcloud compute ssh nexus-demo --zone=us-central1-a --project=vault-ai-487703 --quiet --command=`
+- **SSH prefix:** `gcloud compute ssh $ARGUMENTS --zone=<zone> --project=vault-ai-487703 --quiet --command=`
 
 ## Steps
 
 Run every `gcloud` command with `--project=vault-ai-487703` to avoid targeting the wrong GCP project.
 
+Substitute the correct VM name and zone from the registry into all commands below.
+
 All SSH commands use this pattern:
 ```bash
-gcloud compute ssh nexus-demo --zone=us-central1-a --project=vault-ai-487703 --quiet --command="<cmd>"
+gcloud compute ssh $ARGUMENTS --zone=<zone> --project=vault-ai-487703 --quiet --command="<cmd>"
 ```
 
 Compose commands must `cd ~/nexus` first:
 ```bash
-gcloud compute ssh nexus-demo --zone=us-central1-a --project=vault-ai-487703 --quiet --command="cd ~/nexus && sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.cloud.yml <subcommand>"
+gcloud compute ssh $ARGUMENTS --zone=<zone> --project=vault-ai-487703 --quiet --command="cd ~/nexus && sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.cloud.yml <subcommand>"
 ```
 
 ### Step 1 — VM & Resource Status (run in parallel)
@@ -31,7 +43,7 @@ Run these 3 commands in parallel:
 
 1. **VM status:**
 ```bash
-gcloud compute instances describe nexus-demo --zone=us-central1-a --project=vault-ai-487703 --format="value(status)"
+gcloud compute instances describe $ARGUMENTS --zone=<zone> --project=vault-ai-487703 --format="value(status)"
 ```
 
 2. **Container status:**
