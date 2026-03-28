@@ -19,6 +19,9 @@ from app.entities.schema import TEMPORAL_RELATIONSHIP_TYPES, get_neo4j_label
 
 logger = structlog.get_logger(__name__)
 
+# Allowlist of Cypher relationship types used in email participant linking.
+_EMAIL_RELATIONSHIP_TYPES: frozenset[str] = frozenset({"SENT", "SENT_TO", "CC", "BCC"})
+
 
 class GraphService:
     """Thin async wrapper around Neo4j for NEXUS knowledge-graph operations.
@@ -69,9 +72,11 @@ class GraphService:
         query: str,
         params: dict[str, Any] | None = None,
     ) -> None:
-        """Execute a Cypher write query inside an implicit transaction."""
+        """Execute a Cypher write query inside an explicit write transaction."""
         async with self._driver.session() as session:
-            await session.run(query, params or {})
+            async with session.begin_transaction() as tx:
+                await tx.run(query, params or {})
+                await tx.commit()
 
     # ------------------------------------------------------------------
     # Document nodes
@@ -307,11 +312,11 @@ class GraphService:
 
         # Create CO_OCCURS edges between entities that share this document
         if total >= 2:
-            await self._create_co_occurrence_edges(doc_id)
+            await self._create_co_occurrence_edges(doc_id, matter_id=matter_id)
 
         return total
 
-    async def _create_co_occurrence_edges(self, doc_id: str) -> None:
+    async def _create_co_occurrence_edges(self, doc_id: str, matter_id: str | None = None) -> None:
         """Create ``CO_OCCURS`` edges between entities sharing a **chunk**.
 
         Chunk-level co-occurrence (~500 tokens) is far more meaningful than
@@ -322,7 +327,7 @@ class GraphService:
         (backward compatibility with entities indexed before chunk linking).
         """
         query = """
-        MATCH (e1:Entity)-[:EXTRACTED_FROM]->(c:Chunk)-[:PART_OF]->(d:Document {id: $doc_id})
+        MATCH (e1:Entity)-[:EXTRACTED_FROM]->(c:Chunk)-[:PART_OF]->(d:Document {id: $doc_id, matter_id: $matter_id})
         WITH c, e1
         MATCH (e2:Entity)-[:EXTRACTED_FROM]->(c)
         WHERE id(e1) < id(e2)
@@ -331,7 +336,7 @@ class GraphService:
         ON MATCH  SET r.weight = r.weight + 1
         """
         try:
-            await self._run_write(query, {"doc_id": doc_id})
+            await self._run_write(query, {"doc_id": doc_id, "matter_id": matter_id})
         except Exception:
             logger.warning(
                 "graph.co_occurrence.failed",
@@ -790,6 +795,8 @@ class GraphService:
         """
 
         async def _link(name: str, addr: str, rel_type: str) -> None:
+            if rel_type not in _EMAIL_RELATIONSHIP_TYPES:
+                raise ValueError(f"Invalid email relationship type: {rel_type!r}")
             display = name or addr.split("@")[0]
             query = f"""
             MERGE (p:Entity:Person {{name: $display, type: 'person', matter_id: $matter_id}})
@@ -1257,7 +1264,17 @@ class GraphService:
     # ------------------------------------------------------------------
 
     async def get_graph_stats(self, matter_id: str | None = None) -> dict[str, Any]:
-        """Return aggregate node and edge counts for the knowledge graph."""
+        """Return aggregate node and edge counts for the knowledge graph.
+
+        When *matter_id* is provided, counts are scoped to that matter.
+        When omitted (e.g. admin health checks), returns global stats but
+        logs a warning for auditing.
+        """
+        if not matter_id:
+            logger.warning(
+                "graph.stats.global_query",
+                msg="get_graph_stats called without matter_id — returning global stats",
+            )
         if matter_id:
             node_query = """
             MATCH (n) WHERE n.matter_id = $matter_id
@@ -1265,7 +1282,7 @@ class GraphService:
             """
             edge_query = """
             MATCH (a)-[r]->(b)
-            WHERE a.matter_id = $matter_id OR b.matter_id = $matter_id
+            WHERE a.matter_id = $matter_id AND b.matter_id = $matter_id
             RETURN type(r) AS type, count(r) AS count
             """
             params: dict[str, Any] = {"matter_id": matter_id}

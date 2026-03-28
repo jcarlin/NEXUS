@@ -18,6 +18,22 @@ from workers.celery_app import celery_app  # noqa: F401 — ensures @shared_task
 
 logger = structlog.get_logger(__name__)
 
+# Allowlist of columns that may be dynamically SET on export_jobs rows.
+ALLOWED_EXPORT_JOB_FIELDS: frozenset[str] = frozenset(
+    {
+        "status",
+        "error",
+        "output_path",
+        "result_path",
+        "parameters",
+        "completed_at",
+        "progress",
+        "total_items",
+        "processed_items",
+        "file_size_bytes",
+    }
+)
+
 
 # ---------------------------------------------------------------------------
 # Sync DB helpers (Celery tasks use the sync Postgres URL)
@@ -35,6 +51,10 @@ def _get_sync_engine(settings=None):
 
 def _update_export_job(engine, job_id: str, **kwargs) -> None:
     """Update fields on an export_jobs row."""
+    invalid_keys = set(kwargs.keys()) - ALLOWED_EXPORT_JOB_FIELDS
+    if invalid_keys:
+        raise ValueError(f"Invalid export_jobs fields: {invalid_keys!r}")
+
     set_parts = []
     params: dict = {"job_id": job_id}
     for key, value in kwargs.items():

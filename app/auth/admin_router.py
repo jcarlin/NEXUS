@@ -190,6 +190,9 @@ async def update_user(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    # NOTE: Safe from SQL injection — column names below are hardcoded string
+    # literals, not derived from user input (request body keys are never used
+    # as identifiers).
     set_clauses: list[str] = []
     params: dict = {"user_id": user_id}
 

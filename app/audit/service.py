@@ -17,6 +17,9 @@ from app.common.redaction_utils import redact_error_message
 
 logger = structlog.get_logger(__name__)
 
+# Allowlist of tables that may be exported via export_audit_logs.
+ALLOWED_AUDIT_TABLES: frozenset[str] = frozenset({"audit_log", "ai_audit_log", "agent_audit_log"})
+
 
 class AuditService:
     """Static methods for SOC 2 audit operations. Raw SQL via sqlalchemy.text()."""
@@ -252,8 +255,8 @@ class AuditService:
         export_format: str = "csv",
     ) -> str:
         """Export audit log entries as CSV or JSON string."""
-        if table not in ("ai_audit_log", "agent_audit_log", "audit_log"):
-            raise ValueError(f"Invalid table: {table}")
+        if table not in ALLOWED_AUDIT_TABLES:
+            raise ValueError(f"Invalid audit table: {table!r}")
 
         where_clauses: list[str] = []
         params: dict[str, Any] = {}

@@ -97,13 +97,25 @@ def upgrade() -> None:
 
     # --- Backfill error_category for existing failed jobs ---
     conn = op.get_bind()
-    rows = conn.execute(sa.text("SELECT id, error FROM jobs WHERE status = 'failed' AND error IS NOT NULL")).fetchall()
-    for row in rows:
-        category = _classify_error(row[1])
-        conn.execute(
-            sa.text("UPDATE jobs SET error_category = :cat WHERE id = :id"),
-            {"cat": category, "id": row[0]},
-        )
+    # Build CASE expression from category patterns
+    when_clauses = []
+    for category, patterns in _CATEGORY_PATTERNS:
+        conditions = " OR ".join(f"LOWER(error) LIKE '%{pattern}%'" for pattern in patterns)
+        when_clauses.append(f"WHEN ({conditions}) THEN '{category}'")
+
+    case_sql = "\n            ".join(when_clauses)
+    conn.execute(
+        sa.text(f"""
+        UPDATE jobs
+        SET error_category = CASE
+            {case_sql}
+            ELSE 'UNKNOWN'
+        END
+        WHERE status = 'failed'
+          AND error IS NOT NULL
+          AND error_category IS NULL
+    """)
+    )
 
     # Backfill completed_at from updated_at for completed/failed jobs
     conn.execute(

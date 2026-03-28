@@ -60,8 +60,10 @@ def _get_engine():
     return create_async_engine(
         settings.postgres_url,
         echo=False,
-        pool_size=5,
-        max_overflow=10,
+        pool_size=10,
+        max_overflow=20,
+        pool_pre_ping=True,
+        pool_recycle=3600,
     )
 
 
@@ -109,6 +111,9 @@ def get_neo4j():
     return AsyncGraphDatabase.driver(
         settings.neo4j_uri,
         auth=(settings.neo4j_user, settings.neo4j_password),
+        max_connection_pool_size=50,
+        connection_acquisition_timeout=15.0,
+        max_transaction_retry_time=30.0,
     )
 
 

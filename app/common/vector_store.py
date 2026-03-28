@@ -48,7 +48,10 @@ class VectorStoreClient:
     """Thin wrapper around QdrantClient with NEXUS-specific helpers."""
 
     def __init__(self, settings: Settings) -> None:
-        self.client = QdrantClient(url=settings.qdrant_url)
+        self.client = QdrantClient(
+            url=settings.qdrant_url,
+            timeout=30,
+        )
         self._embedding_dim = settings.embedding_dimensions
         self._enable_visual = settings.enable_visual_embeddings
         self._enable_sparse = settings.enable_sparse_embeddings
@@ -171,6 +174,48 @@ class VectorStoreClient:
         elif VISUAL_COLLECTION in existing:
             logger.info("qdrant.collection_exists", name=VISUAL_COLLECTION)
 
+        # --- Payload indexes for filtered queries ---
+        self._ensure_payload_indexes()
+
+    def _ensure_payload_indexes(self) -> None:
+        """Create payload indexes for commonly-filtered fields (idempotent)."""
+        from qdrant_client.models import PayloadSchemaType
+
+        text_indexes = [
+            ("matter_id", PayloadSchemaType.KEYWORD),
+            ("doc_id", PayloadSchemaType.KEYWORD),
+            ("privilege_status", PayloadSchemaType.KEYWORD),
+            ("page_number", PayloadSchemaType.INTEGER),
+            ("chunk_index", PayloadSchemaType.INTEGER),
+        ]
+        for field, schema_type in text_indexes:
+            try:
+                self.client.create_payload_index(
+                    collection_name=TEXT_COLLECTION,
+                    field_name=field,
+                    field_schema=schema_type,
+                )
+            except Exception:
+                pass  # Index already exists or field not present yet
+
+        if self._enable_visual:
+            visual_indexes = [
+                ("matter_id", PayloadSchemaType.KEYWORD),
+                ("doc_id", PayloadSchemaType.KEYWORD),
+                ("page_number", PayloadSchemaType.INTEGER),
+            ]
+            for field, schema_type in visual_indexes:
+                try:
+                    self.client.create_payload_index(
+                        collection_name=VISUAL_COLLECTION,
+                        field_name=field,
+                        field_schema=schema_type,
+                    )
+                except Exception:
+                    pass
+
+        logger.info("qdrant.payload_indexes_ensured")
+
     # ------------------------------------------------------------------
     # Text collection CRUD
     # ------------------------------------------------------------------
@@ -207,7 +252,16 @@ class VectorStoreClient:
                 # Unnamed vector (backward compatible)
                 points.append(PointStruct(id=point_id, vector=chunk["vector"], payload=payload))
 
-        self.client.upsert(collection_name=TEXT_COLLECTION, points=points)
+        try:
+            self.client.upsert(collection_name=TEXT_COLLECTION, points=points)
+        except Exception:
+            logger.error(
+                "qdrant.upsert_failed",
+                collection=TEXT_COLLECTION,
+                count=len(points),
+                exc_info=True,
+            )
+            raise
         logger.info("qdrant.upsert", collection=TEXT_COLLECTION, count=len(points))
 
     async def update_privilege_status(
@@ -462,7 +516,16 @@ class VectorStoreClient:
             )
             for page in pages
         ]
-        self.client.upsert(collection_name=VISUAL_COLLECTION, points=points)
+        try:
+            self.client.upsert(collection_name=VISUAL_COLLECTION, points=points)
+        except Exception:
+            logger.error(
+                "qdrant.upsert_failed",
+                collection=VISUAL_COLLECTION,
+                count=len(points),
+                exc_info=True,
+            )
+            raise
         logger.info("qdrant.upsert", collection=VISUAL_COLLECTION, count=len(points))
 
     async def query_visual(
