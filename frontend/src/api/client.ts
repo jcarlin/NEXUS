@@ -41,13 +41,49 @@ async function getValidToken(): Promise<string | null> {
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
-export async function apiClient<T>(config: RequestConfig): Promise<T> {
+// Overload: orval v8 mutator pattern (url + RequestInit)
+export async function apiClient<T>(url: string, init?: RequestInit): Promise<T>;
+// Overload: manual pattern (RequestConfig object)
+export async function apiClient<T>(config: RequestConfig): Promise<T>;
+export async function apiClient<T>(
+  urlOrConfig: string | RequestConfig,
+  init?: RequestInit,
+): Promise<T> {
   const token = await getValidToken();
   const matterId = useAppStore.getState().matterId;
 
+  let url: string;
+  let fetchInit: RequestInit;
+
+  if (typeof urlOrConfig === "string") {
+    // Orval v8 pattern: apiClient(url, init)
+    url = `${API_BASE}${urlOrConfig}`;
+    fetchInit = init ?? {};
+  } else {
+    // Manual pattern: apiClient({url, method, headers, data, params, signal})
+    const config = urlOrConfig;
+    url = `${API_BASE}${config.url}`;
+    if (config.params) {
+      const searchParams = new URLSearchParams();
+      for (const [key, value] of Object.entries(config.params)) {
+        if (value !== undefined && value !== null) {
+          searchParams.set(key, String(value));
+        }
+      }
+      const qs = searchParams.toString();
+      if (qs) url += `?${qs}`;
+    }
+    fetchInit = {
+      method: config.method,
+      headers: config.headers,
+      body: config.data ? JSON.stringify(config.data) : undefined,
+      signal: config.signal,
+    };
+  }
+
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    ...config.headers,
+    ...(fetchInit.headers as Record<string, string>),
   };
 
   if (token) {
@@ -57,23 +93,9 @@ export async function apiClient<T>(config: RequestConfig): Promise<T> {
     headers["X-Matter-ID"] = matterId;
   }
 
-  let url = `${API_BASE}${config.url}`;
-  if (config.params) {
-    const searchParams = new URLSearchParams();
-    for (const [key, value] of Object.entries(config.params)) {
-      if (value !== undefined && value !== null) {
-        searchParams.set(key, String(value));
-      }
-    }
-    const qs = searchParams.toString();
-    if (qs) url += `?${qs}`;
-  }
-
   const res = await fetch(url, {
-    method: config.method,
+    ...fetchInit,
     headers,
-    body: config.data ? JSON.stringify(config.data) : undefined,
-    signal: config.signal,
   });
 
   if (res.status === 401) {
