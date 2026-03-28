@@ -403,7 +403,6 @@ class DocumentService:
         reviewed_by: UUID,
         qdrant: VectorStoreClient,
         gs: GraphService,
-        job_id: str,
     ) -> dict:
         """Update privilege status across PostgreSQL, Qdrant, and Neo4j.
 
@@ -421,11 +420,11 @@ class DocumentService:
         if updated is None:
             return None  # type: ignore[return-value]
 
-        # Step 2: Update Qdrant payload
-        await qdrant.update_privilege_status(doc_id=job_id, privilege_status=privilege_status)
+        # Step 2: Update Qdrant payload (Qdrant stores documents.id as doc_id)
+        await qdrant.update_privilege_status(doc_id=str(doc_id), privilege_status=privilege_status)
 
         # Step 3: Update Neo4j Document node
-        await gs.update_document_privilege(doc_id=job_id, privilege_status=privilege_status)
+        await gs.update_document_privilege(doc_id=str(doc_id), privilege_status=privilege_status)
 
         return updated
 

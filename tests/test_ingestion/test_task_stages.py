@@ -294,12 +294,13 @@ class TestStageIndex:
 class TestStageComplete:
     """Tests for _stage_complete."""
 
-    def test_creates_document_record(self):
-        """_stage_complete should create a document record and update stage."""
+    def test_finalizes_document_record(self):
+        """_stage_complete should finalize the document record and update stage."""
         ctx = _make_ctx()
         ctx.parse_result = _FakeParseResult()
         ctx.doc_type = "document"
         ctx.document_type = "document"
+        ctx.document_id = "doc-001"
         ctx.chunks = [_FakeChunk(chunk_index=0, text="chunk", token_count=5)]
         ctx.all_entities = [{"name": "Test", "type": "PERSON", "page_number": 1}]
         ctx.embeddings = [[0.1, 0.2]]
@@ -307,7 +308,7 @@ class TestStageComplete:
         ctx.content_hash = "abc123"
 
         with (
-            patch("app.ingestion.tasks._create_document_record", return_value="doc-001") as mock_create,
+            patch("app.ingestion.tasks._finalize_document_record") as mock_finalize,
             patch("app.ingestion.tasks._update_stage"),
             patch("app.ingestion.tasks.detect_duplicates"),
             patch("app.entities.tasks.resolve_entities") as mock_resolve,
@@ -315,10 +316,11 @@ class TestStageComplete:
             mock_resolve.delay = MagicMock()
             _stage_complete(ctx)
 
-        mock_create.assert_called_once()
-        call_kwargs = mock_create.call_args
-        assert call_kwargs.kwargs["job_id"] == "job-001"
-        assert call_kwargs.kwargs["filename"] == "test.pdf"
+        mock_finalize.assert_called_once()
+        call_kwargs = mock_finalize.call_args
+        assert call_kwargs.kwargs["doc_id"] == "doc-001"
+        assert call_kwargs.kwargs["chunk_count"] == 1
+        assert call_kwargs.kwargs["entity_count"] == 1
 
 
 # ---------------------------------------------------------------------------

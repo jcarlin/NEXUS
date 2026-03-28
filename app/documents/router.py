@@ -431,7 +431,6 @@ async def update_document_privilege(
         reviewed_by=current_user.id,
         qdrant=qdrant,
         gs=gs,
-        job_id=str(row["job_id"]),
     )
     if updated is None:
         raise HTTPException(status_code=404, detail=f"Document {doc_id} not found")

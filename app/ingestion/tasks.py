@@ -227,32 +227,27 @@ def _mark_job_failed_with_category(engine, job_id: str, error: str, error_catego
         conn.commit()
 
 
-def _create_document_record(
+def _create_document_record_early(
     engine,
     job_id: str,
     filename: str,
     doc_type: str,
     page_count: int,
-    chunk_count: int,
-    entity_count: int,
     minio_path: str,
     file_size: int,
     content_hash: str,
     matter_id: str | None = None,
-    metadata: dict | None = None,
-    summary: str | None = None,
 ) -> str:
-    """Insert or update a document record keyed by job_id. Returns the document id.
+    """Create a minimal document record early in the pipeline. Returns the document id.
+
+    Called after parsing/chunking so ``documents.id`` is available for Qdrant
+    and Neo4j indexing.  Final stats (chunk_count, entity_count, metadata,
+    summary) are filled in by :func:`_finalize_document_record`.
 
     Idempotent: if a record already exists for this job_id (e.g. from a
-    Celery retry), the existing row is updated and its id is returned
-    instead of creating a duplicate.
+    Celery retry), the existing row's id is returned.
     """
     doc_id = str(uuid.uuid4())
-    # Serialize metadata, stripping attachment_data (binary) if present
-    meta = dict(metadata) if metadata else {}
-    meta.pop("attachment_data", None)
-    metadata_json = json.dumps(meta, default=str)
     with engine.connect() as conn:
         result = conn.execute(
             text(
@@ -260,22 +255,18 @@ def _create_document_record(
                 INSERT INTO documents
                     (id, job_id, filename, document_type, page_count, chunk_count,
                      entity_count, minio_path, file_size_bytes, content_hash,
-                     matter_id, metadata_, summary, created_at, updated_at)
+                     matter_id, metadata_, created_at, updated_at)
                 VALUES
-                    (:id, :job_id, :filename, :doc_type, :page_count, :chunk_count,
-                     :entity_count, :minio_path, :file_size, :content_hash,
-                     :matter_id, :metadata_, :summary, now(), now())
+                    (:id, :job_id, :filename, :doc_type, :page_count, 0,
+                     0, :minio_path, :file_size, :content_hash,
+                     :matter_id, '{}', now(), now())
                 ON CONFLICT (job_id) DO UPDATE SET
                     filename = EXCLUDED.filename,
                     document_type = EXCLUDED.document_type,
                     page_count = EXCLUDED.page_count,
-                    chunk_count = EXCLUDED.chunk_count,
-                    entity_count = EXCLUDED.entity_count,
                     minio_path = EXCLUDED.minio_path,
                     file_size_bytes = EXCLUDED.file_size_bytes,
                     content_hash = EXCLUDED.content_hash,
-                    metadata_ = EXCLUDED.metadata_,
-                    summary = EXCLUDED.summary,
                     updated_at = now()
                 RETURNING id
                 """
@@ -286,14 +277,10 @@ def _create_document_record(
                 "filename": filename,
                 "doc_type": doc_type,
                 "page_count": page_count,
-                "chunk_count": chunk_count,
-                "entity_count": entity_count,
                 "minio_path": minio_path,
                 "file_size": file_size,
                 "content_hash": content_hash,
                 "matter_id": matter_id,
-                "metadata_": metadata_json,
-                "summary": summary or None,
             },
         )
         row = result.fetchone()
@@ -302,6 +289,43 @@ def _create_document_record(
 
     logger.info("task.document_created", doc_id=doc_id, job_id=job_id, filename=filename)
     return doc_id
+
+
+def _finalize_document_record(
+    engine,
+    doc_id: str,
+    chunk_count: int,
+    entity_count: int,
+    metadata: dict | None = None,
+    summary: str | None = None,
+) -> None:
+    """Update the document record with final pipeline stats."""
+    meta = dict(metadata) if metadata else {}
+    meta.pop("attachment_data", None)
+    metadata_json = json.dumps(meta, default=str)
+    with engine.connect() as conn:
+        conn.execute(
+            text(
+                """
+                UPDATE documents
+                SET chunk_count = :chunk_count,
+                    entity_count = :entity_count,
+                    metadata_ = :metadata_,
+                    summary = :summary,
+                    updated_at = now()
+                WHERE id = :doc_id
+                """
+            ),
+            {
+                "doc_id": doc_id,
+                "chunk_count": chunk_count,
+                "entity_count": entity_count,
+                "metadata_": metadata_json,
+                "summary": summary or None,
+            },
+        )
+        conn.commit()
+    logger.info("task.document_finalized", doc_id=doc_id)
 
 
 def _create_child_job(
@@ -688,6 +712,9 @@ class _PipelineContext:
     all_entities: list[dict] = field(default_factory=list)
     relationship_count: int = 0
 
+    # Populated by _stage_create_document
+    document_id: str = ""
+
     # Populated by _stage_index
     chunk_data_for_neo4j: list[dict] = field(default_factory=list)
 
@@ -858,6 +885,25 @@ def _stage_chunk(ctx: _PipelineContext) -> None:
 
     ctx.progress["chunks_created"] = len(ctx.chunks)
     _update_stage(ctx.engine, ctx.job_id, "contextualizing", "processing", progress=ctx.progress)
+
+
+def _stage_create_document(ctx: _PipelineContext) -> None:
+    """Create the document record early so ``ctx.document_id`` is available
+    for Qdrant and Neo4j indexing.  Final stats are filled by
+    ``_stage_complete`` via ``_finalize_document_record``.
+    """
+    ctx.document_id = _create_document_record_early(
+        engine=ctx.engine,
+        job_id=ctx.job_id,
+        filename=ctx.filename,
+        doc_type=ctx.doc_type,
+        page_count=ctx.parse_result.page_count,
+        minio_path=ctx.minio_path,
+        file_size=ctx.file_size,
+        content_hash=ctx.content_hash,
+        matter_id=ctx.matter_id,
+    )
+    structlog.contextvars.bind_contextvars(doc_id=ctx.document_id)
 
 
 def _stage_contextualize(ctx: _PipelineContext) -> None:
@@ -1059,13 +1105,13 @@ def _stage_embed(ctx: _PipelineContext) -> None:
                     all_embeddings.extend(batch_embs)
 
                 for (page_num, _), emb in zip(complex_pages, all_embeddings):
-                    point_id = f"{ctx.job_id}_page_{page_num}"
+                    point_id = f"{ctx.document_id}_page_{page_num}"
                     ctx.visual_page_embeddings.append(
                         {
                             "id": point_id,
                             "vectors": emb,
                             "payload": {
-                                "doc_id": ctx.job_id,
+                                "doc_id": ctx.document_id,
                                 "page_number": page_num,
                                 "source_file": ctx.filename,
                                 **({"matter_id": ctx.matter_id} if ctx.matter_id else {}),
@@ -1097,10 +1143,10 @@ def _stage_extract(ctx: _PipelineContext) -> None:
     """
     if ctx.settings.defer_ner_to_queue:
         extract_entities_for_job.apply_async(
-            args=[ctx.job_id, ctx.matter_id],
+            args=[ctx.document_id, ctx.matter_id],
             queue="ner",
         )
-        logger.info("task.ner_deferred", job_id=ctx.job_id)
+        logger.info("task.ner_deferred", doc_id=ctx.document_id)
         ctx.all_entities = []
         ctx.relationship_count = 0
         ctx.progress["entities_extracted"] = 0
@@ -1148,7 +1194,7 @@ def _stage_extract(ctx: _PipelineContext) -> None:
     if ctx.settings.enable_relationship_extraction and ctx.all_entities:
         try:
             ctx.relationship_count = asyncio.run(
-                _extract_relationships(ctx.settings, ctx.job_id, ctx.chunks, ctx.all_entities)
+                _extract_relationships(ctx.settings, ctx.document_id, ctx.chunks, ctx.all_entities)
             )
             logger.info(
                 "task.relationships_extracted",
@@ -1203,7 +1249,7 @@ def _stage_index(ctx: _PipelineContext) -> None:
             "section_heading": chunk.metadata.get("section_heading", ""),
             "chunk_text": chunk.text,
             "chunk_index": chunk.chunk_index,
-            "doc_id": ctx.job_id,
+            "doc_id": ctx.document_id,
             "token_count": chunk.token_count,
         }
         if ctx.matter_id is not None:
@@ -1293,7 +1339,7 @@ def _stage_index(ctx: _PipelineContext) -> None:
         asyncio.run(
             _index_to_neo4j(
                 settings=ctx.settings,
-                doc_id=ctx.job_id,
+                doc_id=ctx.document_id,
                 filename=ctx.filename,
                 doc_type=ctx.doc_type,
                 page_count=ctx.parse_result.page_count,
@@ -1306,76 +1352,21 @@ def _stage_index(ctx: _PipelineContext) -> None:
         )
         logger.info("task.neo4j_indexed", entities=len(ctx.all_entities))
     except Exception:
-        logger.error("task.neo4j_index_failed", doc_id=ctx.job_id, exc_info=True)
-
-
-def _update_qdrant_doc_id(
-    qdrant_url: str,
-    job_id: str,
-    doc_id: str,
-    has_visual: bool = False,
-) -> None:
-    """Update Qdrant payload to use real document ID instead of job_id placeholder."""
-    from qdrant_client import QdrantClient
-    from qdrant_client import models as qdrant_models
-
-    try:
-        client = QdrantClient(url=qdrant_url)
-        filter_ = qdrant_models.Filter(
-            must=[
-                qdrant_models.FieldCondition(
-                    key="doc_id",
-                    match=qdrant_models.MatchValue(value=job_id),
-                )
-            ]
-        )
-
-        from app.common.vector_store import TEXT_COLLECTION
-
-        client.set_payload(
-            collection_name=TEXT_COLLECTION,
-            payload={"doc_id": doc_id},
-            points=filter_,
-        )
-
-        if has_visual:
-            try:
-                from app.common.vector_store import VISUAL_COLLECTION
-
-                client.set_payload(
-                    collection_name=VISUAL_COLLECTION,
-                    payload={"doc_id": doc_id},
-                    points=filter_,
-                )
-            except Exception:
-                pass  # Visual collection may not exist
-
-        client.close()
-        logger.info("task.qdrant_doc_id_updated", job_id=job_id, doc_id=doc_id)
-    except Exception:
-        logger.warning("task.qdrant_doc_id_update_failed", job_id=job_id, exc_info=True)
+        logger.error("task.neo4j_index_failed", doc_id=ctx.document_id, exc_info=True)
 
 
 def _stage_complete(ctx: _PipelineContext) -> None:
-    """Stage 6: Create document record + dispatch post-processing tasks."""
-    doc_id = _create_document_record(
+    """Stage 6: Finalize document record + dispatch post-processing tasks."""
+    doc_id = ctx.document_id
+
+    _finalize_document_record(
         engine=ctx.engine,
-        job_id=ctx.job_id,
-        filename=ctx.filename,
-        doc_type=ctx.doc_type,
-        page_count=ctx.parse_result.page_count,
+        doc_id=doc_id,
         chunk_count=len(ctx.chunks),
         entity_count=len(ctx.all_entities),
-        minio_path=ctx.minio_path,
-        file_size=ctx.file_size,
-        content_hash=ctx.content_hash,
-        matter_id=ctx.matter_id,
         metadata=ctx.parse_result.metadata,
         summary=ctx.document_summary or None,
     )
-
-    # Update Qdrant payload with real document ID (was using job_id as placeholder)
-    _update_qdrant_doc_id(ctx.settings.qdrant_url, ctx.job_id, doc_id, bool(ctx.visual_page_embeddings))
 
     # Auto-assign document to dataset if the job has a dataset_id
     if ctx.dataset_id:
@@ -1735,6 +1726,7 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
         _stage_parse,
         _stage_ocr_correct,
         _stage_chunk,
+        _stage_create_document,
         _stage_contextualize,
         _stage_summarize,
         _stage_embed_and_extract,
@@ -1908,6 +1900,20 @@ def import_text_document(
 
         logger.info("task.import_text.chunked", chunk_count=len(chunks))
 
+        # Create document record early so doc_id is available for Qdrant/Neo4j
+        doc_id = _create_document_record_early(
+            engine=engine,
+            job_id=job_id,
+            filename=filename,
+            doc_type=doc_type,
+            page_count=page_count,
+            minio_path=minio_path,
+            file_size=file_size,
+            content_hash=content_hash,
+            matter_id=matter_id,
+        )
+        structlog.contextvars.bind_contextvars(doc_id=doc_id)
+
         progress: dict[str, Any] = {"chunks_created": len(chunks)}
         _update_stage(engine, job_id, "embedding", "processing", progress=progress)
 
@@ -1952,10 +1958,10 @@ def import_text_document(
         elif settings.defer_ner_to_queue:
             # Dispatch NER to dedicated queue — document becomes searchable immediately
             extract_entities_for_job.apply_async(
-                args=[job_id, matter_id],
+                args=[doc_id, matter_id],
                 queue="ner",
             )
-            logger.info("task.import_text.ner_deferred", job_id=job_id)
+            logger.info("task.import_text.ner_deferred", doc_id=doc_id)
         else:
             from app.entities.extractor import EntityExtractor
 
@@ -2003,7 +2009,7 @@ def import_text_document(
                 "section_heading": chunk.metadata.get("section_heading", ""),
                 "chunk_text": chunk.text,
                 "chunk_index": chunk.chunk_index,
-                "doc_id": job_id,
+                "doc_id": doc_id,
                 "token_count": chunk.token_count,
             }
             if matter_id is not None:
@@ -2041,7 +2047,7 @@ def import_text_document(
             asyncio.run(
                 _index_to_neo4j(
                     settings=settings,
-                    doc_id=job_id,
+                    doc_id=doc_id,
                     filename=filename,
                     doc_type=doc_type,
                     page_count=page_count,
@@ -2053,28 +2059,18 @@ def import_text_document(
             )
             logger.info("task.neo4j_indexed", entities=len(all_entities))
         except Exception:
-            logger.error("task.neo4j_index_failed", doc_id=job_id, exc_info=True)
+            logger.error("task.neo4j_index_failed", doc_id=doc_id, exc_info=True)
 
         # ---------------------------------------------------------------
-        # Stage 6: COMPLETE — document record + post-processing
+        # Stage 6: COMPLETE — finalize document record + post-processing
         # ---------------------------------------------------------------
-        doc_id = _create_document_record(
+        _finalize_document_record(
             engine=engine,
-            job_id=job_id,
-            filename=filename,
-            doc_type=doc_type,
-            page_count=page_count,
+            doc_id=doc_id,
             chunk_count=len(chunks),
             entity_count=len(all_entities),
-            minio_path=minio_path,
-            file_size=file_size,
-            content_hash=content_hash,
-            matter_id=matter_id,
             metadata=metadata,
         )
-
-        # Update Qdrant payload with real document ID (was using job_id as placeholder)
-        _update_qdrant_doc_id(settings.qdrant_url, job_id, doc_id)
 
         # Set import_source on the document record
         if import_source:
@@ -2510,20 +2506,24 @@ def _wait_for_memory(
     default_retry_delay=60,
     acks_late=True,
 )
-def extract_entities_for_job(self, job_id: str, matter_id: str | None = None) -> dict:
+def extract_entities_for_job(self, doc_id_or_job_id: str, matter_id: str | None = None) -> dict:
     """Run GLiNER NER for a document that was ingested with deferred NER.
 
     Reads chunk texts from Qdrant, runs batched GLiNER extraction, indexes
     entities to Neo4j, and updates ``entity_count`` in PostgreSQL.
 
+    The first argument accepts either ``documents.id`` (new callers) or
+    ``job_id`` (legacy in-flight tasks).  A DB lookup resolves to the
+    canonical ``documents.id``.
+
     Includes memory guard: pauses when available RAM drops below 2GB,
     rejects the task back to queue below 1GB.
     """
     structlog.contextvars.clear_contextvars()
-    structlog.contextvars.bind_contextvars(task_id=self.request.id, job_id=job_id)
+    structlog.contextvars.bind_contextvars(task_id=self.request.id, doc_id=doc_id_or_job_id)
 
     # Memory guard — prevent OOM under high NER concurrency
-    _wait_for_memory(min_gb=2.0, critical_gb=1.0, task=self, job_id=job_id)
+    _wait_for_memory(min_gb=2.0, critical_gb=1.0, task=self, job_id=doc_id_or_job_id)
 
     from app.config import Settings
     from app.entities.extractor import EntityExtractor
@@ -2536,6 +2536,21 @@ def extract_entities_for_job(self, job_id: str, matter_id: str | None = None) ->
     except Exception:
         pass  # Feature flag DB may not be initialised yet
 
+    # Resolve to canonical documents.id (handles both doc_id and legacy job_id)
+    doc_id = doc_id_or_job_id
+    try:
+        with engine.connect() as conn:
+            row = conn.execute(
+                text(
+                    "SELECT CAST(id AS text) FROM documents WHERE id = CAST(:val AS uuid) OR job_id = CAST(:val AS uuid)"
+                ),
+                {"val": doc_id_or_job_id},
+            ).first()
+            if row:
+                doc_id = row[0]
+    except Exception:
+        pass  # Fall through with original value
+
     try:
         from qdrant_client import QdrantClient
 
@@ -2545,7 +2560,7 @@ def extract_entities_for_job(self, job_id: str, matter_id: str | None = None) ->
         scroll_result = qdrant.scroll(
             collection_name="nexus_text",
             scroll_filter={
-                "must": [{"key": "doc_id", "match": {"value": job_id}}],
+                "must": [{"key": "doc_id", "match": {"value": doc_id}}],
             },
             limit=10_000,
             with_payload=True,
@@ -2554,8 +2569,8 @@ def extract_entities_for_job(self, job_id: str, matter_id: str | None = None) ->
         points = scroll_result[0]
 
         if not points:
-            logger.warning("task.deferred_ner.no_chunks", job_id=job_id)
-            return {"job_id": job_id, "status": "no_chunks", "entity_count": 0}
+            logger.warning("task.deferred_ner.no_chunks", doc_id=doc_id)
+            return {"doc_id": doc_id, "status": "no_chunks", "entity_count": 0}
 
         # Sort by chunk_index for stable ordering
         points.sort(key=lambda p: p.payload.get("chunk_index", 0))
@@ -2589,7 +2604,7 @@ def extract_entities_for_job(self, job_id: str, matter_id: str | None = None) ->
 
         logger.info(
             "task.deferred_ner.extracted",
-            job_id=job_id,
+            doc_id=doc_id,
             entity_count=len(all_entities),
             chunk_count=len(chunk_texts),
         )
@@ -2608,7 +2623,7 @@ def extract_entities_for_job(self, job_id: str, matter_id: str | None = None) ->
                 graph_svc = GraphService(async_driver)
                 asyncio.run(
                     graph_svc.index_entities_for_document(
-                        doc_id=job_id,
+                        doc_id=doc_id,
                         entities=all_entities,
                         matter_id=matter_id,
                     )
@@ -2623,22 +2638,21 @@ def extract_entities_for_job(self, job_id: str, matter_id: str | None = None) ->
                 text(
                     """
                     UPDATE documents SET entity_count = :count, updated_at = now()
-                    WHERE job_id = CAST(:job_id AS uuid)
-                       OR id = CAST(:job_id AS uuid)
+                    WHERE id = CAST(:doc_id AS uuid)
                     """
                 ),
-                {"count": len(all_entities), "job_id": job_id},
+                {"count": len(all_entities), "doc_id": doc_id},
             )
             conn.commit()
 
         return {
-            "job_id": job_id,
+            "doc_id": doc_id,
             "status": "complete",
             "entity_count": len(all_entities),
         }
 
     except Exception as exc:
-        logger.error("task.deferred_ner.failed", job_id=job_id, error=str(exc), exc_info=True)
+        logger.error("task.deferred_ner.failed", doc_id=doc_id, error=str(exc), exc_info=True)
         raise self.retry(exc=exc)
     finally:
         engine.dispose()

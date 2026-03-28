@@ -59,7 +59,8 @@ def test_import_text_document_skips_parse() -> None:
         patch("app.ingestion.tasks._store_celery_task_id"),
         patch("app.ingestion.bulk_import.check_resume", return_value=False),
         patch("app.ingestion.tasks._upload_to_minio"),
-        patch("app.ingestion.tasks._create_document_record", return_value=str(uuid4())),
+        patch("app.ingestion.tasks._create_document_record_early", return_value=str(uuid4())),
+        patch("app.ingestion.tasks._finalize_document_record"),
         patch("app.ingestion.tasks.asyncio.run") as mock_arun,
         patch("app.ingestion.chunker.TextChunker", mock_chunker_cls),
         patch("qdrant_client.QdrantClient", mock_qdrant_cls),
@@ -141,8 +142,8 @@ def test_import_text_document_dedup_skips() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_import_text_updates_qdrant_doc_id() -> None:
-    """import_text_document must call _update_qdrant_doc_id to reconcile IDs."""
+def test_import_text_uses_document_id_in_qdrant() -> None:
+    """import_text_document must use documents.id (not job_id) in Qdrant payloads."""
     job_id = str(uuid4())
     real_doc_id = str(uuid4())
     text_content = "Legal document text."
@@ -180,13 +181,13 @@ def test_import_text_updates_qdrant_doc_id() -> None:
         patch("app.ingestion.tasks._store_celery_task_id"),
         patch("app.ingestion.bulk_import.check_resume", return_value=False),
         patch("app.ingestion.tasks._upload_to_minio"),
-        patch("app.ingestion.tasks._create_document_record", return_value=real_doc_id),
+        patch("app.ingestion.tasks._create_document_record_early", return_value=real_doc_id),
+        patch("app.ingestion.tasks._finalize_document_record"),
         patch("app.ingestion.tasks.asyncio.run") as mock_arun,
         patch("app.ingestion.chunker.TextChunker", mock_chunker_cls),
         patch("qdrant_client.QdrantClient", mock_qdrant_cls),
         patch("app.entities.extractor.EntityExtractor", mock_extractor_cls),
         patch("app.ingestion.tasks.detect_duplicates"),
-        patch("app.ingestion.tasks._update_qdrant_doc_id") as mock_update_doc_id,
     ):
         mock_arun.side_effect = [
             [[0.1] * 1024],  # _embed_chunks
@@ -204,11 +205,11 @@ def test_import_text_updates_qdrant_doc_id() -> None:
         )
 
         assert result["status"] == "complete"
-        # _update_qdrant_doc_id must be called with qdrant_url, job_id, doc_id
-        mock_update_doc_id.assert_called_once()
-        call_args = mock_update_doc_id.call_args
-        assert call_args[0][1] == job_id
-        assert call_args[0][2] == real_doc_id
+        # Qdrant payload should use documents.id, not job_id
+        upsert_call = mock_qdrant_cls.return_value.upsert.call_args
+        points = upsert_call.kwargs.get("points") or upsert_call[1].get("points")
+        assert points[0].payload["doc_id"] == real_doc_id
+        assert points[0].payload["doc_id"] != job_id
 
 
 # ---------------------------------------------------------------------------

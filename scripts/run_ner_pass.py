@@ -78,8 +78,7 @@ def find_docs_needing_ner(engine, matter_id: str, limit: int | None = None) -> l
         rows = conn.execute(text(query), {"mid": matter_id}).fetchall()
         return [
             {
-                "id": str(r.id),  # Qdrant doc_id payload uses documents.id
-                "neo4j_id": str(r.job_id),  # Neo4j Document.id uses job_id
+                "id": str(r.id),  # documents.id — used for both Qdrant and Neo4j
                 "filename": r.filename,
                 "chunk_count": r.chunk_count,
             }
@@ -141,11 +140,10 @@ def update_entity_count(engine, doc_id: str, count: int) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _run_ner_on_doc(doc_id: str, neo4j_id: str, doc_filename: str, matter_id: str) -> tuple[str, int]:
+def _run_ner_on_doc(doc_id: str, doc_filename: str, matter_id: str) -> tuple[str, int]:
     """Run NER on a single document. Called in a worker process.
 
-    *doc_id* is ``documents.id`` (used for Qdrant lookups).
-    *neo4j_id* is ``documents.job_id`` (used for Neo4j Document node matching).
+    *doc_id* is ``documents.id`` — used for both Qdrant and Neo4j lookups.
 
     Each worker loads its own GLiNER model. Returns (doc_id, entity_count).
     """
@@ -186,9 +184,9 @@ def _run_ner_on_doc(doc_id: str, neo4j_id: str, doc_filename: str, matter_id: st
     if not entities:
         return doc_id, 0
 
-    # Index to Neo4j (uses job_id as Document node ID)
+    # Index to Neo4j
     try:
-        asyncio.run(_index_entities_neo4j(settings, neo4j_id, entities, matter_id))
+        asyncio.run(_index_entities_neo4j(settings, doc_id, entities, matter_id))
     except Exception:
         logger.warning("ner_pass.neo4j_failed", doc_id=doc_id, exc_info=True)
 
@@ -303,7 +301,7 @@ def main() -> int:
             # Sequential (single process, useful for debugging)
             for doc in docs:
                 try:
-                    doc_id, ent_count = _run_ner_on_doc(doc["id"], doc["neo4j_id"], doc["filename"], args.matter_id)
+                    doc_id, ent_count = _run_ner_on_doc(doc["id"], doc["filename"], args.matter_id)
                     processed += 1
                     total_entities += ent_count
                     if tracker:

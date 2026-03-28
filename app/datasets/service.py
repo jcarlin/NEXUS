@@ -695,12 +695,11 @@ class DatasetService:
     ) -> list[str]:
         """Resolve a dataset to a list of document IDs for Qdrant filtering.
 
-        Returns job_ids (stored as doc_id in Qdrant payloads) rather than
-        document UUIDs, since Qdrant chunks reference the job_id.
+        Returns documents.id (stored as doc_id in Qdrant payloads).
         """
         result = await db.execute(
             text("""
-                SELECT CAST(doc.job_id AS text) AS doc_id
+                SELECT CAST(doc.id AS text) AS doc_id
                 FROM documents doc
                 JOIN dataset_documents dd ON dd.document_id = doc.id
                 WHERE dd.dataset_id = :dataset_id AND doc.matter_id = :matter_id
