@@ -37,6 +37,23 @@ def _create_job_sync(
 ) -> str:
     """Insert a job row synchronously and return the job_id string."""
     job_id = str(uuid4())
+
+    # Validate matter_id FK to avoid IntegrityError on stale references
+    if matter_id is not None:
+        with engine.connect() as conn:
+            exists = conn.execute(
+                text("SELECT 1 FROM case_matters WHERE id = :mid"),
+                {"mid": matter_id},
+            ).first()
+        if not exists:
+            logger.warning(
+                "job.matter_id_not_found",
+                matter_id=matter_id,
+                task_type=task_type,
+                action="falling_back_to_null",
+            )
+            matter_id = None
+
     with engine.connect() as conn:
         conn.execute(
             text(

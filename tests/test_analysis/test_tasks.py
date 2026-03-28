@@ -105,3 +105,63 @@ class TestScanMatterHotDocsJobTracking:
         complete_calls = [c for c in mock_update.call_args_list if c.args[2] == "complete"]
         assert len(complete_calls) == 1
         assert complete_calls[0].kwargs.get("progress", {}).get("dispatched") == 2
+
+
+class TestCreateJobSyncMatterValidation:
+    """Verify _create_job_sync validates matter_id before INSERT."""
+
+    def test_valid_matter_id_passes_through(self):
+        engine = MagicMock()
+        conn = MagicMock()
+        engine.connect.return_value.__enter__ = MagicMock(return_value=conn)
+        engine.connect.return_value.__exit__ = MagicMock(return_value=False)
+
+        # First call (SELECT validation) returns a row → matter exists
+        conn.execute.return_value.first.return_value = (1,)
+
+        from app.analysis.tasks import _create_job_sync
+
+        job_id = _create_job_sync(engine, "valid-matter", "test_type", "Test")
+
+        assert isinstance(job_id, str)
+        # Two engine.connect() calls: one for SELECT, one for INSERT
+        assert engine.connect.call_count == 2
+        # The INSERT should contain the original matter_id
+        insert_call = conn.execute.call_args_list[-1]
+        insert_params = insert_call.args[1]
+        assert insert_params["matter_id"] == "valid-matter"
+
+    def test_invalid_matter_id_falls_back_to_null(self):
+        engine = MagicMock()
+        conn = MagicMock()
+        engine.connect.return_value.__enter__ = MagicMock(return_value=conn)
+        engine.connect.return_value.__exit__ = MagicMock(return_value=False)
+
+        # First call (SELECT validation) returns None → matter missing
+        conn.execute.return_value.first.return_value = None
+
+        from app.analysis.tasks import _create_job_sync
+
+        job_id = _create_job_sync(engine, "stale-matter", "test_type", "Test")
+
+        assert isinstance(job_id, str)
+        # The INSERT should have matter_id=None
+        insert_call = conn.execute.call_args_list[-1]
+        insert_params = insert_call.args[1]
+        assert insert_params["matter_id"] is None
+
+    def test_none_matter_id_skips_validation(self):
+        engine = MagicMock()
+        conn = MagicMock()
+        engine.connect.return_value.__enter__ = MagicMock(return_value=conn)
+        engine.connect.return_value.__exit__ = MagicMock(return_value=False)
+
+        from app.analysis.tasks import _create_job_sync
+
+        job_id = _create_job_sync(engine, None, "test_type", "Test")
+
+        assert isinstance(job_id, str)
+        # Only one engine.connect() call (the INSERT), no SELECT validation
+        assert engine.connect.call_count == 1
+        insert_params = conn.execute.call_args.args[1]
+        assert insert_params["matter_id"] is None
