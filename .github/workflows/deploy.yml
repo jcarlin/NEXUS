@@ -30,8 +30,11 @@ jobs:
             git fetch origin main
             git checkout origin/main
 
-            # Rebuild and restart changed services
-            sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.cloud.yml up -d --build api worker
+            # Pull latest infrastructure images (picks up version changes in docker-compose.yml)
+            sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.cloud.yml pull
+
+            # Rebuild and restart application services
+            sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.cloud.yml up -d --build api worker beat
 
             # Run any pending migrations
             sudo docker compose exec -T api alembic upgrade head
