@@ -145,7 +145,7 @@ def sync_bulk_import_counters() -> int:
                     GROUP BY bulk_import_job_id
                 ) sub
                 WHERE bi.id = sub.bulk_import_job_id
-                  AND bi.status = 'processing'
+                  AND bi.status IN ('processing', 'complete')
             """)
         )
         conn.commit()

@@ -36,6 +36,17 @@ Full local deployment with zero cloud API dependency.
 - **Destructive commands need extra care.** `git reset --hard`, `git clean -f`, and `git checkout .` are high-blast-radius. Even if you believe you're the only session, prefer targeted alternatives (`git restore <specific-file>`) or ask the user first.
 - **Don't auto-resolve conflicts on others' files.** If a merge/rebase conflict involves files you didn't edit, stop and ask the user which version to keep.
 
+### Infrastructure & Data Safety
+
+**These rules protect production data. Violating them causes irreversible data loss.**
+
+- **NEVER run `docker compose down -v`.** The `-v` flag deletes named volumes, destroying database contents (PostgreSQL, Neo4j, RabbitMQ). Use `docker compose down` (no `-v`) or `docker compose restart`. If a container is broken, remove only that specific container with `docker rm -f <container>`.
+- **NEVER delete Docker volumes.** Commands like `docker volume rm`, `docker volume prune`, or `docker system prune --volumes` destroy production data. Even `docker system prune` (without `--volumes`) is dangerous — always ask before running any prune command.
+- **NEVER delete GCP instances that have persistent disks with `auto-delete: true`.** Check with `gcloud compute instances describe` first. If you need to recreate an instance, set `--no-auto-delete` on the disk BEFORE deleting the instance.
+- **NEVER drop or truncate database tables** without explicit user approval. This includes `DROP TABLE`, `TRUNCATE`, and Alembic downgrades that drop columns.
+- **Prefer targeted fixes over scorched-earth restarts.** If one Docker container is broken, fix or recreate that container — don't `down` the entire stack. If one service is unhealthy, restart that service — don't reset the VM.
+- **Always verify data integrity after infrastructure changes.** After any restart, migration, or container recreation, check that PostgreSQL tables have data (`SELECT count(*) FROM documents`), Qdrant has points, and Neo4j has nodes.
+
 ### Versioning & Releases
 
 This project uses [Semantic Versioning](https://semver.org/) with `v`-prefixed git tags (`v1.11.0`).

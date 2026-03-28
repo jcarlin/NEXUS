@@ -2855,6 +2855,7 @@ def recover_orphan_jobs() -> dict:
                     WHERE status IN ('pending', 'processing')
                       AND updated_at < now() - INTERVAL '10 minutes'
                       AND task_type = 'ingestion'
+                      AND bulk_import_job_id IS NULL
                       AND (metadata_ IS NULL
                            OR metadata_->>'recovery_count' IS NULL
                            OR (metadata_->>'recovery_count')::int < 2)

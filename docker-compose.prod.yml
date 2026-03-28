@@ -44,6 +44,27 @@ services:
       start_period: 20s
     restart: unless-stopped
 
+  beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A workers.celery_app beat -l info --pidfile=/tmp/celerybeat.pid --schedule=/tmp/celerybeat-schedule
+    env_file: .env
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      POSTGRES_URL: postgresql+asyncpg://nexus:${POSTGRES_PASSWORD}@postgres:5432/nexus
+      POSTGRES_URL_SYNC: postgresql://nexus:${POSTGRES_PASSWORD}@postgres:5432/nexus
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: amqp://nexus:${RABBITMQ_PASSWORD:-nexus}@rabbitmq:5672/nexus
+      QDRANT_URL: http://qdrant:6333
+      NEO4J_URI: bolt://neo4j:7687
+      MINIO_ENDPOINT: minio:9000
+    restart: unless-stopped
+
   worker:
     build:
       context: .
