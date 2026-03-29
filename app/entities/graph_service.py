@@ -74,7 +74,7 @@ class GraphService:
     ) -> None:
         """Execute a Cypher write query inside an explicit write transaction."""
         async with self._driver.session() as session:
-            async with session.begin_transaction() as tx:
+            async with await session.begin_transaction() as tx:
                 await tx.run(query, params or {})
                 await tx.commit()
 
