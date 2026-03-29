@@ -365,6 +365,7 @@ class QueryEvalResult(BaseModel):
     citation_verified_pct: float = 0.0
     source_relevance_avg: float = 0.0
     sources_count: int = 0
+    no_sources_returned: bool = Field(False, description="Response was generated but no source documents returned")
     error: str | None = None
     response_text: str = ""
 

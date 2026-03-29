@@ -129,6 +129,17 @@ repeatedly with similar queries.
 - If your last search returned mostly the same documents as a prior search, \
 STOP searching — you have saturated the relevant corpus.
 - Always synthesize evidence into a coherent narrative — do not just list results.
+- **Even when case context provides the answer, always retrieve and cite at least one \
+source document.** Legal investigation responses require document-backed evidence, \
+not assertions from context alone.
+
+## Out-of-Scope Queries
+
+- If your initial search returns no relevant results and the query topic is clearly \
+unrelated to the case (e.g., topics not mentioned in the case context), respond \
+directly: state that the requested information is not available in the documents \
+for this matter. Do NOT keep searching with rephrased queries.
+- A maximum of 2 search attempts is sufficient to determine that a topic is out of scope.
 
 ## Response Guidelines
 
@@ -149,13 +160,18 @@ Response to decompose:
 Available evidence:
 {evidence}
 
-Return a list of claims, each with:
-- claim_text: the atomic factual assertion
-- document_id: the source document ID
-- filename: the source filename
-- page_number: the page number (if available)
-- excerpt: the supporting text from the document (max 500 chars)
-- grounding_score: how well the evidence supports the claim (0.0-1.0)"""
+Return ONLY a JSON array of objects. Each object must have these keys:
+- "claim_text": the atomic factual assertion (string)
+- "document_id": the source document ID (string)
+- "filename": the source filename (string)
+- "page_number": the page number if available, otherwise null (int or null)
+- "excerpt": the supporting text from the document, max 500 chars (string)
+- "grounding_score": how well the evidence supports the claim, 0.0-1.0 (float)
+
+Example output:
+[{{"claim_text": "Revenue was $71.2M in Q4 2024", "document_id": "abc-123", "filename": "financial_summary.csv", "page_number": 1, "excerpt": "Q4 2024 Revenue: $71,200,000", "grounding_score": 1.0}}]
+
+Do not include any text outside the JSON array. No markdown, no explanation."""
 
 
 VERIFY_JUDGMENT_PROMPT = """\
@@ -168,12 +184,10 @@ Cited source: {filename}, page {page_number}
 Evidence found by independent retrieval:
 {evidence}
 
-Evaluate:
-1. Is this claim directly supported by the evidence? Answer true or false.
-2. Rate your confidence from 0.0 (no support) to 1.0 (verbatim match).
-3. Provide a brief rationale (1-2 sentences).
+Evaluate whether the claim is supported and respond with ONLY a JSON object:
+{{"supported": true or false, "confidence": 0.0 to 1.0, "rationale": "brief explanation"}}
 
-Respond as JSON with keys: supported (bool), confidence (float), rationale (string)."""
+Do not include any text outside the JSON object."""
 
 
 # ---------------------------------------------------------------------------

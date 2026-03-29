@@ -333,7 +333,7 @@ async def test_query_graph_recursion_error_returns_budget_message(query_client):
         "/api/v1/query",
         json={"query": "complex multi-hop query"},
     )
-    assert response.status_code == 500
+    assert response.status_code == 422
     data = response.json()
     assert "detail" in data
     assert "processing budget" in data["detail"]

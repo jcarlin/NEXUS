@@ -185,6 +185,7 @@ async def run_full(
     matter_id: str = "00000000-0000-0000-0000-000000000001",
     credentials: tuple[str, str] = ("admin@example.com", "password123"),
     skip_judge: bool = False,
+    dataset_path: Path | None = None,
 ) -> EvaluationResult:
     """Execute a full evaluation against live infrastructure.
 
@@ -194,9 +195,10 @@ async def run_full(
     logger.info("eval.full.start", base_url=base_url, skip_judge=skip_judge)
 
     # 1. Load ground-truth dataset
-    dataset = load_ground_truth()
+    dataset = load_ground_truth(dataset_path)
     if not dataset.ground_truth:
-        raise RuntimeError("No ground-truth items in evaluation/data/ground_truth.json")
+        src = dataset_path or "evaluation/data/ground_truth.json"
+        raise RuntimeError(f"No ground-truth items in {src}")
 
     # 2. Authenticate
     async with httpx.AsyncClient(timeout=EVAL_QUERY_TIMEOUT_S) as client:
@@ -256,9 +258,15 @@ async def run_full(
 # ---------------------------------------------------------------------------
 
 
-def load_ground_truth() -> EvaluationDataset:
-    """Load the ground-truth dataset from evaluation/data/ground_truth.json."""
-    gt_path = Path(__file__).parent / "data" / "ground_truth.json"
+def load_ground_truth(dataset_path: Path | None = None) -> EvaluationDataset:
+    """Load a ground-truth dataset.
+
+    Args:
+        dataset_path: Path to a ground-truth JSON file.  When *None*
+            (the default) the built-in ``evaluation/data/ground_truth.json``
+            is used.
+    """
+    gt_path = dataset_path or (Path(__file__).parent / "data" / "ground_truth.json")
     if not gt_path.exists():
         return EvaluationDataset()
     raw = json.loads(gt_path.read_text())
@@ -381,6 +389,10 @@ async def _evaluate_single_query(
             mrr=round(r_metrics["mrr_at_k"], 4),
         )
 
+    # Flag queries that generated a response but returned no source documents.
+    # These should be reported separately rather than dragging down retrieval averages.
+    no_sources = bool(response_text and not source_docs and item.expected_documents)
+
     return QueryEvalResult(
         query_id=item.id,
         question=item.question,
@@ -395,6 +407,7 @@ async def _evaluate_single_query(
         citation_verified_pct=citation_verified_pct,
         source_relevance_avg=source_relevance_avg,
         sources_count=len(source_docs),
+        no_sources_returned=no_sources,
         response_text=response_text[:500],
     )
 
@@ -422,11 +435,15 @@ def _aggregate_query_results(
     if not functional_results:
         return _AggregatedMetrics([], None, None)
 
-    # Retrieval: average across all queries
-    avg_mrr = statistics.mean(r.mrr_at_10 for r in functional_results)
-    avg_recall = statistics.mean(r.recall_at_10 for r in functional_results)
-    avg_ndcg = statistics.mean(r.ndcg_at_10 for r in functional_results)
-    avg_precision = statistics.mean(r.precision_at_10 for r in functional_results)
+    # Retrieval: exclude queries that returned a response but zero sources
+    # (e.g., answered from case context). These are reported separately.
+    retrieval_results = [r for r in functional_results if not r.no_sources_returned]
+    if not retrieval_results:
+        retrieval_results = functional_results  # fallback: use all if all were zero-source
+    avg_mrr = statistics.mean(r.mrr_at_10 for r in retrieval_results)
+    avg_recall = statistics.mean(r.recall_at_10 for r in retrieval_results)
+    avg_ndcg = statistics.mean(r.ndcg_at_10 for r in retrieval_results)
+    avg_precision = statistics.mean(r.precision_at_10 for r in retrieval_results)
 
     retrieval = RetrievalMetrics(
         mode=RetrievalMode.HYBRID,
@@ -434,7 +451,7 @@ def _aggregate_query_results(
         recall_at_10=avg_recall,
         ndcg_at_10=avg_ndcg,
         precision_at_10=avg_precision,
-        num_queries=len(functional_results),
+        num_queries=len(retrieval_results),
     )
 
     # Citation from cited_claims

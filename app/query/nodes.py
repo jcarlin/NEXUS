@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import json
+import re
 from typing import TYPE_CHECKING, Any
 
 import structlog
@@ -848,10 +849,13 @@ async def _verify_single_claim(
         try:
             from app.query.schemas import VerificationJudgment
 
+            # Strip markdown code fences (common with Gemini)
+            judgment_cleaned = re.sub(r"^```(?:json)?\s*\n?", "", judgment_raw.strip())
+            judgment_cleaned = re.sub(r"\n?```\s*$", "", judgment_cleaned)
             judgment_json = json.loads(
-                judgment_raw
-                if judgment_raw.strip().startswith("{")
-                else judgment_raw[judgment_raw.find("{") : judgment_raw.rfind("}") + 1]
+                judgment_cleaned
+                if judgment_cleaned.strip().startswith("{")
+                else judgment_cleaned[judgment_cleaned.find("{") : judgment_cleaned.rfind("}") + 1]
             )
             judgment = VerificationJudgment(claim_index=claim.get("claim_index", 0), **judgment_json)
             claim["verification_status"] = "verified" if judgment.supported else "flagged"
@@ -1062,20 +1066,24 @@ async def reflect(state: dict) -> dict:
 
 def _parse_claims(raw: str) -> list[dict[str, Any]]:
     """Best-effort parse claims from LLM output."""
+    # Strip markdown code fences (common with Gemini)
+    stripped = re.sub(r"^```(?:json)?\s*\n?", "", raw.strip())
+    stripped = re.sub(r"\n?```\s*$", "", stripped)
+
     # Try JSON parsing first
     try:
-        parsed = json.loads(raw)
+        parsed = json.loads(stripped)
         if isinstance(parsed, list):
             return parsed
     except (json.JSONDecodeError, TypeError):
         pass
 
     # Try to find JSON array in the response
-    start = raw.find("[")
-    end = raw.rfind("]")
+    start = stripped.find("[")
+    end = stripped.rfind("]")
     if start != -1 and end != -1 and end > start:
         try:
-            parsed = json.loads(raw[start : end + 1])
+            parsed = json.loads(stripped[start : end + 1])
             if isinstance(parsed, list):
                 return parsed
         except (json.JSONDecodeError, TypeError):

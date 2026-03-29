@@ -153,13 +153,13 @@
     },
     {
       "id": "gt-016",
-      "question": "What are the terms of the Asset Purchase Agreement between Meridian Holdings and Cascade Partners?",
-      "expected_answer": "The Asset Purchase Agreement is between Meridian Holdings LLC (Buyer, Delaware LLC) and Cascade Partners Inc. (Seller, California corporation), entered into March 15, 2024.",
+      "question": "What are the key terms of the Agreement and Plan of Merger between Acme Corp and Pinnacle Industries?",
+      "expected_answer": "The merger agreement is between Acme Corp (Parent, Delaware corporation), Pinnacle Industries Inc. (Company, Colorado corporation), and Alpine Merger Sub Inc. (wholly owned subsidiary of Parent). Merger Sub merges into Pinnacle, with Pinnacle surviving as a wholly owned subsidiary of Acme Corp.",
       "category": "factual",
       "difficulty": "medium",
-      "expected_documents": ["test-contract.txt"],
+      "expected_documents": ["contract_excerpt_merger.txt"],
       "matter_id": "00000000-0000-0000-0000-000000000001",
-      "tags": ["contract", "asset-purchase"]
+      "tags": ["contract", "merger-agreement"]
     },
     {
       "id": "gt-017",

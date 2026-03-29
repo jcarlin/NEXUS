@@ -236,8 +236,8 @@ async def query(
 
         if "GraphRecursionError" in exc_type or "recursion" in str(exc).lower():
             raise HTTPException(
-                status_code=500,
-                detail="Query exceeded processing budget — too many tool calls. Try a simpler or more specific query.",
+                status_code=422,
+                detail="Query exceeded processing budget — too many tool calls. The requested information may not be available in this matter's documents. Try a simpler or more specific query.",
             ) from exc
 
         raise HTTPException(
