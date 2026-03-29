@@ -10,6 +10,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follo
 
 ## [Unreleased]
 
+## [1.18.0] - 2026-03-29
+
+### Added
+- EFTA corpus retrieval QA evaluation framework with 30 curated ground-truth questions across 3 difficulty levels, covering 16+ retrieval strategies (87e4b8d)
+- `scripts/sample_corpus.py` — corpus discovery script that queries the live API to extract entities, document types, graph stats, and relationship clusters (87e4b8d)
+- `scripts/build_efta_ground_truth.py` — semi-automated ground-truth builder with template-based question generation and optional API answer proposals (87e4b8d)
+- `--dataset` CLI parameter for `scripts/evaluate.py` to target alternate ground-truth files (87e4b8d)
+
 ## [1.17.0] - 2026-03-29
 
 ### Added
