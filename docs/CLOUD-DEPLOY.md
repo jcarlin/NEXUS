@@ -420,6 +420,53 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml \
 
 The GPU overlay adds NVIDIA passthrough to Ollama and optionally a TEI embedder. See `docker-compose.gpu.yml` for details.
 
+### Ingestion VM Setup
+
+For bulk ingestion of large corpora (10k+ documents), use a high-CPU VM with the ingestion overlay:
+
+```bash
+gcloud compute instances create nexus-ingest \
+  --zone=us-west1-a \
+  --machine-type=e2-standard-16 \
+  --boot-disk-size=250GB --boot-disk-type=pd-ssd \
+  --tags=nexus-web
+```
+
+Start the stack with the ingestion overlay:
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+  -f docker-compose.cloud.yml -f docker-compose.ingest.yml up -d
+```
+
+The ingestion overlay (`docker-compose.ingest.yml`) splits workers into two dedicated pools to prevent queue starvation:
+
+| Service | Default Replicas | Queues | Purpose |
+|---------|-----------------|--------|---------|
+| `worker` | 2 | default, bulk, background | I/O-bound import tasks (embedding API, Qdrant writes) |
+| `ner-worker` | 2 | ner | CPU-bound GLiNER entity extraction (8GB memory limit) |
+
+Both worker types set `OMP_NUM_THREADS=2` and `MKL_NUM_THREADS=2` to prevent PyTorch/numpy from consuming all cores via thread parallelism.
+
+**Tuning (set in `.env` on the VM):**
+```bash
+INGEST_WORKER_REPLICAS=2      # General worker replicas
+NER_WORKER_REPLICAS=2         # NER worker replicas
+CELERY_CONCURRENCY=1          # Tasks per general worker process
+NER_WORKER_CONCURRENCY=1      # Tasks per NER worker process
+DEFER_NER_TO_QUEUE=true       # Required: dispatch NER to separate queue
+```
+
+**Scaling dynamically** (no rebuild needed):
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+  -f docker-compose.cloud.yml -f docker-compose.ingest.yml \
+  up -d --scale worker=3 --scale ner-worker=3 --no-recreate
+```
+
+**Per-worker memory guideline:** ~5.7GB (Docling ~1GB, GLiNER ~600MB, sparse embedder ~300MB, torch ~800MB, working memory ~3GB). On a 64GB VM, 4-6 total workers is safe with infrastructure services overhead.
+
+**Data safety:** All workers use `acks_late=True` + `reject_on_worker_lost=True`. Restarting or scaling workers is always safe — in-flight tasks are redelivered by RabbitMQ.
+
 **Disk snapshots (weekly backup):**
 ```bash
 gcloud compute resource-policies create snapshot-schedule nexus-gpu-weekly \
