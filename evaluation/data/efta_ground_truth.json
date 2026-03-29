@@ -1,0 +1,699 @@
+{
+  "version": "2.0",
+  "ground_truth": [
+    {
+      "id": "efta-001",
+      "question": "Who is Jeffrey Epstein according to the documents?",
+      "expected_answer": "According to the documents in the case file, Jeffrey Epstein is identified as a financier, a convicted sex offender, and the defendant in a 2019 federal prosecution in the Southern District of New York [1, 2].\n\nKey identifiers from the documents include:\n\n*   **Defendant Status**: A 2019 protective order from the United States District Court for the Southern District of New York formally names him as the defendant in case No. 19 Cr. 490, styled *UNITED STATES OF AMERICA v. JEFFREY EPSTEIN, Defen",
+      "category": "factual",
+      "difficulty": "easy",
+      "expected_documents": [
+        "TEXT-001-HOUSE_OVERSIGHT_022216.txt_3778_msg0.eml",
+        "IMAGES-011-HOUSE_OVERSIGHT_031751.txt_13172_msg1.eml",
+        "EFTA00001357.pdf",
+        "IMAGES-007-HOUSE_OVERSIGHT_023001.txt_9533_msg0.eml",
+        "IMAGES-011-HOUSE_OVERSIGHT_031710.txt_1932_msg1.eml",
+        "HOUSE_OVERSIGHT_031352_msg3.eml",
+        "IMAGES-011-HOUSE_OVERSIGHT_030999.txt_3925_msg0.eml",
+        "HOUSE_OVERSIGHT_031348_msg1.eml",
+        "IMAGES-011-HOUSE_OVERSIGHT_031099.txt_4499_msg0.eml",
+        "TEXT-001-HOUSE_OVERSIGHT_031347.txt_6801_msg0.eml"
+      ],
+      "matter_id": "00000000-0000-0000-0000-000000000002",
+      "tags": [
+        "dense",
+        "entity-lookup"
+      ]
+    },
+    {
+      "id": "efta-002",
+      "question": "Who is Ghislaine Maxwell and what is her connection to Epstein?",
+      "expected_answer": "",
+      "category": "factual",
+      "difficulty": "easy",
+      "expected_documents": [
+        "EFTA00008874.pdf",
+        "IMAGES-011-HOUSE_OVERSIGHT_030584.txt_2726_msg0.eml",
+        "EFTA00008998.pdf",
+        "IMAGES-011-HOUSE_OVERSIGHT_030581.txt_4262_msg0.eml",
+        "IMAGES-011-HOUSE_OVERSIGHT_030522.txt_12500_msg0.eml",
+        "TEXT-001-HOUSE_OVERSIGHT_030460.txt_7310_msg0.eml",
+        "IMAGES-011-HOUSE_OVERSIGHT_030525.txt_8512_msg0.eml",
+        "TEXT-001-HOUSE_OVERSIGHT_030462.txt_8870_msg1.eml",
+        "HOUSE_OVERSIGHT_030465_msg1.eml",
+        "IMAGES-010-HOUSE_OVERSIGHT_030420.txt_8765_msg1.eml"
+      ],
+      "matter_id": "00000000-0000-0000-0000-000000000002",
+      "tags": [
+        "dense",
+        "entity-lookup",
+        "graph"
+      ]
+    },
+    {
+      "id": "efta-003",
+      "question": "What is the Non-Prosecution Agreement (NPA) referenced in the documents?",
+      "expected_answer": "Based on the available documents, the Non-Prosecution Agreement (NPA) was a legal agreement that resolved a federal investigation into Jeffrey Epstein [2]. Instead of facing federal charges, the agreement deferred prosecution in favor of a state-level prosecution [1].\n\nKey aspects of the NPA mentioned in the documents include:\n*   **Purpose**: The agreement was intended to achieve the goals of the federal investigation through mechanisms other than direct federal prosecution [2].\n*   **Terms**: ",
+      "category": "factual",
+      "difficulty": "easy",
+      "expected_documents": [
+        "IMAGES-002-HOUSE_OVERSIGHT_012617.txt_9580_msg2.eml",
+        "EFTA00009329.pdf",
+        "EFTA00009116.pdf",
+        "EFTA00009016.pdf"
+      ],
+      "matter_id": "00000000-0000-0000-0000-000000000002",
+      "tags": [
+        "dense",
+        "case-context"
+      ]
+    },
+    {
+      "id": "efta-004",
+      "question": "What role did the FBI play in the Epstein investigation?",
+      "expected_answer": "Based on the available evidence, the FBI played a role in two distinct phases of the Jeffrey Epstein investigation: an initial investigation in 2006 that was later closed, and a subsequent investigation that led to his 2019 arrest.\n\n### Initial Investigation (2006-2007)\n\nThe FBI initiated its own investigation into Jeffrey Epstein in July 2006 after the case was presented to them by the Palm Beach Police Department [4, 13]. The focus of the federal investigation was on potential violations of fe",
+      "category": "factual",
+      "difficulty": "easy",
+      "expected_documents": [
+        "HOUSE_OVERSIGHT_028536_msg0.eml",
+        "TEXT-001-HOUSE_OVERSIGHT_025918.txt_13539_msg8.eml",
+        "IMAGES-003-HOUSE_OVERSIGHT_016471.txt_6007_msg0.eml",
+        "EFTA00009632.pdf",
+        "HOUSE_OVERSIGHT_029882_msg9.eml",
+        "IMAGES-010-HOUSE_OVERSIGHT_028536.txt_7144_msg0.eml",
+        "EFTA00009229.pdf",
+        "IMAGES-011-HOUSE_OVERSIGHT_031751.txt_13172_msg1.eml",
+        "TEXT-001-HOUSE_OVERSIGHT_021764.txt_15033_msg0.eml",
+        "EFTA00008585.pdf"
+      ],
+      "matter_id": "00000000-0000-0000-0000-000000000002",
+      "tags": [
+        "dense",
+        "entity-lookup",
+        "graph"
+      ]
+    },
+    {
+      "id": "efta-005",
+      "question": "What is Prince Andrew's connection to Jeffrey Epstein according to the documents?",
+      "expected_answer": "Based on the documents, Prince Andrew had a documented social and travel relationship with Jeffrey Epstein and is implicated in the sexual trafficking conspiracy by a victim.\n\nKey connections established in the evidence are:\n\n*   **Travel on Epstein's Private Jet:** Flight manifests for Jeffrey Epstein's private jet list an \"Andrew Albert,\" which is reportedly an alias for Prince Andrew, as a passenger on multiple flights [1, 2].\n*   **Allegations by a Victim:** Virginia Giuffre, a plaintiff in ",
+      "category": "factual",
+      "difficulty": "easy",
+      "expected_documents": [
+        "TEXT-001-HOUSE_OVERSIGHT_030412.txt_5795_msg0.eml",
+        "IMAGES-011-HOUSE_OVERSIGHT_030522.txt_12500_msg0.eml",
+        "HOUSE_OVERSIGHT_021806_msg3.eml",
+        "IMAGES-010-HOUSE_OVERSIGHT_029766.txt_9735_msg0.eml",
+        "IMAGES-010-HOUSE_OVERSIGHT_030456.txt_2586_msg2.eml",
+        "IMAGES-011-HOUSE_OVERSIGHT_030512.txt_14092_msg0.eml",
+        "TEXT-001-HOUSE_OVERSIGHT_030460.txt_7310_msg0.eml",
+        "TEXT-001-HOUSE_OVERSIGHT_030470.txt_12049_msg0.eml",
+        "IMAGES-010-HOUSE_OVERSIGHT_030454.txt_679_msg1.eml",
+        "HOUSE_OVERSIGHT_030512_msg0.eml"
+      ],
+      "matter_id": "00000000-0000-0000-0000-000000000002",
+      "tags": [
+        "dense",
+        "graph",
+        "entity-lookup"
+      ]
+    },
+    {
+      "id": "efta-006",
+      "question": "What role did the Palm Beach Police Department play in the investigation?",
+      "expected_answer": "The Palm Beach Police Department (PBPD) initiated the original investigation into Jeffrey Epstein in March 2005 [1]. The investigation began after the department received a report from the parents of a minor who believed their stepdaughter had been molested by a resident of Palm Beach [1].\n\nDuring their investigation, the PBPD interviewed at least one of the young women involved [2]. The department also obtained a probable cause affidavit against one individual connected to the case [3]. Evidenc",
+      "category": "factual",
+      "difficulty": "easy",
+      "expected_documents": [
+        "EFTA00009448.pdf",
+        "EFTA00009478.pdf",
+        "TEXT-001-HOUSE_OVERSIGHT_026329.txt_1527_msg7.eml",
+        "HOUSE_OVERSIGHT_026026_msg1.eml",
+        "HOUSE_OVERSIGHT_032947_msg7.eml",
+        "HOUSE_OVERSIGHT_031217_msg0.eml",
+        "HOUSE_OVERSIGHT_021792_msg2.eml",
+        "HOUSE_OVERSIGHT_031662_msg6.eml",
+        "TEXT-001-HOUSE_OVERSIGHT_025875.txt_12910_msg0.eml",
+        "EFTA00003868.pdf"
+      ],
+      "matter_id": "00000000-0000-0000-0000-000000000002",
+      "tags": [
+        "dense",
+        "entity-lookup"
+      ]
+    },
+    {
+      "id": "efta-007",
+      "question": "Who is Bill Clinton and how is he mentioned in the documents?",
+      "expected_answer": "William \"Bill\" Clinton is the 42nd President of the United States [1]. He is mentioned in the document corpus in several contexts, primarily related to his association with Jeffrey Epstein.\n\n**Key Mentions:**\n\n*   **Travel:** An email exchange includes a link to a Daily Mail article alleging that Bill Clinton was identified in a lawsuit against Jeffrey Epstein and that he had visited Epstein's Caribbean compound multiple times [11, 15]. Another email asks for photos from a \"clinton trip to afric",
+      "category": "factual",
+      "difficulty": "easy",
+      "expected_documents": [
+        "TEXT-001-HOUSE_OVERSIGHT_025878.txt_12950_msg0.eml",
+        "HOUSE_OVERSIGHT_029325_msg0.eml",
+        "TEXT-001-HOUSE_OVERSIGHT_029325.txt_8688_msg0.eml",
+        "IMAGES-010-HOUSE_OVERSIGHT_028486.txt_11244_msg0.eml",
+        "HOUSE_OVERSIGHT_025878_msg0.eml",
+        "TEXT-001-HOUSE_OVERSIGHT_031327.txt_2005_msg1.eml",
+        "TEXT-001-HOUSE_OVERSIGHT_030600.txt_605_msg2.eml",
+        "HOUSE_OVERSIGHT_029973_msg5.eml",
+        "TEXT-001-HOUSE_OVERSIGHT_030015.txt_4557_msg0.eml",
+        "HOUSE_OVERSIGHT_029574_msg2.eml"
+      ],
+      "matter_id": "00000000-0000-0000-0000-000000000002",
+      "tags": [
+        "dense",
+        "entity-lookup"
+      ]
+    },
+    {
+      "id": "efta-008",
+      "question": "What is Little St. James island and its significance in the documents?",
+      "expected_answer": "Little St. James is an island in the U.S. Virgin Islands that was owned by Jeffrey Epstein [1, 2]. Documents from Epstein's estate include architectural plans and staff manuals for the island, indicating it was a significant property with cabanas, pavilions, and a screening room [3, 4, 5].\n\nThe island's significance to the case is its alleged role as a location for sexual abuse and trafficking. According to an interview with an individual identified as \"Doe #3,\" Epstein would send her to the isl",
+      "category": "factual",
+      "difficulty": "easy",
+      "expected_documents": [
+        "EFTA00002702.pdf",
+        "EFTA00003147.pdf",
+        "EFTA00002697.pdf",
+        "EFTA00002698.pdf",
+        "EFTA00002700.pdf",
+        "EFTA00002644.pdf",
+        "HOUSE_OVERSIGHT_025880_msg0.eml",
+        "TEXT-001-HOUSE_OVERSIGHT_025879.txt_14468_msg0.eml",
+        "IMAGES-008-HOUSE_OVERSIGHT_026358.txt_4529_msg0.eml",
+        "EFTA00002652.pdf"
+      ],
+      "matter_id": "00000000-0000-0000-0000-000000000002",
+      "tags": [
+        "dense",
+        "entity-lookup",
+        "graph"
+      ]
+    },
+    {
+      "id": "efta-009",
+      "question": "What is the current status of cryptocurrency regulation in the United States?",
+      "expected_answer": "This question is outside the scope of the document corpus.",
+      "category": "factual",
+      "difficulty": "easy",
+      "expected_documents": [],
+      "matter_id": "00000000-0000-0000-0000-000000000002",
+      "tags": [
+        "out-of-scope"
+      ]
+    },
+    {
+      "id": "efta-010",
+      "question": "What patent disputes exist between entities mentioned in these documents?",
+      "expected_answer": "The document corpus does not contain information about patent disputes.",
+      "category": "factual",
+      "difficulty": "easy",
+      "expected_documents": [],
+      "matter_id": "00000000-0000-0000-0000-000000000002",
+      "tags": [
+        "out-of-scope"
+      ]
+    },
+    {
+      "id": "efta-011",
+      "question": "What connections exist between Donald Trump and Jeffrey Epstein according to the documents?",
+      "expected_answer": "Based on the available documents, several connections between Donald Trump and Jeffrey Epstein are described:\n\n**Social and Financial Relationship:**\n*   One document characterizes Donald Trump and Jeffrey Epstein as having been \"close friends\u2014playboys in arms, as it were\u2014for more than a decade\" [7].\n*   The same document suggests a financial connection, stating that Epstein provided \"financial expertise\" to Trump, who was \"beholden to Deutsch Bank\" [7]. Specifically, Epstein advised Trump on co",
+      "category": "analytical",
+      "difficulty": "medium",
+      "expected_documents": [
+        "HOUSE_OVERSIGHT_032065_msg0.eml",
+        "TEXT-002-HOUSE_OVERSIGHT_032775.txt_15116_msg1.eml",
+        "HOUSE_OVERSIGHT_032775_msg0.eml",
+        "HOUSE_OVERSIGHT_031516_msg1.eml",
+        "HOUSE_OVERSIGHT_032778_msg0.eml",
+        "IMAGES-011-HOUSE_OVERSIGHT_031516.txt_4822_msg0.eml",
+        "IMAGES-011-HOUSE_OVERSIGHT_030974.txt_817_msg1.eml",
+        "TEXT-001-HOUSE_OVERSIGHT_029907.txt_9701_msg0.eml",
+        "TEXT-001-HOUSE_OVERSIGHT_030980.txt_6134_msg1.eml",
+        "IMAGES-011-HOUSE_OVERSIGHT_031462.txt_4228_msg3.eml"
+      ],
+      "matter_id": "00000000-0000-0000-0000-000000000002",
+      "tags": [
+        "graph",
+        "text-to-cypher",
+        "dense"
+      ]
+    },
+    {
+      "id": "efta-012",
+      "question": "Describe the timeline of the Epstein investigation from the Palm Beach police inquiry through the federal prosecution.",
+      "expected_answer": "Based on the available documents, the timeline of the Jeffrey Epstein investigation is as follows:\n\n**Palm Beach Investigation (c. 2005 \u2013 2006)**\n*   **Circa 2005:** The investigation into Jeffrey Epstein began with the Palm Beach Police Department (PBPD) after a witness stated she had recruited minor victims for him [3]. The PBPD obtained evidence, including message pads from a search of Epstein's residence, to identify victims [14].\n*   **June 2006:** Epstein was indicted in Palm Beach County ",
+      "category": "timeline",
+      "difficulty": "medium",
+      "expected_documents": [
+        "EFTA00008585.pdf",
+        "HOUSE_OVERSIGHT_031217_msg0.eml",
+        "EFTA00008529.pdf",
+        "HOUSE_OVERSIGHT_021762_msg1.eml",
+        "HOUSE_OVERSIGHT_021792_msg2.eml",
+        "EFTA00008631.pdf",
+        "EFTA00009632.pdf",
+        "EFTA00009550.pdf",
+        "IMAGES-011-HOUSE_OVERSIGHT_031751.txt_13172_msg1.eml",
+        "HOUSE_OVERSIGHT_021761_msg0.eml"
+      ],
+      "matter_id": "00000000-0000-0000-0000-000000000002",
+      "tags": [
+        "temporal",
+        "multi-doc",
+        "dense"
+      ]
+    },
+    {
+      "id": "efta-013",
+      "question": "What organizations are mentioned in the FBI interview reports?",
+      "expected_answer": "Based on the available FBI interview reports and related documents, the following organizations are mentioned:\n\n*   **Palm Beach Police Department**: An individual associated with the Palm Beach Police Department was interviewed regarding their identification of one of the girls who had frequented Jeffrey Epstein's house [1].\n\nOther documents mention internal FBI communications, such as travel requests between FBI Miami and FBI New York for the purpose of conducting witness interviews [2], and t",
+      "category": "analytical",
+      "difficulty": "medium",
+      "expected_documents": [
+        "EFTA00004070.pdf",
+        "TEXT-001-HOUSE_OVERSIGHT_030927.txt_8324_msg0.eml",
+        "HOUSE_OVERSIGHT_031493_msg5.eml",
+        "EFTA00009440.pdf",
+        "IMAGES-006-HOUSE_OVERSIGHT_021475.txt_10524_msg0.eml",
+        "EFTA00009550.pdf",
+        "HOUSE_OVERSIGHT_025656_msg1.eml",
+        "EFTA00009586.pdf",
+        "IMAGES-005-HOUSE_OVERSIGHT_019388.txt_15438_msg0.eml",
+        "IMAGES-008-HOUSE_OVERSIGHT_025655.txt_2053_msg1.eml"
+      ],
+      "matter_id": "00000000-0000-0000-0000-000000000002",
+      "tags": [
+        "dense",
+        "sparse",
+        "entity-lookup"
+      ]
+    },
+    {
+      "id": "efta-014",
+      "question": "What did witnesses state about Epstein's activities in Palm Beach, Florida?",
+      "expected_answer": "Based on the evidence from the documents, witnesses have made the following statements regarding Jeffrey Epstein's activities in Palm Beach, Florida:\n\n**Recruitment and Exploitation of Minors:**\n*   A witness stated that around 2005, she recruited minor victims for Epstein in Palm Beach [1]. She also brought girls who were over 18 to him [1].\n*   Another witness described being introduced to Epstein's assistant at his house, taken to his bedroom for a \"massage,\" and stated, \"I was naked and he t",
+      "category": "factual",
+      "difficulty": "medium",
+      "expected_documents": [
+        "EFTA00008529.pdf",
+        "EFTA00009632.pdf",
+        "EFTA00008631.pdf",
+        "EFTA00009116.pdf",
+        "EFTA00008920.pdf",
+        "IMAGES-011-HOUSE_OVERSIGHT_031751.txt_13172_msg1.eml",
+        "EFTA00008585.pdf",
+        "IMAGES-006-HOUSE_OVERSIGHT_021758.txt_2870_msg0.eml",
+        "EFTA00008744.pdf",
+        "TEXT-001-HOUSE_OVERSIGHT_030616.txt_2653_msg0.eml"
+      ],
+      "matter_id": "00000000-0000-0000-0000-000000000002",
+      "tags": [
+        "dense",
+        "reranker",
+        "multi-query"
+      ]
+    },
+    {
+      "id": "efta-015",
+      "question": "What role did Harvard University play in connection with Jeffrey Epstein?",
+      "expected_answer": "Based on the available evidence, Harvard University's connection to Jeffrey Epstein was primarily as a recipient of his financial donations, which were directed to a specific academic program.\n\nKey findings include:\n\n*   **Financial Contributions**: Jeffrey Epstein was a known philanthropist who provided funding to various scientific endeavors [4]. His contributions extended to Harvard University [1, 2, 5].\n*   **Program for Evolutionary Dynamics**: The evidence specifically identifies Epstein a",
+      "category": "analytical",
+      "difficulty": "medium",
+      "expected_documents": [
+        "IMAGES-011-HOUSE_OVERSIGHT_031751.txt_13172_msg1.eml",
+        "TEXT-001-HOUSE_OVERSIGHT_022216.txt_3778_msg0.eml",
+        "TEXT-001-HOUSE_OVERSIGHT_031008.txt_12056_msg0.eml",
+        "IMAGES-011-HOUSE_OVERSIGHT_031710.txt_1932_msg1.eml",
+        "IMAGES-011-HOUSE_OVERSIGHT_031099.txt_4499_msg0.eml",
+        "HOUSE_OVERSIGHT_031002_msg0.eml",
+        "IMAGES-007-HOUSE_OVERSIGHT_023001.txt_9533_msg0.eml",
+        "IMAGES-011-HOUSE_OVERSIGHT_030999.txt_3925_msg0.eml",
+        "HOUSE_OVERSIGHT_031348_msg1.eml",
+        "TEXT-002-HOUSE_OVERSIGHT_032775.txt_15116_msg1.eml"
+      ],
+      "matter_id": "00000000-0000-0000-0000-000000000002",
+      "tags": [
+        "dense",
+        "graph",
+        "entity-lookup"
+      ]
+    },
+    {
+      "id": "efta-016",
+      "question": "What do the documents reveal about the U.S. Attorney's Office handling of the Epstein case?",
+      "expected_answer": "Based on the available documents, the U.S. Attorney's Office's handling of the Jeffrey Epstein case, particularly in the Southern District of Florida (SDFL), was marked by significant legal and procedural failings, leading to internal review and judicial condemnation.\n\n### Violation of Victims' Rights\n\nA federal court found that federal prosecutors in Florida \"intentionally violated the Crime Victims' Rights Act\" (CVRA) [1]. In a 33-page opinion, the judge stated that prosecutors misled the vict",
+      "category": "analytical",
+      "difficulty": "medium",
+      "expected_documents": [
+        "TEXT-001-HOUSE_OVERSIGHT_031403.txt_14820_msg0.eml",
+        "IMAGES-002-HOUSE_OVERSIGHT_012617.txt_9580_msg2.eml",
+        "TEXT-001-HOUSE_OVERSIGHT_031428.txt_13307_msg1.eml",
+        "IMAGES-007-HOUSE_OVERSIGHT_023001.txt_9533_msg0.eml",
+        "TEXT-001-HOUSE_OVERSIGHT_031399.txt_13185_msg0.eml",
+        "HOUSE_OVERSIGHT_031392_msg0.eml",
+        "HOUSE_OVERSIGHT_031384_msg0.eml",
+        "IMAGES-011-HOUSE_OVERSIGHT_031399.txt_10540_msg0.eml",
+        "HOUSE_OVERSIGHT_031403_msg0.eml",
+        "IMAGES-011-HOUSE_OVERSIGHT_031751.txt_13172_msg1.eml"
+      ],
+      "matter_id": "00000000-0000-0000-0000-000000000002",
+      "tags": [
+        "sparse",
+        "dense",
+        "multi-query"
+      ]
+    },
+    {
+      "id": "efta-017",
+      "question": "What financial information or monetary amounts are documented in the corpus?",
+      "expected_answer": "The corpus contains documents detailing various financial transactions and monetary amounts. These include political contributions, payments for services, and personal expenses.\n\nSpecific documented amounts include:\n*   A payment of $1,600 to Brautigam Land Surveyor [2].\n*   A political contribution of $1,500 to \"Stabenow for US Senate\" [2].\n*   A Visa bill payment of $2,066.45 to Bank of America [2].\n*   A payment of $20,372.55 to James Gainfort [2].\n*   A payment of $7,381.00 to Wells Fargo fo",
+      "category": "analytical",
+      "difficulty": "medium",
+      "expected_documents": [
+        "EFTA00001677.pdf",
+        "EFTA00001911.pdf",
+        "EFTA00000847.pdf",
+        "EFTA00001610.pdf",
+        "IMAGES-007-HOUSE_OVERSIGHT_023316.txt_583_msg0.eml",
+        "IMAGES-007-HOUSE_OVERSIGHT_023215.txt_6889_msg0.eml",
+        "EFTA00003827.pdf",
+        "EFTA00008498.pdf",
+        "EFTA00001530.pdf",
+        "EFTA00000476.pdf"
+      ],
+      "matter_id": "00000000-0000-0000-0000-000000000002",
+      "tags": [
+        "dense",
+        "entity-lookup",
+        "text-to-sql"
+      ]
+    },
+    {
+      "id": "efta-018",
+      "question": "How many documents are in the corpus and what types are they?",
+      "expected_answer": "",
+      "category": "factual",
+      "difficulty": "medium",
+      "expected_documents": [],
+      "matter_id": "00000000-0000-0000-0000-000000000002",
+      "tags": [
+        "text-to-sql"
+      ]
+    },
+    {
+      "id": "efta-019",
+      "question": "What role did New York play in the events described in the Epstein documents?",
+      "expected_answer": "New York served as a central hub for Jeffrey Epstein's criminal operations, functioning as a primary residence, a site for sex trafficking and abuse, and the location of the final federal legal proceedings against him.\n\n### Primary Residence and Operations Hub\n\nJeffrey Epstein owned and operated from a townhouse located at 9 East 71st Street in New York City [1, 2]. This property was not only a residence but also a key location for his sex trafficking operation. Evidence indicates that victims w",
+      "category": "analytical",
+      "difficulty": "medium",
+      "expected_documents": [
+        "TEXT-001-HOUSE_OVERSIGHT_031399.txt_13185_msg0.eml",
+        "IMAGES-011-HOUSE_OVERSIGHT_031751.txt_13172_msg1.eml",
+        "TEXT-002-HOUSE_OVERSIGHT_031823.txt_1345_msg0.eml",
+        "IMAGES-011-HOUSE_OVERSIGHT_031710.txt_1932_msg1.eml",
+        "IMAGES-007-HOUSE_OVERSIGHT_023001.txt_9533_msg0.eml",
+        "HOUSE_OVERSIGHT_029859_msg0.eml",
+        "TEXT-001-HOUSE_OVERSIGHT_029859.txt_7156_msg0.eml",
+        "IMAGES-011-HOUSE_OVERSIGHT_030999.txt_3925_msg0.eml",
+        "IMAGES-011-HOUSE_OVERSIGHT_031099.txt_4499_msg0.eml",
+        "HOUSE_OVERSIGHT_031392_msg0.eml"
+      ],
+      "matter_id": "00000000-0000-0000-0000-000000000002",
+      "tags": [
+        "dense",
+        "graph",
+        "multi-query"
+      ]
+    },
+    {
+      "id": "efta-020",
+      "question": "What law enforcement agencies are mentioned and what were their respective roles in the investigation?",
+      "expected_answer": "Based on the documents available, several law enforcement agencies were involved in the investigation of Jeffrey Epstein, each with distinct roles. The primary agencies mentioned are the Palm Beach Police Department, the Federal Bureau of Investigation (FBI), and the U.S. Attorney's Office for the Southern District of Florida (SDFL).\n\n### Palm Beach Police Department (Palm Beach PD)\n\nThe Palm Beach Police Department was the agency that initiated the original investigation into Jeffrey Epstein [3",
+      "category": "analytical",
+      "difficulty": "medium",
+      "expected_documents": [
+        "EFTA00009632.pdf",
+        "TEXT-001-HOUSE_OVERSIGHT_025918.txt_13539_msg8.eml",
+        "IMAGES-003-HOUSE_OVERSIGHT_016471.txt_6007_msg0.eml",
+        "HOUSE_OVERSIGHT_031384_msg0.eml",
+        "HOUSE_OVERSIGHT_029882_msg9.eml",
+        "HOUSE_OVERSIGHT_031403_msg0.eml",
+        "TEXT-001-HOUSE_OVERSIGHT_021764.txt_15033_msg0.eml",
+        "HOUSE_OVERSIGHT_028536_msg0.eml",
+        "IMAGES-011-HOUSE_OVERSIGHT_031751.txt_13172_msg1.eml",
+        "TEXT-001-HOUSE_OVERSIGHT_031399.txt_13185_msg0.eml"
+      ],
+      "matter_id": "00000000-0000-0000-0000-000000000002",
+      "tags": [
+        "dense",
+        "entity-lookup",
+        "graph"
+      ]
+    },
+    {
+      "id": "efta-021",
+      "question": "Map the network of associates connected to Jeffrey Epstein through intermediaries in the documents.",
+      "expected_answer": "Based on the available documents, Ghislaine Maxwell is identified as a primary associate of Jeffrey Epstein [4, 5, 8]. However, the tools could not map a broader network of individuals connected to Epstein through intermediaries.\n\n**Key Findings:**\n\n*   **Ghislaine Maxwell as a Key Associate:** Several documents reference an article titled \"Jeffrey and Ghislaine: Notes on New York's Oddest Alliance,\" indicating a close and public relationship between the two [4, 5, 9, 13, 14].\n*   **Presence in ",
+      "category": "exploratory",
+      "difficulty": "hard",
+      "expected_documents": [
+        "TEXT-001-HOUSE_OVERSIGHT_021090.txt_6011_msg1.eml",
+        "IMAGES-011-HOUSE_OVERSIGHT_031751.txt_13172_msg1.eml",
+        "IMAGES-011-HOUSE_OVERSIGHT_031710.txt_1932_msg1.eml",
+        "TEXT-001-HOUSE_OVERSIGHT_030460.txt_7310_msg0.eml",
+        "IMAGES-011-HOUSE_OVERSIGHT_030525.txt_8512_msg0.eml",
+        "IMAGES-007-HOUSE_OVERSIGHT_023001.txt_9533_msg0.eml",
+        "EFTA00008529.pdf",
+        "HOUSE_OVERSIGHT_030519_msg0.eml",
+        "IMAGES-010-HOUSE_OVERSIGHT_030420.txt_8765_msg1.eml",
+        "IMAGES-011-HOUSE_OVERSIGHT_031099.txt_4499_msg0.eml"
+      ],
+      "matter_id": "00000000-0000-0000-0000-000000000002",
+      "tags": [
+        "text-to-cypher",
+        "centrality",
+        "graph",
+        "multi-hop"
+      ]
+    },
+    {
+      "id": "efta-022",
+      "question": "What contradictions or inconsistencies exist between different witnesses' accounts about Epstein?",
+      "expected_answer": "Based on the available evidence, I was unable to find direct contradictions between different witnesses' accounts regarding Jeffrey Epstein. Instead, the documents reviewed show a degree of corroboration on key details, particularly concerning travel arrangements for his accusers.\n\n### Travel Arrangements\n\nA central theme in the witness accounts is the method of travel used by Epstein and his associates.\n\n*   **Accuser's Account:** Testimony recounting a victim's statement indicates that Ghislai",
+      "category": "analytical",
+      "difficulty": "hard",
+      "expected_documents": [
+        "HOUSE_OVERSIGHT_022942_msg2.eml",
+        "EFTA00008920.pdf",
+        "TEXT-001-HOUSE_OVERSIGHT_022941.txt_3906_msg2.eml",
+        "EFTA00008744.pdf",
+        "EFTA00008631.pdf",
+        "EFTA00009116.pdf",
+        "EFTA00009229.pdf",
+        "IMAGES-011-HOUSE_OVERSIGHT_031751.txt_13172_msg1.eml",
+        "IMAGES-011-HOUSE_OVERSIGHT_031710.txt_1932_msg1.eml",
+        "EFTA00009512.pdf"
+      ],
+      "matter_id": "00000000-0000-0000-0000-000000000002",
+      "tags": [
+        "decomposition",
+        "multi-hop",
+        "reranker"
+      ]
+    },
+    {
+      "id": "efta-023",
+      "question": "What patterns of concealment or obstruction of justice are documented across the corpus?",
+      "expected_answer": "Based on the documents available, several patterns related to the concealment of criminal activity and obstruction of justice have been identified. These patterns primarily involve witness intimidation and the use of financial means to control victims and suppress legal claims.\n\n### 1. Witness Intimidation\nThere are direct allegations that Jeffrey Epstein engaged in witness intimidation to prevent victims from pursuing their claims. An article draft concerning a lawsuit filed by attorney \"Mr. Ed",
+      "category": "exploratory",
+      "difficulty": "hard",
+      "expected_documents": [
+        "TEXT-001-HOUSE_OVERSIGHT_030402.txt_821_msg0.eml",
+        "EFTA00009229.pdf",
+        "HOUSE_OVERSIGHT_031343_msg0.eml",
+        "IMAGES-012-HOUSE_OVERSIGHT_033142.txt_1783_msg0.eml",
+        "IMAGES-011-HOUSE_OVERSIGHT_031432.txt_13853_msg0.eml",
+        "TEXT-001-HOUSE_OVERSIGHT_031343.txt_12603_msg0.eml",
+        "HOUSE_OVERSIGHT_033142_msg2.eml",
+        "EFTA00008920.pdf",
+        "EFTA00009016.pdf",
+        "EFTA00009329.pdf"
+      ],
+      "matter_id": "00000000-0000-0000-0000-000000000002",
+      "tags": [
+        "sentiment",
+        "hyde",
+        "dense",
+        "context-gap"
+      ]
+    },
+    {
+      "id": "efta-024",
+      "question": "Trace the flow of information between the Palm Beach Police, FBI, and the U.S. Attorney's Office as documented in these files.",
+      "expected_answer": "Based on the available documents, the flow of information regarding the Jeffrey Epstein investigation primarily moved from local law enforcement to federal law enforcement, and then to federal prosecutors.\n\n### 1. From Palm Beach Police Department to the FBI\n\nThe investigation was initiated at the local level by the Palm Beach Police Department (PBPD). After conducting an initial 8 to 10-month investigation, the PBPD formally presented the case to the Federal Bureau of Investigation (FBI) [3]. I",
+      "category": "analytical",
+      "difficulty": "hard",
+      "expected_documents": [
+        "EFTA00008585.pdf",
+        "IMAGES-010-HOUSE_OVERSIGHT_028536.txt_7144_msg0.eml",
+        "EFTA00009632.pdf",
+        "HOUSE_OVERSIGHT_028536_msg0.eml",
+        "EFTA00008529.pdf",
+        "EFTA00008631.pdf",
+        "HOUSE_OVERSIGHT_021762_msg1.eml",
+        "EFTA00009550.pdf",
+        "HOUSE_OVERSIGHT_031217_msg0.eml",
+        "HOUSE_OVERSIGHT_021792_msg2.eml"
+      ],
+      "matter_id": "00000000-0000-0000-0000-000000000002",
+      "tags": [
+        "decomposition",
+        "temporal",
+        "graph",
+        "multi-hop"
+      ]
+    },
+    {
+      "id": "efta-025",
+      "question": "What context gaps or missing information were identified in the documents?",
+      "expected_answer": "Based on the available documents, the primary context gaps identified relate to inaccessible email attachments. While an initial search for documents specifically flagged with context gaps did not yield results, a keyword search for related terms surfaced several instances of incomplete information.\n\n### Inaccessible Email Attachments\n\nMultiple email communications indicate that recipients were unable to open or access attachments, leading to a loss of context for those conversations.\n\n*   Sever",
+      "category": "exploratory",
+      "difficulty": "hard",
+      "expected_documents": [
+        "EFTA00003501.pdf",
+        "TEXT-001-HOUSE_OVERSIGHT_029088.txt_16208_msg0.eml",
+        "EFTA00001147.pdf",
+        "HOUSE_OVERSIGHT_029089_msg1.eml",
+        "IMAGES-006-HOUSE_OVERSIGHT_022250.txt_2048_msg2.eml",
+        "IMAGES-010-HOUSE_OVERSIGHT_029088.txt_3440_msg0.eml",
+        "IMAGES-009-HOUSE_OVERSIGHT_026659.txt_4259_msg2.eml",
+        "EFTA00000628.pdf",
+        "EFTA00001146.pdf",
+        "EFTA00001511.pdf"
+      ],
+      "matter_id": "00000000-0000-0000-0000-000000000002",
+      "tags": [
+        "context-gap",
+        "dense"
+      ]
+    },
+    {
+      "id": "efta-026",
+      "question": "Who are the most connected individuals in the knowledge graph and what are their roles in the Epstein case?",
+      "expected_answer": "Based on the available information, the most connected individuals in the Epstein case, proxied by their mention count in the knowledge graph, are Jeffrey Epstein and Ghislaine Maxwell.\n\nWhile a direct network centrality analysis could not be performed, the frequency of mentions provides insight into their prominence within the documentation [1].\n\n### Most Connected Individuals and Their Roles:\n\n*   **Jeffrey Epstein**: Identified as a defendant in the case, Epstein was a convicted sex offender ",
+      "category": "exploratory",
+      "difficulty": "hard",
+      "expected_documents": [],
+      "matter_id": "00000000-0000-0000-0000-000000000002",
+      "tags": [
+        "centrality",
+        "entity-lookup",
+        "graph"
+      ]
+    },
+    {
+      "id": "efta-027",
+      "question": "What is the relationship between Jeffrey Epstein, Ghislaine Maxwell, and their activities in London and New York?",
+      "expected_answer": "",
+      "category": "analytical",
+      "difficulty": "hard",
+      "expected_documents": [
+        "IMAGES-011-HOUSE_OVERSIGHT_030584.txt_2726_msg0.eml",
+        "EFTA00008874.pdf",
+        "IMAGES-011-HOUSE_OVERSIGHT_030581.txt_4262_msg0.eml",
+        "IMAGES-011-HOUSE_OVERSIGHT_030522.txt_12500_msg0.eml",
+        "IMAGES-006-HOUSE_OVERSIGHT_022234.txt_12642_msg1.eml",
+        "HOUSE_OVERSIGHT_030468_msg1.eml",
+        "IMAGES-011-HOUSE_OVERSIGHT_030525.txt_8512_msg0.eml",
+        "TEXT-001-HOUSE_OVERSIGHT_030417.txt_859_msg0.eml",
+        "TEXT-001-HOUSE_OVERSIGHT_030460.txt_7310_msg0.eml",
+        "HOUSE_OVERSIGHT_022235_msg1.eml"
+      ],
+      "matter_id": "00000000-0000-0000-0000-000000000002",
+      "tags": [
+        "multi-query",
+        "graph",
+        "temporal",
+        "decomposition"
+      ]
+    },
+    {
+      "id": "efta-028",
+      "question": "Create a comprehensive timeline of all legal proceedings involving Jeffrey Epstein documented in the corpus.",
+      "expected_answer": "Based on the available case files, the following is a timeline of documented legal proceedings involving Jeffrey Epstein.\n\n### **Timeline of Legal Proceedings**\n\n*   **June 30, 2006:** Jeffrey Epstein is indicted in Palm Beach County [2].\n*   **June 30, 2007:** A Non-Prosecution Agreement (NPA) is signed between Epstein and the U.S. Attorney's Office for the Southern District of Florida (SDFL) [2]. At the time of this agreement, federal prosecutors had gathered enough evidence to draft a 53-page",
+      "category": "timeline",
+      "difficulty": "hard",
+      "expected_documents": [
+        "IMAGES-007-HOUSE_OVERSIGHT_023001.txt_9533_msg0.eml",
+        "IMAGES-011-HOUSE_OVERSIGHT_031751.txt_13172_msg1.eml",
+        "TEXT-001-HOUSE_OVERSIGHT_031399.txt_13185_msg0.eml",
+        "IMAGES-011-HOUSE_OVERSIGHT_031710.txt_1932_msg1.eml",
+        "TEXT-001-HOUSE_OVERSIGHT_031428.txt_13307_msg1.eml",
+        "IMAGES-011-HOUSE_OVERSIGHT_030999.txt_3925_msg0.eml",
+        "HOUSE_OVERSIGHT_031392_msg0.eml",
+        "HOUSE_OVERSIGHT_031384_msg0.eml",
+        "IMAGES-011-HOUSE_OVERSIGHT_031099.txt_4499_msg0.eml",
+        "TEXT-001-HOUSE_OVERSIGHT_031403.txt_14820_msg0.eml"
+      ],
+      "matter_id": "00000000-0000-0000-0000-000000000002",
+      "tags": [
+        "temporal",
+        "multi-query",
+        "adaptive-depth",
+        "multi-doc"
+      ]
+    },
+    {
+      "id": "efta-029",
+      "question": "What role did specific locations including Palm Beach, New York, London, and the U.S. Virgin Islands play across the investigation?",
+      "expected_answer": "Based on the evidence available, specific locations played distinct and significant roles throughout the Jeffrey Epstein investigation and the associated criminal activities.\n\n### Palm Beach, Florida\n\nPalm Beach was the epicenter of the initial criminal investigation into Jeffrey Epstein and the location of his controversial 2007 non-prosecution agreement (NPA).\n\n*   **Initial Investigation:** The Palm Beach Police Department initiated the investigation into Epstein around 2005 after receiving c",
+      "category": "exploratory",
+      "difficulty": "hard",
+      "expected_documents": [
+        "HOUSE_OVERSIGHT_021792_msg2.eml",
+        "EFTA00008529.pdf",
+        "EFTA00008631.pdf",
+        "HOUSE_OVERSIGHT_031217_msg0.eml",
+        "EFTA00008585.pdf",
+        "HOUSE_OVERSIGHT_033206_msg0.eml",
+        "EFTA00009632.pdf",
+        "TEXT-001-HOUSE_OVERSIGHT_026329.txt_1527_msg7.eml",
+        "HOUSE_OVERSIGHT_021761_msg0.eml",
+        "TEXT-001-HOUSE_OVERSIGHT_031428.txt_13307_msg1.eml"
+      ],
+      "matter_id": "00000000-0000-0000-0000-000000000002",
+      "tags": [
+        "multi-query",
+        "graph",
+        "temporal"
+      ]
+    },
+    {
+      "id": "efta-030",
+      "question": "Identify all individuals who are mentioned in connection with both the FBI investigation and activities in Florida.",
+      "expected_answer": "Based on the available documents, the following individuals are mentioned in connection with the FBI investigation and activities in Florida:\n\n### Government and Law Enforcement Officials\n\n*   **Alex Acosta**: Served as the U.S. Attorney for the Southern District of Florida and was a central figure in the 2007 non-prosecution agreement (NPA) with Jeffrey Epstein [3, 4, 5]. The Justice Department later investigated potential prosecutorial misconduct related to his handling of the Epstein case [1,",
+      "category": "analytical",
+      "difficulty": "hard",
+      "expected_documents": [
+        "HOUSE_OVERSIGHT_031493_msg5.eml",
+        "EFTA00009440.pdf",
+        "IMAGES-005-HOUSE_OVERSIGHT_019388.txt_15438_msg0.eml",
+        "HOUSE_OVERSIGHT_032434_msg1.eml",
+        "IMAGES-006-HOUSE_OVERSIGHT_021475.txt_10524_msg0.eml",
+        "HOUSE_OVERSIGHT_033339_msg0.eml",
+        "IMAGES-011-HOUSE_OVERSIGHT_030934.txt_15331_msg0.eml",
+        "HOUSE_OVERSIGHT_025656_msg1.eml",
+        "HOUSE_OVERSIGHT_028536_msg0.eml",
+        "EFTA00009632.pdf"
+      ],
+      "matter_id": "00000000-0000-0000-0000-000000000002",
+      "tags": [
+        "text-to-cypher",
+        "graph",
+        "entity-lookup"
+      ]
+    }
+  ]
+}

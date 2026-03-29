@@ -613,12 +613,13 @@ async def run_curated_combos(
     expected_docs_per_query: list[list[str]] | None = None,
     scorer=None,
     verbose: bool = False,
+    dataset_path: Path | None = None,
 ) -> list[ComboEvalResult]:
     """Run curated combination evaluations."""
     from evaluation.runner import evaluate_queries, load_ground_truth
 
     results: list[ComboEvalResult] = []
-    dataset = load_ground_truth()
+    dataset = load_ground_truth(dataset_path)
     items = dataset.ground_truth
 
     for combo_name, flag_overrides in CURATED_COMBOS.items():
@@ -823,6 +824,7 @@ async def run_full_qa_sweep(
     skip_judge: bool = False,
     baseline_only: bool = False,
     verbose: bool = False,
+    dataset_path: Path | None = None,
 ) -> QAReport:
     """Run the comprehensive QA evaluation sweep.
 
@@ -842,7 +844,7 @@ async def run_full_qa_sweep(
     flags_to_test = config.flags or QUERY_TIME_FLAGS
 
     # Load ground-truth
-    dataset = load_ground_truth()
+    dataset = load_ground_truth(dataset_path)
     items = dataset.ground_truth
 
     # Build judge scorer
@@ -1013,6 +1015,7 @@ async def run_full_qa_sweep(
                 queries=config.queries or DEFAULT_EVAL_QUERIES,
                 scorer=scorer,
                 verbose=verbose,
+                dataset_path=dataset_path,
             )
 
         # --- Standalone features ---

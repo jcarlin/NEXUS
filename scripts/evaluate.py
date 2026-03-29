@@ -109,8 +109,7 @@ def _run_tuning_sweep(verbose: bool = False) -> int:
     print(f"  Baseline Recall@10: {baseline_metrics.recall_at_10:.4f}")
     for comp in threshold_report.comparisons:
         print(
-            f"  {comp.config_name:20s}  Recall@10: {comp.metrics.recall_at_10:.4f}  "
-            f"(delta: {comp.delta_recall:+.4f})"
+            f"  {comp.config_name:20s}  Recall@10: {comp.metrics.recall_at_10:.4f}  (delta: {comp.delta_recall:+.4f})"
         )
     print(f"  Best: {threshold_report.best_config}")
     print(f"  {threshold_report.recommendation}\n")
@@ -210,6 +209,7 @@ def _run_qa_sweep(args, config: FlagSweepConfig) -> int:
     print(f"  Baseline only: {baseline_only}")
     print()
 
+    dataset_path = Path(args.dataset) if getattr(args, "dataset", None) else None
     try:
         report = asyncio.run(
             run_full_qa_sweep(
@@ -220,6 +220,7 @@ def _run_qa_sweep(args, config: FlagSweepConfig) -> int:
                 skip_judge=skip_judge,
                 baseline_only=baseline_only,
                 verbose=args.verbose,
+                dataset_path=dataset_path,
             )
         )
     except Exception as exc:
@@ -354,6 +355,12 @@ def main() -> int:
         default=None,
         help="Skip LLM-as-judge scoring (faster, retrieval metrics only)",
     )
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        default=None,
+        help="Path to ground-truth JSON dataset (default: evaluation/data/ground_truth.json)",
+    )
 
     args = parser.parse_args()
 
@@ -375,8 +382,9 @@ def main() -> int:
 
         from evaluation.runner import run_full
 
+        ds_path = Path(args.dataset) if getattr(args, "dataset", None) else None
         try:
-            result = asyncio.run(run_full(skip_ragas=args.skip_ragas, verbose=args.verbose))
+            result = asyncio.run(run_full(skip_ragas=args.skip_ragas, verbose=args.verbose, dataset_path=ds_path))
         except NotImplementedError as exc:
             print(f"Error: {exc}", file=sys.stderr)
             return 1
