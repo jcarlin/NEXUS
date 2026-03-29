@@ -10,6 +10,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follo
 
 ## [Unreleased]
 
+## [1.17.0] - 2026-03-29
+
+### Added
+- Wire `record_event()` into ingestion pipeline for Pipeline Monitor Events tab (c026ffa)
+
+### Fixed
+- Fix citation extraction: rewrite VERIFY_CLAIMS_PROMPT / VERIFY_JUDGMENT_PROMPT with explicit JSON output framing and one-shot examples; add markdown code fence stripping for Gemini responses (424a8ae)
+- Fix HTTP 500 on out-of-scope queries: add scope guard to agent prompt (max 2 search attempts before declaring out-of-scope), change GraphRecursionError from 500 to 422 (424a8ae)
+- Fix zero-source answers penalizing retrieval metrics: add `no_sources_returned` flag, exclude from MRR/NDCG aggregation (424a8ae)
+- Add "always cite source documents" instruction to prevent case-context-only answers without evidence (424a8ae)
+- Fix gt-016 ground truth: update non-existent `test-contract.txt` reference to actual `contract_excerpt_merger.txt` (424a8ae)
+
 ## [1.16.2] - 2026-03-29
 
 ### Fixed
