@@ -21,8 +21,11 @@ services:
 
   worker:
     command: celery -A workers.celery_app worker -Q default,bulk,background -l info -c ${CELERY_CONCURRENCY:-1} --pool=prefork --max-tasks-per-child=100
+    environment:
+      OMP_NUM_THREADS: "2"
+      MKL_NUM_THREADS: "2"
     deploy:
-      replicas: ${INGEST_WORKER_REPLICAS:-3}
+      replicas: ${INGEST_WORKER_REPLICAS:-2}
 
   ner-worker:
     build:
@@ -40,6 +43,8 @@ services:
       NEO4J_URI: bolt://neo4j:7687
       MINIO_ENDPOINT: minio:9000
       OLLAMA_BASE_URL: http://ollama:11434
+      OMP_NUM_THREADS: "2"
+      MKL_NUM_THREADS: "2"
     deploy:
       replicas: ${NER_WORKER_REPLICAS:-2}
       resources:
