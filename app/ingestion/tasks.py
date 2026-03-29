@@ -28,6 +28,7 @@ from celery import shared_task
 from celery.exceptions import SoftTimeLimitExceeded
 from sqlalchemy import create_engine, text
 
+from app.ingestion.events import record_event
 from workers.celery_app import celery_app  # noqa: F401 — ensures @shared_task binds to our app
 
 logger = structlog.get_logger(__name__)
@@ -1613,7 +1614,19 @@ def process_zip(self, job_id: str, minio_path: str) -> dict:
     engine = _get_sync_engine(settings)
     load_overrides_sync_safe(settings, engine)
     zip_matter_id = _get_job_matter_id(engine, job_id)
+    worker = self.request.hostname
     structlog.contextvars.bind_contextvars(matter_id=zip_matter_id)
+
+    import time as _time
+
+    _zip_start = _time.perf_counter()
+    record_event(
+        engine,
+        job_id,
+        "TASK_RECEIVED",
+        worker=worker,
+        detail={"filename": minio_path.rsplit("/", 1)[-1], "type": "zip"},
+    )
 
     try:
         _update_stage(engine, job_id, "parsing", "processing")
@@ -1667,6 +1680,15 @@ def process_zip(self, job_id: str, minio_path: str) -> dict:
             children=len(child_jobs),
         )
 
+        record_event(
+            engine,
+            job_id,
+            "TASK_COMPLETED",
+            worker=worker,
+            detail={"child_jobs": len(child_jobs)},
+            duration_ms=int((_time.perf_counter() - _zip_start) * 1000),
+        )
+
         return {
             "job_id": job_id,
             "status": "complete",
@@ -1683,8 +1705,18 @@ def process_zip(self, job_id: str, minio_path: str) -> dict:
         except Exception:
             logger.error("task.zip.failed_to_update_status", exc_info=True)
 
+        elapsed_ms = int((_time.perf_counter() - _zip_start) * 1000)
         if self.request.retries < self.max_retries:
+            record_event(
+                engine,
+                job_id,
+                "TASK_RETRIED",
+                worker=worker,
+                detail={"error": str(exc), "retry": self.request.retries + 1},
+                duration_ms=elapsed_ms,
+            )
             raise self.retry(exc=exc)
+        record_event(engine, job_id, "TASK_FAILED", worker=worker, detail={"error": str(exc)}, duration_ms=elapsed_ms)
         raise
 
     finally:
@@ -1730,6 +1762,8 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
     _store_celery_task_id(engine, job_id, self.request.id)
     _store_task_metadata(engine, job_id, self.request.hostname, self.request.retries)
     filename = minio_path.rsplit("/", 1)[-1]
+    worker = self.request.hostname
+    current_stage = "unknown"
 
     import time as _time
 
@@ -1768,13 +1802,35 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
         _stage_index,
         _stage_complete,
     ]
+    stage_names = [
+        "parse",
+        "ocr_correct",
+        "chunk",
+        "create_document",
+        "contextualize",
+        "summarize",
+        "embed_and_extract",
+        "index",
+        "complete",
+    ]
 
     try:
-        for stage_fn in stages:
+        record_event(
+            engine, job_id, "TASK_RECEIVED", worker=worker, detail={"filename": filename, "minio_path": minio_path}
+        )
+
+        for stage_fn, stage_name in zip(stages, stage_names):
             if _is_job_cancelled(engine, job_id):
                 logger.warning("task.cancelled_during_processing")
                 return {"job_id": job_id, "status": "cancelled"}
+            current_stage = stage_name
+            record_event(engine, job_id, "STAGE_STARTED", worker=worker, detail={"stage": stage_name})
+            _t0 = _time.perf_counter()
             stage_fn(ctx)
+            _elapsed = int((_time.perf_counter() - _t0) * 1000)
+            record_event(
+                engine, job_id, "STAGE_COMPLETED", worker=worker, detail={"stage": stage_name}, duration_ms=_elapsed
+            )
 
         # Record ingestion success metrics (T1-8)
         try:
@@ -1786,6 +1842,21 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
             pass  # Metrics are best-effort
 
         _mark_job_completed(engine, job_id)
+
+        total_ms = int((_time.perf_counter() - _ingest_start) * 1000)
+        record_event(
+            engine,
+            job_id,
+            "TASK_COMPLETED",
+            worker=worker,
+            detail={
+                "filename": filename,
+                "page_count": ctx.parse_result.page_count,
+                "chunk_count": len(ctx.chunks),
+                "entity_count": len(ctx.all_entities),
+            },
+            duration_ms=total_ms,
+        )
 
         return {
             "job_id": job_id,
@@ -1799,6 +1870,14 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
         logger.error("task.process_document.timeout", job_id=job_id)
         _update_stage(engine, job_id, "failed", "failed", error="Task timed out (soft time limit exceeded)")
         _mark_job_failed_with_category(engine, job_id, "timeout", "TIMEOUT")
+        record_event(
+            engine,
+            job_id,
+            "TASK_FAILED",
+            worker=worker,
+            detail={"error": "timeout", "stage": current_stage},
+            duration_ms=int((_time.perf_counter() - _ingest_start) * 1000),
+        )
         try:
             from app.common.metrics import INGESTION_JOBS_TOTAL
 
@@ -1825,9 +1904,25 @@ def process_document(self, job_id: str, minio_path: str) -> dict:
         except Exception:
             logger.error("task.failed_to_update_status", exc_info=True)
 
-        # Let Celery retry on transient errors
+        elapsed_ms = int((_time.perf_counter() - _ingest_start) * 1000)
         if self.request.retries < self.max_retries:
+            record_event(
+                engine,
+                job_id,
+                "TASK_RETRIED",
+                worker=worker,
+                detail={"error": str(exc), "stage": current_stage, "retry": self.request.retries + 1},
+                duration_ms=elapsed_ms,
+            )
             raise self.retry(exc=exc)
+        record_event(
+            engine,
+            job_id,
+            "TASK_FAILED",
+            worker=worker,
+            detail={"error": str(exc), "stage": current_stage},
+            duration_ms=elapsed_ms,
+        )
         raise
 
     finally:
@@ -1880,6 +1975,12 @@ def import_text_document(
     engine = _get_sync_engine(settings)
     load_overrides_sync_safe(settings, engine)
     _store_celery_task_id(engine, job_id, self.request.id)
+    worker = self.request.hostname
+
+    import time as _time
+
+    _import_start = _time.perf_counter()
+    record_event(engine, job_id, "TASK_RECEIVED", worker=worker, detail={"filename": filename, "type": "import_text"})
 
     # Dedup guard: skip if a document with this content_hash already exists
     if matter_id and content_hash:
@@ -1887,6 +1988,14 @@ def import_text_document(
 
         if check_resume(engine, content_hash, matter_id):
             _update_stage(engine, job_id, "complete", "complete")
+            record_event(
+                engine,
+                job_id,
+                "TASK_COMPLETED",
+                worker=worker,
+                detail={"skipped": True, "reason": "dedup"},
+                duration_ms=int((_time.perf_counter() - _import_start) * 1000),
+            )
             logger.info("task.import_text.dedup_skipped", content_hash=content_hash[:16])
             return {
                 "job_id": job_id,
@@ -2182,6 +2291,20 @@ def import_text_document(
             entities=len(all_entities),
         )
 
+        record_event(
+            engine,
+            job_id,
+            "TASK_COMPLETED",
+            worker=worker,
+            detail={
+                "filename": filename,
+                "page_count": page_count,
+                "chunk_count": len(chunks),
+                "entity_count": len(all_entities),
+            },
+            duration_ms=int((_time.perf_counter() - _import_start) * 1000),
+        )
+
         return {
             "job_id": job_id,
             "status": "complete",
@@ -2228,8 +2351,18 @@ def import_text_document(
             except Exception:
                 logger.error("task.import_text.failed_to_update_bulk_job", exc_info=True)
 
+        elapsed_ms = int((_time.perf_counter() - _import_start) * 1000)
         if self.request.retries < self.max_retries:
+            record_event(
+                engine,
+                job_id,
+                "TASK_RETRIED",
+                worker=worker,
+                detail={"error": str(exc), "retry": self.request.retries + 1},
+                duration_ms=elapsed_ms,
+            )
             raise self.retry(exc=exc)
+        record_event(engine, job_id, "TASK_FAILED", worker=worker, detail={"error": str(exc)}, duration_ms=elapsed_ms)
         raise
 
     finally:
