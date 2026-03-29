@@ -1,10 +1,59 @@
+# Ingestion overlay — layer on top of the base + prod + cloud compose files.
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+#          -f docker-compose.cloud.yml -f docker-compose.ingest.yml up -d
+#
+# Splits workers into two pools:
+#   worker     — default,bulk,background queues (I/O-bound import tasks)
+#   ner-worker — ner queue only (CPU-bound GLiNER extraction)
+#
+# This prevents NER tasks from starving the default queue during bulk ingestion.
+#
+# Tuning (set in .env on the ingest VM):
+#   INGEST_WORKER_REPLICAS   — general worker replicas (default: 3)
+#   CELERY_CONCURRENCY       — general worker concurrency per replica (default: 1)
+#   NER_WORKER_REPLICAS      — NER worker replicas (default: 2)
+#   NER_WORKER_CONCURRENCY   — NER worker concurrency per replica (default: 1)
+
 services:
   api:
     volumes:
       - /mnt/epstein:/mnt/epstein:ro
+
   worker:
+    command: celery -A workers.celery_app worker -Q default,bulk,background -l info -c ${CELERY_CONCURRENCY:-1} --pool=prefork --max-tasks-per-child=100
     deploy:
-      replicas: 5
+      replicas: ${INGEST_WORKER_REPLICAS:-3}
+
+  ner-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A workers.celery_app worker -Q ner -l info -c ${NER_WORKER_CONCURRENCY:-1} --pool=prefork --max-tasks-per-child=50
+    env_file: .env
+    environment:
+      # Must match docker-compose.prod.yml worker environment (Docker service names)
+      POSTGRES_URL: postgresql+asyncpg://nexus:${POSTGRES_PASSWORD}@postgres:5432/nexus
+      POSTGRES_URL_SYNC: postgresql://nexus:${POSTGRES_PASSWORD}@postgres:5432/nexus
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: amqp://nexus:${RABBITMQ_PASSWORD:-nexus}@rabbitmq:5672/nexus
+      QDRANT_URL: http://qdrant:6333
+      NEO4J_URI: bolt://neo4j:7687
+      MINIO_ENDPOINT: minio:9000
+      OLLAMA_BASE_URL: http://ollama:11434
+    deploy:
+      replicas: ${NER_WORKER_REPLICAS:-2}
+      resources:
+        limits:
+          memory: 8G
+    depends_on:
+      redis:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
   beat:
     build:
       context: .
