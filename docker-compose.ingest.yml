@@ -4,7 +4,7 @@ services:
       - /mnt/epstein:/mnt/epstein:ro
   worker:
     deploy:
-      replicas: 8
+      replicas: 5
   beat:
     build:
       context: .

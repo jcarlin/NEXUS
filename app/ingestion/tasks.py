@@ -621,6 +621,37 @@ async def _index_to_neo4j(
         await driver.close()
 
 
+async def _index_deferred_entities_to_neo4j(
+    settings,
+    doc_id: str,
+    entities: list[dict],
+    matter_id: str | None = None,
+) -> None:
+    """Index entities from deferred NER to Neo4j.
+
+    Runs inside a single ``asyncio.run()`` call so the async Neo4j driver
+    stays on one event loop (avoids the two-loop bug from separate
+    ``asyncio.run()`` calls for the operation and driver close).
+    """
+    from neo4j import AsyncGraphDatabase
+
+    from app.entities.graph_service import GraphService
+
+    driver = AsyncGraphDatabase.driver(
+        settings.neo4j_uri,
+        auth=(settings.neo4j_user, settings.neo4j_password),
+    )
+    try:
+        gs = GraphService(driver)
+        await gs.index_entities_for_document(
+            doc_id=doc_id,
+            entities=entities,
+            matter_id=matter_id,
+        )
+    finally:
+        await driver.close()
+
+
 async def _extract_relationships(
     settings,
     doc_id: str,
@@ -1379,7 +1410,7 @@ def _stage_complete(ctx: _PipelineContext) -> None:
         logger.info("task.dataset_assigned", doc_id=doc_id, dataset_id=ctx.dataset_id)
 
     # Dispatch deferred NER now that chunks are in Qdrant
-    if ctx.settings.defer_ner_to_queue:
+    if ctx.settings.defer_ner_to_queue and ctx.chunks:
         extract_entities_for_job.apply_async(
             args=[ctx.document_id, ctx.matter_id],
             queue="ner",
@@ -2062,7 +2093,7 @@ def import_text_document(
             logger.error("task.neo4j_index_failed", doc_id=doc_id, exc_info=True)
 
         # Dispatch deferred NER now that chunks are in Qdrant
-        if settings.defer_ner_to_queue and not pre_entities:
+        if settings.defer_ner_to_queue and not pre_entities and chunks:
             extract_entities_for_job.apply_async(
                 args=[doc_id, matter_id],
                 queue="ner",
@@ -2617,26 +2648,17 @@ def extract_entities_for_job(self, doc_id_or_job_id: str, matter_id: str | None 
             chunk_count=len(chunk_texts),
         )
 
-        # Index to Neo4j
+        # Index to Neo4j (single asyncio.run to keep driver on one event loop)
         if all_entities:
             try:
-                from neo4j import AsyncGraphDatabase
-
-                from app.entities.graph_service import GraphService
-
-                async_driver = AsyncGraphDatabase.driver(
-                    settings.neo4j_uri,
-                    auth=(settings.neo4j_user, settings.neo4j_password),
-                )
-                graph_svc = GraphService(async_driver)
                 asyncio.run(
-                    graph_svc.index_entities_for_document(
+                    _index_deferred_entities_to_neo4j(
+                        settings=settings,
                         doc_id=doc_id,
                         entities=all_entities,
                         matter_id=matter_id,
                     )
                 )
-                asyncio.run(async_driver.close())
             except Exception:
                 logger.warning("task.deferred_ner.neo4j_failed", exc_info=True)
 
