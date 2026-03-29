@@ -10,6 +10,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follo
 
 ## [Unreleased]
 
+## [1.16.2] - 2026-03-29
+
+### Fixed
+- Skip deferred NER dispatch for zero-chunk documents — 33% of EFTA scanned PDFs produce no text, wasting worker cycles on guaranteed no-op NER tasks (44c6bfe)
+- Fix Neo4j dual-event-loop bug in deferred NER — async driver create, graph write, and close now run within a single `asyncio.run()` call, fixing silent entity write failures (44c6bfe)
+- Reduce ingest worker replicas from 8 to 5 to prevent CPU oversubscription on 16-core VM (44c6bfe)
+
 ## [1.16.1] - 2026-03-28
 
 ### Fixed
