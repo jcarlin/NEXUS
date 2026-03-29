@@ -11,7 +11,7 @@ import type { PaginatedResponse } from "@/types";
 
 interface CeleryOverview {
   workers: { hostname: string; status: string }[];
-  queues: { name: string; reserved_count: number; scheduled_count: number; pending_count?: number }[];
+  queues: { name: string; active_count: number; reserved_count: number; scheduled_count: number; pending_count?: number }[];
 }
 
 interface BulkImportItem {
@@ -89,6 +89,12 @@ export function PipelineSummary() {
   const processingCount = processingData?.total ?? 0;
   const failedCount = failedData?.total ?? 0;
 
+  const celeryActiveCount = (celeryData?.queues ?? []).reduce(
+    (sum, q) => sum + (q.active_count ?? 0),
+    0,
+  );
+  const displayProcessing = Math.max(processingCount, celeryActiveCount);
+
   const queuedCount = (celeryData?.queues ?? []).reduce(
     (sum, q) => sum + (q.pending_count ?? 0) + q.reserved_count + q.scheduled_count,
     0,
@@ -118,10 +124,10 @@ export function PipelineSummary() {
   const stats = [
     {
       label: "Processing",
-      value: processingCount,
-      loading: processingLoading,
+      value: displayProcessing,
+      loading: processingLoading || celeryLoading,
       icon: Activity,
-      color: processingCount > 0 ? "text-blue-500" : "text-muted-foreground",
+      color: displayProcessing > 0 ? "text-blue-500" : "text-muted-foreground",
     },
     {
       label: "Failed",
