@@ -1142,11 +1142,7 @@ def _stage_extract(ctx: _PipelineContext) -> None:
     becomes searchable immediately; entities populate asynchronously.
     """
     if ctx.settings.defer_ner_to_queue:
-        extract_entities_for_job.apply_async(
-            args=[ctx.document_id, ctx.matter_id],
-            queue="ner",
-        )
-        logger.info("task.ner_deferred", doc_id=ctx.document_id)
+        # NER will be dispatched in _stage_complete after chunks are indexed in Qdrant
         ctx.all_entities = []
         ctx.relationship_count = 0
         ctx.progress["entities_extracted"] = 0
@@ -1381,6 +1377,14 @@ def _stage_complete(ctx: _PipelineContext) -> None:
             )
             conn.commit()
         logger.info("task.dataset_assigned", doc_id=doc_id, dataset_id=ctx.dataset_id)
+
+    # Dispatch deferred NER now that chunks are in Qdrant
+    if ctx.settings.defer_ner_to_queue:
+        extract_entities_for_job.apply_async(
+            args=[ctx.document_id, ctx.matter_id],
+            queue="ner",
+        )
+        logger.info("task.ner_deferred", doc_id=ctx.document_id)
 
     # Acceptable degradation: email threading is feature-flagged
     # post-processing that does not affect the core document record
@@ -1956,12 +1960,8 @@ def import_text_document(
         if pre_entities:
             all_entities = pre_entities
         elif settings.defer_ner_to_queue:
-            # Dispatch NER to dedicated queue — document becomes searchable immediately
-            extract_entities_for_job.apply_async(
-                args=[doc_id, matter_id],
-                queue="ner",
-            )
-            logger.info("task.import_text.ner_deferred", doc_id=doc_id)
+            # NER will be dispatched after Qdrant indexing (Stage 6)
+            pass
         else:
             from app.entities.extractor import EntityExtractor
 
@@ -2060,6 +2060,14 @@ def import_text_document(
             logger.info("task.neo4j_indexed", entities=len(all_entities))
         except Exception:
             logger.error("task.neo4j_index_failed", doc_id=doc_id, exc_info=True)
+
+        # Dispatch deferred NER now that chunks are in Qdrant
+        if settings.defer_ner_to_queue and not pre_entities:
+            extract_entities_for_job.apply_async(
+                args=[doc_id, matter_id],
+                queue="ner",
+            )
+            logger.info("task.import_text.ner_deferred", doc_id=doc_id)
 
         # ---------------------------------------------------------------
         # Stage 6: COMPLETE — finalize document record + post-processing
