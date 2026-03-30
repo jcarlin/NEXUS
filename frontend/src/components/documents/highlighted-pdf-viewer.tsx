@@ -22,8 +22,8 @@ interface HighlightedPdfViewerProps {
   onCreateHighlight?: (anchor: AnnotationAnchor, pageNumber: number) => void;
 }
 
-function normalizeText(s: string): string {
-  return s.replace(/\s+/g, " ").trim().toLowerCase();
+function stripForMatch(s: string): string {
+  return s.replace(/\s+/g, "").toLowerCase();
 }
 
 function applyHighlightToTextLayer(container: HTMLElement, highlightText: string) {
@@ -32,59 +32,33 @@ function applyHighlightToTextLayer(container: HTMLElement, highlightText: string
   );
   if (spans.length === 0) return;
 
-  // Build page text from spans
-  const spanTexts: string[] = [];
-  for (const span of spans) {
-    spanTexts.push(span.textContent ?? "");
-  }
-  const fullText = spanTexts.join("");
-  const normalizedFull = normalizeText(fullText);
-  const normalizedSearch = normalizeText(highlightText.slice(0, 300));
+  // Strip all whitespace for matching — PDF text layer spans often lack
+  // inter-word spaces, so whitespace-aware matching fails silently.
+  const strippedFull = stripForMatch(
+    Array.from(spans, (s) => s.textContent ?? "").join(" "),
+  );
+  const strippedSearch = stripForMatch(highlightText.slice(0, 300));
 
-  const matchIdx = normalizedFull.indexOf(normalizedSearch);
+  let matchIdx = strippedFull.indexOf(strippedSearch);
+  // Fallback: try shorter prefix if full match fails (chunk may span pages)
+  if (matchIdx === -1 && strippedSearch.length > 80) {
+    const shorter = strippedSearch.slice(0, 80);
+    matchIdx = strippedFull.indexOf(shorter);
+  }
   if (matchIdx === -1) return;
 
-  // Map normalized index back to original character positions
-  let normIdx = 0;
-  let origIdx = 0;
-  const origText = fullText;
+  const matchEnd = matchIdx + strippedSearch.length;
 
-  // Find original start
-  while (normIdx < matchIdx && origIdx < origText.length) {
-    if (/\s/.test(origText[origIdx]!)) {
-      while (origIdx < origText.length && /\s/.test(origText[origIdx]!)) origIdx++;
-      normIdx++; // one space in normalized
-    } else {
-      origIdx++;
-      normIdx++;
-    }
-  }
-  const matchStartOrig = origIdx;
-
-  // Find original end
-  let matchEndNorm = matchIdx + normalizedSearch.length;
-  while (normIdx < matchEndNorm && origIdx < origText.length) {
-    if (/\s/.test(origText[origIdx]!)) {
-      while (origIdx < origText.length && /\s/.test(origText[origIdx]!)) origIdx++;
-      normIdx++;
-    } else {
-      origIdx++;
-      normIdx++;
-    }
-  }
-  const matchEndOrig = origIdx;
-
-  // Map to spans: find which spans overlap [matchStartOrig, matchEndOrig)
-  let charOffset = 0;
+  // Map stripped character positions back to spans
+  let strippedCount = 0;
   for (const span of spans) {
     const text = span.textContent ?? "";
-    const spanStart = charOffset;
-    const spanEnd = charOffset + text.length;
-    charOffset = spanEnd;
+    const spanStrippedStart = strippedCount;
+    const strippedLen = text.replace(/\s+/g, "").length;
+    strippedCount += strippedLen;
 
-    if (spanEnd <= matchStartOrig || spanStart >= matchEndOrig) continue;
+    if (strippedCount <= matchIdx || spanStrippedStart >= matchEnd) continue;
 
-    // This span overlaps with the match
     span.classList.add("citation-highlight");
   }
 }
