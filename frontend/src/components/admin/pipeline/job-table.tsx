@@ -34,6 +34,7 @@ import { JobErrorPanel } from "@/components/admin/pipeline/job-error-panel";
 import type { PaginatedResponse, JobStatusResponse } from "@/types";
 
 const PAGE_SIZE = 25;
+const ACTIVE_STATUSES = new Set(["processing", "pending"]);
 
 const STATUS_OPTIONS = [
   { value: "pending", label: "Pending" },
@@ -127,7 +128,11 @@ export function JobTable() {
         params,
       }),
     enabled: !!matterId,
-    refetchInterval: isLive && !statusParam ? 5_000 : false,
+    refetchInterval:
+      isLive &&
+      (!statusParam || [...selectedStatuses].some((s) => ACTIVE_STATUSES.has(s)))
+        ? 5_000
+        : false,
     gcTime: 5 * 60_000,
   });
 
