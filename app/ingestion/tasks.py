@@ -821,10 +821,9 @@ def _stage_parse(ctx: _PipelineContext) -> None:
     doc_id_for_pages = ctx.job_id
     ctx.rendered_page_images = []
 
-    # Acceptable degradation: PDF page rendering is only needed for
-    # visual embeddings (ENABLE_VISUAL_EMBEDDINGS), which is experimental.
-    # Text-based indexing is the core pipeline and is unaffected.
-    if ctx.settings.enable_visual_embeddings and ext == ".pdf":
+    # Always render PDF page images — they power document preview and
+    # citation thumbnails regardless of the visual embeddings flag.
+    if ext == ".pdf":
         try:
             with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as pdf_tmp:
                 pdf_tmp.write(_download_from_minio(ctx.settings, ctx.minio_path))
