@@ -99,6 +99,12 @@ FLAG_REGISTRY: dict[str, FlagMeta] = {
         risk_level=FlagRiskLevel.CACHE_CLEAR,
         di_caches=["get_dedup_detector"],
     ),
+    "enable_docling_ocr": FlagMeta(
+        display_name="Docling OCR",
+        description="RapidOCR in the Docling PDF pipeline. Disable for text-based PDFs (5-8x speedup).",
+        category=FlagCategory.INGESTION,
+        risk_level=FlagRiskLevel.RESTART,
+    ),
     # --- Ingestion Pipeline ---
     "enable_email_threading": FlagMeta(
         display_name="Email Threading",

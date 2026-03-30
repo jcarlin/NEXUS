@@ -110,6 +110,7 @@ class FeatureFlags(BaseModel):
     sso: bool
     saml: bool
     memo_drafting: bool
+    docling_ocr: bool
     chunk_quality_scoring: bool
     contextual_chunks: bool
     retrieval_grading: bool
@@ -240,6 +241,9 @@ class Settings(BaseSettings):
     # --- Rate Limiting ---
     rate_limit_queries_per_minute: int = 30
     rate_limit_ingests_per_minute: int = 10
+
+    # --- Docling OCR ---
+    enable_docling_ocr: bool = True  # Disable to skip OCR on text-based PDFs (massive speedup)
 
     # --- Chunk Quality Scoring ---
     enable_chunk_quality_scoring: bool = False
@@ -619,6 +623,7 @@ class Settings(BaseSettings):
                 sso=self.enable_sso,
                 saml=self.enable_saml,
                 memo_drafting=self.enable_memo_drafting,
+                docling_ocr=self.enable_docling_ocr,
                 chunk_quality_scoring=self.enable_chunk_quality_scoring,
                 contextual_chunks=self.enable_contextual_chunks,
                 retrieval_grading=self.enable_retrieval_grading,

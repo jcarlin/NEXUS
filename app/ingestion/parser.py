@@ -162,13 +162,29 @@ class DocumentParser:
 
         The converter is heavyweight (loads models on first call),
         so we defer creation until the first document is actually parsed.
+        When ``ENABLE_DOCLING_OCR=false`` the RapidOCR pipeline is skipped
+        entirely, giving a ~5-8x speedup on text-based PDFs.
         """
         if self._converter is None:
             try:
-                from docling.document_converter import DocumentConverter
+                from docling.datamodel.base_models import InputFormat
+                from docling.datamodel.pipeline_options import PdfPipelineOptions
+                from docling.document_converter import DocumentConverter, PdfFormatOption
 
-                self._converter = DocumentConverter()
-                logger.info("parser.docling.loaded")
+                from app.config import Settings
+
+                settings = Settings()
+                do_ocr = settings.enable_docling_ocr
+
+                pdf_opts = PdfPipelineOptions(do_ocr=do_ocr)
+                self._converter = DocumentConverter(
+                    format_options={
+                        InputFormat.PDF: PdfFormatOption(
+                            pipeline_options=pdf_opts,
+                        ),
+                    }
+                )
+                logger.info("parser.docling.loaded", do_ocr=do_ocr)
             except Exception:
                 logger.exception("parser.docling.load_failed")
                 raise

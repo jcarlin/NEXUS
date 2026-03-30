@@ -1735,6 +1735,8 @@ def process_zip(self, job_id: str, minio_path: str) -> dict:
     default_retry_delay=30,
     acks_late=True,
     reject_on_worker_lost=True,
+    soft_time_limit=3600,  # 1 hour — complex PDFs with OCR need headroom
+    time_limit=3900,  # 1 hour 5 min hard kill
 )
 def process_document(self, job_id: str, minio_path: str) -> dict:
     """Run the full 6-stage ingestion pipeline for a single document.
