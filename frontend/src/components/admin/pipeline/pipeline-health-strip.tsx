@@ -25,11 +25,26 @@ interface SystemMetrics {
   disk_percent: number;
 }
 
+interface TaskTypeThroughput {
+  task_type: string;
+  jobs_per_minute: number;
+  jobs_last_hour: number;
+}
+
 interface Throughput {
   jobs_per_minute: number;
   jobs_last_hour: number;
   avg_duration_seconds: number;
+  by_type: TaskTypeThroughput[];
 }
+
+const TYPE_LABELS: Record<string, string> = {
+  ingestion: "ingest",
+  entity_resolution: "ner",
+  case_setup: "case",
+  analysis_sentiment: "sentiment",
+  analysis_matter_scan: "hot-scan",
+};
 
 function pctColor(pct: number): string {
   if (pct >= 90) return "text-red-500";
@@ -137,6 +152,16 @@ export function PipelineHealthStrip() {
           {throughput && throughput.avg_duration_seconds > 0 && (
             <span className="text-muted-foreground/60 ml-1">
               (avg {Math.round(throughput.avg_duration_seconds)}s)
+            </span>
+          )}
+          {throughput && throughput.by_type.length > 1 && (
+            <span className="text-muted-foreground/50 ml-1">
+              {throughput.by_type.map((t) => (
+                <span key={t.task_type} className="ml-1.5">
+                  {TYPE_LABELS[t.task_type] ?? t.task_type}:{" "}
+                  {t.jobs_per_minute}
+                </span>
+              ))}
             </span>
           )}
         </div>

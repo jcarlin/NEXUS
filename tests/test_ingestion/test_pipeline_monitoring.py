@@ -24,18 +24,27 @@ async def test_get_pipeline_throughput():
     from app.ingestion.service import IngestionService
 
     mock_row = (5, 2.5, 30.0)
-    mock_result = MagicMock()
-    mock_result.one.return_value = mock_row
+    aggregate_result = MagicMock()
+    aggregate_result.one.return_value = mock_row
+
+    by_type_result = MagicMock()
+    by_type_result.all.return_value = [
+        ("ingestion", 3, 1.5),
+        ("entity_resolution", 2, 1.0),
+    ]
 
     mock_db = AsyncMock()
-    mock_db.execute.return_value = mock_result
+    mock_db.execute = AsyncMock(side_effect=[aggregate_result, by_type_result])
 
     result = await IngestionService.get_pipeline_throughput(db=mock_db)
 
     assert result["jobs_last_hour"] == 5
     assert result["jobs_per_minute"] == 2.5
     assert result["avg_duration_seconds"] == 30.0
-    mock_db.execute.assert_called_once()
+    assert len(result["by_type"]) == 2
+    assert result["by_type"][0]["task_type"] == "ingestion"
+    assert result["by_type"][1]["task_type"] == "entity_resolution"
+    assert mock_db.execute.call_count == 2
 
 
 @pytest.mark.asyncio

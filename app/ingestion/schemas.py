@@ -218,12 +218,21 @@ class BulkImportListResponse(PaginatedResponse[BulkImportStatusResponse]):
 # ---------------------------------------------------------------------------
 
 
+class TaskTypeThroughput(BaseModel):
+    """Per-task-type throughput breakdown."""
+
+    task_type: str
+    jobs_per_minute: float = 0.0
+    jobs_last_hour: int = 0
+
+
 class PipelineThroughputResponse(BaseModel):
     """Throughput metrics for the pipeline health strip."""
 
     jobs_per_minute: float = 0.0
     jobs_last_hour: int = 0
     avg_duration_seconds: float = 0.0
+    by_type: list[TaskTypeThroughput] = []
 
 
 class ErrorCategoryBreakdown(BaseModel):

@@ -752,10 +752,40 @@ class IngestionService:
             """)
         )
         row = result.one()
+
+        # Per-task-type breakdown
+        by_type_result = await db.execute(
+            text("""
+                SELECT
+                    coalesce(task_type, 'ingestion') AS task_type,
+                    count(*) AS jobs_last_hour,
+                    CASE WHEN count(*) > 0 THEN
+                        count(*)::float / GREATEST(
+                            EXTRACT(EPOCH FROM (now() - min(completed_at))) / 60.0, 1
+                        )
+                    ELSE 0 END AS jobs_per_minute
+                FROM jobs
+                WHERE status IN ('complete', 'completed')
+                  AND completed_at > now() - interval '1 hour'
+                  AND started_at IS NOT NULL
+                GROUP BY coalesce(task_type, 'ingestion')
+                ORDER BY jobs_per_minute DESC
+            """)
+        )
+        by_type = [
+            {
+                "task_type": r[0],
+                "jobs_last_hour": int(r[1] or 0),
+                "jobs_per_minute": round(float(r[2] or 0), 2),
+            }
+            for r in by_type_result.all()
+        ]
+
         return {
             "jobs_per_minute": round(float(row[1] or 0), 2),
             "jobs_last_hour": int(row[0] or 0),
             "avg_duration_seconds": round(float(row[2] or 0), 1),
+            "by_type": by_type,
         }
 
     @staticmethod
