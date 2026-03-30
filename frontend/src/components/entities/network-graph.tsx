@@ -44,6 +44,8 @@ export const NetworkGraph = forwardRef<NetworkGraphHandle, NetworkGraphProps>(
     const linkSelRef = useRef<Selection<SVGLineElement, GraphLink, SVGGElement, unknown> | null>(null);
     const navigate = useNavigate({});
     const { ref: containerRef, width: containerWidth, height: containerHeight } = useContainerSize();
+    const activeTypesRef = useRef(activeTypes);
+    activeTypesRef.current = activeTypes;
 
     const zoomIn = useCallback(() => {
       const svg = svgRef.current;
@@ -270,6 +272,22 @@ export const NetworkGraph = forwardRef<NetworkGraphHandle, NetworkGraphProps>(
       simulationRef.current = simulation;
       nodeSelRef.current = node;
       linkSelRef.current = link;
+
+      // Apply persisted type filter immediately (the filter effect won't
+      // re-run if activeTypes hasn't changed since mount)
+      const at = activeTypesRef.current;
+      node.style("display", (d) =>
+        at.has(d.type) || !ENTITY_COLORS[d.type] ? null : "none",
+      );
+      const visibleNames = new Set<string>();
+      node.each((d) => {
+        if (at.has(d.type) || !ENTITY_COLORS[d.type]) visibleNames.add(d.name);
+      });
+      link.style("display", (d) => {
+        const src = (d.source as GraphNode).name;
+        const tgt = (d.target as GraphNode).name;
+        return visibleNames.has(src) && visibleNames.has(tgt) ? null : "none";
+      });
 
       return () => {
         simulation.stop();
