@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Pause, Play } from "lucide-react";
 import { apiClient } from "@/api/client";
@@ -41,6 +41,7 @@ export function QueueControls() {
   const queryClient = useQueryClient();
   const [pausedQueues, setPausedQueues] = useState<Set<string>>(new Set());
   const [confirmQueue, setConfirmQueue] = useState<string | null>(null);
+  const lastMutationAt = useRef(0);
 
   const { data, isLoading } = useQuery({
     queryKey: ["admin-celery"],
@@ -52,9 +53,11 @@ export function QueueControls() {
     refetchInterval: isLive ? 10_000 : false,
   });
 
-  // Sync pause state from backend on load/refresh
+  // Sync pause state from backend on load/refresh, but skip briefly
+  // after a mutation so optimistic updates aren't overwritten before
+  // Celery's inspect reflects the cancel_consumer/add_consumer change.
   useEffect(() => {
-    if (data?.queues) {
+    if (data?.queues && Date.now() - lastMutationAt.current > 3000) {
       setPausedQueues(new Set(data.queues.filter((q) => q.paused).map((q) => q.name)));
     }
   }, [data]);
@@ -66,6 +69,7 @@ export function QueueControls() {
         method: "POST",
       }),
     onSuccess: (_, queueName) => {
+      lastMutationAt.current = Date.now();
       setPausedQueues((prev) => new Set([...prev, queueName]));
       notify.success(`Queue "${queueName}" paused.`);
       void queryClient.invalidateQueries({ queryKey: ["admin-celery"] });
@@ -82,6 +86,7 @@ export function QueueControls() {
         method: "POST",
       }),
     onSuccess: (_, queueName) => {
+      lastMutationAt.current = Date.now();
       setPausedQueues((prev) => {
         const next = new Set(prev);
         next.delete(queueName);
