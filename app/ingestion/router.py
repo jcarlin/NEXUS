@@ -796,7 +796,7 @@ async def pause_queue(
     Workers stop pulling new tasks from the specified queue.
     Already-running tasks are not affected.
     """
-    if queue_name not in ("default", "bulk", "background"):
+    if queue_name not in ("default", "bulk", "background", "ner"):
         raise HTTPException(status_code=400, detail=f"Unknown queue: {queue_name}")
 
     from workers.celery_app import celery_app
@@ -817,7 +817,7 @@ async def resume_queue(
     current_user: UserRecord = Depends(get_current_user),
 ):
     """Resume consumption of a previously paused Celery queue."""
-    if queue_name not in ("default", "bulk", "background"):
+    if queue_name not in ("default", "bulk", "background", "ner"):
         raise HTTPException(status_code=400, detail=f"Unknown queue: {queue_name}")
 
     from workers.celery_app import celery_app
