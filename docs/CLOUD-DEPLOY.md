@@ -445,16 +445,18 @@ The ingestion overlay (`docker-compose.ingest.yml`) splits workers into two dedi
 | `worker` | 2 | default, bulk, background | I/O-bound import tasks (embedding API, Qdrant writes) |
 | `ner-worker` | 2 | ner | CPU-bound GLiNER entity extraction (8GB memory limit) |
 
-Both worker types set `OMP_NUM_THREADS=2` and `MKL_NUM_THREADS=2` to prevent PyTorch/numpy from consuming all cores via thread parallelism.
+Both worker types set `OMP_NUM_THREADS=4` and `MKL_NUM_THREADS=4` to give ONNX operations (Docling OCR, FastEmbed BM42 sparse embeddings) enough threads without oversubscribing.
 
 **Tuning (set in `.env` on the VM):**
 ```bash
 INGEST_WORKER_REPLICAS=2      # General worker replicas
 NER_WORKER_REPLICAS=2         # NER worker replicas
-CELERY_CONCURRENCY=1          # Tasks per general worker process
+CELERY_CONCURRENCY=2          # Tasks per general worker process (total import procs = replicas × concurrency)
 NER_WORKER_CONCURRENCY=1      # Tasks per NER worker process
 DEFER_NER_TO_QUEUE=true       # Required: dispatch NER to separate queue
 ```
+
+**Balancing concurrency vs threads:** Total ONNX threads should roughly equal vCPU count. On a 16 vCPU VM with `CELERY_CONCURRENCY=2`: 2 replicas × 2 processes × 4 threads = 16 threads. Raising concurrency requires lowering `OMP_NUM_THREADS` to compensate (e.g., concurrency=4 → OMP=2).
 
 **Scaling dynamically** (no rebuild needed):
 ```bash
@@ -473,6 +475,75 @@ gcloud compute resource-policies create snapshot-schedule nexus-gpu-weekly \
   --region=us-west1 --max-retention-days=30 --weekly-schedule=sunday --start-time=04:00
 gcloud compute disks add-resource-policies nexus-gpu \
   --zone=us-west1-a --resource-policies=nexus-gpu-weekly
+```
+
+### GCS Data Mount (for ingestion from cloud storage)
+
+Mount a GCS bucket via FUSE for large-scale ingestion from Google Cloud Storage:
+
+```bash
+# Install gcsfuse (one-time)
+export GCSFUSE_REPO=gcsfuse-$(lsb_release -c -s)
+echo "deb [signed-by=/usr/share/keyrings/cloud.google.asc] https://packages.cloud.google.com/apt $GCSFUSE_REPO main" \
+  | sudo tee /etc/apt/sources.list.d/gcsfuse.list
+curl https://packages.cloud.google.com/apt/doc/apt-key.gpg \
+  | sudo tee /usr/share/keyrings/cloud.google.asc
+sudo apt-get update && sudo apt-get install -y gcsfuse
+
+# Mount bucket (allow Docker containers to access via --allow-other)
+sudo mkdir -p /mnt/epstein
+sudo gcsfuse --implicit-dirs --allow-other nexus-epstein-data /mnt/epstein
+```
+
+The `docker-compose.ingest.yml` overlay binds `/mnt/epstein:/mnt/epstein:ro` into the API container, so import scripts can read GCS data directly.
+
+**Bulk import script:**
+```bash
+COMPOSE='sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+  -f docker-compose.cloud.yml -f docker-compose.ingest.yml'
+
+$COMPOSE exec -T api python3 scripts/import_pdf_directory.py \
+  --dir /mnt/epstein/<dataset> \
+  --matter-id <UUID> \
+  --disable-hnsw --resume
+```
+
+Each import creates a `bulk_import_jobs` record visible in **Pipeline Monitor > Bulk Imports**. The script only discovers `.pdf` files (case-insensitive) — images and other files are automatically skipped.
+
+### Verification Commands
+
+**PostgreSQL:**
+```bash
+$COMPOSE exec -T postgres psql -U nexus -d nexus -c \
+  "SELECT count(*) FROM documents WHERE matter_id = '<UUID>';"
+```
+
+**Qdrant** (collection name is `nexus_text`, not `documents`):
+```bash
+$COMPOSE exec -T api python3 -c '
+from qdrant_client import QdrantClient
+c = QdrantClient(url="http://qdrant:6333")
+info = c.get_collection("nexus_text")
+print(f"Points: {info.points_count}, Status: {info.status}")
+'
+```
+
+**Neo4j:**
+```bash
+sudo docker exec nexus-neo4j-1 cypher-shell -u neo4j -p '<NEO4J_PASSWORD from .env>' \
+  'MATCH (n) RETURN labels(n)[0] AS label, count(n) AS cnt ORDER BY cnt DESC;'
+```
+
+**Bulk import progress:**
+```bash
+$COMPOSE exec -T postgres psql -U nexus -d nexus -c \
+  "SELECT source_path, status, total_documents, processed_documents, failed_documents
+   FROM bulk_import_jobs ORDER BY created_at;"
+```
+
+**RabbitMQ queue depth:**
+```bash
+sudo docker exec nexus-rabbitmq-1 rabbitmqctl list_queues name messages consumers
 ```
 
 ### Rollback
