@@ -49,17 +49,10 @@ type DialogType = "rename" | "changeType" | "merge" | "delete" | null;
 
 function NetworkGraphPage() {
   const matterId = useAppStore((s) => s.matterId);
-  const [vs, setVS] = useViewState("/entities/network", {
+  const [vs, setVS] = useViewState("/entities/filters", {
     activeTypes: [...DEFAULT_TYPES],
   });
   const activeTypes = useMemo(() => new Set(vs.activeTypes), [vs.activeTypes]);
-  const setActiveTypes = useCallback(
-    (updater: Set<string> | ((prev: Set<string>) => Set<string>)) => {
-      const next = typeof updater === "function" ? updater(activeTypes) : updater;
-      setVS({ activeTypes: [...next] });
-    },
-    [activeTypes, setVS],
-  );
   const graphRef = useRef<NetworkGraphHandle>(null);
   const [editMode, setEditMode] = useState(false);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -121,16 +114,14 @@ function NetworkGraphPage() {
   });
 
   const toggleType = useCallback((type: string) => {
-    setActiveTypes((prev) => {
-      const next = new Set(prev);
-      if (next.has(type)) {
-        next.delete(type);
-      } else {
-        next.add(type);
-      }
-      return next;
-    });
-  }, []);
+    const current = new Set(vs.activeTypes);
+    if (current.has(type)) {
+      current.delete(type);
+    } else {
+      current.add(type);
+    }
+    setVS({ activeTypes: [...current] });
+  }, [vs.activeTypes, setVS]);
 
   const handleNodeContextMenu = useCallback((event: MouseEvent, node: { name: string; type: string }) => {
     if (!editMode) return;

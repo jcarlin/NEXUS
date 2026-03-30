@@ -118,6 +118,7 @@ export interface EntityConnection {
   relationship_type: string;
   context?: string | null;
   weight: number;
+  target_type?: string | null;
 }
 
 export interface GraphStats {

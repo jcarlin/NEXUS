@@ -439,6 +439,7 @@ class GraphService:
                type(r)          AS relationship_type,
                COALESCE(connected.name, connected.filename, connected.chunk_id) AS target,
                labels(connected) AS target_labels,
+               connected.type   AS target_type,
                properties(r)   AS edge_properties
         LIMIT $limit
         """
@@ -549,6 +550,7 @@ class GraphService:
         self,
         query: str | None = None,
         entity_type: str | None = None,
+        entity_types: list[str] | None = None,
         limit: int = 50,
         offset: int = 0,
         matter_id: str | None = None,
@@ -556,6 +558,7 @@ class GraphService:
         """Search entities with optional text query and type filter.
 
         Returns (items, total_count).
+        *entity_types* (list) takes precedence over *entity_type* (single).
         """
         where_clauses: list[str] = []
         params: dict[str, Any] = {"limit": limit, "offset": offset}
@@ -568,7 +571,10 @@ class GraphService:
             where_clauses.append("toLower(e.name) CONTAINS toLower($query)")
             params["query"] = query
 
-        if entity_type:
+        if entity_types:
+            where_clauses.append("e.type IN $entity_types")
+            params["entity_types"] = entity_types
+        elif entity_type:
             where_clauses.append("e.type = $entity_type")
             params["entity_type"] = entity_type
 

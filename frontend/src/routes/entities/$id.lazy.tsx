@@ -1,7 +1,8 @@
 import { createLazyFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { ArrowLeft, MoreHorizontal } from "lucide-react";
+import { useViewState } from "@/hooks/use-view-state";
 import { apiClient } from "@/api/client";
 import { useAppStore } from "@/stores/app-store";
 import { useAuthStore } from "@/stores/auth-store";
@@ -15,6 +16,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { EntityHeader } from "@/components/entities/entity-header";
 import { ConnectionsGraph } from "@/components/entities/connections-graph";
+import { GraphControls } from "@/components/entities/graph-controls";
 import { DocumentMentions } from "@/components/entities/document-mentions";
 import { EntityTimeline } from "@/components/entities/entity-timeline";
 import { ReportingChain } from "@/components/entities/reporting-chain";
@@ -36,12 +38,25 @@ interface ConnectionsResponse {
 
 type EditDialog = "rename" | "changeType" | "delete" | null;
 
+const DEFAULT_TYPES = new Set(["person", "organization", "location", "date", "monetary_amount"]);
+
 function EntityDetailPage() {
   const { id } = Route.useParams();
   const matterId = useAppStore((s) => s.matterId);
   const user = useAuthStore((s) => s.user);
   const canEdit = user?.role === "admin" || user?.role === "attorney";
   const [activeDialog, setActiveDialog] = useState<EditDialog>(null);
+
+  const [filterVS, setFilterVS] = useViewState("/entities/filters", {
+    activeTypes: [...DEFAULT_TYPES],
+  });
+  const activeTypes = useMemo(() => new Set(filterVS.activeTypes), [filterVS.activeTypes]);
+  const toggleType = useCallback((type: string) => {
+    const current = new Set(filterVS.activeTypes);
+    if (current.has(type)) current.delete(type);
+    else current.add(type);
+    setFilterVS({ activeTypes: [...current] });
+  }, [filterVS.activeTypes, setFilterVS]);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["entity-connections", matterId, id],
@@ -107,10 +122,17 @@ function EntityDetailPage() {
         )}
       </div>
 
+      <GraphControls
+        activeTypes={activeTypes}
+        onToggleType={toggleType}
+      />
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <ConnectionsGraph
           entity={data.entity}
-          connections={data.connections}
+          connections={data.connections.filter(
+            (c) => !c.target_type || activeTypes.has(c.target_type),
+          )}
         />
         <EntityTimeline entityId={id} />
       </div>

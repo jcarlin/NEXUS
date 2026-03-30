@@ -1,6 +1,6 @@
 import { createLazyFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Network } from "lucide-react";
 import { useViewState } from "@/hooks/use-view-state";
 import { apiClient } from "@/api/client";
@@ -9,13 +9,7 @@ import { useDebounce } from "@/hooks/use-debounce";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Pagination } from "@/components/ui/pagination";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { GraphControls } from "@/components/entities/graph-controls";
 import { EntityTable } from "@/components/entities/entity-table";
 import type { EntityResponse, PaginatedResponse } from "@/types";
 
@@ -23,26 +17,27 @@ export const Route = createLazyFileRoute("/entities/")({
   component: EntitiesPage,
 });
 
-const ENTITY_TYPES = [
-  { value: "all", label: "All Types" },
-  { value: "person", label: "Person" },
-  { value: "organization", label: "Organization" },
-  { value: "location", label: "Location" },
-  { value: "date", label: "Date" },
-  { value: "monetary_amount", label: "Money" },
-  { value: "email_address", label: "Email" },
-  { value: "phone_number", label: "Phone" },
-  { value: "address", label: "Address" },
-];
+const DEFAULT_TYPES = new Set(["person", "organization", "location", "date", "monetary_amount"]);
 
 function EntitiesPage() {
   const matterId = useAppStore((s) => s.matterId);
   const [vs, setVS] = useViewState("/entities", {
     search: "",
-    entityType: "all",
     offset: 0,
     sorting: [],
   });
+  const [filterVS, setFilterVS] = useViewState("/entities/filters", {
+    activeTypes: [...DEFAULT_TYPES],
+  });
+  const activeTypes = useMemo(() => new Set(filterVS.activeTypes), [filterVS.activeTypes]);
+  const toggleType = useCallback((type: string) => {
+    const current = new Set(filterVS.activeTypes);
+    if (current.has(type)) current.delete(type);
+    else current.add(type);
+    setFilterVS({ activeTypes: [...current] });
+    setVS({ offset: 0 });
+  }, [filterVS.activeTypes, setFilterVS, setVS]);
+
   const [searchInput, setSearchInput] = useState(vs.search);
   const debouncedSearch = useDebounce(searchInput, 300);
   const limit = 50;
@@ -52,15 +47,19 @@ function EntitiesPage() {
     setVS({ search: debouncedSearch });
   }, [debouncedSearch, setVS]);
 
+  // Build entity_types param: if all types active, don't filter
+  const allActive = filterVS.activeTypes.length === DEFAULT_TYPES.size;
+  const entityTypesParam = allActive ? undefined : filterVS.activeTypes.join(",");
+
   const { data, isLoading } = useQuery({
-    queryKey: ["entities", matterId, debouncedSearch, vs.entityType, vs.offset],
+    queryKey: ["entities", matterId, debouncedSearch, entityTypesParam, vs.offset],
     queryFn: () =>
       apiClient<PaginatedResponse<EntityResponse>>({
         url: "/api/v1/entities",
         method: "GET",
         params: {
           q: debouncedSearch || undefined,
-          entity_type: vs.entityType !== "all" ? vs.entityType : undefined,
+          entity_types: entityTypesParam,
           offset: vs.offset,
           limit,
         },
@@ -102,24 +101,12 @@ function EntitiesPage() {
           }}
           className="max-w-sm"
         />
-        <Select
-          value={vs.entityType}
-          onValueChange={(v) => {
-            setVS({ entityType: v, offset: 0 });
-          }}
-        >
-          <SelectTrigger className="w-[180px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {ENTITY_TYPES.map((t) => (
-              <SelectItem key={t.value} value={t.value}>
-                {t.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
       </div>
+
+      <GraphControls
+        activeTypes={activeTypes}
+        onToggleType={toggleType}
+      />
 
       <EntityTable
         data={data?.items ?? []}

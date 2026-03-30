@@ -61,7 +61,7 @@ export function ConnectionsGraph({ entity, connections }: ConnectionsGraphProps)
         nodeMap.set(conn.target, {
           id: conn.target,
           name: conn.target,
-          type: "DEFAULT",
+          type: conn.target_type ?? "DEFAULT",
           isCenter: false,
         });
       }

@@ -39,6 +39,7 @@ _CYPHER_WRITE_RE = re.compile(
 async def list_entities(
     q: str | None = Query(None, description="Search query for entity name"),
     entity_type: str | None = Query(None, description="Filter by entity type"),
+    entity_types: str | None = Query(None, description="Comma-separated entity types (overrides entity_type)"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     gs: GraphService = Depends(get_graph_service),
@@ -46,8 +47,14 @@ async def list_entities(
     matter_id: UUID = Depends(get_matter_id),
 ):
     """Search or list extracted entities (paginated)."""
+    types_list = [t.strip() for t in entity_types.split(",") if t.strip()] if entity_types else None
     items, total = await gs.search_entities(
-        query=q, entity_type=entity_type, limit=limit, offset=offset, matter_id=str(matter_id)
+        query=q,
+        entity_type=entity_type,
+        entity_types=types_list,
+        limit=limit,
+        offset=offset,
+        matter_id=str(matter_id),
     )
     return {
         "items": items,

@@ -15,9 +15,9 @@ const ENTITY_TYPES = [
 interface GraphControlsProps {
   activeTypes: Set<string>;
   onToggleType: (type: string) => void;
-  onZoomIn: () => void;
-  onZoomOut: () => void;
-  onFitView: () => void;
+  onZoomIn?: () => void;
+  onZoomOut?: () => void;
+  onFitView?: () => void;
   editMode?: boolean;
   onToggleEditMode?: () => void;
 }
@@ -56,28 +56,36 @@ export function GraphControls({
           </div>
         ))}
       </div>
-      <div className="flex items-center gap-1">
-        {canEdit && onToggleEditMode && (
-          <Button
-            variant={editMode ? "default" : "outline"}
-            size="icon"
-            className="h-7 w-7"
-            onClick={onToggleEditMode}
-            title={editMode ? "Exit edit mode" : "Enter edit mode"}
-          >
-            {editMode ? <Unlock className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
-          </Button>
-        )}
-        <Button variant="outline" size="icon" className="h-7 w-7" onClick={onZoomIn}>
-          <ZoomIn className="h-3.5 w-3.5" />
-        </Button>
-        <Button variant="outline" size="icon" className="h-7 w-7" onClick={onZoomOut}>
-          <ZoomOut className="h-3.5 w-3.5" />
-        </Button>
-        <Button variant="outline" size="icon" className="h-7 w-7" onClick={onFitView}>
-          <Maximize2 className="h-3.5 w-3.5" />
-        </Button>
-      </div>
+      {(onZoomIn || onZoomOut || onFitView || onToggleEditMode) && (
+        <div className="flex items-center gap-1">
+          {canEdit && onToggleEditMode && (
+            <Button
+              variant={editMode ? "default" : "outline"}
+              size="icon"
+              className="h-7 w-7"
+              onClick={onToggleEditMode}
+              title={editMode ? "Exit edit mode" : "Enter edit mode"}
+            >
+              {editMode ? <Unlock className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
+            </Button>
+          )}
+          {onZoomIn && (
+            <Button variant="outline" size="icon" className="h-7 w-7" onClick={onZoomIn}>
+              <ZoomIn className="h-3.5 w-3.5" />
+            </Button>
+          )}
+          {onZoomOut && (
+            <Button variant="outline" size="icon" className="h-7 w-7" onClick={onZoomOut}>
+              <ZoomOut className="h-3.5 w-3.5" />
+            </Button>
+          )}
+          {onFitView && (
+            <Button variant="outline" size="icon" className="h-7 w-7" onClick={onFitView}>
+              <Maximize2 className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

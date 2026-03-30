@@ -17,7 +17,6 @@ export interface ViewStateMap {
   };
   "/entities": {
     search: string;
-    entityType: string;
     offset: number;
     sorting: SortingEntry[];
   };
@@ -43,7 +42,7 @@ export interface ViewStateMap {
     sorting: SortingEntry[];
     globalFilter: string;
   };
-  "/entities/network": {
+  "/entities/filters": {
     activeTypes: string[];
   };
   "/analytics/timeline": {
