@@ -138,13 +138,20 @@ _OCR_GARBLE_RE = re.compile(r"[A-Z]{2}[a-z][A-Z]{2}")
 
 
 def normalize_entity_name(raw: str) -> str:
-    """Normalize an entity name: strip OCR artifacts, rejoin hyphenation, collapse whitespace.
+    """Normalize an entity name: fix encoding, rejoin hyphenation, collapse whitespace.
 
     This is the single normalization point — used by the extractor, ingestion
     tasks, and the NER pass script to ensure consistent entity names.
+
+    Uses ``ftfy`` (already installed) for encoding/mojibake/HTML-entity fixes,
+    which is purpose-built for cleaning OCR and web-scraped text.
     """
+    import ftfy
+
+    # ftfy: fix mojibake, broken Unicode, HTML entities (&amp; → &), etc.
+    name = ftfy.fix_text(raw)
     # Replace newlines/carriage returns with spaces
-    name = raw.replace("\r\n", " ").replace("\r", " ").replace("\n", " ")
+    name = name.replace("\r\n", " ").replace("\r", " ").replace("\n", " ")
     # Rejoin OCR hyphenation at line breaks: "Ep- stein" → "Epstein"
     name = re.sub(r"(\w)- (\w)", r"\1\2", name)
     name = re.sub(r"(\w) -(\w)", r"\1\2", name)
@@ -228,7 +235,7 @@ class EntityExtractor:
         text: str,
         *,
         entity_types: list[str] | None = None,
-        threshold: float = 0.3,
+        threshold: float = 0.5,
     ) -> list[ExtractedEntity]:
         """Extract entities from *text* using GLiNER.
 
@@ -237,6 +244,8 @@ class EntityExtractor:
             entity_types: Override the default ``GLINER_ENTITY_TYPES`` if you
                 only need a subset.
             threshold: Minimum confidence score for returned entities.
+                Raised from 0.3 to 0.5 — GLiNER's confidence scoring
+                naturally filters OCR garbage at higher thresholds.
 
         Returns:
             List of :class:`ExtractedEntity` with text, type, score, and
@@ -291,7 +300,7 @@ class EntityExtractor:
         texts: list[str],
         *,
         entity_types: list[str] | None = None,
-        threshold: float = 0.3,
+        threshold: float = 0.5,
         batch_size: int = 8,
     ) -> list[list[ExtractedEntity]]:
         """Extract entities from multiple texts using batched inference.

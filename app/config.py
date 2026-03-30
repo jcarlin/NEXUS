@@ -98,6 +98,7 @@ class FeatureFlags(BaseModel):
     ai_audit_logging: bool
     batch_embeddings: bool
     case_setup_agent: bool
+    llm_entity_resolution: bool
     coreference_resolution: bool
     graph_centrality: bool
     hot_doc_detection: bool
@@ -231,6 +232,7 @@ class Settings(BaseSettings):
     chunk_size: int = 512
     chunk_overlap: int = 64
     gliner_model: str = "urchade/gliner_multi_pii-v1"
+    gliner_confidence_threshold: float = 0.5  # GLiNER extraction confidence; raised from 0.3 to filter OCR noise
     enable_relationship_extraction: bool = False  # Tier-2 Instructor+LLM extraction off by default
     defer_ner_to_queue: bool = False  # Deferred NER: dispatch to separate 'ner' queue instead of inline
     ner_batch_size: int = 8  # GLiNER batch size (texts per forward pass); 24 for short emails
@@ -307,6 +309,11 @@ class Settings(BaseSettings):
 
     # --- Case Intelligence ---
     enable_case_setup_agent: bool = False
+
+    # --- LLM Entity Resolution ---
+    enable_llm_entity_resolution: bool = (
+        False  # Instructor + LLM for hard entity merges (partial names, OCR corruption)
+    )
 
     # --- Coreference Resolution (M11) ---
     enable_coreference_resolution: bool = False  # spaCy + coreferee
@@ -611,6 +618,7 @@ class Settings(BaseSettings):
                 ai_audit_logging=self.enable_ai_audit_logging,
                 batch_embeddings=self.enable_batch_embeddings,
                 case_setup_agent=self.enable_case_setup_agent,
+                llm_entity_resolution=self.enable_llm_entity_resolution,
                 coreference_resolution=self.enable_coreference_resolution,
                 graph_centrality=self.enable_graph_centrality,
                 hot_doc_detection=self.enable_hot_doc_detection,

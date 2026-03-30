@@ -64,6 +64,7 @@ dependencies = [
 
     # Entity Resolution
     "rapidfuzz",
+    "ftfy>=6.2",
 
     # Near-Duplicate Detection
     "datasketch>=1.6",

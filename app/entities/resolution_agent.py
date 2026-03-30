@@ -11,6 +11,8 @@ from typing import Annotated, Any, TypedDict
 import structlog
 from langgraph.graph import END, START, StateGraph
 
+from app.entities.resolver import RESOLVABLE_TYPES
+
 logger = structlog.get_logger(__name__)
 
 
@@ -79,7 +81,7 @@ def create_resolution_nodes(settings: dict[str, Any]) -> dict[str, Any]:
                 types_to_process = [entity_type]
             else:
                 records = await gs._run_query("MATCH (e:Entity) RETURN DISTINCT e.type AS type")
-                types_to_process = [r["type"] for r in records if r.get("type")]
+                types_to_process = [r["type"] for r in records if r.get("type") and r["type"] in RESOLVABLE_TYPES]
 
             all_entities: list[dict[str, Any]] = []
             for etype in types_to_process:
@@ -167,6 +169,148 @@ def create_resolution_nodes(settings: dict[str, Any]) -> dict[str, Any]:
         # integration where resolved text feeds back into entity extraction.
         logger.info("resolution.coreference.complete")
         return {}
+
+    # --- Node: llm_resolve ---
+
+    async def llm_resolve(state: dict) -> dict:
+        """Use LLM to resolve entities that fuzzy matching can't handle.
+
+        Feature-flagged via ``enable_llm_entity_resolution``.  Uses Instructor +
+        the analysis-tier LLM (Gemini Flash) for structured merge decisions.
+        Handles OCR corruption, partial→full name matching, and abbreviations.
+        """
+        if not settings.get("enable_llm_entity_resolution", False):
+            logger.info("resolution.llm_resolve.skipped", reason="feature_disabled")
+            return {}
+
+        # Collect entities not yet in a confident match group
+        all_matches = state.get("all_matches", [])
+        entities = state.get("entities", [])
+
+        if not entities:
+            return {}
+
+        # Build set of already-matched entity names
+        matched_names: set[str] = set()
+        for m in all_matches:
+            matched_names.add(m["name_a"])
+            matched_names.add(m["name_b"])
+
+        # Group unmatched entities by type
+        unmatched_by_type: dict[str, list[dict]] = {}
+        for ent in entities:
+            if ent["name"] not in matched_names and ent.get("type") in RESOLVABLE_TYPES:
+                unmatched_by_type.setdefault(ent["type"], []).append(ent)
+
+        if not unmatched_by_type:
+            logger.info("resolution.llm_resolve.skipped", reason="no_unmatched_entities")
+            return {}
+
+        # Get LLM client via tier resolver (analysis tier = cheapest)
+        from app.entities.prompts import ENTITY_RESOLUTION_PROMPT
+
+        postgres_url = settings.get("postgres_url")
+        if not postgres_url:
+            logger.warning("resolution.llm_resolve.skipped", reason="no_postgres_url")
+            return {}
+
+        from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+        from app.llm_config.resolver import resolve_llm_config
+
+        engine = create_async_engine(postgres_url)
+        try:
+            async with AsyncSession(engine) as db:
+                llm_config = await resolve_llm_config("analysis", db)
+        finally:
+            await engine.dispose()
+
+        # Build Instructor client from the resolved LLM config
+        import instructor
+        from pydantic import BaseModel, Field
+
+        class EntityMergeGroup(BaseModel):
+            canonical: str = Field(description="Best canonical form of the name")
+            aliases: list[str] = Field(description="Other names referring to the same entity")
+            confidence: float = Field(ge=0, le=1)
+
+        class EntityMergeResponse(BaseModel):
+            groups: list[EntityMergeGroup] = Field(default_factory=list)
+
+        if llm_config.provider == "gemini":
+            import google.genai
+
+            client = instructor.from_genai(
+                google.genai.Client(api_key=llm_config.api_key),
+                mode=instructor.Mode.GENAI_STRUCTURED_OUTPUTS,
+            )
+        elif llm_config.provider == "anthropic":
+            import anthropic
+
+            client = instructor.from_anthropic(anthropic.Anthropic(api_key=llm_config.api_key))
+        else:
+            import openai
+
+            client = instructor.from_openai(
+                openai.OpenAI(api_key=llm_config.api_key, base_url=llm_config.base_url or None)
+            )
+
+        new_matches: list[dict] = []
+        batch_size = 50
+
+        for entity_type, type_entities in unmatched_by_type.items():
+            # Sort by mention count descending so the LLM sees the most important first
+            sorted_ents = sorted(type_entities, key=lambda e: e.get("mention_count", 0), reverse=True)
+
+            # Process in batches
+            for i in range(0, len(sorted_ents), batch_size):
+                batch = sorted_ents[i : i + batch_size]
+                name_list = "\n".join(f"- {ent['name']} (mentions: {ent.get('mention_count', 1)})" for ent in batch)
+
+                prompt = ENTITY_RESOLUTION_PROMPT.format(
+                    entity_type=entity_type,
+                    name_list=name_list,
+                )
+
+                try:
+                    result = client.chat.completions.create(
+                        model=llm_config.model,
+                        messages=[{"role": "user", "content": prompt}],
+                        response_model=EntityMergeResponse,
+                        max_retries=2,
+                    )
+
+                    for group in result.groups:
+                        if group.confidence < 0.8 or len(group.aliases) == 0:
+                            continue
+                        # Create pairwise matches from the group
+                        for alias in group.aliases:
+                            new_matches.append(
+                                {
+                                    "name_a": group.canonical,
+                                    "name_b": alias,
+                                    "entity_type": entity_type,
+                                    "score": group.confidence * 100,  # normalize to 0-100 scale
+                                    "method": "llm",
+                                }
+                            )
+
+                except Exception:
+                    logger.error(
+                        "resolution.llm_resolve.batch_failed",
+                        entity_type=entity_type,
+                        batch_start=i,
+                        batch_size=len(batch),
+                    )
+
+        # Merge new LLM matches into the confident matches
+        existing = state.get("all_matches", [])
+        logger.info(
+            "resolution.llm_resolve.complete",
+            new_matches=len(new_matches),
+            types_processed=list(unmatched_by_type.keys()),
+        )
+        return {"all_matches": existing + new_matches}
 
     # --- Node: merge ---
 
@@ -412,6 +556,7 @@ def create_resolution_nodes(settings: dict[str, Any]) -> dict[str, Any]:
         "resolve_coreferences": log_agent_node("entity_resolution", "resolve_coreferences", postgres_url=postgres_url)(
             resolve_coreferences
         ),
+        "llm_resolve": log_agent_node("entity_resolution", "llm_resolve", postgres_url=postgres_url)(llm_resolve),
         "merge": log_agent_node("entity_resolution", "merge", postgres_url=postgres_url)(merge),
         "infer_hierarchy": log_agent_node("entity_resolution", "infer_hierarchy", postgres_url=postgres_url)(
             infer_hierarchy
@@ -446,6 +591,7 @@ def build_resolution_graph(
     graph.add_node("extract", nodes["extract"])
     graph.add_node("deduplicate", nodes["deduplicate"])
     graph.add_node("resolve_coreferences", nodes["resolve_coreferences"])
+    graph.add_node("llm_resolve", nodes["llm_resolve"])
     graph.add_node("merge", nodes["merge"])
     graph.add_node("infer_hierarchy", nodes["infer_hierarchy"])
     graph.add_node("link_defined_terms", nodes["link_defined_terms"])
@@ -455,7 +601,8 @@ def build_resolution_graph(
     graph.add_edge(START, "extract")
     graph.add_edge("extract", "deduplicate")
     graph.add_edge("deduplicate", "resolve_coreferences")
-    graph.add_edge("resolve_coreferences", "merge")
+    graph.add_edge("resolve_coreferences", "llm_resolve")
+    graph.add_edge("llm_resolve", "merge")
     graph.add_edge("merge", "infer_hierarchy")
     graph.add_edge("infer_hierarchy", "link_defined_terms")
     graph.add_edge("link_defined_terms", "present_uncertain")
@@ -491,6 +638,7 @@ async def run_resolution_agent(
         "neo4j_user": app_settings.neo4j_user,
         "neo4j_password": app_settings.neo4j_password,
         "enable_coreference_resolution": app_settings.enable_coreference_resolution,
+        "enable_llm_entity_resolution": app_settings.enable_llm_entity_resolution,
         "postgres_url": app_settings.postgres_url,
     }
 

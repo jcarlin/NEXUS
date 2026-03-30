@@ -52,6 +52,7 @@ async def test_resolution_agent_full_flow() -> None:
         "neo4j_user": "neo4j",
         "neo4j_password": "test",
         "enable_coreference_resolution": False,
+        "enable_llm_entity_resolution": False,
         "postgres_url": "postgresql+asyncpg://test@localhost/test",
     }
 
@@ -166,6 +167,30 @@ async def test_resolution_agent_uncertain_merges() -> None:
 
     # mark_pending_merge should have been called for both entity names
     assert mock_gs.mark_pending_merge.call_count == 2  # once for name_a, once for name_b
+
+
+@pytest.mark.asyncio
+async def test_llm_resolve_node_skipped_when_disabled() -> None:
+    """llm_resolve node should be a no-op when feature flag is disabled."""
+    from app.entities.resolution_agent import create_resolution_nodes
+
+    settings = {
+        "neo4j_uri": "bolt://localhost:7687",
+        "neo4j_user": "neo4j",
+        "neo4j_password": "test",
+        "enable_llm_entity_resolution": False,
+        "postgres_url": "postgresql+asyncpg://test@localhost/test",
+    }
+
+    nodes = create_resolution_nodes(settings)
+    result = await nodes["llm_resolve"](
+        {
+            "entities": [{"name": "Trump", "type": "person", "mention_count": 100}],
+            "all_matches": [],
+        }
+    )
+    # Should return empty dict (no-op)
+    assert result == {}
 
 
 def test_resolution_agent_celery_task() -> None:

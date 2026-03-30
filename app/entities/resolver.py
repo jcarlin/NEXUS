@@ -2,19 +2,47 @@
 
 Resolves duplicates like "J. Epstein" / "Jeffrey Epstein" / "Epstein, Jeffrey"
 into a single canonical entity node in the knowledge graph.
+
+Uses ``rapidfuzz.fuzz.token_sort_ratio`` (word-order-insensitive name matching)
+and ``rapidfuzz.process.cdist`` (batch all-pairs comparison) — the library's
+recommended APIs for this workload.
 """
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field
 
 import networkx as nx
 import numpy as np
 import structlog
-from rapidfuzz import fuzz
+from rapidfuzz import fuzz, process
 
 logger = structlog.get_logger(__name__)
+
+# Entity types that benefit from fuzzy/probabilistic resolution.
+# Dates, amounts, phone numbers etc. are inherently unique values —
+# fuzzy-matching "$15 million" with "$15 billion" is a category error.
+RESOLVABLE_TYPES: frozenset[str] = frozenset(
+    {
+        "person",
+        "organization",
+        "location",
+        "court",
+        "address",
+        "vehicle",
+    }
+)
+
+EXACT_MATCH_TYPES: frozenset[str] = frozenset(
+    {
+        "date",
+        "monetary_amount",
+        "case_number",
+        "phone_number",
+        "email_address",
+        "flight_number",
+    }
+)
 
 
 @dataclass
@@ -68,7 +96,14 @@ class EntityResolver:
         self,
         entities: list[dict],
     ) -> list[EntityMatch]:
-        """Compare all entity pairs within the same type using rapidfuzz.
+        """Compare entity pairs within resolvable types using rapidfuzz.
+
+        Uses ``fuzz.token_sort_ratio`` (word-order-insensitive) instead of
+        basic ``fuzz.ratio``, and ``process.cdist`` for efficient batch
+        comparison — both are the library's recommended APIs for name matching.
+
+        Only processes :data:`RESOLVABLE_TYPES` (person, organization, etc.).
+        Dates, monetary amounts, and other exact-value types are skipped.
 
         Parameters
         ----------
@@ -88,49 +123,43 @@ class EntityResolver:
         matches: list[EntityMatch] = []
 
         for entity_type, names in by_type.items():
+            # Skip types that shouldn't be fuzzy-matched
+            if entity_type not in RESOLVABLE_TYPES:
+                continue
+
             # Deduplicate names list
             unique_names = list(dict.fromkeys(names))
             if len(unique_names) < 2:
                 continue
 
-            # Token-based blocking: bucket names by each lowercase token.
-            # "Jeffrey Epstein" → tokens {"jeffrey", "epstein"}
-            # "Epstein, Jeffrey" → tokens {"epstein", "jeffrey"}
-            # Both land in the "epstein" bucket → compared.
-            # This replaces first-char blocking which missed cross-initial
-            # duplicates (e.g. "Jeffrey Epstein" vs "Epstein, Jeffrey").
-            token_to_indices: dict[str, list[int]] = {}
-            for idx, name in enumerate(unique_names):
-                tokens = set(re.sub(r"[^a-z0-9\s]", "", name.lower()).split())
-                for tok in tokens:
-                    if len(tok) >= 3:  # skip very short tokens
-                        token_to_indices.setdefault(tok, []).append(idx)
+            # rapidfuzz.process.cdist: batch all-pairs comparison with
+            # score_cutoff and multi-core parallelization.
+            # token_sort_ratio normalizes word order, so
+            # "Jeffrey Epstein" ≈ "Epstein, Jeffrey".
+            score_matrix = process.cdist(
+                unique_names,
+                unique_names,
+                scorer=fuzz.token_sort_ratio,
+                processor=lambda x: " ".join(x.lower().split()),
+                score_cutoff=self.fuzzy_threshold,
+                workers=-1,
+            )
 
-            comparison_pairs: set[tuple[int, int]] = set()
-            for indices in token_to_indices.values():
-                if len(indices) > 200:  # skip extremely common tokens
-                    continue
-                for ii in range(len(indices)):
-                    for jj in range(ii + 1, len(indices)):
-                        comparison_pairs.add((indices[ii], indices[jj]))
-
-            for i, j in comparison_pairs:
-                name_a = unique_names[i]
-                name_b = unique_names[j]
-                score = fuzz.ratio(
-                    " ".join(name_a.lower().split()),
-                    " ".join(name_b.lower().split()),
-                )
-                if score >= self.fuzzy_threshold:
-                    matches.append(
-                        EntityMatch(
-                            name_a=name_a,
-                            name_b=name_b,
-                            entity_type=entity_type,
-                            score=score,
-                            method="fuzzy",
+            # Extract upper-triangle pairs above threshold
+            n = len(unique_names)
+            for i in range(n):
+                for j in range(i + 1, n):
+                    score = score_matrix[i][j]
+                    if score >= self.fuzzy_threshold:
+                        matches.append(
+                            EntityMatch(
+                                name_a=unique_names[i],
+                                name_b=unique_names[j],
+                                entity_type=entity_type,
+                                score=score,
+                                method="fuzzy",
+                            )
                         )
-                    )
 
         logger.info(
             "resolver.fuzzy.complete",

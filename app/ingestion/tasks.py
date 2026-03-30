@@ -1190,7 +1190,11 @@ def _stage_extract(ctx: _PipelineContext) -> None:
 
     # Batch extraction: process all chunks in batched forward passes
     chunk_texts = [chunk.text for chunk in ctx.chunks]
-    batch_results = extractor.extract_batch(chunk_texts, batch_size=ctx.settings.ner_batch_size)
+    batch_results = extractor.extract_batch(
+        chunk_texts,
+        batch_size=ctx.settings.ner_batch_size,
+        threshold=ctx.settings.gliner_confidence_threshold,
+    )
 
     from app.entities.extractor import normalize_entity_name
 
@@ -2111,7 +2115,7 @@ def import_text_document(
             seen_entities: set[tuple[str, str]] = set()
 
             for chunk in chunks:
-                extracted = extractor.extract(chunk.text)
+                extracted = extractor.extract(chunk.text, threshold=settings.gliner_confidence_threshold)
                 for ent in extracted:
                     key = (ent.text.strip().lower(), ent.type)
                     if key not in seen_entities:
@@ -2753,7 +2757,11 @@ def extract_entities_for_job(self, doc_id_or_job_id: str, matter_id: str | None 
 
         # Batch NER extraction
         extractor = EntityExtractor(model_name=settings.gliner_model)
-        batch_results = extractor.extract_batch(chunk_texts, batch_size=settings.ner_batch_size)
+        batch_results = extractor.extract_batch(
+            chunk_texts,
+            batch_size=settings.ner_batch_size,
+            threshold=settings.gliner_confidence_threshold,
+        )
 
         all_entities: list[dict] = []
         seen: set[tuple[str, str]] = set()

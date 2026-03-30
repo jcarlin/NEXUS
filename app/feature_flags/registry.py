@@ -79,6 +79,12 @@ FLAG_REGISTRY: dict[str, FlagMeta] = {
         category=FlagCategory.ENTITY_GRAPH,
         risk_level=FlagRiskLevel.SAFE,
     ),
+    "enable_llm_entity_resolution": FlagMeta(
+        display_name="LLM Entity Resolution",
+        description="Instructor + LLM-based entity resolution for hard merges (partial names, OCR corruption). Uses analysis tier (Gemini Flash).",
+        category=FlagCategory.ENTITY_GRAPH,
+        risk_level=FlagRiskLevel.SAFE,
+    ),
     "enable_coreference_resolution": FlagMeta(
         display_name="Coreference Resolution",
         description="spaCy + coreferee pronoun resolution during entity resolution. Loads en_core_web_lg (~560 MB).",

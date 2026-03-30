@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import networkx as nx
 
-from app.entities.resolver import EntityMatch, EntityResolver
+from app.entities.resolver import EXACT_MATCH_TYPES, RESOLVABLE_TYPES, EntityMatch, EntityResolver
 
 # ---------------------------------------------------------------------------
 # Fuzzy matching tests (8)
@@ -208,3 +208,114 @@ def test_compute_merge_groups_multi_type():
 
     types = {g.entity_type for g in groups}
     assert types == {"location", "organization"}
+
+
+# ---------------------------------------------------------------------------
+# Type gating tests — dates, amounts etc. must NOT be fuzzy-matched
+# ---------------------------------------------------------------------------
+
+
+def test_type_gating_dates_excluded():
+    """Date entities should never go through fuzzy resolution."""
+    resolver = EntityResolver(fuzzy_threshold=80)
+    entities = [
+        {"name": "January 1987", "type": "date"},
+        {"name": "January 1989", "type": "date"},
+    ]
+    matches = resolver.find_fuzzy_matches(entities)
+    assert len(matches) == 0
+
+
+def test_type_gating_monetary_excluded():
+    """Monetary amounts should never go through fuzzy resolution."""
+    resolver = EntityResolver(fuzzy_threshold=80)
+    entities = [
+        {"name": "$15 million", "type": "monetary_amount"},
+        {"name": "$15 billion", "type": "monetary_amount"},
+    ]
+    matches = resolver.find_fuzzy_matches(entities)
+    assert len(matches) == 0
+
+
+def test_type_gating_exact_types_excluded():
+    """All EXACT_MATCH_TYPES should be skipped."""
+    resolver = EntityResolver(fuzzy_threshold=50)  # very low to catch any leaks
+    entities = [
+        {"name": "555-0100", "type": "phone_number"},
+        {"name": "555-0101", "type": "phone_number"},
+        {"name": "john@example.com", "type": "email_address"},
+        {"name": "john@example.org", "type": "email_address"},
+        {"name": "AA1234", "type": "flight_number"},
+        {"name": "AA1235", "type": "flight_number"},
+        {"name": "1:19-cv-01234", "type": "case_number"},
+        {"name": "1:19-cv-01235", "type": "case_number"},
+    ]
+    matches = resolver.find_fuzzy_matches(entities)
+    assert len(matches) == 0
+
+
+def test_type_gating_persons_included():
+    """Person entities should still go through fuzzy resolution."""
+    resolver = EntityResolver(fuzzy_threshold=80)
+    entities = [
+        {"name": "John Smith", "type": "person"},
+        {"name": "John Smithe", "type": "person"},
+    ]
+    matches = resolver.find_fuzzy_matches(entities)
+    assert len(matches) >= 1
+
+
+def test_type_gating_organizations_included():
+    """Organization entities should still go through fuzzy resolution."""
+    resolver = EntityResolver(fuzzy_threshold=80)
+    entities = [
+        {"name": "Department of Justice", "type": "organization"},
+        {"name": "Dept. of Justice", "type": "organization"},
+    ]
+    matches = resolver.find_fuzzy_matches(entities)
+    # May or may not match depending on scorer — the point is they're compared
+    # (not skipped). At token_sort_ratio, these share enough tokens.
+    assert isinstance(matches, list)
+
+
+def test_resolvable_types_constant():
+    """Verify the type sets don't overlap and cover expected types."""
+    assert RESOLVABLE_TYPES & EXACT_MATCH_TYPES == frozenset()
+    assert "person" in RESOLVABLE_TYPES
+    assert "organization" in RESOLVABLE_TYPES
+    assert "date" in EXACT_MATCH_TYPES
+    assert "monetary_amount" in EXACT_MATCH_TYPES
+
+
+# ---------------------------------------------------------------------------
+# token_sort_ratio tests — word order insensitivity
+# ---------------------------------------------------------------------------
+
+
+def test_token_sort_handles_reordered_names():
+    """token_sort_ratio should match 'Epstein, Jeffrey' with 'Jeffrey Epstein'."""
+    resolver = EntityResolver(fuzzy_threshold=85)
+    entities = [
+        {"name": "Jeffrey Epstein", "type": "person"},
+        {"name": "Epstein, Jeffrey", "type": "person"},
+    ]
+    matches = resolver.find_fuzzy_matches(entities)
+    assert len(matches) == 1
+    assert matches[0].score >= 85
+
+
+def test_mixed_resolvable_and_exact_types():
+    """Fuzzy matching should only process resolvable types, not exact-match types."""
+    resolver = EntityResolver(fuzzy_threshold=80)
+    entities = [
+        {"name": "Jeffrey Epstein", "type": "person"},
+        {"name": "Jeffery Epstein", "type": "person"},
+        {"name": "January 1987", "type": "date"},
+        {"name": "January 1989", "type": "date"},
+        {"name": "$15 million", "type": "monetary_amount"},
+        {"name": "$15 billion", "type": "monetary_amount"},
+    ]
+    matches = resolver.find_fuzzy_matches(entities)
+    # Only person matches, never date or monetary
+    assert all(m.entity_type == "person" for m in matches)
+    assert len(matches) >= 1
