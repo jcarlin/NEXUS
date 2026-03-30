@@ -32,7 +32,7 @@ async def test_resolution_agent_full_flow() -> None:
             {"name": "Robert Johnsonn", "type": "person", "mention_count": 3},
         ],
     )
-    mock_gs.merge_entities = AsyncMock()
+    mock_gs.merge_entities = AsyncMock(return_value=True)
     mock_gs.create_temporal_relationship = AsyncMock()
     mock_gs.create_alias_edge = AsyncMock()
     mock_gs.mark_pending_merge = AsyncMock()

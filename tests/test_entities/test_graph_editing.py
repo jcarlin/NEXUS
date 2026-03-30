@@ -187,7 +187,7 @@ async def test_merge_entities(client: AsyncClient) -> None:
             {"name": "Robert", "type": "person", "mention_count": 3, "aliases": []},
         ]
     )
-    mock.merge_entities = AsyncMock()
+    mock.merge_entities = AsyncMock(return_value=True)
     _apply_gs(client, mock)
     try:
         resp = await client.post(

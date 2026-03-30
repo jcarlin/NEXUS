@@ -373,17 +373,45 @@ def create_resolution_nodes(settings: dict[str, Any]) -> dict[str, Any]:
         try:
             gs = GraphService(driver)
             total_merges = 0
+            merged_away: set[str] = set()
 
             for group in groups:
+                if group.canonical in merged_away:
+                    logger.warning(
+                        "resolution.merge.canonical_was_merged_away",
+                        canonical=group.canonical,
+                        aliases=group.aliases,
+                    )
+                    continue
                 for alias in group.aliases:
-                    try:
-                        await gs.merge_entities(group.canonical, alias, group.entity_type, matter_id=state["matter_id"])
-                        total_merges += 1
-                        logger.info(
-                            "resolution.merged",
-                            canonical=group.canonical,
+                    if alias in merged_away:
+                        logger.warning(
+                            "resolution.merge.skipped_already_merged",
                             alias=alias,
+                            canonical=group.canonical,
                         )
+                        continue
+                    try:
+                        success = await gs.merge_entities(
+                            group.canonical,
+                            alias,
+                            group.entity_type,
+                            matter_id=state["matter_id"],
+                        )
+                        if success:
+                            total_merges += 1
+                            merged_away.add(alias)
+                            logger.info(
+                                "resolution.merged",
+                                canonical=group.canonical,
+                                alias=alias,
+                            )
+                        else:
+                            logger.warning(
+                                "resolution.merge.node_missing",
+                                canonical=group.canonical,
+                                alias=alias,
+                            )
                     except Exception:
                         logger.error(
                             "resolution.merge_failed",

@@ -24,18 +24,21 @@ def graph_service(mock_driver):
 
 @pytest.mark.asyncio
 async def test_merge_entities(graph_service):
-    """merge_entities should execute a write query."""
-    graph_service._run_write = AsyncMock()
+    """merge_entities should execute a write query and return True on success."""
+    graph_service._run_write_returning = AsyncMock(
+        return_value=[{"merged_name": "Jeffrey Epstein"}],
+    )
 
-    await graph_service.merge_entities(
+    result = await graph_service.merge_entities(
         canonical_name="Jeffrey Epstein",
         alias_name="J. Epstein",
         entity_type="person",
         matter_id="matter-1",
     )
 
-    graph_service._run_write.assert_called_once()
-    call_args = graph_service._run_write.call_args
+    assert result is True
+    graph_service._run_write_returning.assert_called_once()
+    call_args = graph_service._run_write_returning.call_args
     params = call_args[0][1]
     assert params["canonical_name"] == "Jeffrey Epstein"
     assert params["alias_name"] == "J. Epstein"
@@ -44,17 +47,29 @@ async def test_merge_entities(graph_service):
 
 
 @pytest.mark.asyncio
-async def test_merge_entities_cypher_structure(graph_service):
-    """The merge query should contain DETACH DELETE for the alias node."""
-    graph_service._run_write = AsyncMock()
+async def test_merge_entities_cypher_uses_apoc(graph_service):
+    """The merge query should use APOC mergeNodes for atomic relationship transfer."""
+    graph_service._run_write_returning = AsyncMock(
+        return_value=[{"merged_name": "A"}],
+    )
 
     await graph_service.merge_entities("A", "B", "person", matter_id="m1")
 
-    cypher = graph_service._run_write.call_args[0][0]
-    assert "DETACH DELETE" in cypher
-    assert "MERGE" in cypher
+    cypher = graph_service._run_write_returning.call_args[0][0]
+    assert "apoc.refactor.mergeNodes" in cypher
+    assert "mergeRels: true" in cypher
     assert "aliases" in cypher
     assert "matter_id" in cypher
+
+
+@pytest.mark.asyncio
+async def test_merge_entities_node_missing(graph_service):
+    """merge_entities returns False when either node is not found."""
+    graph_service._run_write_returning = AsyncMock(return_value=[])
+
+    result = await graph_service.merge_entities("A", "B", "person", matter_id="m1")
+
+    assert result is False
 
 
 @pytest.mark.asyncio

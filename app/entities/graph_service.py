@@ -78,6 +78,19 @@ class GraphService:
                 await tx.run(query, params or {})
                 await tx.commit()
 
+    async def _run_write_returning(
+        self,
+        query: str,
+        params: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Execute a Cypher write query and return result records."""
+        async with self._driver.session() as session:
+            async with await session.begin_transaction() as tx:
+                result = await tx.run(query, params or {})
+                records = await result.data()
+                await tx.commit()
+                return [{k: self._serialize_value(v) for k, v in rec.items()} for rec in records]
+
     # ------------------------------------------------------------------
     # Document nodes
     # ------------------------------------------------------------------
@@ -492,38 +505,28 @@ class GraphService:
         alias_name: str,
         entity_type: str,
         matter_id: str,
-    ) -> None:
+    ) -> bool:
         """Merge two entity nodes, keeping the canonical name.
 
-        Transfers all relationships from the alias to the canonical node,
-        adds the alias to the canonical's aliases list, sums mention counts,
-        and deletes the alias node.
+        Uses APOC ``mergeNodes`` to atomically transfer ALL relationships
+        (MENTIONED_IN, EXTRACTED_FROM, CO_OCCURS, RELATED_TO, email edges,
+        etc.) from the alias to the canonical node, then deletes the alias.
+
+        Returns ``True`` if the merge executed, ``False`` if either node
+        was not found (already merged or never existed).
         """
         query = """
         MATCH (canonical:Entity {name: $canonical_name, type: $entity_type, matter_id: $matter_id})
         MATCH (alias:Entity {name: $alias_name, type: $entity_type, matter_id: $matter_id})
         WHERE canonical <> alias
-
-        // Transfer MENTIONED_IN relationships
-        WITH canonical, alias
-        OPTIONAL MATCH (alias)-[r:MENTIONED_IN]->(d:Document)
-        WITH canonical, alias, collect(d) AS docs, collect(r) AS rels
-        FOREACH (d IN docs |
-            MERGE (canonical)-[:MENTIONED_IN]->(d)
-        )
-        FOREACH (r IN rels | DELETE r)
-
-        // Update canonical: add alias, sum mention counts
-        WITH canonical, alias
-        SET canonical.mention_count = coalesce(canonical.mention_count, 0) + coalesce(alias.mention_count, 0),
-            canonical.aliases = coalesce(canonical.aliases, []) + [$alias_name]
-
-        // Delete alias node and its remaining relationships
-        WITH alias
-        DETACH DELETE alias
+        WITH canonical, alias, alias.mention_count AS alias_mentions
+        CALL apoc.refactor.mergeNodes([canonical, alias], {properties: 'discard', mergeRels: true}) YIELD node
+        SET node.mention_count = coalesce(node.mention_count, 0) + coalesce(alias_mentions, 0),
+            node.aliases = coalesce(node.aliases, []) + [$alias_name]
+        RETURN node.name AS merged_name
         """
         try:
-            await self._run_write(
+            records = await self._run_write_returning(
                 query,
                 {
                     "canonical_name": canonical_name,
@@ -532,12 +535,21 @@ class GraphService:
                     "matter_id": matter_id,
                 },
             )
+            if not records:
+                logger.warning(
+                    "graph.entity.merge_noop",
+                    canonical=canonical_name,
+                    alias=alias_name,
+                    reason="one_or_both_nodes_missing",
+                )
+                return False
             logger.info(
                 "graph.entity.merged",
                 canonical=canonical_name,
                 alias=alias_name,
                 type=entity_type,
             )
+            return True
         except Exception:
             logger.error(
                 "graph.entity.merge_failed",
