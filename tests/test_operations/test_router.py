@@ -403,8 +403,8 @@ class TestCeleryOverview:
                 ),
             ],
             queues=[
-                CeleryQueueInfo(name="default", active_count=1, reserved_count=0, scheduled_count=0),
-                CeleryQueueInfo(name="ingestion", active_count=1, reserved_count=2, scheduled_count=0),
+                CeleryQueueInfo(name="default", active_count=1, reserved_count=0, scheduled_count=0, paused=False),
+                CeleryQueueInfo(name="ingestion", active_count=1, reserved_count=2, scheduled_count=0, paused=True),
             ],
             active_tasks=[
                 CeleryTaskInfo(
@@ -429,6 +429,8 @@ class TestCeleryOverview:
         assert data["workers"][0]["hostname"] == "worker-1@host"
         assert data["workers"][0]["active_tasks"] == 2
         assert len(data["queues"]) == 2
+        assert data["queues"][0]["paused"] is False
+        assert data["queues"][1]["paused"] is True
         assert len(data["active_tasks"]) == 1
         assert data["active_tasks"][0]["task_id"] == "task-abc-123"
 

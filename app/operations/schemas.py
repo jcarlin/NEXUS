@@ -109,6 +109,7 @@ class CeleryQueueInfo(BaseModel):
     reserved_count: int = 0
     scheduled_count: int = 0
     pending_count: int = 0
+    paused: bool = False
 
 
 class CeleryOverview(BaseModel):

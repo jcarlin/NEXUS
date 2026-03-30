@@ -401,6 +401,15 @@ class CeleryService:
             if q.name not in queue_map:
                 queue_map[q.name] = CeleryQueueInfo(name=q.name)
 
+        # Mark queues as paused if no online worker is consuming them
+        consumed_queues: set[str] = set()
+        for worker_queues_list in active_queues.values():
+            for q in worker_queues_list:
+                consumed_queues.add(q.get("name", ""))
+        has_online_workers = len(all_hostnames) > 0
+        for q_info in queue_map.values():
+            q_info.paused = has_online_workers and q_info.name not in consumed_queues
+
         queues = sorted(queue_map.values(), key=lambda q: q.name)
 
         # Build active tasks

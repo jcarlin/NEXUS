@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Pause, Play } from "lucide-react";
 import { apiClient } from "@/api/client";
@@ -26,6 +26,7 @@ interface QueueInfo {
   reserved_count: number;
   scheduled_count: number;
   pending_count: number;
+  paused: boolean;
 }
 
 interface CeleryOverview {
@@ -50,6 +51,13 @@ export function QueueControls() {
       }),
     refetchInterval: isLive ? 10_000 : false,
   });
+
+  // Sync pause state from backend on load/refresh
+  useEffect(() => {
+    if (data?.queues) {
+      setPausedQueues(new Set(data.queues.filter((q) => q.paused).map((q) => q.name)));
+    }
+  }, [data]);
 
   const pauseMutation = useMutation({
     mutationFn: (queueName: string) =>

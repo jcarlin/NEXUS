@@ -52,6 +52,7 @@ interface QueueInfo {
   active_count: number;
   reserved_count: number;
   scheduled_count: number;
+  paused: boolean;
 }
 
 interface CeleryOverview {

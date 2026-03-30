@@ -286,6 +286,8 @@ class TestCeleryServiceOverview:
 
         mock_app = MagicMock()
         mock_app.control.inspect.return_value = mock_inspect
+        mock_app.conf.task_queues = []
+        mock_app.conf.broker_url = ""
 
         result = await CeleryService.get_workers_overview(mock_app)
 
@@ -299,6 +301,10 @@ class TestCeleryServiceOverview:
         assert len(result.active_tasks) == 1
         assert result.active_tasks[0].task_id == "task-1"
 
+        # Consumed queues should not be paused
+        default_q = next(q for q in result.queues if q.name == "default")
+        assert default_q.paused is False
+
     async def test_get_workers_overview_no_workers(self):
         """When no workers are online, returns empty overview."""
         mock_inspect = MagicMock()
@@ -310,6 +316,8 @@ class TestCeleryServiceOverview:
 
         mock_app = MagicMock()
         mock_app.control.inspect.return_value = mock_inspect
+        mock_app.conf.task_queues = []
+        mock_app.conf.broker_url = ""
 
         result = await CeleryService.get_workers_overview(mock_app)
 
@@ -317,6 +325,55 @@ class TestCeleryServiceOverview:
         assert len(result.workers) == 0
         assert len(result.queues) == 0
         assert len(result.active_tasks) == 0
+
+    async def test_paused_queue_detected(self):
+        """A queue not consumed by any online worker is marked as paused."""
+        from types import SimpleNamespace
+
+        mock_inspect = MagicMock()
+        mock_inspect.active.return_value = {"worker-1@host": []}
+        mock_inspect.stats.return_value = {"worker-1@host": {"pool": {}, "clock": 0}}
+        mock_inspect.active_queues.return_value = {
+            "worker-1@host": [{"name": "default"}],
+        }
+        mock_inspect.reserved.return_value = {}
+        mock_inspect.scheduled.return_value = {}
+
+        mock_app = MagicMock()
+        mock_app.control.inspect.return_value = mock_inspect
+        mock_app.conf.task_queues = [
+            SimpleNamespace(name="default"),
+            SimpleNamespace(name="bulk"),
+        ]
+        mock_app.conf.broker_url = ""
+
+        result = await CeleryService.get_workers_overview(mock_app)
+
+        default_q = next(q for q in result.queues if q.name == "default")
+        bulk_q = next(q for q in result.queues if q.name == "bulk")
+        assert default_q.paused is False
+        assert bulk_q.paused is True
+
+    async def test_no_workers_means_no_paused(self):
+        """When no workers are online, queues are not marked paused."""
+        from types import SimpleNamespace
+
+        mock_inspect = MagicMock()
+        mock_inspect.active.return_value = None
+        mock_inspect.stats.return_value = None
+        mock_inspect.active_queues.return_value = None
+        mock_inspect.reserved.return_value = None
+        mock_inspect.scheduled.return_value = None
+
+        mock_app = MagicMock()
+        mock_app.control.inspect.return_value = mock_inspect
+        mock_app.conf.task_queues = [SimpleNamespace(name="default")]
+        mock_app.conf.broker_url = ""
+
+        result = await CeleryService.get_workers_overview(mock_app)
+
+        for q in result.queues:
+            assert q.paused is False
 
 
 class TestCeleryServiceShutdown:
