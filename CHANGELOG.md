@@ -10,6 +10,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follo
 
 ## [Unreleased]
 
+## [1.21.0] - 2026-03-30
+
+### Added
+- Feature-flagged LLM entity resolution node (`ENABLE_LLM_ENTITY_RESOLUTION`) — uses Instructor + analysis-tier LLM (Gemini Flash) for hard entity merges: partial names, OCR corruption, abbreviations (df6c2cc)
+- `RESOLVABLE_TYPES` / `EXACT_MATCH_TYPES` type gating — dates, monetary amounts, phone numbers, case numbers, email addresses, and flight numbers are excluded from fuzzy entity resolution (df6c2cc)
+- Entity resolution prompt template in `app/entities/prompts.py` (df6c2cc)
+- Configurable `GLINER_CONFIDENCE_THRESHOLD` setting (default 0.5, raised from hardcoded 0.3) to filter OCR garbage at extraction time (df6c2cc)
+- One-time entity cleanup script `scripts/cleanup_entities.py` — re-normalize, undo broken merges, re-run resolution with `--dry-run` support (df6c2cc)
+- 12 new entity tests: type gating, token_sort_ratio, ftfy normalization, LLM node (df6c2cc)
+
+### Changed
+- Entity resolver now uses `rapidfuzz.fuzz.token_sort_ratio` (word-order-insensitive) instead of `fuzz.ratio` for name matching (df6c2cc)
+- Entity resolver now uses `rapidfuzz.process.cdist()` batch API instead of hand-rolled token-based blocking loop (df6c2cc)
+- `normalize_entity_name()` now uses `ftfy.fix_text()` for encoding/mojibake/HTML entity fixes (df6c2cc)
+- GLiNER confidence threshold raised from 0.3 to 0.5 (configurable via `GLINER_CONFIDENCE_THRESHOLD`) (df6c2cc)
+
+### Fixed
+- Entity resolution no longer merges unrelated monetary amounts ($15M with $1B) or dates (Jan 1987 with Jan 2019) — these types are now excluded from fuzzy matching (df6c2cc)
+
 ## [1.20.0] - 2026-03-30
 
 ### Added
