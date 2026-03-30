@@ -115,8 +115,13 @@ def create_resolution_nodes(settings: dict[str, Any]) -> dict[str, Any]:
                 "uncertain_merges": [],
             }
 
+        import asyncio
+
         resolver = EntityResolver()
-        fuzzy_matches = resolver.find_fuzzy_matches(entities)
+        # CPU-bound cdist() on 13K+ names blocks for minutes — run in thread
+        # pool so async DB connections don't time out.
+        loop = asyncio.get_running_loop()
+        fuzzy_matches = await loop.run_in_executor(None, resolver.find_fuzzy_matches, entities)
 
         # Split into confident vs uncertain
         confident = []
@@ -181,28 +186,31 @@ def create_resolution_nodes(settings: dict[str, Any]) -> dict[str, Any]:
         """
         # Check DB override first (admin UI toggle), fall back to settings dict
         llm_er_enabled = settings.get("enable_llm_entity_resolution", False)
-        postgres_url = settings.get("postgres_url")
-        if not llm_er_enabled and postgres_url:
-            from sqlalchemy import text as sa_text
-            from sqlalchemy.ext.asyncio import create_async_engine as _create_engine
+        if not llm_er_enabled:
+            postgres_url = settings.get("postgres_url")
+            if postgres_url:
+                try:
+                    from sqlalchemy import text as sa_text
+                    from sqlalchemy.ext.asyncio import AsyncSession as _AsyncSession
+                    from sqlalchemy.ext.asyncio import create_async_engine as _create_engine
 
-            _eng = _create_engine(postgres_url)
-            try:
-                from sqlalchemy.ext.asyncio import AsyncSession as _AsyncSession
-
-                async with _AsyncSession(_eng) as _db:
-                    row = (
-                        await _db.execute(
-                            sa_text(
-                                "SELECT enabled FROM feature_flag_overrides "
-                                "WHERE flag_name = 'enable_llm_entity_resolution'"
-                            )
-                        )
-                    ).first()
-                    if row:
-                        llm_er_enabled = row[0]
-            finally:
-                await _eng.dispose()
+                    _eng = _create_engine(postgres_url)
+                    try:
+                        async with _AsyncSession(_eng) as _db:
+                            row = (
+                                await _db.execute(
+                                    sa_text(
+                                        "SELECT enabled FROM feature_flag_overrides "
+                                        "WHERE flag_name = 'enable_llm_entity_resolution'"
+                                    )
+                                )
+                            ).first()
+                            if row:
+                                llm_er_enabled = row[0]
+                    finally:
+                        await _eng.dispose()
+                except Exception:
+                    logger.debug("resolution.llm_resolve.db_check_failed")
 
         if not llm_er_enabled:
             logger.info("resolution.llm_resolve.skipped", reason="feature_disabled")
