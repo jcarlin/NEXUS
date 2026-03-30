@@ -16,52 +16,76 @@ NEXUS ingests, analyzes, and queries 50,000+ pages of mixed-format legal documen
 
 ## System Architecture
 
-```
-               CLIENT                          API GATEWAY
+```mermaid
+graph TD
+    subgraph Client["Client Layer"]
+        SPA["React SPA<br/><small>React 19 · Vite · TanStack Router</small>"]
+    end
 
-React SPA ──── HTTPS ──── Nginx/Caddy ──── FastAPI ──── JWT Auth Middleware
- (React 19     SSE                          |          RBAC + Matter Scoping
-  Vite+TS)                                  |          Audit Log Middleware
+    subgraph CDN["Hosting"]
+        Vercel["Vercel CDN<br/><small>Static + /api/* proxy</small>"]
+    end
 
-               ┌────────────────────── QUERY ENGINE ──────────────────────┐
-               │                                                         │
-               │  LangGraph Agentic Pipeline                             │
-               │  ┌──────────────────┐   ┌──────────────────────────┐   │
-               │  │ Case Context     │──>│ Investigation Agent      │   │
-               │  │ Resolve          │   │ (create_react_agent,     │   │
-               │  └──────────────────┘   │  16+1 tools)             │   │
-               │                         └───────────┬──────────────┘   │
-               │                         ┌───────────▼──────────────┐   │
-               │                         │ Post-Agent Extract       │   │
-               │                         └───────────┬──────────────┘   │
-               │                         ┌───────────▼──────────────┐   │
-               │                         │ Verify Citations (CoVe)  │   │
-               │                         └───────────┬──────────────┘   │
-               │                         ┌───────────▼──────────────┐   │
-               │                         │ Generate Follow-Ups      │   │
-               │                         └──────────────────────────┘   │
-               └─────────────────────────────────────────────────────────┘
+    subgraph Gateway["API Gateway"]
+        FastAPI["FastAPI<br/><small>uvicorn:8000 · 23 DI factories</small>"]
+        MW["Middleware Chain<br/><small>RequestID → Logging → Audit → CORS → JWT Auth</small>"]
+    end
 
-               ┌────────────── CASE INTELLIGENCE ──────────────────────┐
-               │  Case Setup Agent (anchor doc → claims, parties,      │
-               │  terms, timeline) → auto-injected into query graph    │
-               └───────────────────────────────────────────────────────┘
+    subgraph Modules["Domain Modules (20)"]
+        query["query<br/><small>Agentic RAG</small>"]
+        ingestion["ingestion<br/><small>8-stage pipeline</small>"]
+        entities["entities<br/><small>KG + NER</small>"]
+        documents["documents"]
+        cases["cases"]
+        analytics["analytics"]
+        auth["auth<br/><small>JWT · RBAC</small>"]
+        others["... 13 more"]
+    end
 
-               ┌─────────────────────── DATA LAYER ──────────────────────┐
-               │  Qdrant (dense+sparse, native RRF, visual rerank)      │
-               │  Neo4j (entity graph, multi-hop, temporal, path-finding)│
-               │  PostgreSQL (users, matters, docs, audit, chat)         │
-               │  MinIO (raw files, parsed output, page images)          │
-               │  RabbitMQ (Celery broker — durable queues, redelivery)  │
-               │  Redis (rate limiting, cache, Celery result backend)   │
-               └─────────────────────────────────────────────────────────┘
+    subgraph Agents["Agentic Layer — 6 LangGraph Agents"]
+        inv["Investigation Agent<br/><small>create_react_agent · 17 tools</small>"]
+        cite["Citation Verifier"]
+        csa["Case Setup Agent"]
+        hot["Hot Doc Scanner"]
+        comp["Contextual Completeness"]
+        eres["Entity Resolution"]
+    end
 
-               ┌────────────────── INGESTION PIPELINE ───────────────────┐
-               │  MinIO Webhook / API Upload / EDRM Import / Bulk Import│
-               │  Parse → Chunk → QualityScore → Contextualize(LLM) →  │
-               │  Embed(dense+sparse) → NER → Resolve Entities →       │
-               │  Index(Qdrant+Neo4j+PG) → Hot Doc → Near-Dupe         │
-               └─────────────────────────────────────────────────────────┘
+    subgraph AI["AI / ML Services"]
+        LLM["LLM Providers<br/><small>Anthropic · OpenAI · Gemini · vLLM · Ollama</small>"]
+        EMB["Embedding<br/><small>Gemini · OpenAI · local · TEI · BGE-M3</small>"]
+        NER["GLiNER NER<br/><small>CPU · ~50ms/chunk</small>"]
+        RANK["Reranker<br/><small>BGE-reranker-v2-m3</small>"]
+    end
+
+    subgraph Data["Data Layer"]
+        PG["PostgreSQL 16<br/><small>36 tables · users · audit · chat</small>"]
+        QD["Qdrant v1.17<br/><small>Dense+sparse RRF · visual</small>"]
+        N4J["Neo4j 5<br/><small>Entities · relationships · paths</small>"]
+        MINIO["MinIO<br/><small>Raw files · parsed · pages</small>"]
+        RMQ["RabbitMQ<br/><small>4 durable queues</small>"]
+        REDIS["Redis 7<br/><small>Rate limit · cache · results</small>"]
+    end
+
+    subgraph Workers["Background Workers"]
+        W["Celery Workers<br/><small>General (default/bulk/background)<br/>NER (ner queue only)</small>"]
+    end
+
+    SPA -->|HTTPS/SSE| Vercel --> FastAPI --> MW
+    MW --> query & ingestion & entities & documents & cases & analytics & auth & others
+    query --> inv & cite
+    cases --> csa
+    analytics --> hot & comp
+    entities --> eres
+    query & cases --> LLM
+    ingestion --> EMB
+    entities --> NER
+    query --> RANK
+    query --> PG & QD & N4J
+    ingestion --> PG & QD & MINIO
+    entities --> N4J
+    ingestion --> W --> RMQ
+    W --> REDIS
 ```
 
 ---
@@ -132,23 +156,95 @@ React SPA ──── HTTPS ──── Nginx/Caddy ──── FastAPI ─�
 
 8-stage Celery pipeline with retry, progress tracking, job cancellation, and child job dispatch.
 
-```
-Upload / MinIO Webhook / EDRM Import / Bulk Import ──> Celery Task Chain
-                                                          │
-                    ├── 1. Parse (Docling / stdlib by extension)
-                    ├── 2. Chunk (semantic, 512 tok, 64 overlap, table-aware)
-                    ├── 2b. Quality Score (heuristic: coherence, density, completeness)
-                    ├── 2c. Contextualize (LLM context prefix per chunk — ENABLE_CONTEXTUAL_CHUNKS)
-                    ├── 3. Embed (dense: multi-provider, sparse: FastEmbed BM42)
-                    ├── 4. Extract (GLiNER NER, ~50ms/chunk)
-                    ├── 5. Resolve (entity resolution: rapidfuzz + embedding + union-find)
-                    └── 6. Index (Qdrant + Neo4j + PostgreSQL)
+```mermaid
+flowchart TD
+    subgraph Entry["Entry Points"]
+        A["POST /documents/ingest<br/><small>File Upload → MinIO</small>"]
+        B["POST /datasets/import<br/><small>Bulk Import (pre-parsed text)</small>"]
+    end
 
-Post-ingestion (fire-and-forget):
-  ├── Hot Doc Scoring (ENABLE_HOT_DOC_DETECTION)
-  ├── Near-Duplicate Detection (ENABLE_NEAR_DUPLICATE_DETECTION)
-  └── Email Threading (ENABLE_EMAIL_THREADING, default on)
+    A -->|"process_document()"| PARSE
+    B -->|"run_bulk_import() → import_text_document()"| CHUNK
+
+    PARSE["1. Parse<br/><small>Docling: PDF, DOCX, XLSX, PPTX, HTML<br/>Email: EML, MSG + child jobs for attachments<br/>Other: CSV, RTF, TXT</small>"]
+    OCR["OCR Correction 🏷️<br/><small>Regex ligatures + optional LLM cleanup</small>"]
+    CHUNK["2. Chunk<br/><small>Semantic boundaries · 512 tok / 64 overlap<br/>Email-aware body/quote split · Tables atomic</small>"]
+    QS["Quality Score<br/><small>Heuristic: coherence, density,<br/>completeness, length (~5ms/chunk)</small>"]
+    CTX["Contextualize 🏷️<br/><small>LLM context prefix per chunk<br/>(batched, Gemini 2.0 Flash)</small>"]
+    SUM["Summarize 🏷️<br/><small>Doc summary (2-3 sentences)<br/>Chunk summaries → summary vector</small>"]
+
+    PARSE --> OCR --> CHUNK --> QS --> CTX --> SUM
+
+    subgraph EmbedStage["3. Embed (parallel)"]
+        DENSE["Dense Embed<br/><small>Gemini embedding-001 (768d)</small>"]
+        SPARSE["Sparse Embed 🏷️<br/><small>FastEmbed BM42</small>"]
+        VIS["Visual Embed 🏷️<br/><small>ColQwen2.5 (off by default)</small>"]
+    end
+
+    subgraph NERStage["4. Entity Extraction (parallel with embed)"]
+        GLINER["GLiNER NER<br/><small>gliner_multi_pii-v1 · CPU<br/>12 entity types · threshold 0.3</small>"]
+        REL["LLM Relationships 🏷️<br/><small>Instructor · chunks with 2+ entities<br/>(off by default)</small>"]
+    end
+
+    SUM --> EmbedStage & NERStage
+
+    INDEX["5. Index<br/><small>Qdrant: upsert dense + sparse vectors<br/>Neo4j: Entity/Document/Chunk nodes + edges<br/>PostgreSQL: document record</small>"]
+
+    EmbedStage --> INDEX
+    NERStage --> INDEX
+
+    COMPLETE["6. Complete"]
+    INDEX --> COMPLETE
+
+    subgraph Deferred["Deferred NER (ner queue) 🏷️"]
+        DNER["extract_entities_for_job<br/><small>Dispatched after Qdrant indexing<br/>Runs on dedicated NER workers</small>"]
+    end
+
+    COMPLETE -->|"if DEFER_NER_TO_QUEUE"| Deferred
+
+    subgraph PostIngest["Post-Ingestion (fire-and-forget)"]
+        THREAD["Email Threading<br/><small>RFC 5322 headers</small>"]
+        DEDUP["Near-Duplicate Detection 🏷️<br/><small>MinHash + Jaccard ≥ 0.80</small>"]
+        HOTDOC["Hot Doc Scoring 🏷️<br/><small>7 sentiment dims + 3 signals</small>"]
+        RESOLVE["Entity Resolution<br/><small>rapidfuzz + embedding + union-find</small>"]
+    end
+
+    COMPLETE --> PostIngest
 ```
+
+> 🏷️ = Feature-flagged stage (see `/admin/feature-flags` or `docs/feature-flags.md`)
+
+### Worker & Queue Architecture
+
+```mermaid
+flowchart LR
+    API["FastAPI<br/><small>Dispatches tasks</small>"]
+
+    subgraph RMQ["RabbitMQ (4 durable queues)"]
+        direction TB
+        QD["default<br/><small>User uploads, single files</small>"]
+        QB["bulk<br/><small>Batch reindex, bulk imports</small>"]
+        QN["ner<br/><small>Deferred GLiNER extraction</small>"]
+        QBG["background<br/><small>Entity resolution, analysis,<br/>case setup, exports</small>"]
+    end
+
+    subgraph GeneralPool["General Workers (×3 replicas)"]
+        GW["worker<br/><small>Concurrency: 2<br/>OMP_NUM_THREADS: 4<br/>Queues: default, bulk, background</small>"]
+    end
+
+    subgraph NERPool["NER Workers (×2 replicas)"]
+        NW["ner-worker<br/><small>Concurrency: 1<br/>OMP_NUM_THREADS: 4<br/>Memory limit: 8GB<br/>Queue: ner only</small>"]
+    end
+
+    API --> QD & QB & QN & QBG
+    QD & QB & QBG --> GW
+    QN --> NW
+
+    GW --> PG["PostgreSQL"] & QDR["Qdrant"] & NEO["Neo4j"]
+    NW --> PG & QDR & NEO
+```
+
+> Separation prevents CPU-bound NER tasks from starving I/O-bound import tasks. See `docker-compose.ingest.yml` and `docs/CLOUD-DEPLOY.md` for tuning.
 
 ### Key Design Decisions
 
@@ -168,11 +264,52 @@ Post-ingestion (fire-and-forget):
 
 ### State Graph
 
-```
-START -> case_context_resolve -> investigation_agent -> post_agent_extract
-                                                              |
-                                                              v
-                                                     verify_citations -> generate_follow_ups -> END
+```mermaid
+flowchart TD
+    Q["USER QUERY<br/><small>POST /query/stream (SSE)</small>"]
+
+    ROUTER["Query Router<br/><small>Privilege enforcement · Dataset scoping<br/>Chat history via PostgresCheckpointer</small>"]
+
+    CCR["case_context_resolve<br/><small>Load claims, parties, terms, timeline<br/>Prompt routing: factual | analytical | exploratory | timeline<br/>Adaptive retrieval depth by query type</small>"]
+
+    AGENT["investigation_agent<br/><small>LangGraph create_react_agent<br/>LLM: Gemini 2.5 Pro · Max 30 steps<br/>Tool budget: ~5 per investigation</small>"]
+
+    subgraph Tools["17 Agent Tools (InjectedState for security)"]
+        direction LR
+        T1["vector_search"]
+        T2["graph_query"]
+        T3["temporal_search"]
+        T4["entity_lookup"]
+        T5["document_retrieval"]
+        T6["case_context"]
+        T7["sentiment_search"]
+        T8["hot_doc_search"]
+        T9["context_gap_search"]
+        T10["communication_matrix"]
+        T11["decompose_query 🏷️"]
+        T12["cypher_query 🏷️"]
+        T13["structured_query 🏷️"]
+        T14["topic_cluster 🏷️"]
+        T15["network_analysis 🏷️"]
+        T16["community_context 🏷️"]
+        T17["ask_user 🏷️"]
+    end
+
+    PAE["post_agent_extract<br/><small>Extract response, sources, entities, claims<br/>HalluGraph: validate entities against Neo4j KG 🏷️</small>"]
+
+    VC["verify_citations 🏷️<br/><small>Chain-of-Verification (CoVe)<br/>Decompose → re-retrieve → LLM judge<br/>Status: verified | flagged | unverified</small>"]
+
+    REFLECT["reflect 🏷️<br/><small>Self-reflection: retry if faithfulness < 0.6<br/>Re-inject flagged claims (max 1 retry)</small>"]
+
+    FU["generate_follow_ups<br/><small>3 follow-up investigation questions</small>"]
+
+    SSE["SSE Response<br/><small>sources → tokens → tool_calls → done</small>"]
+
+    Q --> ROUTER --> CCR --> AGENT
+    AGENT <-->|"tool loop"| Tools
+    AGENT --> PAE --> VC
+    VC -->|"faithfulness < threshold"| REFLECT -->|"retry"| AGENT
+    VC -->|"pass"| FU --> SSE
 ```
 
 Controlled by `ENABLE_AGENTIC_PIPELINE` (default `true`). When disabled, falls back to the v1 10-node linear chain (classify → rewrite → retrieve → grade_retrieval → rerank → check_relevance → graph_lookup → synthesize → follow_ups).
@@ -245,6 +382,38 @@ NEXUS uses 6 autonomous agents across the pipeline. See `docs/agents.md` for ful
 
 ## Retrieval Architecture
 
+```mermaid
+flowchart LR
+    Q["Query Text"]
+
+    subgraph Embed["Embedding"]
+        HYDE["HyDE 🏷️<br/><small>Generate hypothetical<br/>answer for dense</small>"]
+        DE["Dense Embed<br/><small>Gemini embedding-001<br/>768 dimensions</small>"]
+        SE["Sparse Embed<br/><small>FastEmbed BM42<br/>Lexical weights</small>"]
+    end
+
+    subgraph Qdrant["Qdrant Native RRF"]
+        PF_D["Prefetch Dense<br/><small>top-40 by cosine</small>"]
+        PF_S["Prefetch Sparse<br/><small>top-40 by dot product</small>"]
+        RRF["FusionQuery(RRF)<br/><small>Reciprocal Rank Fusion</small>"]
+    end
+
+    subgraph PostRetrieval["Post-Retrieval"]
+        DEDUP["Near-Duplicate<br/>Dedup 🏷️"]
+        RERANK["Cross-Encoder<br/>Rerank 🏷️<br/><small>BGE-reranker-v2-m3</small>"]
+        VRERANK["Visual Rerank 🏷️<br/><small>70% text + 30%<br/>ColQwen2.5 MaxSim</small>"]
+    end
+
+    TOPK["Top-K Results<br/><small>Filtered by matter_id<br/>+ privilege status</small>"]
+
+    Q --> HYDE --> DE
+    Q --> SE
+    Q --> DE
+    DE --> PF_D
+    SE --> PF_S
+    PF_D & PF_S --> RRF --> DEDUP --> RERANK --> VRERANK --> TOPK
+```
+
 ### 1. Dense + Sparse Hybrid (Qdrant Native RRF)
 
 Qdrant `nexus_text` collection with named vectors:
@@ -312,6 +481,25 @@ Neo4j traversals augment text retrieval:
 ---
 
 ## Knowledge Graph
+
+```mermaid
+graph LR
+    E["🔵 Entity<br/><small>name, type, aliases,<br/>mention_count, matter_id</small>"]
+    D["🟢 Document<br/><small>filename, file_type,<br/>date, matter_id</small>"]
+    C["🟡 Claim<br/><small>label, text,<br/>legal_elements</small>"]
+    EV["🟠 Event<br/><small>description, date,<br/>location, participants</small>"]
+    CH["⬜ Chunk<br/><small>chunk_id, page</small>"]
+
+    E -->|"MENTIONED_IN<br/><small>chunk_id, page, context</small>"| D
+    E -->|"RELATED_TO<br/><small>type, description, dates</small>"| E
+    E -->|"CO_OCCURS_WITH<br/><small>frequency, documents</small>"| E
+    E -->|"ALIAS_OF"| E
+    E -->|"REPORTS_TO<br/><small>confidence, source</small>"| E
+    E -->|"PARTICIPATED_IN<br/><small>role</small>"| EV
+    E -->|"LINKED_TO_CLAIM"| C
+    D -->|"CONTAINS"| CH
+    CH -->|"MENTIONED_IN"| E
+```
 
 ### Node Types
 
@@ -452,27 +640,446 @@ User notes, highlights, tags, and issue codes on documents. Stored in PostgreSQL
 
 ## Data Model
 
+```mermaid
+flowchart TD
+    subgraph Upload["Document Upload"]
+        FILE["File / Bulk Import / EDRM"]
+    end
+
+    subgraph MINIO_S["MinIO (Object Storage)"]
+        RAW["raw/ — Original files"]
+        PARSED["parsed/ — Parse output"]
+        PAGES["pages/ — Page images"]
+    end
+
+    subgraph PG_S["PostgreSQL (Relational Metadata)"]
+        JOBS["ingestion_jobs<br/><small>status, stage, progress</small>"]
+        DOCS["documents<br/><small>filename, type, date, entity_count</small>"]
+        CHAT["chat_messages<br/><small>query, response, thread_id</small>"]
+        AUDIT["audit_log / ai_audit_log<br/><small>immutable audit trail</small>"]
+        CASES["case_contexts / claims / parties<br/><small>case intelligence</small>"]
+    end
+
+    subgraph QD_S["Qdrant (Vector Store)"]
+        NEXTEXT["nexus_text<br/><small>dense (768d) + sparse (BM42)<br/>+ optional summary vector</small>"]
+        NEXVIS["nexus_visual<br/><small>ColQwen2.5 multi-vector<br/>(128d per token)</small>"]
+    end
+
+    subgraph N4J_S["Neo4j (Knowledge Graph)"]
+        ENTS["Entity nodes<br/><small>person, org, location, date...</small>"]
+        RELS["Relationships<br/><small>MENTIONED_IN, RELATED_TO,<br/>SENT, CO_OCCURS_WITH</small>"]
+    end
+
+    FILE --> RAW
+    RAW -->|"Docling parse"| PARSED & PAGES
+    PARSED -->|"chunk + embed"| NEXTEXT
+    PAGES -->|"visual embed"| NEXVIS
+    PARSED -->|"metadata"| DOCS
+    FILE -->|"create job"| JOBS
+    PARSED -->|"GLiNER NER"| ENTS --> RELS
+
+    linkStyle default stroke:#666
+```
+
+> **Common key**: `doc_id` (UUID) links records across all 4 stores. `matter_id` scopes every query.
+
 ### PostgreSQL (36 tables, 24 migrations)
 
-```
-Core:           jobs, documents, chat_messages
-Auth:           users, case_matters, user_case_matters
-Audit:          audit_log, ai_audit_log, agent_audit_log
-EDRM:           edrm_import_log
-Cases:          case_contexts, case_claims, case_parties,
-                case_defined_terms, investigation_sessions
-Bulk Import:    bulk_import_jobs
-Analytics:      communication_pairs, org_chart_entries
-Annotations:    annotations, production_sets,
-                production_set_documents, export_jobs
-Redaction:      redactions
-Evaluation:     evaluation_dataset_items, evaluation_runs
-Datasets:       datasets, dataset_documents, document_tags, dataset_access
-Google Drive:   google_drive_connections, google_drive_sync_state
-Memos:          memos
-LLM Config:     llm_providers, llm_tier_config
-Feature Flags:  feature_flag_overrides
-Retention:      retention_policies
+```mermaid
+erDiagram
+    %% ── Core ──
+    jobs {
+        uuid id PK
+        varchar filename
+        varchar status "pending|processing|complete|failed"
+        varchar stage "uploading → complete"
+        jsonb progress
+        text error
+        uuid parent_job_id FK "child jobs (ZIP)"
+        uuid matter_id FK
+        uuid dataset_id FK
+        varchar error_category
+        int retry_count
+        varchar worker_hostname
+        timestamptz started_at
+        timestamptz completed_at
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    documents {
+        uuid id PK
+        uuid job_id FK
+        uuid matter_id FK
+        varchar filename
+        varchar document_type
+        int page_count
+        int chunk_count
+        int entity_count
+        varchar minio_path
+        bigint file_size_bytes
+        varchar content_hash "SHA-256 dedup"
+        varchar privilege_status "not_reviewed|privileged|work_product|not_privileged"
+        varchar message_id "RFC 2822"
+        varchar thread_id
+        int thread_position
+        boolean is_inclusive
+        varchar duplicate_cluster_id
+        float hot_doc_score
+        float anomaly_score
+        float context_gap_score
+        varchar import_source
+        jsonb metadata_
+        timestamptz created_at
+    }
+
+    chat_messages {
+        uuid id PK
+        uuid thread_id "conversation grouping"
+        uuid matter_id FK
+        varchar role "user|assistant|system"
+        text content
+        jsonb source_documents
+        jsonb entities_mentioned
+        jsonb follow_up_questions
+        jsonb cited_claims
+        timestamptz created_at
+    }
+
+    %% ── Auth ──
+    users {
+        uuid id PK
+        varchar email UK
+        varchar password_hash "bcrypt"
+        varchar full_name
+        varchar role "admin|attorney|paralegal|reviewer"
+        varchar api_key_hash
+        varchar sso_provider
+        varchar sso_subject_id
+        boolean is_active
+        timestamptz created_at
+    }
+
+    case_matters {
+        uuid id PK
+        varchar name
+        text description
+        boolean is_active
+        boolean is_archived "retention"
+        timestamptz created_at
+    }
+
+    user_case_matters {
+        uuid user_id PK,FK
+        uuid matter_id PK,FK
+        timestamptz assigned_at
+    }
+
+    %% ── Audit (all immutable — PG RULEs block UPDATE/DELETE) ──
+    audit_log {
+        uuid id PK
+        uuid user_id FK
+        varchar action "HTTP method"
+        varchar resource "request path"
+        varchar resource_type
+        uuid matter_id
+        varchar ip_address
+        int status_code
+        float duration_ms
+        varchar request_id
+        uuid session_id
+        timestamptz created_at
+    }
+
+    ai_audit_log {
+        uuid id PK
+        uuid user_id FK
+        uuid session_id
+        varchar call_type "completion|embedding|extraction"
+        varchar node_name "LangGraph node"
+        varchar provider
+        varchar model
+        varchar prompt_hash "SHA-256, no content"
+        int input_tokens
+        int output_tokens
+        float latency_ms
+        varchar status
+        timestamptz created_at
+    }
+
+    agent_audit_log {
+        uuid id PK
+        uuid user_id FK
+        uuid session_id
+        varchar agent_id
+        varchar action_type "tool_call|plan|assess"
+        varchar action_name
+        int iteration_number
+        float duration_ms
+        timestamptz created_at
+    }
+
+    %% ── Cases ──
+    case_contexts {
+        uuid id PK
+        uuid matter_id UK
+        varchar anchor_document_id
+        varchar status "processing|ready|confirmed"
+        json timeline
+        timestamptz created_at
+    }
+
+    case_claims {
+        uuid id PK
+        uuid case_context_id FK
+        int claim_number
+        varchar claim_label
+        text claim_text
+        json legal_elements
+        json source_pages
+    }
+
+    case_parties {
+        uuid id PK
+        uuid case_context_id FK
+        varchar name
+        varchar role "plaintiff|defendant|witness"
+        json aliases
+        varchar entity_id "KG link"
+    }
+
+    case_defined_terms {
+        uuid id PK
+        uuid case_context_id FK
+        varchar term
+        text definition
+        varchar entity_id "KG link"
+    }
+
+    investigation_sessions {
+        uuid id PK
+        uuid matter_id
+        uuid case_context_id FK
+        uuid user_id
+        varchar title
+        json findings
+        varchar status
+    }
+
+    %% ── Datasets ──
+    datasets {
+        uuid id PK
+        uuid matter_id FK
+        uuid parent_id FK "tree structure"
+        varchar name
+        varchar dataset_type "folder|smart"
+        jsonb filter_criteria
+        int document_count
+    }
+
+    dataset_documents {
+        uuid dataset_id PK,FK
+        uuid document_id PK,FK
+    }
+
+    document_tags {
+        uuid id PK
+        uuid document_id FK
+        uuid matter_id
+        varchar tag_name
+        varchar tag_value
+    }
+
+    dataset_access {
+        uuid dataset_id PK,FK
+        uuid user_id PK,FK
+        varchar permission "read|write|admin"
+    }
+
+    %% ── Analytics ──
+    communication_pairs {
+        uuid id PK
+        uuid matter_id
+        varchar sender_name
+        varchar recipient_name
+        varchar relationship_type "to|cc|bcc"
+        int message_count
+        timestamptz first_date
+        timestamptz last_date
+    }
+
+    org_chart_entries {
+        uuid id PK
+        uuid matter_id
+        varchar person_name
+        varchar reports_to
+        float confidence
+        varchar source
+    }
+
+    %% ── Annotations & Export ──
+    annotations {
+        uuid id PK
+        uuid document_id FK
+        uuid matter_id
+        uuid user_id FK
+        varchar annotation_type "note|highlight|tag|issue_code"
+        text content
+        jsonb position
+    }
+
+    production_sets {
+        uuid id PK
+        uuid matter_id
+        varchar name
+        varchar bates_prefix
+        int bates_start
+    }
+
+    production_set_documents {
+        uuid production_set_id PK,FK
+        uuid document_id PK,FK
+        varchar bates_number
+    }
+
+    export_jobs {
+        uuid id PK
+        uuid production_set_id FK
+        varchar format "zip|pdf|json"
+        varchar status
+        varchar output_path
+    }
+
+    %% ── Other ──
+    redactions {
+        uuid id PK
+        uuid document_id FK
+        uuid user_id FK
+        int page_number
+        jsonb coordinates
+        varchar reason
+    }
+
+    edrm_import_log {
+        uuid id PK
+        uuid matter_id
+        varchar filename
+        varchar format "dat|opt|csv"
+        int record_count
+        varchar status
+    }
+
+    bulk_import_jobs {
+        uuid id PK
+        uuid matter_id
+        varchar adapter_type
+        varchar source_path
+        varchar status
+        int total_documents
+        int processed_documents
+        int failed_documents
+        int skipped_documents
+    }
+
+    evaluation_dataset_items {
+        uuid id PK
+        uuid matter_id
+        text question
+        text expected_answer
+        jsonb expected_doc_ids
+    }
+
+    evaluation_runs {
+        uuid id PK
+        uuid dataset_item_id FK
+        varchar run_label
+        float retrieval_mrr
+        float faithfulness
+        float citation_accuracy
+    }
+
+    google_drive_connections {
+        uuid id PK
+        uuid user_id FK
+        uuid matter_id
+        text encrypted_token
+        varchar folder_id
+    }
+
+    google_drive_sync_state {
+        uuid id PK
+        uuid connection_id FK
+        varchar page_token
+        timestamptz last_sync
+    }
+
+    memos {
+        uuid id PK
+        uuid matter_id
+        uuid user_id FK
+        varchar title
+        text content
+        varchar status "draft|final"
+    }
+
+    llm_providers {
+        uuid id PK
+        varchar name UK
+        varchar provider_type
+        varchar base_url
+        varchar default_model
+        boolean is_active
+    }
+
+    llm_tier_config {
+        uuid id PK
+        varchar tier UK "query|analysis|ingestion|general"
+        uuid provider_id FK
+        varchar model
+    }
+
+    feature_flag_overrides {
+        uuid id PK
+        varchar flag_name UK
+        boolean enabled
+        uuid changed_by FK
+        timestamptz changed_at
+    }
+
+    retention_policies {
+        uuid id PK
+        uuid matter_id FK,UK
+        int retention_days
+        varchar action "archive|purge"
+        timestamptz expires_at
+    }
+
+    %% ── Relationships ──
+    jobs ||--o{ documents : "job_id"
+    jobs }o--|| case_matters : "matter_id"
+    jobs }o--o| datasets : "dataset_id"
+    jobs }o--o| jobs : "parent_job_id"
+    documents }o--|| case_matters : "matter_id"
+    chat_messages }o--|| case_matters : "matter_id"
+    users ||--o{ user_case_matters : "user_id"
+    case_matters ||--o{ user_case_matters : "matter_id"
+    case_matters ||--o| case_contexts : "matter_id"
+    case_contexts ||--o{ case_claims : "case_context_id"
+    case_contexts ||--o{ case_parties : "case_context_id"
+    case_contexts ||--o{ case_defined_terms : "case_context_id"
+    case_contexts ||--o{ investigation_sessions : "case_context_id"
+    datasets ||--o{ dataset_documents : "dataset_id"
+    documents ||--o{ dataset_documents : "document_id"
+    datasets }o--o| datasets : "parent_id"
+    documents ||--o{ annotations : "document_id"
+    production_sets ||--o{ production_set_documents : "production_set_id"
+    documents ||--o{ production_set_documents : "document_id"
+    production_sets ||--o{ export_jobs : "production_set_id"
+    documents ||--o{ redactions : "document_id"
+    evaluation_dataset_items ||--o{ evaluation_runs : "dataset_item_id"
+    google_drive_connections ||--o{ google_drive_sync_state : "connection_id"
+    llm_providers ||--o{ llm_tier_config : "provider_id"
+    case_matters ||--o| retention_policies : "matter_id"
 ```
 
 See `docs/database-schema.md` for full column reference, indexes, and constraints.
