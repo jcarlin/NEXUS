@@ -10,6 +10,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follo
 
 ## [Unreleased]
 
+## [1.20.0] - 2026-03-30
+
+### Added
+- OCR auto-detection: `ENABLE_DOCLING_OCR=auto` uses pypdfium2 text-layer sampling to skip OCR model loading on text-based PDFs, with two-converter cache (ocr/no_ocr) (0a7b100)
+- MIG horizontal scaling infra: queue metric exporter (RabbitMQ → Cloud Monitoring), satellite worker startup script, MIG creation with queue-depth autoscaler (0-12 spot VMs, scales to zero), image push and teardown scripts (0a7b100)
+
+### Changed
+- `ENABLE_DOCLING_OCR` is now a 3-way string (`auto`/`true`/`false`) instead of boolean; default changed from `true` to `auto` (0a7b100)
+
+### Fixed
+- NER worker scripts: `nexus-gpu` → `nexus-ingest` VM references, added MinIO port 9000 to firewall rule (0a7b100)
+
 ## [1.19.0] - 2026-03-30
 
 ### Added
