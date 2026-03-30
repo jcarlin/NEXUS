@@ -438,25 +438,25 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml \
   -f docker-compose.cloud.yml -f docker-compose.ingest.yml up -d
 ```
 
-The ingestion overlay (`docker-compose.ingest.yml`) splits workers into two dedicated pools to prevent queue starvation:
+The ingestion overlay (`docker-compose.ingest.yml`) splits workers into two dedicated pools to prevent NER tasks from starving the import queue:
 
 | Service | Default Replicas | Queues | Purpose |
 |---------|-----------------|--------|---------|
-| `worker` | 2 | default, bulk, background | I/O-bound import tasks (embedding API, Qdrant writes) |
-| `ner-worker` | 2 | ner | CPU-bound GLiNER entity extraction (8GB memory limit) |
+| `worker` | 3 | default, bulk, background | Import tasks — Docling OCR, embedding (Gemini API + FastEmbed BM42 sparse), Qdrant/Neo4j indexing |
+| `ner-worker` | 2 | ner | CPU-bound GLiNER entity extraction (8GB memory limit per replica) |
 
-Both worker types set `OMP_NUM_THREADS=4` and `MKL_NUM_THREADS=4` to give ONNX operations (Docling OCR, FastEmbed BM42 sparse embeddings) enough threads without oversubscribing.
+Both worker types set `OMP_NUM_THREADS=4` and `MKL_NUM_THREADS=4` to give ONNX operations (Docling OCR, FastEmbed BM42 sparse embeddings) enough threads per process without oversubscribing.
 
 **Tuning (set in `.env` on the VM):**
 ```bash
-INGEST_WORKER_REPLICAS=2      # General worker replicas
-NER_WORKER_REPLICAS=2         # NER worker replicas
+INGEST_WORKER_REPLICAS=3      # General worker replicas (default: 3)
+NER_WORKER_REPLICAS=2         # NER worker replicas (default: 2)
 CELERY_CONCURRENCY=2          # Tasks per general worker process (total import procs = replicas × concurrency)
 NER_WORKER_CONCURRENCY=1      # Tasks per NER worker process
 DEFER_NER_TO_QUEUE=true       # Required: dispatch NER to separate queue
 ```
 
-**Balancing concurrency vs threads:** Total ONNX threads should roughly equal vCPU count. On a 16 vCPU VM with `CELERY_CONCURRENCY=2`: 2 replicas × 2 processes × 4 threads = 16 threads. Raising concurrency requires lowering `OMP_NUM_THREADS` to compensate (e.g., concurrency=4 → OMP=2).
+**Balancing concurrency vs threads:** Total ONNX threads should roughly equal vCPU count. On a 16 vCPU VM with the defaults: 3 replicas × 2 processes × 4 OMP threads = 24 threads (slight oversubscription, OK because import tasks alternate between CPU and I/O). Raising concurrency requires lowering `OMP_NUM_THREADS` to compensate (e.g., concurrency=4 → OMP=2).
 
 **Scaling dynamically** (no rebuild needed):
 ```bash
@@ -465,7 +465,7 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml \
   up -d --scale worker=3 --scale ner-worker=3 --no-recreate
 ```
 
-**Per-worker memory guideline:** ~5.7GB (Docling ~1GB, GLiNER ~600MB, sparse embedder ~300MB, torch ~800MB, working memory ~3GB). On a 64GB VM, 4-6 total workers is safe with infrastructure services overhead.
+**Per-worker memory guideline:** ~3-5GB per general worker container (with concurrency=2), ~2GB per NER worker. Observed on a 64GB VM: 3 general + 2 NER + infra ≈ 20-25GB, leaving ample headroom.
 
 **Data safety:** All workers use `acks_late=True` + `reject_on_worker_lost=True`. Restarting or scaling workers is always safe — in-flight tasks are redelivered by RabbitMQ.
 
