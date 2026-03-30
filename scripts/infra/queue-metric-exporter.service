@@ -1,0 +1,21 @@
+[Unit]
+Description=NEXUS RabbitMQ Queue Metric Exporter
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=julian
+Environment=GCP_PROJECT=vault-ai-487703
+Environment=RMQ_HOST=localhost
+Environment=RMQ_PORT=15672
+Environment=RMQ_VHOST=nexus
+Environment=RMQ_USER=nexus
+Environment=RMQ_PASS=nexus
+Environment=METRIC_INTERVAL=30
+ExecStart=/usr/bin/python3 /home/julian/nexus/scripts/infra/queue_metric_exporter.py
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

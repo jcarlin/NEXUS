@@ -110,7 +110,7 @@ class FeatureFlags(BaseModel):
     sso: bool
     saml: bool
     memo_drafting: bool
-    docling_ocr: bool
+    docling_ocr: str
     chunk_quality_scoring: bool
     contextual_chunks: bool
     retrieval_grading: bool
@@ -243,7 +243,7 @@ class Settings(BaseSettings):
     rate_limit_ingests_per_minute: int = 10
 
     # --- Docling OCR ---
-    enable_docling_ocr: bool = True  # Disable to skip OCR on text-based PDFs (massive speedup)
+    enable_docling_ocr: str = "auto"  # "auto" = per-doc text-layer detection, "true" = always OCR, "false" = never OCR
 
     # --- Chunk Quality Scoring ---
     enable_chunk_quality_scoring: bool = False

@@ -49,7 +49,7 @@ class FeatureFlagService:
                     description=meta.description,
                     category=meta.category,
                     risk_level=meta.risk_level,
-                    enabled=current_value,
+                    enabled=_coerce_flag_bool(current_value),
                     is_override=override is not None,
                     env_default=env_default,
                     depends_on=list(meta.depends_on),
@@ -213,6 +213,13 @@ def load_overrides_sync_safe(settings: object, engine: object) -> None:
         logger.warning("feature_flags.sync_load_failed", exc_info=True)
 
 
+def _coerce_flag_bool(value: object) -> bool:
+    """Coerce a flag value to bool. Handles str flags like enable_docling_ocr."""
+    if isinstance(value, str):
+        return value.lower() not in ("false", "0", "")
+    return bool(value) if value is not None else False
+
+
 def settings_env_default(flag_name: str) -> bool:
     """Get the env-file default for a flag by reading Settings model field defaults."""
     from app.config import Settings
@@ -220,8 +227,7 @@ def settings_env_default(flag_name: str) -> bool:
     field_info = Settings.model_fields.get(flag_name)
     if field_info is None:
         return False
-    default = field_info.default
-    return bool(default) if default is not None else False
+    return _coerce_flag_bool(field_info.default)
 
 
 def _clear_di_caches(cache_names: list[str]) -> list[str]:

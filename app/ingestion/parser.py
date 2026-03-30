@@ -83,7 +83,7 @@ class DocumentParser:
     """
 
     def __init__(self) -> None:
-        self._converter = None  # Lazy-loaded Docling DocumentConverter
+        self._converters: dict[str, object] = {}  # "ocr" and "no_ocr" cached separately
 
     # ------------------------------------------------------------------
     # Public API
@@ -157,38 +157,75 @@ class DocumentParser:
     # Docling backend
     # ------------------------------------------------------------------
 
-    def _get_converter(self):
-        """Lazily initialise the Docling DocumentConverter.
+    def _get_converter(self, with_ocr: bool = False):
+        """Lazily initialise a Docling DocumentConverter for the given OCR mode.
 
-        The converter is heavyweight (loads models on first call),
-        so we defer creation until the first document is actually parsed.
-        When ``ENABLE_DOCLING_OCR=false`` the RapidOCR pipeline is skipped
-        entirely, giving a ~5-8x speedup on text-based PDFs.
+        Two converters are cached separately (``"ocr"`` and ``"no_ocr"``) so
+        that the heavyweight OCR ONNX models are only loaded when a document
+        actually needs them.
         """
-        if self._converter is None:
+        key = "ocr" if with_ocr else "no_ocr"
+        if key not in self._converters:
             try:
                 from docling.datamodel.base_models import InputFormat
                 from docling.datamodel.pipeline_options import PdfPipelineOptions
                 from docling.document_converter import DocumentConverter, PdfFormatOption
 
-                from app.config import Settings
-
-                settings = Settings()
-                do_ocr = settings.enable_docling_ocr
-
-                pdf_opts = PdfPipelineOptions(do_ocr=do_ocr)
-                self._converter = DocumentConverter(
+                pdf_opts = PdfPipelineOptions(do_ocr=with_ocr)
+                self._converters[key] = DocumentConverter(
                     format_options={
                         InputFormat.PDF: PdfFormatOption(
                             pipeline_options=pdf_opts,
                         ),
                     }
                 )
-                logger.info("parser.docling.loaded", do_ocr=do_ocr)
+                logger.info("parser.docling.loaded", do_ocr=with_ocr)
             except Exception:
                 logger.exception("parser.docling.load_failed")
                 raise
-        return self._converter
+        return self._converters[key]
+
+    @staticmethod
+    def _has_text_layer(file_path: Path) -> bool:
+        """Fast check for embedded text using pypdfium2 (Docling dependency).
+
+        Samples the first 3 pages. If average character count > 50, the PDF
+        has a usable text layer and OCR model loading can be skipped entirely.
+        """
+        import pypdfium2 as pdfium
+
+        try:
+            doc = pdfium.PdfDocument(str(file_path))
+            pages_to_check = min(len(doc), 3)
+            total_chars = 0
+            for i in range(pages_to_check):
+                page = doc[i]
+                textpage = page.get_textpage()
+                total_chars += len(textpage.get_text_range().strip())
+                textpage.close()
+                page.close()
+            doc.close()
+            return total_chars / max(pages_to_check, 1) > 50
+        except Exception:
+            return False  # Can't read → fall back to OCR
+
+    def _resolve_ocr(self, file_path: Path, ext: str) -> bool:
+        """Decide whether to use OCR for this document based on config."""
+        from app.config import Settings
+
+        settings = Settings()
+        ocr_setting = settings.enable_docling_ocr
+
+        # Handle both str ("auto"/"true"/"false") and bool (from DB overrides)
+        if isinstance(ocr_setting, bool):
+            return ocr_setting
+        if ocr_setting == "auto":
+            if ext != ".pdf":
+                return False
+            has_text = self._has_text_layer(file_path)
+            logger.info("parser.ocr.auto_detect", filename=file_path.name, has_text_layer=has_text)
+            return not has_text
+        return ocr_setting.lower() not in ("false", "0", "")
 
     def _parse_with_docling(self, file_path: Path, filename: str) -> ParseResult:
         """Parse a file using the Docling library.
@@ -197,7 +234,9 @@ class DocumentParser:
         whose ``.document`` exposes the parsed content.  We extract the full
         markdown representation and attempt per-page iteration when available.
         """
-        converter = self._get_converter()
+        ext = Path(filename).suffix.lower()
+        use_ocr = self._resolve_ocr(file_path, ext)
+        converter = self._get_converter(with_ocr=use_ocr)
 
         try:
             result = converter.convert(str(file_path))

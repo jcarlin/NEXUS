@@ -101,7 +101,7 @@ FLAG_REGISTRY: dict[str, FlagMeta] = {
     ),
     "enable_docling_ocr": FlagMeta(
         display_name="Docling OCR",
-        description="RapidOCR in the Docling PDF pipeline. Disable for text-based PDFs (5-8x speedup).",
+        description="RapidOCR in the Docling PDF pipeline. 3-way: 'auto' (per-doc text-layer detection), 'true' (always OCR), 'false' (never, 5-8x speedup).",
         category=FlagCategory.INGESTION,
         risk_level=FlagRiskLevel.RESTART,
     ),

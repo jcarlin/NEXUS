@@ -1,7 +1,7 @@
 #!/bin/bash
 # Create spot NER worker VMs for distributed GLiNER entity extraction.
 #
-# These VMs connect to the nexus-gpu main VM's RabbitMQ, PostgreSQL, Qdrant,
+# These VMs connect to the nexus-ingest VM's RabbitMQ, PostgreSQL, Qdrant,
 # and Neo4j services via internal VPC networking. Each runs 4 Celery prefork
 # processes consuming the 'ner' queue.
 #
@@ -10,7 +10,7 @@
 #      docker tag nexus-api gcr.io/vault-ai-487703/nexus-api:latest
 #      docker push gcr.io/vault-ai-487703/nexus-api:latest
 #   2. Firewall rule for internal services (created below if missing)
-#   3. nexus-gpu internal IP known (auto-detected below)
+#   3. nexus-ingest internal IP known (auto-detected below)
 #
 # Usage:
 #   bash scripts/infra/create_ner_workers.sh [NUM_WORKERS]
@@ -31,12 +31,12 @@ echo "Zone: $ZONE"
 echo ""
 
 # ── Detect main VM internal IP ──────────────────────────────────
-MAIN_VM_IP=$(gcloud compute instances describe nexus-gpu \
+MAIN_VM_IP=$(gcloud compute instances describe nexus-ingest \
     --zone="$ZONE" --project="$PROJECT" \
     --format='get(networkInterfaces[0].networkIP)' 2>/dev/null)
 
 if [ -z "$MAIN_VM_IP" ]; then
-    echo "ERROR: Could not detect nexus-gpu internal IP. Is the VM running?"
+    echo "ERROR: Could not detect nexus-ingest internal IP. Is the VM running?"
     exit 1
 fi
 echo "Main VM internal IP: $MAIN_VM_IP"
@@ -51,23 +51,23 @@ if ! gcloud compute firewall-rules describe nexus-internal-services --project="$
     echo "Creating firewall rule for internal services..."
     gcloud compute firewall-rules create nexus-internal-services \
         --project="$PROJECT" \
-        --allow=tcp:5432,tcp:5672,tcp:6333,tcp:6379,tcp:7687 \
+        --allow=tcp:5432,tcp:5672,tcp:6333,tcp:6379,tcp:7687,tcp:9000 \
         --source-tags=nexus-internal \
         --target-tags=nexus-internal \
         --network=default \
-        --description="Allow NER workers to reach nexus-gpu services"
+        --description="Allow NER workers to reach nexus-ingest services"
 else
     echo "Firewall rule nexus-internal-services already exists."
 fi
 
-# ── Ensure nexus-gpu has the tag ────────────────────────────────
-EXISTING_TAGS=$(gcloud compute instances describe nexus-gpu \
+# ── Ensure nexus-ingest has the tag ────────────────────────────────
+EXISTING_TAGS=$(gcloud compute instances describe nexus-ingest \
     --zone="$ZONE" --project="$PROJECT" \
     --format='value(tags.items)' 2>/dev/null || echo "")
 
 if [[ "$EXISTING_TAGS" != *"nexus-internal"* ]]; then
-    echo "Adding nexus-internal tag to nexus-gpu..."
-    gcloud compute instances add-tags nexus-gpu \
+    echo "Adding nexus-internal tag to nexus-ingest..."
+    gcloud compute instances add-tags nexus-ingest \
         --zone="$ZONE" --project="$PROJECT" \
         --tags=nexus-internal
 fi
