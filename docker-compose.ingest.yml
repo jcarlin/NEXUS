@@ -9,7 +9,7 @@
 # This prevents NER tasks from starving the default queue during bulk ingestion.
 #
 # Tuning (set in .env on the ingest VM):
-#   INGEST_WORKER_REPLICAS   — general worker replicas (default: 2)
+#   INGEST_WORKER_REPLICAS   — general worker replicas (default: 3)
 #   CELERY_CONCURRENCY       — general worker concurrency per replica (default: 1)
 #   NER_WORKER_REPLICAS      — NER worker replicas (default: 2)
 #   NER_WORKER_CONCURRENCY   — NER worker concurrency per replica (default: 1)
@@ -25,7 +25,7 @@ services:
       OMP_NUM_THREADS: "4"
       MKL_NUM_THREADS: "4"
     deploy:
-      replicas: ${INGEST_WORKER_REPLICAS:-2}
+      replicas: ${INGEST_WORKER_REPLICAS:-3}
 
   ner-worker:
     build:
