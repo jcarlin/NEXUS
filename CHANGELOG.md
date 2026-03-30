@@ -10,6 +10,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follo
 
 ## [Unreleased]
 
+## [1.19.0] - 2026-03-30
+
+### Added
+- Dedicated NER worker pool — `docker-compose.ingest.yml` now splits workers into general (default/bulk/background queues) and NER-only pools to prevent queue starvation during bulk ingestion (d19c980)
+- Ingestion VM setup section in `docs/CLOUD-DEPLOY.md` — documents worker separation, GCS mount, scaling commands, verification procedures, and recommended `.env` tuning for the `nexus-ingest` VM (6fa9bd8, 89f2d5d)
+- 7 comprehensive mermaid diagrams in `ARCHITECTURE.md` — system architecture, ingestion pipeline, query pipeline (LangGraph state graph), hybrid retrieval, worker & queue architecture, knowledge graph schema, data flow across stores, and full PostgreSQL ER diagram with all 36 tables and columns (0493a55)
+
+### Performance
+- Tune worker thread limits — `OMP_NUM_THREADS=4` / `MKL_NUM_THREADS=4` for ONNX operations (Docling OCR, FastEmbed BM42 sparse embeddings); recommended `CELERY_CONCURRENCY=2` with 3 general worker replicas for 16-vCPU VMs (a4e5fed, 9c8b386, 8aaec43)
+
+### Fixed
+- Pipeline Monitor Processing card now falls back to Celery active task count when PostgreSQL reports zero processing jobs (db5cebc)
+
+### Infrastructure
+- `nexus-ingest` VM (e2-standard-16, 16 vCPU / 64GB) actively ingesting EFTA corpus; upgrade to e2-standard-32 (32 vCPU / 128GB) underway to increase worker parallelism
+
 ## [1.18.0] - 2026-03-29
 
 ### Added
