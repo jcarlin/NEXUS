@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import { Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { GenerateMemoButton } from "./generate-memo-button";
+import { ShareButton } from "./share-button";
 
 interface MessageActionsProps {
   content: string;
@@ -32,6 +33,7 @@ export function MessageActions({ content, threadId }: MessageActionsProps) {
         )}
         {copied ? "Copied" : "Copy"}
       </Button>
+      {threadId && <ShareButton threadId={threadId} />}
       {threadId && <GenerateMemoButton threadId={threadId} />}
     </div>
   );

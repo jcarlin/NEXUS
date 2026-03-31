@@ -16,6 +16,7 @@ import { Route as EntitiesIndexRouteImport } from './routes/entities/index'
 import { Route as DocumentsIndexRouteImport } from './routes/documents/index'
 import { Route as DatasetsIndexRouteImport } from './routes/datasets/index'
 import { Route as ChatIndexRouteImport } from './routes/chat/index'
+import { Route as SharedTokenRouteImport } from './routes/shared/$token'
 import { Route as ReviewResultSetRouteImport } from './routes/review/result-set'
 import { Route as ReviewHotDocsRouteImport } from './routes/review/hot-docs'
 import { Route as ReviewExportsRouteImport } from './routes/review/exports'
@@ -82,6 +83,11 @@ const ChatIndexRoute = ChatIndexRouteImport.update({
   path: '/chat/',
   getParentRoute: () => rootRouteImport,
 } as any).lazy(() => import('./routes/chat/index.lazy').then((d) => d.Route))
+const SharedTokenRoute = SharedTokenRouteImport.update({
+  id: '/shared/$token',
+  path: '/shared/$token',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() => import('./routes/shared/$token.lazy').then((d) => d.Route))
 const ReviewResultSetRoute = ReviewResultSetRouteImport.update({
   id: '/review/result-set',
   path: '/review/result-set',
@@ -268,6 +274,7 @@ export interface FileRoutesByFullPath {
   '/review/exports': typeof ReviewExportsRoute
   '/review/hot-docs': typeof ReviewHotDocsRoute
   '/review/result-set': typeof ReviewResultSetRoute
+  '/shared/$token': typeof SharedTokenRoute
   '/chat/': typeof ChatIndexRoute
   '/datasets/': typeof DatasetsIndexRoute
   '/documents/': typeof DocumentsIndexRoute
@@ -301,6 +308,7 @@ export interface FileRoutesByTo {
   '/review/exports': typeof ReviewExportsRoute
   '/review/hot-docs': typeof ReviewHotDocsRoute
   '/review/result-set': typeof ReviewResultSetRoute
+  '/shared/$token': typeof SharedTokenRoute
   '/chat': typeof ChatIndexRoute
   '/datasets': typeof DatasetsIndexRoute
   '/documents': typeof DocumentsIndexRoute
@@ -335,6 +343,7 @@ export interface FileRoutesById {
   '/review/exports': typeof ReviewExportsRoute
   '/review/hot-docs': typeof ReviewHotDocsRoute
   '/review/result-set': typeof ReviewResultSetRoute
+  '/shared/$token': typeof SharedTokenRoute
   '/chat/': typeof ChatIndexRoute
   '/datasets/': typeof DatasetsIndexRoute
   '/documents/': typeof DocumentsIndexRoute
@@ -370,6 +379,7 @@ export interface FileRouteTypes {
     | '/review/exports'
     | '/review/hot-docs'
     | '/review/result-set'
+    | '/shared/$token'
     | '/chat/'
     | '/datasets/'
     | '/documents/'
@@ -403,6 +413,7 @@ export interface FileRouteTypes {
     | '/review/exports'
     | '/review/hot-docs'
     | '/review/result-set'
+    | '/shared/$token'
     | '/chat'
     | '/datasets'
     | '/documents'
@@ -436,6 +447,7 @@ export interface FileRouteTypes {
     | '/review/exports'
     | '/review/hot-docs'
     | '/review/result-set'
+    | '/shared/$token'
     | '/chat/'
     | '/datasets/'
     | '/documents/'
@@ -470,6 +482,7 @@ export interface RootRouteChildren {
   ReviewExportsRoute: typeof ReviewExportsRoute
   ReviewHotDocsRoute: typeof ReviewHotDocsRoute
   ReviewResultSetRoute: typeof ReviewResultSetRoute
+  SharedTokenRoute: typeof SharedTokenRoute
   ChatIndexRoute: typeof ChatIndexRoute
   DatasetsIndexRoute: typeof DatasetsIndexRoute
   DocumentsIndexRoute: typeof DocumentsIndexRoute
@@ -526,6 +539,13 @@ declare module '@tanstack/react-router' {
       path: '/chat'
       fullPath: '/chat/'
       preLoaderRoute: typeof ChatIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/shared/$token': {
+      id: '/shared/$token'
+      path: '/shared/$token'
+      fullPath: '/shared/$token'
+      preLoaderRoute: typeof SharedTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/review/result-set': {
@@ -726,6 +746,7 @@ const rootRouteChildren: RootRouteChildren = {
   ReviewExportsRoute: ReviewExportsRoute,
   ReviewHotDocsRoute: ReviewHotDocsRoute,
   ReviewResultSetRoute: ReviewResultSetRoute,
+  SharedTokenRoute: SharedTokenRoute,
   ChatIndexRoute: ChatIndexRoute,
   DatasetsIndexRoute: DatasetsIndexRoute,
   DocumentsIndexRoute: DocumentsIndexRoute,
