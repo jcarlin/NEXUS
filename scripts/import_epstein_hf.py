@@ -471,7 +471,6 @@ async def run_pipeline(
                     continue
 
                 # Fetch chunks + embeddings for this document via DuckDB join
-                # Use COALESCE to handle shards with document_id vs file_key
                 chunk_rows = conn.execute(
                     """
                     SELECT
@@ -480,33 +479,12 @@ async def run_pipeline(
                         c.token_count,
                         e.embedding
                     FROM chunks c
-                    JOIN embeddings_chunk e ON (
-                        e.chunk_id = c.id
-                        OR (e.document_id = c.document_id AND c.id IS NULL)
-                    )
-                    WHERE COALESCE(c.document_id, NULL) = ?
-                       OR COALESCE(c.file_key, NULL) = ?
+                    JOIN embeddings_chunk e ON e.chunk_id = c.id
+                    WHERE c.document_id = ?
                     ORDER BY c.chunk_index
                 """,
-                    [doc_int_id, file_key],
+                    [doc_int_id],
                 ).fetchall()
-
-                if not chunk_rows:
-                    # Try alternate join: chunks by document_id only
-                    chunk_rows = conn.execute(
-                        """
-                        SELECT
-                            c.chunk_index,
-                            c.content,
-                            c.token_count,
-                            e.embedding
-                        FROM chunks c
-                        JOIN embeddings_chunk e ON e.chunk_id = c.id
-                        WHERE c.document_id = ?
-                        ORDER BY c.chunk_index
-                    """,
-                        [doc_int_id],
-                    ).fetchall()
 
                 if not chunk_rows:
                     skipped += 1
