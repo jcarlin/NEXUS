@@ -24,6 +24,7 @@ export const Route = createRootRoute({
 function RootLayout() {
   const matches = useMatches();
   const isLoginPage = matches.some((m) => m.routeId === "/login");
+  const isSharedPage = matches.some((m) => m.routeId.startsWith("/shared"));
   const [commandOpen, setCommandOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
@@ -32,7 +33,7 @@ function RootLayout() {
     onOpenCommandPalette: openCommandPalette,
   });
 
-  if (isLoginPage) {
+  if (isLoginPage || isSharedPage) {
     return <Outlet />;
   }
 

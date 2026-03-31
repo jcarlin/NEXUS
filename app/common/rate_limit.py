@@ -111,3 +111,15 @@ async def rate_limit_login(
         max_requests=10,
         window_seconds=60,
     )
+
+
+async def rate_limit_shared_queries(
+    request: Request,
+) -> None:
+    """Rate limiter for public shared chat follow-up queries (5 req/min per IP)."""
+    await _check_rate_limit(
+        request,
+        key_prefix="shared_queries",
+        max_requests=5,
+        window_seconds=60,
+    )
