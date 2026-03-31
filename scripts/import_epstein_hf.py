@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 """Import kabasshouse/epstein-data HuggingFace dataset into NEXUS.
 
-Downloads multi-table parquet dataset (documents, chunks, embeddings_chunk,
-entities, kg_entities, kg_relationships), joins by integer ID, and writes
-directly to PG/Qdrant/Neo4j using pre-computed 768-dim gemini-embedding-001
-vectors. No re-chunking, no re-embedding, no NER.
+Uses DuckDB to read and join multi-table parquet dataset (documents,
+chunks, embeddings_chunk, entities) directly from HuggingFace hub cache.
+Writes to PG/Qdrant/Neo4j via async pipeline using pre-computed 768-dim
+gemini-embedding-001 vectors.
 
-Direct async pipeline (not Celery) — single process with async I/O to all
-three data stores in parallel. Typically ~200-400 docs/sec.
+No re-chunking, no re-embedding, no NER — all pre-computed.
 
 Idempotent via content_hash — safe to re-run after interruption.
 
@@ -16,7 +15,7 @@ Usage::
     # Inspect dataset structure
     python scripts/import_epstein_hf.py --inspect
 
-    # Dry run — count + schema preview
+    # Dry run (first 100 docs)
     python scripts/import_epstein_hf.py \\
         --matter-id 00000000-0000-0000-0000-000000000002 \\
         --dry-run --limit 100
@@ -51,14 +50,72 @@ logger = structlog.get_logger(__name__)
 
 HF_DATASET = "kabasshouse/epstein-data"
 IMPORT_SOURCE = "kabasshouse/epstein-data"
-
 QDRANT_BATCH_SIZE = 500
 NEO4J_BATCH_SIZE = 200
 ENTITY_BATCH_SIZE = 500
 
+# Tables in the HF dataset repo under data/
+HF_TABLES = [
+    "documents",
+    "chunks",
+    "embeddings_chunk",
+    "entities",
+    "kg_entities",
+    "kg_relationships",
+    "persons",
+    "financial_transactions",
+    "recovered_redactions",
+    "curated_docs",
+]
+
 
 # ---------------------------------------------------------------------------
-# HF dataset inspection
+# DuckDB setup
+# ---------------------------------------------------------------------------
+
+
+def create_duckdb_conn(cache_dir: str | None = None):
+    """Create a DuckDB connection with HF parquet files registered as views."""
+    import duckdb
+
+    conn = duckdb.connect(":memory:")
+    conn.execute("SET enable_progress_bar = false")
+
+    # Download parquet files via huggingface_hub and register as views
+    from huggingface_hub import HfApi, hf_hub_download
+
+    api = HfApi()
+
+    for table in HF_TABLES:
+        try:
+            files = list(api.list_repo_tree(HF_DATASET, repo_type="dataset", path_in_repo=f"data/{table}"))
+            pq_files = [f for f in files if hasattr(f, "rfilename") and f.rfilename.endswith(".parquet")]
+            if not pq_files:
+                continue
+
+            # Download all parquet files and collect local paths
+            local_paths = []
+            for f in sorted(pq_files, key=lambda x: x.rfilename):
+                local = hf_hub_download(HF_DATASET, f.rfilename, repo_type="dataset", cache_dir=cache_dir)
+                local_paths.append(local)
+
+            # Register as a DuckDB view using read_parquet with union_by_name
+            # This handles mixed schemas across shards
+            paths_sql = ", ".join(f"'{p}'" for p in local_paths)
+            conn.execute(f"""
+                CREATE VIEW {table} AS
+                SELECT * FROM read_parquet([{paths_sql}], union_by_name=true)
+            """)
+            count = conn.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
+            print(f"    {table}: {count:,} rows ({len(pq_files)} shards)")
+        except Exception as e:
+            print(f"    {table}: FAILED — {e}")
+
+    return conn
+
+
+# ---------------------------------------------------------------------------
+# Inspection
 # ---------------------------------------------------------------------------
 
 
@@ -69,6 +126,7 @@ def inspect_dataset() -> None:
     print(f"\n=== Inspecting {HF_DATASET} ===\n")
     api = HfApi()
 
+    # Export stats
     try:
         path = hf_hub_download(HF_DATASET, "data/export_stats.json", repo_type="dataset")
         with open(path) as f:
@@ -78,25 +136,15 @@ def inspect_dataset() -> None:
             if k == "layers":
                 print("  Tables:")
                 for table, count in v.items():
-                    print(f"    {table}: {count:,} rows")
+                    print(f"    {table}: {count:,}")
             else:
                 print(f"  {k}: {v}")
     except Exception as e:
         print(f"  export_stats.json: {e}")
 
+    # Parquet sizes
     print("\nParquet files:")
-    for table in [
-        "documents",
-        "chunks",
-        "embeddings_chunk",
-        "entities",
-        "kg_entities",
-        "kg_relationships",
-        "persons",
-        "financial_transactions",
-        "recovered_redactions",
-        "curated_docs",
-    ]:
+    for table in HF_TABLES:
         try:
             files = list(api.list_repo_tree(HF_DATASET, repo_type="dataset", path_in_repo=f"data/{table}"))
             pq_files = [f for f in files if hasattr(f, "size")]
@@ -105,175 +153,22 @@ def inspect_dataset() -> None:
         except Exception as e:
             print(f"  {table}: {e}")
 
-    import pandas as pd
+    # DuckDB schema inspection
+    print("\nLoading via DuckDB (union_by_name for mixed schemas)...")
+    conn = create_duckdb_conn()
 
     for table in ["documents", "chunks", "embeddings_chunk"]:
         try:
-            files = list(api.list_repo_tree(HF_DATASET, repo_type="dataset", path_in_repo=f"data/{table}"))
-            first = [f for f in files if hasattr(f, "rfilename")][0]
-            path = hf_hub_download(HF_DATASET, first.rfilename, repo_type="dataset")
-            df = pd.read_parquet(path)
-            print(f"\n  {table} columns: {list(df.columns)}")
-            if table == "embeddings_chunk" and "embedding" in df.columns:
-                emb = df.iloc[0]["embedding"]
-                print(f"  embedding type={type(emb).__name__}, shape={getattr(emb, 'shape', len(emb))}")
-        except Exception as e:
-            print(f"  {table}: {e}")
+            cols = conn.execute(
+                f"SELECT column_name, data_type FROM information_schema.columns WHERE table_name = '{table}'"
+            ).fetchall()
+            print(f"\n  {table} schema:")
+            for name, dtype in cols:
+                print(f"    {name}: {dtype}")
+        except Exception:
+            pass
 
-
-# ---------------------------------------------------------------------------
-# Parquet loading
-# ---------------------------------------------------------------------------
-
-
-def download_parquet_table(table_name: str, cache_dir: str | None = None) -> list[Path]:
-    """Download all parquet files for a table. Returns list of local paths."""
-    from huggingface_hub import HfApi, hf_hub_download
-
-    api = HfApi()
-    files = list(api.list_repo_tree(HF_DATASET, repo_type="dataset", path_in_repo=f"data/{table_name}"))
-    pq_files = sorted(
-        [f for f in files if hasattr(f, "rfilename") and f.rfilename.endswith(".parquet")],
-        key=lambda x: x.rfilename,
-    )
-    paths = []
-    for f in pq_files:
-        local = hf_hub_download(HF_DATASET, f.rfilename, repo_type="dataset", cache_dir=cache_dir)
-        paths.append(Path(local))
-    return paths
-
-
-def _safe_int(val: Any) -> int | None:
-    if val is None:
-        return None
-    try:
-        v = int(val)
-        return v if v == v else None
-    except (ValueError, TypeError):
-        return None
-
-
-def load_indexes(cache_dir: str | None = None, doc_id_set: set[int] | None = None):
-    """Load chunk, embedding, and entity indexes into memory.
-
-    Returns (chunk_map, emb_map, entity_map, doc_chunks).
-    """
-    import numpy as np
-    import pandas as pd
-
-    # Chunks: chunk_key → (document_id, chunk_index, content, token_count)
-    # Some shards use integer document_id, others use file_key string.
-    # We normalize to integer document_id using doc_file_key_to_id map.
-    print("\n  Loading chunks index...")
-    chunk_map: dict[int, tuple[int, int, str, int]] = {}
-    # For file_key-based shards, we need a reverse map from file_key → doc int id
-    # This will be populated lazily if needed
-    file_key_to_doc_id: dict[str, int] | None = None
-    chunk_auto_id = 0  # auto-increment for shards without chunk id column
-
-    for cp in download_parquet_table("chunks", cache_dir):
-        cdf = pd.read_parquet(cp)
-        has_doc_id_col = "document_id" in cdf.columns
-        has_file_key_col = "file_key" in cdf.columns
-        has_id_col = "id" in cdf.columns
-
-        # If this shard uses file_key, build reverse map from doc parquets
-        if has_file_key_col and not has_doc_id_col and file_key_to_doc_id is None:
-            print("    Building file_key → doc_id reverse map...")
-            file_key_to_doc_id = {}
-            for dp in download_parquet_table("documents", cache_dir):
-                ddf = pd.read_parquet(dp, columns=["id", "file_key"])
-                for _, drow in ddf.iterrows():
-                    file_key_to_doc_id[str(drow["file_key"])] = int(drow["id"])
-                del ddf
-            print(f"    Mapped {len(file_key_to_doc_id):,} file_keys")
-
-        for _, row in cdf.iterrows():
-            # Resolve document_id
-            if has_doc_id_col:
-                doc_id = int(row["document_id"])
-            elif has_file_key_col and file_key_to_doc_id is not None:
-                fk = str(row["file_key"])
-                doc_id = file_key_to_doc_id.get(fk, -1)
-                if doc_id == -1:
-                    continue
-            else:
-                continue
-
-            if doc_id_set and doc_id not in doc_id_set:
-                continue
-            content = str(row.get("content", ""))
-            if not content.strip():
-                continue
-
-            chunk_id = int(row["id"]) if has_id_col else chunk_auto_id
-            chunk_auto_id += 1
-
-            chunk_map[chunk_id] = (
-                doc_id,
-                int(row.get("chunk_index", 0)),
-                content,
-                int(row.get("token_count", 0)) or len(content.split()),
-            )
-        del cdf
-    print(f"    {len(chunk_map):,} chunks indexed")
-
-    # Embeddings: chunk_id → numpy array (768-dim float32)
-    print("  Loading embeddings index...")
-    emb_map: dict[int, np.ndarray] = {}
-    for ep in download_parquet_table("embeddings_chunk", cache_dir):
-        edf = pd.read_parquet(ep)
-        for _, row in edf.iterrows():
-            chunk_id = int(row["chunk_id"])
-            if chunk_id in chunk_map:
-                embedding = row.get("embedding")
-                if embedding is not None:
-                    emb_map[chunk_id] = np.asarray(embedding, dtype=np.float32)
-        del edf
-    print(f"    {len(emb_map):,} embeddings indexed")
-
-    # Entities: document_id → list of entity dicts
-    print("  Loading entities index...")
-    entity_map: dict[int, list[dict]] = {}
-    for ep in download_parquet_table("entities", cache_dir):
-        edf = pd.read_parquet(ep)
-        has_doc_id = "document_id" in edf.columns
-        has_fk = "file_key" in edf.columns
-        for _, row in edf.iterrows():
-            if has_doc_id:
-                doc_id = int(row["document_id"])
-            elif has_fk and file_key_to_doc_id is not None:
-                doc_id = file_key_to_doc_id.get(str(row["file_key"]), -1)
-                if doc_id == -1:
-                    continue
-            else:
-                continue
-            if doc_id_set and doc_id not in doc_id_set:
-                continue
-            value = str(row.get("value", ""))
-            if not value.strip():
-                continue
-            normalized = str(row.get("normalized_value", "")) or value
-            if doc_id not in entity_map:
-                entity_map[doc_id] = []
-            entity_map[doc_id].append(
-                {
-                    "name": normalized.strip() or value.strip(),
-                    "type": str(row.get("entity_type", "unknown")).lower(),
-                }
-            )
-        del edf
-    total_ents = sum(len(v) for v in entity_map.values())
-    print(f"    {total_ents:,} entities for {len(entity_map):,} documents")
-
-    # Group chunks by document_id
-    doc_chunks: dict[int, list[int]] = {}
-    for chunk_id, (doc_id, *_) in chunk_map.items():
-        if doc_id not in doc_chunks:
-            doc_chunks[doc_id] = []
-        doc_chunks[doc_id].append(chunk_id)
-
-    return chunk_map, emb_map, entity_map, doc_chunks
+    conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -308,32 +203,24 @@ def check_resume(engine, content_hash: str, matter_id: str) -> bool:
 
 
 def create_job_and_document(
-    engine, doc_row, matter_id: str, metadata_json: str, content_hash: str, chunk_count: int, entity_count: int
+    engine,
+    filename: str,
+    full_text: str,
+    doc_type: str,
+    page_count: int,
+    content_hash: str,
+    chunk_count: int,
+    entity_count: int,
+    matter_id: str,
+    metadata_json: str,
+    msg_id: str | None,
+    in_reply: str | None,
+    refs: str | None,
 ) -> tuple[str, str]:
     from sqlalchemy import text
 
     job_id = str(uuid.uuid4())
     doc_id = str(uuid.uuid4())
-
-    import pandas as pd
-
-    file_key = str(doc_row.get("file_key", ""))
-    filename = file_key.split("/")[-1] if "/" in file_key else file_key
-    full_text = str(doc_row.get("full_text", ""))
-    doc_type = str(doc_row.get("document_type", "document")) if pd.notna(doc_row.get("document_type")) else "document"
-    page_count = _safe_int(doc_row.get("page_number")) or 1
-
-    # Parse email headers
-    email_fields = doc_row.get("email_fields")
-    msg_id = in_reply = refs = None
-    if pd.notna(email_fields) and isinstance(email_fields, str) and email_fields.strip():
-        try:
-            eh = json.loads(email_fields)
-            msg_id = eh.get("message_id")
-            in_reply = eh.get("in_reply_to")
-            refs = eh.get("references")
-        except (json.JSONDecodeError, TypeError):
-            pass
 
     with engine.connect() as conn:
         conn.execute(
@@ -444,54 +331,86 @@ def detect_named_vectors(settings) -> bool:
 
 
 async def run_pipeline(
+    conn,
     engine,
     settings,
     matter_id: str,
-    cache_dir: str | None,
     limit: int | None,
     resume: bool,
     skip_minio: bool,
     skip_neo4j: bool,
     use_named_vectors: bool,
     concurrency: int,
+    dry_run: bool,
 ) -> tuple[int, int, int]:
-    """Direct async pipeline: read parquet → write PG/Qdrant/Neo4j.
+    """DuckDB → PG/Qdrant/Neo4j async pipeline.
+
+    Uses DuckDB to join documents + chunks + embeddings in a single SQL query,
+    then streams results grouped by document into the write pipeline.
 
     Returns (imported, skipped, total_chunks).
     """
-    import pandas as pd
     from qdrant_client import AsyncQdrantClient
     from qdrant_client.models import PointStruct
 
     from app.common.vector_store import TEXT_COLLECTION
 
-    # Download document parquet paths
-    print("\n  Downloading document parquet shards...")
-    doc_paths = download_parquet_table("documents", cache_dir)
-    print(f"    {len(doc_paths)} document shards")
+    # Build the main join query
+    # COALESCE handles mixed schemas (some shards have document_id, others file_key)
+    limit_clause = f"LIMIT {limit}" if limit else ""
 
-    # If limit is set, figure out which doc IDs we care about
-    doc_id_set: set[int] | None = None
-    if limit:
-        print(f"  Pre-scanning for first {limit} documents...")
-        doc_id_set = set()
-        count = 0
-        for dp in doc_paths:
-            ddf = pd.read_parquet(dp, columns=["id"])
-            for _, row in ddf.iterrows():
-                doc_id_set.add(int(row["id"]))
-                count += 1
-                if count >= limit:
-                    break
-            del ddf
-            if count >= limit:
-                break
-        print(f"    Selected {len(doc_id_set)} document IDs")
+    # First, get documents with their chunks and embeddings joined
+    print("\n  Building joined query via DuckDB...")
+    doc_query = f"""
+        SELECT
+            d.id AS doc_int_id,
+            d.file_key,
+            d.full_text,
+            d.document_type,
+            d.date,
+            d.dataset,
+            d.is_photo,
+            d.has_handwriting,
+            d.has_stamps,
+            d.ocr_source,
+            d.additional_notes,
+            d.page_number,
+            d.document_number,
+            d.char_count,
+            d.email_fields
+        FROM documents d
+        WHERE d.full_text IS NOT NULL
+          AND length(trim(d.full_text)) >= 10
+        ORDER BY d.id
+        {limit_clause}
+    """
 
-    # Load indexes (chunks, embeddings, entities)
-    chunk_map, emb_map, entity_map, doc_chunks = load_indexes(cache_dir, doc_id_set)
+    doc_count = conn.execute(f"SELECT count(*) FROM ({doc_query}) t").fetchone()[0]
+    print(f"  Documents to process: {doc_count:,}")
 
-    # Connect to async clients
+    if dry_run:
+        # Show dataset distribution
+        dist = conn.execute("""
+            SELECT dataset, count(*) as cnt
+            FROM documents
+            WHERE full_text IS NOT NULL AND length(trim(full_text)) >= 10
+            GROUP BY dataset ORDER BY cnt DESC
+        """).fetchall()
+        print("\n  Dataset distribution:")
+        for label, cnt in dist:
+            print(f"    {label}: {cnt:,}")
+
+        sample = conn.execute(
+            f"SELECT file_key, dataset, document_type, char_count FROM ({doc_query}) t LIMIT 5"
+        ).fetchall()
+        print("\n  Sample documents:")
+        for fk, ds, dt, cc in sample:
+            print(f"    {fk}: {ds}, {dt}, {cc} chars")
+
+        print(f"\n  [DRY RUN] Would import {doc_count:,} documents")
+        return doc_count, 0, 0
+
+    # Connect async clients
     qdrant = AsyncQdrantClient(url=settings.qdrant_url)
     neo4j_driver = None
     if not skip_neo4j:
@@ -508,182 +427,280 @@ async def run_pipeline(
     start_time = time.time()
 
     try:
-        for dp in doc_paths:
-            ddf = pd.read_parquet(dp)
+        # Stream documents from DuckDB
+        doc_result = conn.execute(doc_query)
 
-            # Process documents in batches of `concurrency`
-            rows = list(ddf.iterrows())
-            del ddf
+        while True:
+            doc_rows = doc_result.fetchmany(concurrency)
+            if not doc_rows:
+                break
 
-            for batch_start in range(0, len(rows), concurrency):
-                batch_rows = rows[batch_start : batch_start + concurrency]
+            for doc_row in doc_rows:
+                (
+                    doc_int_id,
+                    file_key,
+                    full_text,
+                    document_type,
+                    date_val,
+                    dataset,
+                    is_photo,
+                    has_handwriting,
+                    has_stamps,
+                    ocr_source,
+                    additional_notes,
+                    page_number,
+                    document_number,
+                    char_count,
+                    email_fields,
+                ) = doc_row
 
-                for _, doc_row in batch_rows:
-                    if limit and imported + skipped >= limit:
-                        break
+                file_key = str(file_key or "")
+                full_text = str(full_text or "")
+                filename = file_key.split("/")[-1] if "/" in file_key else file_key
 
-                    doc_int_id = int(doc_row["id"])
-                    file_key = str(doc_row.get("file_key", ""))
-                    full_text = str(doc_row.get("full_text", "")) if pd.notna(doc_row.get("full_text")) else ""
+                content_hash = hashlib.sha256(full_text.encode("utf-8")).hexdigest()[:16]
 
-                    if not full_text or len(full_text.strip()) < 10:
-                        skipped += 1
+                if resume and check_resume(engine, content_hash, matter_id):
+                    skipped += 1
+                    continue
+
+                # Fetch chunks + embeddings for this document via DuckDB join
+                # Use COALESCE to handle shards with document_id vs file_key
+                chunk_rows = conn.execute(
+                    """
+                    SELECT
+                        c.chunk_index,
+                        c.content,
+                        c.token_count,
+                        e.embedding
+                    FROM chunks c
+                    JOIN embeddings_chunk e ON (
+                        e.chunk_id = c.id
+                        OR (e.document_id = c.document_id AND c.id IS NULL)
+                    )
+                    WHERE COALESCE(c.document_id, NULL) = ?
+                       OR COALESCE(c.file_key, NULL) = ?
+                    ORDER BY c.chunk_index
+                """,
+                    [doc_int_id, file_key],
+                ).fetchall()
+
+                if not chunk_rows:
+                    # Try alternate join: chunks by document_id only
+                    chunk_rows = conn.execute(
+                        """
+                        SELECT
+                            c.chunk_index,
+                            c.content,
+                            c.token_count,
+                            e.embedding
+                        FROM chunks c
+                        JOIN embeddings_chunk e ON e.chunk_id = c.id
+                        WHERE c.document_id = ?
+                        ORDER BY c.chunk_index
+                    """,
+                        [doc_int_id],
+                    ).fetchall()
+
+                if not chunk_rows:
+                    skipped += 1
+                    continue
+
+                # Parse chunks
+                doc_chunks: list[tuple[str, int, int, list[float]]] = []
+                for chunk_index, content, token_count, embedding in chunk_rows:
+                    if embedding is None or content is None:
                         continue
-
-                    content_hash = hashlib.sha256(full_text.encode("utf-8")).hexdigest()[:16]
-
-                    if resume and check_resume(engine, content_hash, matter_id):
-                        skipped += 1
+                    emb_list = list(embedding) if hasattr(embedding, "__iter__") else []
+                    if not emb_list:
                         continue
-
-                    # Build chunks + embeddings for this document
-                    chunk_ids = doc_chunks.get(doc_int_id, [])
-                    doc_chunk_data: list[tuple[str, int, int, list[float]]] = []  # (text, idx, tokens, emb)
-
-                    for cid in sorted(chunk_ids, key=lambda c: chunk_map[c][1]):
-                        if cid not in emb_map:
-                            continue
-                        _, chunk_index, content, token_count = chunk_map[cid]
-                        doc_chunk_data.append((content, chunk_index, token_count, emb_map[cid].tolist()))
-
-                    if not doc_chunk_data:
-                        skipped += 1
-                        continue
-
-                    entities = entity_map.get(doc_int_id, [])
-
-                    # Build metadata
-                    meta: dict[str, Any] = {
-                        "dataset": str(doc_row.get("dataset", "")) if pd.notna(doc_row.get("dataset")) else "",
-                        "original_file_key": file_key,
-                    }
-                    for field in ("date", "document_number", "ocr_source", "additional_notes"):
-                        val = doc_row.get(field)
-                        if pd.notna(val) and str(val).strip():
-                            meta[field] = str(val)
-                    for bf in ("is_photo", "has_handwriting", "has_stamps"):
-                        if doc_row.get(bf):
-                            meta[bf] = True
-                    metadata_json = json.dumps(meta, default=str)
-
-                    # PG insert
-                    job_id, doc_id = create_job_and_document(
-                        engine,
-                        doc_row,
-                        matter_id,
-                        metadata_json,
-                        content_hash,
-                        len(doc_chunk_data),
-                        len(entities),
+                    doc_chunks.append(
+                        (
+                            str(content),
+                            int(chunk_index or 0),
+                            int(token_count or len(str(content).split())),
+                            emb_list,
+                        )
                     )
 
-                    # MinIO upload (async via thread)
-                    if not skip_minio:
-                        filename = file_key.split("/")[-1] if "/" in file_key else file_key
-                        await asyncio.to_thread(
-                            upload_to_minio,
-                            settings,
-                            f"raw/{job_id}/{filename}",
-                            full_text.encode("utf-8"),
+                if not doc_chunks:
+                    skipped += 1
+                    continue
+
+                # Fetch entities for this document
+                entity_rows = conn.execute(
+                    """
+                    SELECT entity_type, value, normalized_value
+                    FROM entities
+                    WHERE document_id = ?
+                """,
+                    [doc_int_id],
+                ).fetchall()
+
+                entities = [
+                    {
+                        "name": str(norm or val).strip(),
+                        "type": str(etype or "unknown").lower(),
+                    }
+                    for etype, val, norm in entity_rows
+                    if val and str(val).strip()
+                ]
+
+                # Build metadata
+                meta: dict[str, Any] = {
+                    "dataset": str(dataset or ""),
+                    "original_file_key": file_key,
+                }
+                if date_val:
+                    meta["date"] = str(date_val)
+                if document_number:
+                    meta["document_number"] = str(document_number)
+                if ocr_source:
+                    meta["ocr_source"] = str(ocr_source)
+                if additional_notes:
+                    meta["additional_notes"] = str(additional_notes)
+                if is_photo:
+                    meta["is_photo"] = True
+                if has_handwriting:
+                    meta["has_handwriting"] = True
+                if has_stamps:
+                    meta["has_stamps"] = True
+                metadata_json = json.dumps(meta, default=str)
+
+                # Parse email headers
+                msg_id = in_reply = refs = None
+                if email_fields and str(email_fields).strip():
+                    try:
+                        eh = json.loads(str(email_fields))
+                        msg_id = eh.get("message_id")
+                        in_reply = eh.get("in_reply_to")
+                        refs = eh.get("references")
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+
+                doc_type = str(document_type or "document")
+                pg_count = int(page_number) if page_number and str(page_number).isdigit() else 1
+
+                # PG insert
+                job_id, doc_id = create_job_and_document(
+                    engine,
+                    filename,
+                    full_text,
+                    doc_type,
+                    pg_count,
+                    content_hash,
+                    len(doc_chunks),
+                    len(entities),
+                    matter_id,
+                    metadata_json,
+                    msg_id,
+                    in_reply,
+                    refs,
+                )
+
+                # MinIO upload
+                if not skip_minio:
+                    await asyncio.to_thread(
+                        upload_to_minio,
+                        settings,
+                        f"raw/{job_id}/{filename}",
+                        full_text.encode("utf-8"),
+                    )
+
+                # Qdrant upsert
+                points: list[PointStruct] = []
+                point_ids: list[str] = []
+                for text, chunk_index, token_count, embedding in doc_chunks:
+                    pid = str(uuid.uuid4())
+                    point_ids.append(pid)
+                    vector: Any = {"dense": embedding} if use_named_vectors else embedding
+                    points.append(
+                        PointStruct(
+                            id=pid,
+                            vector=vector,
+                            payload={
+                                "source_file": file_key,
+                                "chunk_text": text,
+                                "chunk_index": chunk_index,
+                                "doc_id": doc_id,
+                                "matter_id": matter_id,
+                                "token_count": token_count,
+                            },
+                        )
+                    )
+
+                for i in range(0, len(points), QDRANT_BATCH_SIZE):
+                    await qdrant.upsert(
+                        collection_name=TEXT_COLLECTION,
+                        points=points[i : i + QDRANT_BATCH_SIZE],
+                    )
+
+                # Neo4j
+                if neo4j_driver:
+                    async with neo4j_driver.session() as session:
+                        await session.run(
+                            """
+                            MERGE (doc:Document {id: $doc_id})
+                            SET doc.filename = $filename, doc.doc_type = $doc_type,
+                                doc.page_count = $page_count, doc.matter_id = $matter_id
+                            """,
+                            doc_id=doc_id,
+                            filename=filename,
+                            doc_type=doc_type,
+                            page_count=pg_count,
+                            matter_id=matter_id,
                         )
 
-                    # Qdrant upsert
-                    points: list[PointStruct] = []
-                    point_ids: list[str] = []
-                    for text, chunk_index, token_count, embedding in doc_chunk_data:
-                        pid = str(uuid.uuid4())
-                        point_ids.append(pid)
-                        vector: Any = {"dense": embedding} if use_named_vectors else embedding
-                        points.append(
-                            PointStruct(
-                                id=pid,
-                                vector=vector,
-                                payload={
-                                    "source_file": file_key,
-                                    "chunk_text": text,
-                                    "chunk_index": chunk_index,
-                                    "doc_id": doc_id,
-                                    "matter_id": matter_id,
-                                    "token_count": token_count,
-                                },
-                            )
-                        )
-
-                    for i in range(0, len(points), QDRANT_BATCH_SIZE):
-                        await qdrant.upsert(collection_name=TEXT_COLLECTION, points=points[i : i + QDRANT_BATCH_SIZE])
-
-                    # Neo4j: Document + Chunk + Entity nodes
-                    if neo4j_driver:
-                        filename = file_key.split("/")[-1] if "/" in file_key else file_key
-                        async with neo4j_driver.session() as session:
+                        chunk_nodes = [
+                            {"chunk_id": pid, "text_preview": text[:200], "page_number": 1, "qdrant_point_id": pid}
+                            for pid, (text, *_) in zip(point_ids, doc_chunks)
+                        ]
+                        for i in range(0, len(chunk_nodes), NEO4J_BATCH_SIZE):
                             await session.run(
                                 """
-                                MERGE (doc:Document {id: $doc_id})
-                                SET doc.filename = $filename, doc.doc_type = $doc_type,
-                                    doc.page_count = $page_count, doc.matter_id = $matter_id
+                                UNWIND $chunks AS c
+                                MERGE (chunk:Chunk {id: c.chunk_id})
+                                SET chunk.text_preview = c.text_preview,
+                                    chunk.page_number = c.page_number,
+                                    chunk.qdrant_point_id = c.qdrant_point_id
+                                WITH chunk, c
+                                MATCH (doc:Document {id: $doc_id})
+                                MERGE (doc)-[:HAS_CHUNK]->(chunk)
                                 """,
+                                chunks=chunk_nodes[i : i + NEO4J_BATCH_SIZE],
                                 doc_id=doc_id,
-                                filename=filename,
-                                doc_type=meta.get("doc_type", "document"),
-                                page_count=_safe_int(doc_row.get("page_number")) or 1,
-                                matter_id=matter_id,
                             )
 
-                            # Chunk nodes
-                            chunk_nodes = [
-                                {"chunk_id": pid, "text_preview": text[:200], "page_number": 1, "qdrant_point_id": pid}
-                                for pid, (text, *_) in zip(point_ids, doc_chunk_data)
-                            ]
-                            for i in range(0, len(chunk_nodes), NEO4J_BATCH_SIZE):
+                        if entities:
+                            for i in range(0, len(entities), ENTITY_BATCH_SIZE):
                                 await session.run(
                                     """
-                                    UNWIND $chunks AS c
-                                    MERGE (chunk:Chunk {id: c.chunk_id})
-                                    SET chunk.text_preview = c.text_preview,
-                                        chunk.page_number = c.page_number,
-                                        chunk.qdrant_point_id = c.qdrant_point_id
-                                    WITH chunk, c
+                                    UNWIND $entities AS e
+                                    MERGE (ent:Entity {name: e.name, type: e.type, matter_id: $matter_id})
+                                    ON CREATE SET ent.first_seen = datetime(), ent.mention_count = 1
+                                    ON MATCH SET ent.mention_count = ent.mention_count + 1
+                                    WITH ent
                                     MATCH (doc:Document {id: $doc_id})
-                                    MERGE (doc)-[:HAS_CHUNK]->(chunk)
+                                    MERGE (ent)-[:MENTIONED_IN]->(doc)
                                     """,
-                                    chunks=chunk_nodes[i : i + NEO4J_BATCH_SIZE],
+                                    entities=entities[i : i + ENTITY_BATCH_SIZE],
+                                    matter_id=matter_id,
                                     doc_id=doc_id,
                                 )
 
-                            # Entity nodes
-                            if entities:
-                                for i in range(0, len(entities), ENTITY_BATCH_SIZE):
-                                    await session.run(
-                                        """
-                                        UNWIND $entities AS e
-                                        MERGE (ent:Entity {name: e.name, type: e.type, matter_id: $matter_id})
-                                        ON CREATE SET ent.first_seen = datetime(), ent.mention_count = 1
-                                        ON MATCH SET ent.mention_count = ent.mention_count + 1
-                                        WITH ent
-                                        MATCH (doc:Document {id: $doc_id})
-                                        MERGE (ent)-[:MENTIONED_IN]->(doc)
-                                        """,
-                                        entities=entities[i : i + ENTITY_BATCH_SIZE],
-                                        matter_id=matter_id,
-                                        doc_id=doc_id,
-                                    )
+                imported += 1
+                total_chunks += len(doc_chunks)
 
-                    imported += 1
-                    total_chunks += len(doc_chunk_data)
-
-                # Progress
-                if imported % 500 < concurrency or imported < concurrency:
-                    elapsed = time.time() - start_time
-                    rate = imported / elapsed if elapsed > 0 else 0
-                    eta_min = ((limit or 1_400_000) - imported - skipped) / rate / 60 if rate > 0 else 0
-                    print(
-                        f"  [{imported:,}/{limit or '~1.4M'}] "
-                        f"{total_chunks:,} chunks, {skipped:,} skipped, "
-                        f"{rate:.1f} docs/sec, ETA {eta_min:.0f}min"
-                    )
-
-            if limit and imported + skipped >= limit:
-                break
+            # Progress
+            elapsed = time.time() - start_time
+            rate = imported / elapsed if elapsed > 0 else 0
+            if imported % 500 < concurrency or imported < concurrency:
+                eta_min = (doc_count - imported - skipped) / rate / 60 if rate > 0 else 0
+                print(
+                    f"  [{imported:,}/{doc_count:,}] "
+                    f"{total_chunks:,} chunks, {skipped:,} skipped, "
+                    f"{rate:.1f} docs/sec, ETA {eta_min:.0f}min"
+                )
 
     except KeyboardInterrupt:
         print(f"\n  Interrupted at {imported:,} docs.")
@@ -696,35 +713,26 @@ async def run_pipeline(
 
 
 # ---------------------------------------------------------------------------
-# KG import (small tables, direct sync)
+# KG import
 # ---------------------------------------------------------------------------
 
 
-def import_kg(settings, matter_id: str, cache_dir: str | None = None) -> None:
+def import_kg(conn, settings, matter_id: str) -> None:
     """Import curated KG entities + relationships directly to Neo4j."""
-    import pandas as pd
     from neo4j import GraphDatabase
 
-    kg_ent_paths = download_parquet_table("kg_entities", cache_dir)
-    kg_rel_paths = download_parquet_table("kg_relationships", cache_dir)
-    if not kg_ent_paths:
-        print("  No KG tables found, skipping.")
-        return
-
-    kg_entities = pd.concat([pd.read_parquet(p) for p in kg_ent_paths], ignore_index=True)
-    kg_rels = pd.concat([pd.read_parquet(p) for p in kg_rel_paths], ignore_index=True)
-    print(f"\n  Importing KG: {len(kg_entities)} entities, {len(kg_rels)} relationships")
+    kg_count = conn.execute("SELECT count(*) FROM kg_entities").fetchone()[0]
+    rel_count = conn.execute("SELECT count(*) FROM kg_relationships").fetchone()[0]
+    print(f"\n  Importing KG: {kg_count} entities, {rel_count} relationships")
 
     driver = GraphDatabase.driver(settings.neo4j_uri, auth=(settings.neo4j_user, settings.neo4j_password))
 
     with driver.session() as session:
+        # KG entities
+        rows = conn.execute("SELECT id, name, entity_type, description FROM kg_entities").fetchall()
         batch = [
-            {
-                "name": str(row.get("name", "")),
-                "type": str(row.get("entity_type", "unknown")).lower(),
-                "description": str(row.get("description", "")) if pd.notna(row.get("description")) else "",
-            }
-            for _, row in kg_entities.iterrows()
+            {"name": str(name), "type": str(etype or "unknown").lower(), "description": str(desc or "")}
+            for _, name, etype, desc in rows
         ]
         if batch:
             session.run(
@@ -737,21 +745,26 @@ def import_kg(settings, matter_id: str, cache_dir: str | None = None) -> None:
                 matter_id=matter_id,
             )
 
-        kg_id_to_name = {int(row["id"]): str(row.get("name", "")) for _, row in kg_entities.iterrows()}
+        # Build id → name map
+        kg_id_to_name = {int(rid): str(name) for rid, name, _, _ in rows}
 
+        # KG relationships
+        rels = conn.execute(
+            "SELECT source_id, target_id, relationship_type, weight, evidence FROM kg_relationships"
+        ).fetchall()
         rel_batch = []
-        for _, row in kg_rels.iterrows():
-            src = kg_id_to_name.get(int(row.get("source_id", -1)), "")
-            tgt = kg_id_to_name.get(int(row.get("target_id", -1)), "")
+        for src_id, tgt_id, rtype, weight, evidence in rels:
+            src = kg_id_to_name.get(int(src_id), "")
+            tgt = kg_id_to_name.get(int(tgt_id), "")
             if not src or not tgt:
                 continue
             rel_batch.append(
                 {
                     "source": src,
                     "target": tgt,
-                    "rel_type": str(row.get("relationship_type", "RELATED_TO")),
-                    "weight": float(row.get("weight", 1.0)) if pd.notna(row.get("weight")) else 1.0,
-                    "evidence": str(row.get("evidence", "")) if pd.notna(row.get("evidence")) else "",
+                    "rel_type": str(rtype or "RELATED_TO"),
+                    "weight": float(weight or 1.0),
+                    "evidence": str(evidence or ""),
                 }
             )
 
@@ -770,7 +783,7 @@ def import_kg(settings, matter_id: str, cache_dir: str | None = None) -> None:
             )
 
     driver.close()
-    print(f"  KG import complete: {len(kg_entities)} entities, {len(kg_rels)} relationships")
+    print(f"  KG import complete: {kg_count} entities, {rel_count} relationships")
 
 
 # ---------------------------------------------------------------------------
@@ -780,7 +793,7 @@ def import_kg(settings, matter_id: str, cache_dir: str | None = None) -> None:
 
 def main() -> int:  # noqa: C901
     parser = argparse.ArgumentParser(
-        description="Import kabasshouse/epstein-data into NEXUS (direct async pipeline)",
+        description="Import kabasshouse/epstein-data into NEXUS (DuckDB + async pipeline)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--matter-id", default=None, help="Target matter UUID")
@@ -789,11 +802,11 @@ def main() -> int:  # noqa: C901
     parser.add_argument("--dry-run", action="store_true", help="Load + count, no writes")
     parser.add_argument("--resume", action="store_true", help="Skip docs whose content_hash exists")
     parser.add_argument("--disable-hnsw", action="store_true", help="Disable HNSW during import, rebuild after")
-    parser.add_argument("--skip-minio", action="store_true", help="Skip MinIO upload of text files")
-    parser.add_argument("--skip-neo4j", action="store_true", help="Skip Neo4j graph indexing")
+    parser.add_argument("--skip-minio", action="store_true", help="Skip MinIO text upload")
+    parser.add_argument("--skip-neo4j", action="store_true", help="Skip Neo4j graph writes")
     parser.add_argument("--skip-kg", action="store_true", help="Skip KG entity/relationship import")
     parser.add_argument("--cache-dir", default=None, help="HF datasets cache directory")
-    parser.add_argument("--concurrency", type=int, default=16, help="Documents per batch (default: 16)")
+    parser.add_argument("--concurrency", type=int, default=16, help="Documents per fetch batch (default: 16)")
 
     args = parser.parse_args()
 
@@ -811,11 +824,15 @@ def main() -> int:  # noqa: C901
         print(f"Error: '{args.matter_id}' is not a valid UUID", file=sys.stderr)
         return 1
 
-    print(f"\n=== NEXUS HF Import: {HF_DATASET} (direct async) ===")
+    print(f"\n=== NEXUS HF Import: {HF_DATASET} (DuckDB + async) ===")
     print(f"  Matter:      {args.matter_id}")
-    print(f"  Concurrency: {args.concurrency} docs/batch")
+    print(f"  Concurrency: {args.concurrency}")
     if args.limit:
-        print(f"  Limit:       {args.limit} documents")
+        print(f"  Limit:       {args.limit}")
+
+    # Create DuckDB connection with all HF tables registered
+    print("\n  Registering HF parquet tables in DuckDB...")
+    conn = create_duckdb_conn(args.cache_dir)
 
     settings = _get_settings()
     engine = _get_engine()
@@ -823,32 +840,35 @@ def main() -> int:  # noqa: C901
     use_named = detect_named_vectors(settings)
     print(f"  Named vectors: {use_named}")
 
-    if args.disable_hnsw:
+    if args.disable_hnsw and not args.dry_run:
         disable_hnsw(settings)
 
     start_time = time.time()
     imported, skipped_count, total_chunks = asyncio.run(
         run_pipeline(
+            conn=conn,
             engine=engine,
             settings=settings,
             matter_id=args.matter_id,
-            cache_dir=args.cache_dir,
             limit=args.limit,
             resume=args.resume,
             skip_minio=args.skip_minio,
             skip_neo4j=args.skip_neo4j,
             use_named_vectors=use_named,
             concurrency=args.concurrency,
+            dry_run=args.dry_run,
         )
     )
 
-    if args.disable_hnsw:
+    if args.disable_hnsw and not args.dry_run:
         rebuild_hnsw(settings)
 
-    if not args.skip_kg:
-        import_kg(settings, args.matter_id, args.cache_dir)
+    if not args.skip_kg and not args.dry_run:
+        import_kg(conn, settings, args.matter_id)
 
-    if imported > 0:
+    conn.close()
+
+    if imported > 0 and not args.dry_run:
         print("\n  Dispatching post-ingestion hooks...")
         try:
             from app.ingestion.bulk_import import dispatch_post_ingestion_hooks
@@ -860,7 +880,7 @@ def main() -> int:  # noqa: C901
 
     elapsed = time.time() - start_time
     print("\n=== Import Complete ===")
-    print(f"  Imported:     {imported:,} documents")
+    print(f"  Imported:     {imported:,}")
     print(f"  Skipped:      {skipped_count:,}")
     print(f"  Total chunks: {total_chunks:,}")
     print(f"  Elapsed:      {elapsed:.1f}s ({elapsed / 60:.1f}min)")
