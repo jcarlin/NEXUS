@@ -76,6 +76,7 @@ def create_duckdb_conn(cache_dir: str | None = None):
 
     conn = duckdb.connect(":memory:")
     conn.execute("SET enable_progress_bar = false")
+    conn.execute("SET temp_directory = '/tmp/duckdb_tmp'")
     api = HfApi()
 
     for table in HF_TABLES:
