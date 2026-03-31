@@ -1961,6 +1961,8 @@ def import_text_document(
     import_source: str | None = None,
     bulk_import_job_id: str | None = None,
     email_headers: dict | None = None,
+    pre_chunks: list[dict] | None = None,
+    pre_embeddings: list[list[float]] | None = None,
 ) -> dict:
     """Import a pre-parsed text document, skipping the download+parse stage.
 
@@ -2030,24 +2032,38 @@ def import_text_document(
         logger.info("task.import_text.uploaded", minio_path=minio_path)
 
         # ---------------------------------------------------------------
-        # Stage 2: CHUNKING
+        # Stage 2: CHUNKING — use pre_chunks if provided
         # ---------------------------------------------------------------
         _update_stage(engine, job_id, "chunking", "processing")
 
-        from app.ingestion.chunker import TextChunker
+        if pre_chunks:
+            from app.ingestion.chunker import Chunk
 
-        chunker = TextChunker(
-            max_tokens=settings.chunk_size,
-            overlap_tokens=settings.chunk_overlap,
-        )
+            chunks = [
+                Chunk(
+                    chunk_index=c.get("chunk_index", i),
+                    text=c["text"],
+                    token_count=c.get("token_count", len(c["text"].split())),
+                    metadata={"source_file": filename, **(c.get("metadata") or {})},
+                )
+                for i, c in enumerate(pre_chunks)
+            ]
+            logger.info("task.import_text.pre_chunked", chunk_count=len(chunks))
+        else:
+            from app.ingestion.chunker import TextChunker
 
-        chunks = chunker.chunk(
-            text,
-            metadata={"source_file": filename},
-            document_type=doc_type,
-        )
+            chunker = TextChunker(
+                max_tokens=settings.chunk_size,
+                overlap_tokens=settings.chunk_overlap,
+            )
 
-        logger.info("task.import_text.chunked", chunk_count=len(chunks))
+            chunks = chunker.chunk(
+                text,
+                metadata={"source_file": filename},
+                document_type=doc_type,
+            )
+
+            logger.info("task.import_text.chunked", chunk_count=len(chunks))
 
         # Create document record early so doc_id is available for Qdrant/Neo4j
         doc_id = _create_document_record_early(
@@ -2067,13 +2083,17 @@ def import_text_document(
         _update_stage(engine, job_id, "embedding", "processing", progress=progress)
 
         # ---------------------------------------------------------------
-        # Stage 3: EMBEDDING — dense + optional sparse
+        # Stage 3: EMBEDDING — use pre_embeddings if provided, else dense + optional sparse
         # ---------------------------------------------------------------
         chunk_texts = [c.text for c in chunks]
 
-        # BGE-M3 unified path: single forward pass for both dense + sparse
         sparse_embeddings: list[tuple[list[int], list[float]]] = []
-        if settings.embedding_provider == "bgem3" and chunk_texts:
+
+        if pre_embeddings:
+            embeddings = pre_embeddings
+            logger.info("task.import_text.pre_embedded", count=len(embeddings))
+        elif settings.embedding_provider == "bgem3" and chunk_texts:
+            # BGE-M3 unified path: single forward pass for both dense + sparse
             bgem3 = _get_bgem3_provider(
                 model_name=settings.bgem3_model_name,
                 max_length=settings.bgem3_max_length,
@@ -2086,7 +2106,7 @@ def import_text_document(
         else:
             embeddings = []
 
-        if settings.enable_sparse_embeddings and chunk_texts and not sparse_embeddings:
+        if settings.enable_sparse_embeddings and chunk_texts and not sparse_embeddings and not pre_embeddings:
             from app.ingestion.sparse_embedder import SparseEmbedder
 
             sparse_emb = SparseEmbedder(model_name=settings.sparse_embedding_model)
