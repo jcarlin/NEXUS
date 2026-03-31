@@ -395,7 +395,7 @@ async def run_pipeline(
     doc_count = min(doc_count_raw, limit) if limit else doc_count_raw
     print(f"\n  Streaming {doc_count:,} documents...")
 
-    qdrant = AsyncQdrantClient(url=settings.qdrant_url)
+    qdrant = AsyncQdrantClient(url=settings.qdrant_url, timeout=120)
     neo4j_driver = None
     if not skip_neo4j:
         from neo4j import AsyncGraphDatabase
@@ -524,7 +524,15 @@ async def run_pipeline(
                         )
                     )
                 for i in range(0, len(pts), QDRANT_BATCH_SIZE):
-                    await qdrant.upsert(collection_name=TEXT_COLLECTION, points=pts[i : i + QDRANT_BATCH_SIZE])
+                    for _retry in range(3):
+                        try:
+                            await qdrant.upsert(collection_name=TEXT_COLLECTION, points=pts[i : i + QDRANT_BATCH_SIZE])
+                            break
+                        except Exception as qe:
+                            if _retry == 2:
+                                raise
+                            logger.warning("qdrant.upsert_retry", error=str(qe), retry=_retry + 1)
+                            await asyncio.sleep(2**_retry)
 
                 # Neo4j
                 if neo4j_driver:
