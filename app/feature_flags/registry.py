@@ -341,6 +341,12 @@ FLAG_REGISTRY: dict[str, FlagMeta] = {
         risk_level=FlagRiskLevel.RESTART,
     ),
     # --- Page Visibility ---
+    "enable_shareable_links": FlagMeta(
+        display_name="Shareable Chat Links",
+        description="Allow users to create public shareable links for chat conversations with optional follow-up questions.",
+        category=FlagCategory.QUERY,
+        risk_level=FlagRiskLevel.SAFE,
+    ),
     "enable_page_chat": FlagMeta(
         display_name="Chat",
         description="Show the Chat page in the sidebar navigation.",
