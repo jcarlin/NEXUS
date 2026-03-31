@@ -161,19 +161,55 @@ def load_indexes(cache_dir: str | None = None, doc_id_set: set[int] | None = Non
     import numpy as np
     import pandas as pd
 
-    # Chunks: id → (document_id, chunk_index, content, token_count)
+    # Chunks: chunk_key → (document_id, chunk_index, content, token_count)
+    # Some shards use integer document_id, others use file_key string.
+    # We normalize to integer document_id using doc_file_key_to_id map.
     print("\n  Loading chunks index...")
     chunk_map: dict[int, tuple[int, int, str, int]] = {}
+    # For file_key-based shards, we need a reverse map from file_key → doc int id
+    # This will be populated lazily if needed
+    file_key_to_doc_id: dict[str, int] | None = None
+    chunk_auto_id = 0  # auto-increment for shards without chunk id column
+
     for cp in download_parquet_table("chunks", cache_dir):
         cdf = pd.read_parquet(cp)
+        has_doc_id_col = "document_id" in cdf.columns
+        has_file_key_col = "file_key" in cdf.columns
+        has_id_col = "id" in cdf.columns
+
+        # If this shard uses file_key, build reverse map from doc parquets
+        if has_file_key_col and not has_doc_id_col and file_key_to_doc_id is None:
+            print("    Building file_key → doc_id reverse map...")
+            file_key_to_doc_id = {}
+            for dp in download_parquet_table("documents", cache_dir):
+                ddf = pd.read_parquet(dp, columns=["id", "file_key"])
+                for _, drow in ddf.iterrows():
+                    file_key_to_doc_id[str(drow["file_key"])] = int(drow["id"])
+                del ddf
+            print(f"    Mapped {len(file_key_to_doc_id):,} file_keys")
+
         for _, row in cdf.iterrows():
-            doc_id = int(row["document_id"])
+            # Resolve document_id
+            if has_doc_id_col:
+                doc_id = int(row["document_id"])
+            elif has_file_key_col and file_key_to_doc_id is not None:
+                fk = str(row["file_key"])
+                doc_id = file_key_to_doc_id.get(fk, -1)
+                if doc_id == -1:
+                    continue
+            else:
+                continue
+
             if doc_id_set and doc_id not in doc_id_set:
                 continue
             content = str(row.get("content", ""))
             if not content.strip():
                 continue
-            chunk_map[int(row["id"])] = (
+
+            chunk_id = int(row["id"]) if has_id_col else chunk_auto_id
+            chunk_auto_id += 1
+
+            chunk_map[chunk_id] = (
                 doc_id,
                 int(row.get("chunk_index", 0)),
                 content,
@@ -201,8 +237,17 @@ def load_indexes(cache_dir: str | None = None, doc_id_set: set[int] | None = Non
     entity_map: dict[int, list[dict]] = {}
     for ep in download_parquet_table("entities", cache_dir):
         edf = pd.read_parquet(ep)
+        has_doc_id = "document_id" in edf.columns
+        has_fk = "file_key" in edf.columns
         for _, row in edf.iterrows():
-            doc_id = int(row["document_id"])
+            if has_doc_id:
+                doc_id = int(row["document_id"])
+            elif has_fk and file_key_to_doc_id is not None:
+                doc_id = file_key_to_doc_id.get(str(row["file_key"]), -1)
+                if doc_id == -1:
+                    continue
+            else:
+                continue
             if doc_id_set and doc_id not in doc_id_set:
                 continue
             value = str(row.get("value", ""))
