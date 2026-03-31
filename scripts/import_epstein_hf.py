@@ -185,8 +185,15 @@ def load_indexes(
         """).fetchall()
         if not rows:
             break
+        skipped_dim = 0
         for cid, emb in rows:
-            emb_index[int(cid)] = np.asarray(emb, dtype=np.float32)
+            arr = np.asarray(emb, dtype=np.float32)
+            if arr.shape[0] != 768:
+                skipped_dim += 1
+                continue
+            emb_index[int(cid)] = arr
+        if skipped_dim:
+            logger.warning("embeddings.bad_dim", skipped=skipped_dim, batch_offset=offset)
         offset += batch_size
     print(f"    {len(emb_index):,} embeddings ({time.time() - t0:.1f}s)")
 
