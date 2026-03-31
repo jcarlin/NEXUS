@@ -27,7 +27,7 @@ export function FindingsBar() {
           <BookmarkCheck className="h-4 w-4" />
           Findings
           <Badge variant="secondary" className="text-[10px]">
-            {findings.length}
+            {findings.length.toLocaleString()}
           </Badge>
         </span>
         {open ? (

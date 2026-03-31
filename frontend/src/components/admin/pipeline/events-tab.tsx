@@ -56,7 +56,7 @@ const PAGE_SIZE = 50;
 
 function formatDuration(ms: number | null): string {
   if (ms == null) return "--";
-  if (ms < 1000) return `${ms}ms`;
+  if (ms < 1000) return `${ms.toLocaleString()}ms`;
   const secs = Math.round(ms / 1000);
   if (secs < 60) return `${secs}s`;
   const mins = Math.floor(secs / 60);

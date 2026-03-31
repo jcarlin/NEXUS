@@ -132,17 +132,17 @@ export function TracePanel({ traceSteps, traceSummary, toolCalls, stage, isStrea
           <span className="font-medium">Trace</span>
           <span className="font-mono text-[10px] tabular-nums">{formatMs(totalMs)}</span>
           <span className="text-muted-foreground/50">·</span>
-          <span className="text-[10px]">{traceSteps.length} steps</span>
+          <span className="text-[10px]">{traceSteps.length.toLocaleString()} steps</span>
           {toolCount > 0 && (
             <>
               <span className="text-muted-foreground/50">·</span>
-              <span className="text-[10px]">{toolCount} tools</span>
+              <span className="text-[10px]">{toolCount.toLocaleString()} tools</span>
             </>
           )}
           {overrideCount > 0 && (
             <>
               <span className="text-muted-foreground/50">·</span>
-              <span className="text-[10px] text-primary">{overrideCount} overrides</span>
+              <span className="text-[10px] text-primary">{overrideCount.toLocaleString()} overrides</span>
             </>
           )}
         </div>

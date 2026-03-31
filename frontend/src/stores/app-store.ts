@@ -10,6 +10,7 @@ interface AppState {
   sidebarCollapsed: boolean;
   threadSidebarCollapsed: boolean;
   definedTermsOpen: boolean;
+  mobileThreadSheetOpen: boolean;
 
   setMatter: (matterId: string) => void;
   setDataset: (datasetId: string | null) => void;
@@ -22,6 +23,7 @@ interface AppState {
   toggleThreadSidebar: () => void;
   setThreadSidebarCollapsed: (collapsed: boolean) => void;
   toggleDefinedTerms: () => void;
+  setMobileThreadSheetOpen: (open: boolean) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -33,6 +35,7 @@ export const useAppStore = create<AppState>()(
       sidebarCollapsed: false,
       threadSidebarCollapsed: false,
       definedTermsOpen: false,
+      mobileThreadSheetOpen: false,
 
       setMatter: (matterId) => {
         set({ matterId, datasetId: null });
@@ -67,6 +70,7 @@ export const useAppStore = create<AppState>()(
       setThreadSidebarCollapsed: (collapsed) => set({ threadSidebarCollapsed: collapsed }),
       toggleDefinedTerms: () =>
         set((state) => ({ definedTermsOpen: !state.definedTermsOpen })),
+      setMobileThreadSheetOpen: (open) => set({ mobileThreadSheetOpen: open }),
     }),
     {
       name: "nexus-app-store",

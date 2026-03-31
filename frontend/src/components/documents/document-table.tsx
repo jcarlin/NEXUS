@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
-import { formatDate, formatFileSize } from "@/lib/utils";
+import { formatDate, formatFileSize, formatNumber } from "@/lib/utils";
 import type { DocumentResponse } from "@/types";
 
 function scoreColor(score: number | null | undefined): string {
@@ -74,6 +74,10 @@ export function DocumentTable({ data, loading, initialSorting, onSortingChange }
       {
         accessorKey: "page_count",
         header: ({ column }) => <DataTableColumnHeader column={column} title="Pages" />,
+        cell: ({ row }) => {
+          const count = row.original.page_count;
+          return count != null ? <span className="tabular-nums">{formatNumber(count)}</span> : <span className="text-muted-foreground">{"\u2014"}</span>;
+        },
       },
       {
         accessorKey: "file_size_bytes",

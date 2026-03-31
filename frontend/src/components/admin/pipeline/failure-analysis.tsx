@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/api/client";
 import { useAppStore } from "@/stores/app-store";
 import { useLiveRefresh } from "@/hooks/use-live-refresh";
-import { formatDateTime } from "@/lib/utils";
+import { formatDateTime, formatNumber } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -88,7 +88,7 @@ function HorizontalBar({
             />
           </div>
           <span className="w-10 text-xs tabular-nums text-right">
-            {item.count}
+            {formatNumber(item.count)}
           </span>
         </div>
       ))}
@@ -155,10 +155,10 @@ export function FailureAnalysis() {
           {analysis && (
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
               <span>
-                <strong className="text-destructive">{analysis.total_failed}</strong> failed
+                <strong className="text-destructive">{formatNumber(analysis.total_failed)}</strong> failed
               </span>
               <span>
-                <strong className="text-green-600">{analysis.total_completed}</strong> completed
+                <strong className="text-green-600">{formatNumber(analysis.total_completed)}</strong> completed
               </span>
               <span>
                 <strong>{failureRate}%</strong> failure rate
@@ -292,7 +292,7 @@ export function FailureAnalysis() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right tabular-nums text-xs">
-                        {err.count}
+                        {formatNumber(err.count)}
                       </TableCell>
                       <TableCell className="text-[10px] text-muted-foreground whitespace-nowrap">
                         {formatDateTime(err.last_seen)}

@@ -23,6 +23,14 @@ export function formatDateTime(date: string | Date): string {
   });
 }
 
+export function formatNumber(n: number): string {
+  return n.toLocaleString();
+}
+
+export function formatPercent(n: number, decimals = 0): string {
+  return `${n.toFixed(decimals)}%`;
+}
+
 export function truncate(str: string, maxLength: number): string {
   if (str.length <= maxLength) return str;
   return str.slice(0, maxLength - 1) + "\u2026";

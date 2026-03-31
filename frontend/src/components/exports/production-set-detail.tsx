@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Pagination } from "@/components/ui/pagination";
+import { formatNumber } from "@/lib/utils";
 import type { PaginatedResponse } from "@/types";
 import type { ProductionSetDocumentResponse } from "@/api/generated/schemas";
 
@@ -64,7 +65,7 @@ export function ProductionSetDetail({ productionSetId, onBack, onRefresh }: Prop
           Production Set Documents
         </h2>
         <span className="text-sm text-muted-foreground">
-          {data ? `${data.total} documents` : ""}
+          {data ? `${formatNumber(data.total)} documents` : ""}
         </span>
       </div>
 

@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatNumber } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 
 interface ContextSummaryProps {
@@ -40,7 +41,7 @@ export function ContextSummary({ context, onRerun }: ContextSummaryProps) {
       {context.claims && context.claims.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Claims ({context.claims.length})</CardTitle>
+            <CardTitle className="text-base">Claims ({formatNumber(context.claims.length)})</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {context.claims.map((claim, i) => (
@@ -61,7 +62,7 @@ export function ContextSummary({ context, onRerun }: ContextSummaryProps) {
       {uniqueParties.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Parties ({uniqueParties.length})</CardTitle>
+            <CardTitle className="text-base">Parties ({formatNumber(uniqueParties.length)})</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-2">
@@ -78,7 +79,7 @@ export function ContextSummary({ context, onRerun }: ContextSummaryProps) {
       {uniqueTerms.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Defined Terms ({uniqueTerms.length})</CardTitle>
+            <CardTitle className="text-base">Defined Terms ({formatNumber(uniqueTerms.length)})</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             {uniqueTerms.map((dt, i) => (
@@ -97,7 +98,7 @@ export function ContextSummary({ context, onRerun }: ContextSummaryProps) {
         return (
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Timeline ({dates.length})</CardTitle>
+              <CardTitle className="text-base">Timeline ({formatNumber(dates.length)})</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               {dates.map((kd, i) => (

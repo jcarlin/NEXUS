@@ -109,7 +109,7 @@ export function CommMatrix({ matrix, entities, loading, onCellClick }: CommMatri
                     className="cursor-pointer"
                     onClick={() => onCellClick?.(sender, receiver)}
                   >
-                    <title>{`${sender} → ${receiver}: ${count}`}</title>
+                    <title>{`${sender} → ${receiver}: ${count.toLocaleString()}`}</title>
                   </rect>
                   {count > 0 && cellSize >= 30 && (
                     <text
@@ -120,7 +120,7 @@ export function CommMatrix({ matrix, entities, loading, onCellClick }: CommMatri
                       fill={count > maxCount * 0.6 ? "white" : "black"}
                       pointerEvents="none"
                     >
-                      {count}
+                      {count.toLocaleString()}
                     </text>
                   )}
                 </g>

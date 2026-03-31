@@ -6,6 +6,7 @@ import { useFeatureFlag } from "@/hooks/use-feature-flags";
 import { useViewState } from "@/hooks/use-view-state";
 import { HotDocTable } from "@/components/review/hot-doc-table";
 import { FeatureDisabledBanner } from "@/components/ui/feature-disabled-banner";
+import { formatNumber } from "@/lib/utils";
 import type { DocumentDetail, PaginatedResponse } from "@/types";
 
 export const Route = createLazyFileRoute("/review/hot-docs")({
@@ -42,7 +43,7 @@ function HotDocsPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Hot Documents</h1>
         <p className="text-sm text-muted-foreground">
-          {data ? `${data.total} documents with hot score >= 0.7` : "Loading..."}
+          {data ? `${formatNumber(data.total)} documents with hot score >= 0.7` : "Loading..."}
         </p>
       </div>
 

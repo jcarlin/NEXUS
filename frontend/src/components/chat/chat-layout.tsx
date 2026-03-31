@@ -5,9 +5,10 @@ import {
   ResizableHandle,
 } from "@/components/ui/resizable";
 import { usePanelRef } from "react-resizable-panels";
-import { ChevronsLeft, ChevronsRight, Bug } from "lucide-react";
+import { ChevronsLeft, ChevronsRight, Bug, MessageSquare } from "lucide-react";
 import { ThreadSidebar } from "./thread-sidebar";
 import { CitationSidebar } from "./citation-sidebar";
+import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useCitationStore } from "@/stores/citation-store";
@@ -30,6 +31,8 @@ export function ChatLayout({ children }: ChatLayoutProps) {
   const toggleDevMode = useDevModeStore((s) => s.toggle);
   const collapsed = useAppStore((s) => s.threadSidebarCollapsed);
   const toggle = useAppStore((s) => s.toggleThreadSidebar);
+  const mobileThreadSheetOpen = useAppStore((s) => s.mobileThreadSheetOpen);
+  const setMobileThreadSheetOpen = useAppStore((s) => s.setMobileThreadSheetOpen);
   const setSidebarCollapsed = useAppStore((s) => s.setSidebarCollapsed);
   const setThreadSidebarCollapsed = useAppStore((s) => s.setThreadSidebarCollapsed);
 
@@ -80,6 +83,32 @@ export function ChatLayout({ children }: ChatLayoutProps) {
       >
         <ThreadSidebar collapsed={collapsed} onToggle={toggle} />
       </div>
+
+      {/* Mobile: left-edge tab to open chat history */}
+      <button
+        type="button"
+        className="flex md:hidden shrink-0 w-10 flex-col items-center justify-start gap-3 border-r bg-muted/30 pt-3"
+        onClick={() => setMobileThreadSheetOpen(true)}
+        aria-label="Open chat history"
+      >
+        <MessageSquare className="h-4 w-4 text-muted-foreground" />
+        <span className="text-[10px] font-medium tracking-wide text-muted-foreground [writing-mode:vertical-lr]">
+          History
+        </span>
+      </button>
+
+      {/* Mobile thread history drawer */}
+      <Sheet open={mobileThreadSheetOpen} onOpenChange={setMobileThreadSheetOpen}>
+        <SheetContent side="left" className="w-[280px] p-0" overlayClassName="bg-black/20" hideClose>
+          <SheetTitle className="sr-only">Chat History</SheetTitle>
+          <SheetDescription className="sr-only">Browse and select chat threads</SheetDescription>
+          <ThreadSidebar
+            collapsed={false}
+            onToggle={() => setMobileThreadSheetOpen(false)}
+            onThreadSelect={() => setMobileThreadSheetOpen(false)}
+          />
+        </SheetContent>
+      </Sheet>
 
       <ResizablePanelGroup direction="horizontal" className="flex-1">
         <ResizablePanel id="chat-main" minSize="35%">

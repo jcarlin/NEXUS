@@ -102,7 +102,7 @@ const columns = [
     cell: (info) => {
       const ms = info.getValue();
       return ms != null ? (
-        <span className="text-xs text-muted-foreground">{ms}ms</span>
+        <span className="text-xs text-muted-foreground">{ms.toLocaleString()}ms</span>
       ) : (
         <span className="text-xs text-muted-foreground">-</span>
       );

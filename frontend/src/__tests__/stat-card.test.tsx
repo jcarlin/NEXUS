@@ -97,8 +97,8 @@ describe("StatCard", () => {
     expect(screen.getByText("Total ingested")).toBeInTheDocument();
   });
 
-  it("renders large numbers correctly", () => {
+  it("renders large numbers with locale formatting", () => {
     render(<StatCard title="Documents" value={50000} icon={FileText} />);
-    expect(screen.getByText("50000")).toBeInTheDocument();
+    expect(screen.getByText((50000).toLocaleString())).toBeInTheDocument();
   });
 });

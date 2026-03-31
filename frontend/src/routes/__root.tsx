@@ -61,10 +61,10 @@ function RootLayout() {
                   </SheetTrigger>
                 }
               />
-              <SheetContent side="left" className="w-56 p-0" overlayClassName="bg-black/20">
+              <SheetContent side="left" className="w-56 p-0" overlayClassName="bg-black/20" hideClose>
                 <SheetTitle className="sr-only">Navigation</SheetTitle>
                 <SheetDescription className="sr-only">Main navigation menu</SheetDescription>
-                <Sidebar />
+                <Sidebar forceExpanded onClose={() => setMobileNavOpen(false)} />
               </SheetContent>
             </Sheet>
             <main className="flex-1 overflow-auto p-4 md:p-6">

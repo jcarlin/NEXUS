@@ -24,6 +24,7 @@ import {
   ChevronsRight,
   GitBranch,
   PanelLeft,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/stores/app-store";
@@ -77,8 +78,14 @@ const adminNav: NavItem[] = [
   { to: "/admin/architecture", label: "Architecture", icon: GitBranch, roles: ["admin"] },
 ];
 
-export function Sidebar() {
-  const collapsed = useAppStore((s) => s.sidebarCollapsed);
+interface SidebarProps {
+  forceExpanded?: boolean;
+  onClose?: () => void;
+}
+
+export function Sidebar({ forceExpanded, onClose }: SidebarProps = {}) {
+  const storeCollapsed = useAppStore((s) => s.sidebarCollapsed);
+  const collapsed = forceExpanded ? false : storeCollapsed;
   const toggleSidebar = useAppStore((s) => s.toggleSidebar);
   const userRole = useAuthStore((s) => s.user?.role);
   const { data: flags } = useFeatureFlags();
@@ -163,14 +170,22 @@ export function Sidebar() {
     >
       <div className={cn("flex h-14 items-center border-b border-sidebar-border/50 px-3", collapsed ? "justify-center" : "justify-between")}>
         {!collapsed && <span className="text-lg font-bold tracking-widest text-amber">NEXUS</span>}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" onClick={toggleSidebar} className="h-7 w-7 text-muted-foreground hover:text-foreground">
-              {collapsed ? <ChevronsRight className="h-4 w-4" /> : <ChevronsLeft className="h-4 w-4" />}
+        {forceExpanded ? (
+          onClose && (
+            <Button variant="ghost" size="icon" onClick={onClose} className="h-7 w-7 text-sidebar-foreground hover:text-foreground" aria-label="Close menu">
+              <X className="h-4 w-4" />
             </Button>
-          </TooltipTrigger>
-          <TooltipContent side="right">{collapsed ? "Expand sidebar" : "Collapse sidebar"}</TooltipContent>
-        </Tooltip>
+          )
+        ) : (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" onClick={toggleSidebar} className="h-7 w-7 text-muted-foreground hover:text-foreground">
+                {collapsed ? <ChevronsRight className="h-4 w-4" /> : <ChevronsLeft className="h-4 w-4" />}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">{collapsed ? "Expand sidebar" : "Collapse sidebar"}</TooltipContent>
+          </Tooltip>
+        )}
       </div>
 
       <ScrollArea className="flex-1 px-2 py-3">

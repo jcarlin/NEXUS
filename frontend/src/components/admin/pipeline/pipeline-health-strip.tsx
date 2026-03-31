@@ -146,7 +146,7 @@ export function PipelineHealthStrip() {
           <Activity className="h-3 w-3 text-muted-foreground" />
           <span className="text-muted-foreground">
             {throughput
-              ? `${throughput.jobs_per_minute} jobs/min`
+              ? `${throughput.jobs_per_minute.toLocaleString()} jobs/min`
               : "--"}
           </span>
           {throughput && throughput.avg_duration_seconds > 0 && (
@@ -159,7 +159,7 @@ export function PipelineHealthStrip() {
               {throughput.by_type.map((t) => (
                 <span key={t.task_type} className="ml-1.5">
                   {TYPE_LABELS[t.task_type] ?? t.task_type}:{" "}
-                  {t.jobs_per_minute}
+                  {t.jobs_per_minute.toLocaleString()}
                 </span>
               ))}
             </span>

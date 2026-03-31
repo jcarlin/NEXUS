@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { formatDate } from "@/lib/utils";
+import { formatDate, formatNumber } from "@/lib/utils";
 import type { EntityResponse } from "@/types";
 
 const TYPE_COLORS: Record<string, string> = {
@@ -52,7 +52,7 @@ export function EntityHeader({ entity }: EntityHeaderProps) {
           </div>
           <div className="text-right space-y-1 shrink-0">
             <p className="text-2xl font-bold tabular-nums">
-              {entity.mention_count}
+              {formatNumber(entity.mention_count)}
             </p>
             <p className="text-xs text-muted-foreground">mentions</p>
           </div>

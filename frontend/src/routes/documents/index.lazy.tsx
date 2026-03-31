@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { DocumentTable } from "@/components/documents/document-table";
 import { DocumentFilters } from "@/components/documents/document-filters";
-import { formatFileSize } from "@/lib/utils";
+import { formatFileSize, formatNumber } from "@/lib/utils";
 import type { DocumentResponse, PaginatedResponse } from "@/types";
 
 export const Route = createLazyFileRoute("/documents/")({
@@ -561,7 +561,7 @@ function DocumentsPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Documents</h1>
           <p className="text-sm text-muted-foreground">
-            {data ? `${data.total} documents` : "Loading..."}
+            {data ? `${formatNumber(data.total)} documents` : "Loading..."}
           </p>
         </div>
         <Button onClick={() => navigate({ to: "/documents/import" })}>

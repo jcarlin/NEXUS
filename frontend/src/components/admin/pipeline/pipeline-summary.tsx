@@ -7,6 +7,7 @@ import { useNotifications } from "@/hooks/use-notifications";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatNumber } from "@/lib/utils";
 import type { PaginatedResponse } from "@/types";
 
 interface CeleryOverview {
@@ -124,21 +125,21 @@ export function PipelineSummary() {
   const stats = [
     {
       label: "Processing",
-      value: displayProcessing,
+      value: formatNumber(displayProcessing),
       loading: processingLoading || celeryLoading,
       icon: Activity,
       color: displayProcessing > 0 ? "text-blue-500" : "text-muted-foreground",
     },
     {
       label: "Failed",
-      value: failedCount,
+      value: formatNumber(failedCount),
       loading: failedLoading,
       icon: AlertTriangle,
       color: failedCount > 0 ? "text-destructive" : "text-muted-foreground",
     },
     {
       label: "Queued",
-      value: queuedCount,
+      value: formatNumber(queuedCount),
       loading: celeryLoading,
       icon: Layers,
       color: "text-muted-foreground",

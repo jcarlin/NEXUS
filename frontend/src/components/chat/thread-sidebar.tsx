@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "@tanstack/react-router";
-import { Plus, MessageSquare, Loader2, ChevronsLeft, ChevronsRight } from "lucide-react";
+import { Plus, MessageSquare, Loader2, ChevronsLeft } from "lucide-react";
 import { apiClient } from "@/api/client";
 import { useAppStore } from "@/stores/app-store";
 import { Button } from "@/components/ui/button";
@@ -35,11 +35,12 @@ function groupByTime(threads: ChatThread[]): { label: string; threads: ChatThrea
     .map(([label, items]) => ({ label, threads: items }));
 }
 
-function ThreadItem({ thread, isActive }: { thread: ChatThread; isActive: boolean }) {
+function ThreadItem({ thread, isActive, onSelect }: { thread: ChatThread; isActive: boolean; onSelect?: () => void }) {
   return (
     <Link
       to="/chat/$threadId"
       params={{ threadId: thread.thread_id }}
+      onClick={onSelect}
       className={cn(
         "flex flex-col gap-0.5 overflow-hidden rounded-md px-3 py-2 text-xs transition-colors hover:bg-accent",
         isActive && "bg-accent",
@@ -62,9 +63,10 @@ function ThreadItem({ thread, isActive }: { thread: ChatThread; isActive: boolea
 interface ThreadSidebarProps {
   collapsed: boolean;
   onToggle: () => void;
+  onThreadSelect?: () => void;
 }
 
-export function ThreadSidebar({ collapsed, onToggle }: ThreadSidebarProps) {
+export function ThreadSidebar({ collapsed, onToggle, onThreadSelect }: ThreadSidebarProps) {
   const matterId = useAppStore((s) => s.matterId);
   const params = useParams({ strict: false });
   const activeThreadId = "threadId" in params ? params.threadId : undefined;
@@ -83,26 +85,28 @@ export function ThreadSidebar({ collapsed, onToggle }: ThreadSidebarProps) {
 
   if (collapsed) {
     return (
-      <div className="flex h-full w-full flex-col items-center border-r bg-muted/30 py-2 gap-1">
+      <div className="flex h-full w-full flex-col items-center border-r bg-muted/30 pt-2 gap-1">
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onToggle}>
-              <ChevronsRight className="h-4 w-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="right">Expand sidebar (⌘B)</TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-              <Link to="/chat">
+            <Button variant="ghost" size="icon" className="h-7 w-7" asChild>
+              <Link to="/chat" onClick={onThreadSelect}>
                 <Plus className="h-4 w-4" />
               </Link>
             </Button>
           </TooltipTrigger>
           <TooltipContent side="right">New chat</TooltipContent>
         </Tooltip>
+        <button
+          type="button"
+          className="flex flex-1 w-full flex-col items-center justify-start gap-3 pt-2 cursor-pointer hover:bg-muted/50 transition-colors rounded-md"
+          onClick={onToggle}
+          aria-label="Expand chat history"
+        >
+          <MessageSquare className="h-4 w-4 text-muted-foreground" />
+          <span className="text-[10px] font-medium tracking-wide text-muted-foreground [writing-mode:vertical-lr]">
+            History
+          </span>
+        </button>
       </div>
     );
   }
@@ -113,7 +117,7 @@ export function ThreadSidebar({ collapsed, onToggle }: ThreadSidebarProps) {
         <span className="text-sm font-semibold">Chat History</span>
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="sm" asChild>
-            <Link to="/chat">
+            <Link to="/chat" onClick={onThreadSelect}>
               <Plus className="mr-1 h-3.5 w-3.5" />
               New
             </Link>
@@ -144,6 +148,7 @@ export function ThreadSidebar({ collapsed, onToggle }: ThreadSidebarProps) {
               <ThreadItem
                 thread={threads.find((t) => t.thread_id === activeThreadId)!}
                 isActive
+                onSelect={onThreadSelect}
               />
               <div className="mx-3 my-1.5 border-b border-border/50" />
             </>
@@ -160,6 +165,7 @@ export function ThreadSidebar({ collapsed, onToggle }: ThreadSidebarProps) {
                   key={thread.thread_id}
                   thread={thread}
                   isActive={false}
+                  onSelect={onThreadSelect}
                 />
               ))}
             </div>

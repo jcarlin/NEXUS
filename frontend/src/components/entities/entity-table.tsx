@@ -24,7 +24,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
-import { formatDate } from "@/lib/utils";
+import { formatDate, formatNumber } from "@/lib/utils";
 import type { EntityResponse } from "@/types";
 
 const TYPE_COLORS: Record<string, string> = {
@@ -99,7 +99,7 @@ export function EntityTable({ data, loading, initialSorting, onSortingChange }: 
         header: ({ column }) => <DataTableColumnHeader column={column} title="Mentions" className="hidden md:table-cell" />,
         cell: ({ row }) => (
           <div className="hidden md:table-cell">
-            <span className="tabular-nums">{row.original.mention_count}</span>
+            <span className="tabular-nums">{formatNumber(row.original.mention_count)}</span>
           </div>
         ),
       },

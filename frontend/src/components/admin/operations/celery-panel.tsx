@@ -4,7 +4,7 @@ import { Loader2, RotateCcw, Power, Trash2, XCircle } from "lucide-react";
 import { apiClient } from "@/api/client";
 import { useNotifications } from "@/hooks/use-notifications";
 import { useLiveRefresh } from "@/hooks/use-live-refresh";
-import { cn } from "@/lib/utils";
+import { cn, formatNumber } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -397,19 +397,19 @@ export function CeleryPanel() {
                   </div>
                   <div className="grid grid-cols-3 gap-2 text-center">
                     <div>
-                      <p className="text-lg font-semibold">{q.active_count}</p>
+                      <p className="text-lg font-semibold">{formatNumber(q.active_count)}</p>
                       <p className="text-[10px] text-muted-foreground">
                         Active
                       </p>
                     </div>
                     <div>
-                      <p className="text-lg font-semibold">{q.reserved_count}</p>
+                      <p className="text-lg font-semibold">{formatNumber(q.reserved_count)}</p>
                       <p className="text-[10px] text-muted-foreground">
                         Reserved
                       </p>
                     </div>
                     <div>
-                      <p className="text-lg font-semibold">{q.scheduled_count}</p>
+                      <p className="text-lg font-semibold">{formatNumber(q.scheduled_count)}</p>
                       <p className="text-[10px] text-muted-foreground">
                         Scheduled
                       </p>

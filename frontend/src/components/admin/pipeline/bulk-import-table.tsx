@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import { apiClient } from "@/api/client";
 import { useAppStore } from "@/stores/app-store";
 import { useLiveRefresh } from "@/hooks/use-live-refresh";
-import { formatDateTime, formatFileSize } from "@/lib/utils";
+import { formatDateTime, formatFileSize, formatNumber } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -192,7 +192,7 @@ const columns = [
       const val = info.getValue();
       return (
         <span className={`text-xs ${val > 0 ? "text-amber-600 font-medium" : "text-muted-foreground"}`}>
-          {val}
+          {formatNumber(val)}
         </span>
       );
     },
@@ -203,7 +203,7 @@ const columns = [
       const val = info.getValue();
       return (
         <span className={`text-xs ${val > 0 ? "text-destructive font-medium" : "text-muted-foreground"}`}>
-          {val}
+          {formatNumber(val)}
         </span>
       );
     },
@@ -344,7 +344,7 @@ function BulkImportDetailRow({ importId, importStatus, hasIncompleteProgress, fa
     <div className="bg-muted/30">
       {failedDocuments > 0 && (
         <div className="flex items-center gap-2 px-4 py-2 border-b">
-          <span className="text-xs text-destructive font-medium">{failedDocuments} failed</span>
+          <span className="text-xs text-destructive font-medium">{formatNumber(failedDocuments)} failed</span>
           <Button
             size="sm"
             variant="ghost"
@@ -394,7 +394,7 @@ function BulkImportDetailRow({ importId, importStatus, hasIncompleteProgress, fa
               <td className="px-4 py-1.5 text-muted-foreground">{job.stage ?? "--"}</td>
               <td className="px-4 py-1.5 text-muted-foreground">
                 {job.progress
-                  ? `${job.progress.chunks_created ?? 0} chunks`
+                  ? `${(job.progress.chunks_created ?? 0).toLocaleString()} chunks`
                   : "--"}
               </td>
               <td className="px-4 py-1.5 text-muted-foreground">
@@ -437,7 +437,7 @@ function BulkImportDetailRow({ importId, importStatus, hasIncompleteProgress, fa
       </table>
       {totalPages > 1 && (
         <div className="flex items-center justify-between px-4 py-2 border-t">
-          <span className="text-xs text-muted-foreground">{total} jobs</span>
+          <span className="text-xs text-muted-foreground">{formatNumber(total)} jobs</span>
           <div className="flex items-center gap-2">
             <Button size="sm" variant="ghost" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>
               Prev

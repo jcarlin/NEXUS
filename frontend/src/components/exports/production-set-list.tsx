@@ -24,6 +24,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Pagination } from "@/components/ui/pagination";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { DataTableToolbar } from "@/components/ui/data-table-toolbar";
+import { formatNumber } from "@/lib/utils";
 import { ProductionSetDetail } from "./production-set-detail";
 import type { ProductionSet } from "@/routes/review/exports";
 
@@ -92,6 +93,7 @@ export function ProductionSetList({
       {
         accessorKey: "document_count",
         header: ({ column }) => <DataTableColumnHeader column={column} title="Documents" />,
+        cell: ({ row }) => <span className="tabular-nums">{formatNumber(row.original.document_count ?? 0)}</span>,
       },
       {
         accessorKey: "bates_prefix",

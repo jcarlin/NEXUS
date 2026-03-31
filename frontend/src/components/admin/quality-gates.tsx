@@ -33,7 +33,7 @@ function isPassingMetric(name: string, value: number): boolean {
 
 function formatMetricValue(name: string, value: number): string {
   if (name.includes("latency") || name.includes("ms")) {
-    return `${Math.round(value)}ms`;
+    return `${Math.round(value).toLocaleString()}ms`;
   }
   return `${(value * 100).toFixed(1)}%`;
 }

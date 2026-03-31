@@ -17,6 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { formatNumber } from "@/lib/utils";
 import type { DocumentResponse, PaginatedResponse } from "@/types";
 import type { DuplicateCluster } from "@/api/generated/schemas";
 
@@ -56,7 +57,7 @@ function ResultSetPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Result Set</h1>
         <p className="text-sm text-muted-foreground">
-          {data ? `${data.total} documents` : "Loading..."} &mdash; Select rows and export to CSV.
+          {data ? `${formatNumber(data.total)} documents` : "Loading..."} &mdash; Select rows and export to CSV.
         </p>
       </div>
 
@@ -133,7 +134,7 @@ function DuplicateClustersPanel() {
                     </TableCell>
                     <TableCell className="font-mono text-xs">{cluster.cluster_id}</TableCell>
                     <TableCell className="text-right">
-                      <Badge variant="secondary">{cluster.document_count}</Badge>
+                      <Badge variant="secondary">{formatNumber(cluster.document_count)}</Badge>
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {cluster.avg_score != null ? cluster.avg_score.toFixed(3) : "--"}

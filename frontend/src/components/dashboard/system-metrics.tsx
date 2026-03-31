@@ -66,7 +66,7 @@ export function SystemMetrics() {
       label: "Disk",
       icon: HardDrive,
       percent: data.disk_percent,
-      detail: `${data.disk_used_gb} / ${data.disk_total_gb} GB`,
+      detail: `${data.disk_used_gb.toLocaleString()} / ${data.disk_total_gb.toLocaleString()} GB`,
     },
   ];
 
