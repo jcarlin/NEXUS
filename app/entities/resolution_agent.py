@@ -15,6 +15,10 @@ from app.entities.resolver import RESOLVABLE_TYPES
 
 logger = structlog.get_logger(__name__)
 
+# LLM resolution is expensive — limit to types where name variants matter.
+# Fuzzy matching still runs on all RESOLVABLE_TYPES.
+LLM_RESOLVE_TYPES: frozenset[str] = frozenset({"person", "organization"})
+
 
 def _replace(existing: list, new: list) -> list:
     """Reducer that replaces a list field wholesale."""
@@ -232,7 +236,7 @@ def create_resolution_nodes(settings: dict[str, Any]) -> dict[str, Any]:
         # Group unmatched entities by type
         unmatched_by_type: dict[str, list[dict]] = {}
         for ent in entities:
-            if ent["name"] not in matched_names and ent.get("type") in RESOLVABLE_TYPES:
+            if ent["name"] not in matched_names and ent.get("type") in LLM_RESOLVE_TYPES:
                 unmatched_by_type.setdefault(ent["type"], []).append(ent)
 
         if not unmatched_by_type:
