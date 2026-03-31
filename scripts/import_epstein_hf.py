@@ -93,6 +93,12 @@ def create_duckdb_conn(cache_dir: str | None = None):
             if not pq_files:
                 continue
 
+            # Filter to canonical shards only (*-of-*.parquet) to avoid
+            # duplicate rows from older export format (*.parquet without -of-)
+            canonical = [f for f in pq_files if "-of-" in f.rfilename]
+            if canonical:
+                pq_files = canonical
+
             # Download all parquet files and collect local paths
             local_paths = []
             for f in sorted(pq_files, key=lambda x: x.rfilename):
