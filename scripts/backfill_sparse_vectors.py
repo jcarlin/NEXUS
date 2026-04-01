@@ -136,10 +136,18 @@ def scroll_and_backfill(
                         )
 
                 if points_vectors:
-                    client.update_vectors(
-                        collection_name=TEXT_COLLECTION,
-                        points=points_vectors,
-                    )
+                    for _retry in range(3):
+                        try:
+                            client.update_vectors(
+                                collection_name=TEXT_COLLECTION,
+                                points=points_vectors,
+                            )
+                            break
+                        except Exception as e:
+                            if _retry == 2:
+                                raise
+                            print(f"  Qdrant retry {_retry + 1}: {e}")
+                            time.sleep(2**_retry)
                     updated += len(points_vectors)
 
             # Progress
