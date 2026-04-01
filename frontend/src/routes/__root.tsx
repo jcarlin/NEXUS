@@ -34,7 +34,11 @@ function RootLayout() {
   });
 
   if (isLoginPage || isSharedPage) {
-    return <Outlet />;
+    return (
+      <TooltipProvider delayDuration={200}>
+        <Outlet />
+      </TooltipProvider>
+    );
   }
 
   return (

@@ -5,12 +5,19 @@ import {
   Loader2,
   MessageSquare,
   Send,
-  FileText,
   AlertCircle,
+  ChevronDown,
+  ChevronUp,
+  BookOpen,
+  Sparkles,
+  ShieldCheck,
+  ShieldAlert,
+  ShieldQuestion,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { MarkdownMessage } from "@/components/chat/markdown-message";
-import type { ChatMessage } from "@/types";
+import type { ChatMessage, CitedClaim } from "@/types";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
@@ -209,7 +216,17 @@ export function SharedChatViewer({ token }: SharedChatViewerProps) {
       <div ref={scrollRef} className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-3xl px-4 py-6 space-y-6">
           {messages.map((msg, i) => (
-            <MessageBubble key={i} message={msg} />
+            <MessageBubble
+              key={i}
+              message={msg}
+              onFollowUpSelect={
+                data.allow_follow_ups && msg.role === "assistant" && i === messages.length - 1
+                  ? (q: string) => {
+                      setInputValue(q);
+                    }
+                  : undefined
+              }
+            />
           ))}
 
           {/* Pending user message */}
@@ -234,7 +251,7 @@ export function SharedChatViewer({ token }: SharedChatViewerProps) {
               )}
               {streamingText && (
                 <div className="rounded-2xl rounded-bl-md bg-muted px-4 py-3">
-                  <MarkdownMessage content={streamingText} />
+                  <MarkdownMessage content={streamingText} sources={[]} />
                 </div>
               )}
             </div>
@@ -286,7 +303,46 @@ export function SharedChatViewer({ token }: SharedChatViewerProps) {
   );
 }
 
-function MessageBubble({ message }: { message: ChatMessage }) {
+// ---------------------------------------------------------------------------
+// Entity type colors (matches main chat)
+// ---------------------------------------------------------------------------
+
+const typeColors: Record<string, string> = {
+  PERSON: "bg-blue-100 text-blue-800",
+  ORGANIZATION: "bg-purple-100 text-purple-800",
+  LOCATION: "bg-green-100 text-green-800",
+  DATE: "bg-amber-100 text-amber-800",
+  MONETARY: "bg-emerald-100 text-emerald-800",
+  EMAIL: "bg-cyan-100 text-cyan-800",
+  PHONE: "bg-orange-100 text-orange-800",
+};
+
+const verificationIcon = {
+  verified: ShieldCheck,
+  flagged: ShieldAlert,
+  unverified: ShieldQuestion,
+};
+
+const verificationColor = {
+  verified: "text-green-600",
+  flagged: "text-red-600",
+  unverified: "text-muted-foreground",
+};
+
+// ---------------------------------------------------------------------------
+// MessageBubble — mirrors main chat's AssistantMessage
+// ---------------------------------------------------------------------------
+
+function MessageBubble({
+  message,
+  onFollowUpSelect,
+}: {
+  message: ChatMessage;
+  onFollowUpSelect?: (q: string) => void;
+}) {
+  const [sourcesOpen, setSourcesOpen] = useState(false);
+  const [claimsOpen, setClaimsOpen] = useState(false);
+
   if (message.role === "user") {
     return (
       <div className="flex justify-end">
@@ -297,32 +353,175 @@ function MessageBubble({ message }: { message: ChatMessage }) {
     );
   }
 
-  return (
-    <div className="space-y-2">
-      <div className="rounded-2xl rounded-bl-md bg-muted px-4 py-3">
-        <MarkdownMessage content={message.content} />
-      </div>
+  const sources = message.source_documents;
+  const entities = message.entities_mentioned;
+  const citedClaims = message.cited_claims;
+  const followUps = message.follow_up_questions;
 
-      {/* Sources */}
-      {message.source_documents.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 pl-1">
-          {message.source_documents.slice(0, 5).map((doc, i) => (
-            <span
-              key={i}
-              className="inline-flex items-center gap-1 rounded-md bg-muted/60 px-2 py-0.5 text-[11px] text-muted-foreground"
+  return (
+    <div className="flex justify-start">
+      <div className="space-y-2 max-w-full">
+        {/* Label */}
+        <div className="flex items-center gap-1.5 px-1">
+          <Sparkles className="h-3.5 w-3.5 text-primary" />
+          <span className="text-xs font-medium text-muted-foreground">NEXUS</span>
+        </div>
+
+        {/* Message content */}
+        <div className="px-1">
+          <div className="text-sm">
+            <MarkdownMessage content={message.content} sources={sources} />
+          </div>
+        </div>
+
+        {/* Entity chips */}
+        {entities.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 px-1">
+            {entities.map((entity) => {
+              const colorClass =
+                typeColors[entity.type.toUpperCase()] ??
+                "bg-gray-100 text-gray-800";
+              return (
+                <Badge
+                  key={entity.name}
+                  variant="outline"
+                  className={`border-0 text-xs ${colorClass}`}
+                >
+                  {entity.name}
+                </Badge>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Source & claim toggle buttons */}
+        <div className="flex items-center gap-2 px-1">
+          {sources.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1.5 text-xs text-muted-foreground"
+              onClick={() => setSourcesOpen(!sourcesOpen)}
             >
-              <FileText className="h-3 w-3" />
-              {doc.filename}
-              {doc.page != null && <span>p.{doc.page}</span>}
-            </span>
-          ))}
-          {message.source_documents.length > 5 && (
-            <span className="inline-flex items-center rounded-md bg-muted/60 px-2 py-0.5 text-[11px] text-muted-foreground">
-              +{message.source_documents.length - 5} more
-            </span>
+              <BookOpen className="h-3.5 w-3.5" />
+              {sources.length} source{sources.length !== 1 ? "s" : ""}
+              {sourcesOpen ? (
+                <ChevronUp className="h-3 w-3" />
+              ) : (
+                <ChevronDown className="h-3 w-3" />
+              )}
+            </Button>
+          )}
+
+          {citedClaims.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1.5 text-xs text-muted-foreground"
+              onClick={() => setClaimsOpen(!claimsOpen)}
+            >
+              {citedClaims.length} claim{citedClaims.length !== 1 ? "s" : ""}
+              {claimsOpen ? (
+                <ChevronUp className="h-3 w-3" />
+              ) : (
+                <ChevronDown className="h-3 w-3" />
+              )}
+            </Button>
           )}
         </div>
-      )}
+
+        {/* Expandable sources panel */}
+        {sourcesOpen && sources.length > 0 && (
+          <div className="rounded-md border">
+            <div className="space-y-1 px-3 py-2">
+              {sources.map((src, idx) => (
+                <div
+                  key={src.id}
+                  className="flex items-start gap-2 rounded-md p-1.5 text-xs"
+                >
+                  <span className="mt-0.5 flex h-4 min-w-4 items-center justify-center rounded bg-primary/15 text-[10px] font-semibold text-primary">
+                    {idx + 1}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium">{src.filename}</p>
+                    {src.page != null && (
+                      <span className="text-muted-foreground">
+                        Page {src.page}
+                      </span>
+                    )}
+                    {src.chunk_text && (
+                      <p className="mt-0.5 line-clamp-2 text-muted-foreground">
+                        {src.chunk_text}
+                      </p>
+                    )}
+                  </div>
+                  {src.relevance_score != null && (
+                    <Badge variant="secondary" className="shrink-0 text-[10px]">
+                      {(src.relevance_score * 100).toFixed(0)}%
+                    </Badge>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Expandable claims panel */}
+        {claimsOpen && citedClaims.length > 0 && (
+          <div className="rounded-md border">
+            <div className="space-y-2 px-3 py-2">
+              {citedClaims.map((claim: CitedClaim, idx: number) => {
+                const status = (claim.verification_status ?? "unverified") as keyof typeof verificationIcon;
+                const Icon = verificationIcon[status] ?? ShieldQuestion;
+                const color = verificationColor[status] ?? verificationColor.unverified;
+                return (
+                  <div
+                    key={idx}
+                    className="flex items-start gap-2 text-xs"
+                  >
+                    <Icon className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${color}`} />
+                    <div className="min-w-0 flex-1">
+                      <p>{claim.claim_text}</p>
+                      <p className="mt-0.5 text-muted-foreground">
+                        {claim.filename}
+                        {claim.page_number != null && `, p.${claim.page_number}`}
+                        {" "}&middot;{" "}
+                        <span
+                          className={
+                            claim.grounding_score >= 0.8
+                              ? "font-medium text-green-600"
+                              : claim.grounding_score >= 0.5
+                                ? "font-medium text-yellow-600"
+                                : "font-medium text-red-600"
+                          }
+                        >
+                          {(claim.grounding_score * 100).toFixed(0)}%
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Follow-up question chips */}
+        {followUps.length > 0 && onFollowUpSelect && (
+          <div className="flex flex-wrap gap-2 px-1">
+            {followUps.map((q, idx) => (
+              <button
+                key={q}
+                onClick={() => onFollowUpSelect(q)}
+                className="animate-in fade-in slide-in-from-bottom-2 rounded-full border bg-background px-3 py-1.5 text-xs text-muted-foreground transition-colors duration-200 hover:bg-accent hover:text-accent-foreground"
+                style={{ animationDelay: `${idx * 75}ms`, animationFillMode: "both" }}
+              >
+                {q}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

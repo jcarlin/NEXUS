@@ -35,6 +35,7 @@ function injectCitations(
   onCitationClick?: (source: SourceDocument, index: number) => void,
 ): ReactNode {
   if (typeof children === "string") {
+    if (!sources?.length) return children;
     const parts = children.split(/(\[\d+\])/g);
     if (parts.length === 1) return children;
     return parts.map((part, i) => {
