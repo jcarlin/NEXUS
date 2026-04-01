@@ -89,6 +89,12 @@ async def get_entity_connections_by_query(
         matter_id=str(matter_id),
         entity_only=entity_only,
     )
+    # Flatten edge_properties into top-level fields for frontend compatibility
+    for conn in connections:
+        props = conn.get("edge_properties")
+        if isinstance(props, dict):
+            conn.setdefault("weight", props.get("weight", 1.0))
+            conn.setdefault("context", props.get("evidence") or props.get("context"))
     return {"entity": entity, "connections": connections}
 
 

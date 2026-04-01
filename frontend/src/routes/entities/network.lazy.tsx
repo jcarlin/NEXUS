@@ -60,12 +60,12 @@ function NetworkGraphPage() {
   const [selectedEntity, setSelectedEntity] = useState<{ name: string; type: string }>({ name: "", type: "" });
 
   const { data: entitiesData, isLoading: entitiesLoading } = useQuery({
-    queryKey: ["entities-network", matterId],
+    queryKey: ["entities-network", matterId, vs.activeTypes],
     queryFn: () =>
       apiClient<PaginatedResponse<EntityResponse>>({
         url: "/api/v1/entities",
         method: "GET",
-        params: { limit: 200, offset: 0 },
+        params: { limit: 200, offset: 0, entity_types: vs.activeTypes.join(",") },
       }),
     enabled: !!matterId,
   });
