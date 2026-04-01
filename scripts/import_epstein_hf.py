@@ -474,8 +474,9 @@ async def run_pipeline(
                 if ef and str(ef).strip():
                     try:
                         eh = json.loads(str(ef))
-                        mid, irp, rfs = eh.get("message_id"), eh.get("in_reply_to"), eh.get("references")
-                    except (json.JSONDecodeError, TypeError):
+                        if isinstance(eh, dict):
+                            mid, irp, rfs = eh.get("message_id"), eh.get("in_reply_to"), eh.get("references")
+                    except (json.JSONDecodeError, TypeError, AttributeError):
                         pass
 
                 doc_type = str(dty or "document")
