@@ -672,15 +672,17 @@ class GraphService:
         cypher = f"""
         MATCH (e:Entity {{name: $name}})-[r:MENTIONED_IN]->(d:Document)
         {where_clause}
+        WITH d, r
+        ORDER BY coalesce(d.date, d.created_at, d.filename)
+        LIMIT 100
         OPTIONAL MATCH (other:Entity)-[:MENTIONED_IN]->(d)
         WHERE other.name <> $name
         WITH d, r, collect(DISTINCT other.name)[..5] AS co_entities
         RETURN d.filename AS document,
-               d.type AS document_type,
+               coalesce(d.doc_type, d.type) AS document_type,
                r.page_number AS page_number,
-               d.created_at AS date,
+               coalesce(d.date, d.created_at) AS date,
                co_entities
-        ORDER BY d.created_at
         """
         try:
             records = await self._run_query(cypher, params)
