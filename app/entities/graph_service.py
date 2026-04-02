@@ -444,13 +444,14 @@ class GraphService:
         connected_pattern = "(connected:Entity)" if entity_only else "(connected)"
 
         # When querying entity-only connections, filter out noise:
-        # short names (<3 chars), partial name matches of the queried entity
+        # exclude reference_number type (3M+ noisy entities), short names,
+        # and partial matches of the queried entity
         if entity_only:
             where_clauses.extend(
                 [
+                    "connected.type IN ['person', 'organization', 'location', 'monetary_amount']",
                     "size(connected.name) >= 3",
-                    "NOT toLower(connected.name) CONTAINS toLower($name)",
-                    "NOT toLower($name) CONTAINS toLower(connected.name)",
+                    "connected.name <> $name",
                 ]
             )
 

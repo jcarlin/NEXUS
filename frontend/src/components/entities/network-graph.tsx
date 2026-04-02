@@ -99,7 +99,22 @@ export const NetworkGraph = forwardRef<NetworkGraphHandle, NetworkGraphProps>(
         });
       }
 
-      const entityNames = new Set(entities.map((e) => e.name));
+      // Add connected entities that aren't in the original entity set
+      // so that edges from connections actually render
+      for (const c of connections) {
+        for (const name of [c.source, c.target]) {
+          if (!nodeMap.has(name)) {
+            nodeMap.set(name, {
+              id: name,
+              name,
+              type: c.source === name ? "person" : (c.target_type ?? "person"),
+              mention_count: 0,
+            });
+          }
+        }
+      }
+
+      const entityNames = new Set(nodeMap.keys());
       const filteredConnections = connections.filter(
         (c) => entityNames.has(c.source) && entityNames.has(c.target),
       );
