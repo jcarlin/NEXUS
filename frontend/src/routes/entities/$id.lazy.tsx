@@ -64,7 +64,7 @@ function EntityDetailPage() {
       apiClient<ConnectionsResponse>({
         url: `/api/v1/entities/connections`,
         method: "GET",
-        params: { name: id, limit: 50, entity_only: true },
+        params: { name: id, limit: 200, entity_only: true },
       }),
     enabled: !!matterId,
   });

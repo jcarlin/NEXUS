@@ -454,6 +454,7 @@ class GraphService:
                labels(connected) AS target_labels,
                connected.type   AS target_type,
                properties(r)   AS edge_properties
+        ORDER BY coalesce(r.weight, 1) DESC
         LIMIT $limit
         """
         try:
