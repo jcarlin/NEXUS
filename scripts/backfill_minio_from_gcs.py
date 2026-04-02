@@ -240,19 +240,23 @@ def update_filenames_batch(engine, doc_ids: list[str]) -> int:
         return 0
 
     with engine.connect() as conn:
-        result = conn.execute(
-            text("""
-                UPDATE documents
-                SET filename = filename || '.pdf',
-                    document_type = 'PDF',
-                    updated_at = now()
-                WHERE id = ANY(:ids::uuid[])
-                  AND filename NOT LIKE '%.pdf'
-            """),
-            {"ids": doc_ids},
-        )
+        # Update each doc individually to avoid UUID array casting issues
+        updated = 0
+        for did in doc_ids:
+            r = conn.execute(
+                text("""
+                    UPDATE documents
+                    SET filename = filename || '.pdf',
+                        document_type = 'PDF',
+                        updated_at = now()
+                    WHERE id = :did
+                      AND filename NOT LIKE :pattern
+                """),
+                {"did": did, "pattern": "%.pdf"},
+            )
+            updated += r.rowcount
         conn.commit()
-        return result.rowcount
+        return updated
 
 
 def main() -> None:
