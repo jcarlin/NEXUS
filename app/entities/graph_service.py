@@ -444,13 +444,12 @@ class GraphService:
         connected_pattern = "(connected:Entity)" if entity_only else "(connected)"
 
         # When querying entity-only connections, filter out noise:
-        # exclude reference_number type (3M+ noisy entities), short names,
-        # and partial matches of the queried entity
+        # exclude reference_number/date types, short names, entity name fragments
         if entity_only:
             where_clauses.extend(
                 [
                     "connected.type IN ['person', 'organization', 'location', 'monetary_amount']",
-                    "size(connected.name) >= 3",
+                    "size(connected.name) >= 5",
                     "connected.name <> $name",
                 ]
             )
@@ -460,20 +459,14 @@ class GraphService:
         query = f"""
         MATCH (e:Entity {{name: $name}})-[r]-{connected_pattern}
         {where_clause}
-        WITH e, connected, r,
-             COALESCE(connected.name, connected.filename, connected.chunk_id) AS target_name
-        WITH e.name AS source, type(r) AS rel_type, target_name,
-             labels(connected) AS target_labels, connected.type AS target_type,
-             coalesce(r.weight, 1) AS weight, properties(r) AS edge_props
+        WITH connected.name AS target, connected.type AS target_type,
+             labels(connected) AS target_labels,
+             max(coalesce(r.weight, 1)) AS weight
+        RETURN $name AS source, 'CO_OCCURS' AS relationship_type,
+               target, target_labels, target_type,
+               {{weight: weight}} AS edge_properties,
+               weight
         ORDER BY weight DESC
-        WITH source, target_name, target_labels, target_type,
-             collect(rel_type)[0] AS relationship_type,
-             max(weight) AS top_weight,
-             collect(edge_props)[0] AS edge_properties
-        RETURN source, relationship_type, target_name AS target,
-               target_labels, target_type, edge_properties,
-               top_weight AS weight
-        ORDER BY top_weight DESC
         LIMIT $limit
         """
         try:
