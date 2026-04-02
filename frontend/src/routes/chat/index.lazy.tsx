@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { createLazyFileRoute, useNavigate } from "@tanstack/react-router";
+import { motion } from "motion/react";
 import { ChatLayout } from "@/components/chat/chat-layout";
 import { MessageList, EXAMPLE_QUERIES } from "@/components/chat/message-list";
 import { MessageInput } from "@/components/chat/message-input";
@@ -83,7 +84,12 @@ function ChatPage() {
     <ChatLayout>
       {!hasContent ? (
         <div className="flex h-full flex-col items-center justify-center px-4 pb-16">
-          <div className="w-full max-w-2xl">
+          <motion.div
+            className="w-full max-w-2xl"
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+          >
             <h2 className="mb-2 text-center text-lg font-medium tracking-tight text-muted-foreground">
               What would you like to investigate?
             </h2>
@@ -101,18 +107,23 @@ function ChatPage() {
             />
 
             <div className="mt-4 flex flex-wrap justify-center gap-2">
-              {EXAMPLE_QUERIES.map((q) => (
-                <button
+              {EXAMPLE_QUERIES.map((q, i) => (
+                <motion.button
                   key={q}
                   type="button"
-                  className="rounded-full border border-border/50 px-3 py-1.5 text-xs text-muted-foreground transition-all duration-150 hover:border-primary/30 hover:bg-accent/40 hover:text-foreground active:scale-[0.97]"
+                  className="rounded-full border border-border/50 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/30 hover:bg-accent/40 hover:text-foreground"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, delay: 0.3 + i * 0.05, ease: [0.16, 1, 0.3, 1] }}
+                  whileHover={{ scale: 1.04 }}
+                  whileTap={{ scale: 0.97 }}
                   onClick={() => handleSend(q)}
                 >
                   {q}
-                </button>
+                </motion.button>
               ))}
             </div>
-          </div>
+          </motion.div>
         </div>
       ) : (
         <div className="flex h-full flex-col">
