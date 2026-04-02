@@ -158,14 +158,16 @@ def match_entities_to_chunks(
     return matches
 
 
-def write_extracted_from_edges(neo4j_driver, matches: list[tuple[str, str, str]], matter_id: str) -> int:
+def write_extracted_from_edges(
+    neo4j_driver, matches: list[tuple[str, str, str]], matter_id: str, batch_size: int = NEO4J_BATCH_SIZE
+) -> int:
     """Create EXTRACTED_FROM edges in Neo4j."""
     if not matches:
         return 0
 
     created = 0
-    for i in range(0, len(matches), NEO4J_BATCH_SIZE):
-        batch = [{"name": m[0], "type": m[1], "chunk_id": m[2]} for m in matches[i : i + NEO4J_BATCH_SIZE]]
+    for i in range(0, len(matches), batch_size):
+        batch = [{"name": m[0], "type": m[1], "chunk_id": m[2]} for m in matches[i : i + batch_size]]
         with neo4j_driver.session() as session:
             session.run(
                 """
@@ -242,8 +244,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    global NEO4J_BATCH_SIZE
-    NEO4J_BATCH_SIZE = args.neo4j_batch
+    neo4j_batch = args.neo4j_batch
 
     settings = _get_settings()
     engine = _get_engine(settings)
@@ -318,7 +319,7 @@ def main() -> None:
 
             # 4. Write EXTRACTED_FROM edges
             if matches:
-                ef_count = write_extracted_from_edges(neo4j_driver, matches, args.matter_id)
+                ef_count = write_extracted_from_edges(neo4j_driver, matches, args.matter_id, neo4j_batch)
                 stats["extracted_from_created"] += ef_count
 
                 # 5. Generate CO_OCCURS for this document
