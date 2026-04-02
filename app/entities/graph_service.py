@@ -599,10 +599,10 @@ class GraphService:
         data_cypher = f"""
         MATCH (e:Entity) {where_str}
         RETURN e.name AS id, e.name AS name, e.type AS type,
-               e.mention_count AS mention_count,
+               coalesce(e.mention_count, 0) AS mention_count,
                e.first_seen AS first_seen, e.last_seen AS last_seen,
                coalesce(e.aliases, []) AS aliases
-        ORDER BY e.mention_count DESC
+        ORDER BY coalesce(e.mention_count, 0) DESC
         SKIP $offset LIMIT $limit
         """
         try:

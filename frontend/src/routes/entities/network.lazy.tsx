@@ -81,7 +81,7 @@ function NetworkGraphPage() {
       const seen = new Set<string>();
 
       const topEntities = (entitiesData?.items ?? [])
-        .sort((a, b) => b.mention_count - a.mention_count)
+        .sort((a, b) => (b.mention_count ?? 0) - (a.mention_count ?? 0))
         .slice(0, 50);
 
       const results = await Promise.all(

@@ -23,8 +23,8 @@ export function formatDateTime(date: string | Date): string {
   });
 }
 
-export function formatNumber(n: number): string {
-  return n.toLocaleString();
+export function formatNumber(n: number | null | undefined): string {
+  return (n ?? 0).toLocaleString();
 }
 
 export function formatPercent(n: number, decimals = 0): string {

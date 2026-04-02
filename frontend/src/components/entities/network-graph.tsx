@@ -95,7 +95,7 @@ export const NetworkGraph = forwardRef<NetworkGraphHandle, NetworkGraphProps>(
           id: e.id,
           name: e.name,
           type: e.type,
-          mention_count: e.mention_count,
+          mention_count: e.mention_count ?? 0,
         });
       }
 
