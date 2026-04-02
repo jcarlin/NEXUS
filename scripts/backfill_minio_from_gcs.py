@@ -27,7 +27,6 @@ import argparse
 import concurrent.futures
 import json
 import os
-import subprocess
 import sys
 import time
 from pathlib import Path
@@ -96,27 +95,24 @@ def build_gcs_index(force_rebuild: bool = False) -> dict[str, str]:
 
     index: dict[str, str] = {}
 
-    # Use gsutil for listing (faster than Python client for large buckets)
-    result = subprocess.run(
-        ["gsutil", "-m", "ls", "-r", f"{GCS_BUCKET}/**"],
-        capture_output=True,
-        text=True,
-        timeout=3600,
-    )
+    # Use google-cloud-storage Python client
+    from google.cloud import storage as gcs_storage
 
-    if result.returncode != 0:
-        logger.error("gsutil.failed", stderr=result.stderr[:500])
-        raise RuntimeError(f"gsutil ls failed: {result.stderr[:200]}")
+    bucket_name = GCS_BUCKET.replace("gs://", "")
+    client = gcs_storage.Client()
+    bucket = client.bucket(bucket_name)
+    count = 0
 
-    for line in result.stdout.strip().split("\n"):
-        line = line.strip()
-        if not line or line.endswith("/") or line.endswith(":"):
-            continue
+    for blob in bucket.list_blobs():
+        count += 1
+        name = blob.name
         # Extract the filename (without extension) as the key
-        # e.g., gs://nexus-epstein-data/ds1/0001/EFTA00000001.pdf -> EFTA00000001
-        filename = line.rsplit("/", 1)[-1]
+        # e.g., ds1/0001/EFTA00000001.pdf -> EFTA00000001
+        filename = name.rsplit("/", 1)[-1] if "/" in name else name
         key = filename.rsplit(".", 1)[0] if "." in filename else filename
-        index[key] = line
+        index[key] = f"gs://{bucket_name}/{name}"
+        if count % 100_000 == 0:
+            logger.info("gcs_index.progress", count=count)
 
     elapsed = time.time() - t0
     logger.info("gcs_index.built", count=len(index), elapsed=f"{elapsed:.1f}s")
@@ -142,6 +138,18 @@ def minio_object_exists(minio_client, bucket: str, key: str) -> bool:
         raise
 
 
+_gcs_client = None
+
+
+def _get_gcs_storage_client():
+    global _gcs_client
+    if _gcs_client is None:
+        from google.cloud import storage
+
+        _gcs_client = storage.Client()
+    return _gcs_client
+
+
 def download_gcs_blob(gcs_path: str) -> bytes:
     """Download a blob from GCS and return its bytes."""
     # Parse gs://bucket/key
@@ -149,9 +157,7 @@ def download_gcs_blob(gcs_path: str) -> bytes:
     bucket_name = parts[0]
     blob_name = parts[1]
 
-    from google.cloud import storage
-
-    client = storage.Client()
+    client = _get_gcs_storage_client()
     bucket = client.bucket(bucket_name)
     blob = bucket.blob(blob_name)
     return blob.download_as_bytes()
