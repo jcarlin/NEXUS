@@ -336,14 +336,12 @@ def create_app() -> FastAPI:
 
     application.include_router(retention_router, prefix="/api/v1")
 
-    # Shareable chat links (feature-flagged auth router + always-on public router)
-    if settings.enable_shareable_links:
-        from app.shared.router import auth_router as shared_auth_router
-
-        application.include_router(shared_auth_router, prefix="/api/v1")
-
+    # Shareable chat links (auth router always registered — returns 403 when
+    # flag is off so the frontend gets a clean error instead of 404)
+    from app.shared.router import auth_router as shared_auth_router
     from app.shared.router import public_router as shared_public_router
 
+    application.include_router(shared_auth_router, prefix="/api/v1")
     application.include_router(shared_public_router, prefix="/api/v1")
 
     # LLM runtime configuration (always enabled — admin-only access enforced in router)
