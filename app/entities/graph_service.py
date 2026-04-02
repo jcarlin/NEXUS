@@ -460,13 +460,20 @@ class GraphService:
         query = f"""
         MATCH (e:Entity {{name: $name}})-[r]-{connected_pattern}
         {where_clause}
-        RETURN e.name           AS source,
-               type(r)          AS relationship_type,
-               COALESCE(connected.name, connected.filename, connected.chunk_id) AS target,
-               labels(connected) AS target_labels,
-               connected.type   AS target_type,
-               properties(r)   AS edge_properties
-        ORDER BY coalesce(r.weight, 1) DESC
+        WITH e, connected, r,
+             COALESCE(connected.name, connected.filename, connected.chunk_id) AS target_name
+        WITH e.name AS source, type(r) AS rel_type, target_name,
+             labels(connected) AS target_labels, connected.type AS target_type,
+             coalesce(r.weight, 1) AS weight, properties(r) AS edge_props
+        ORDER BY weight DESC
+        WITH source, target_name, target_labels, target_type,
+             collect(rel_type)[0] AS relationship_type,
+             max(weight) AS top_weight,
+             collect(edge_props)[0] AS edge_properties
+        RETURN source, relationship_type, target_name AS target,
+               target_labels, target_type, edge_properties,
+               top_weight AS weight
+        ORDER BY top_weight DESC
         LIMIT $limit
         """
         try:
