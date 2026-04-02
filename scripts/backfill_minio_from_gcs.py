@@ -28,6 +28,7 @@ import concurrent.futures
 import json
 import os
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -42,6 +43,9 @@ GCS_INDEX_PATH = "/tmp/gcs_efta_index.json"
 IMPORT_SOURCE = "kabasshouse/epstein-data"
 BATCH_SIZE = 500
 
+# Thread-local storage for per-thread GCS and MinIO clients
+_thread_local = threading.local()
+
 
 def _get_engine():
     from sqlalchemy import create_engine
@@ -52,30 +56,48 @@ def _get_engine():
     return create_engine(settings.postgres_url_sync)
 
 
-def _get_minio_client():
-    import boto3
-    from botocore.config import Config as BotoConfig
-
+def _get_minio_settings() -> dict:
+    """Return MinIO connection settings as a dict (thread-safe to read)."""
     from app.config import Settings
 
     settings = Settings()
     scheme = "https" if settings.minio_use_ssl else "http"
-    client = boto3.client(
-        "s3",
-        endpoint_url=f"{scheme}://{settings.minio_endpoint}",
-        aws_access_key_id=settings.minio_access_key,
-        aws_secret_access_key=settings.minio_secret_key,
-        config=BotoConfig(signature_version="s3v4"),
-        region_name="us-east-1",
-    )
-    bucket = settings.minio_bucket
-    return client, bucket
+    return {
+        "endpoint_url": f"{scheme}://{settings.minio_endpoint}",
+        "aws_access_key_id": settings.minio_access_key,
+        "aws_secret_access_key": settings.minio_secret_key,
+        "bucket": settings.minio_bucket,
+    }
 
 
-def _get_gcs_client():
-    from google.cloud import storage
+def _get_thread_minio_client(minio_settings: dict):
+    """Get a per-thread MinIO (boto3 s3) client. boto3 clients are NOT thread-safe."""
+    client = getattr(_thread_local, "minio_client", None)
+    if client is None:
+        import boto3
+        from botocore.config import Config as BotoConfig
 
-    return storage.Client()
+        client = boto3.client(
+            "s3",
+            endpoint_url=minio_settings["endpoint_url"],
+            aws_access_key_id=minio_settings["aws_access_key_id"],
+            aws_secret_access_key=minio_settings["aws_secret_access_key"],
+            config=BotoConfig(signature_version="s3v4"),
+            region_name="us-east-1",
+        )
+        _thread_local.minio_client = client
+    return client
+
+
+def _get_thread_gcs_client():
+    """Get a per-thread GCS storage client."""
+    client = getattr(_thread_local, "gcs_client", None)
+    if client is None:
+        from google.cloud import storage
+
+        client = storage.Client()
+        _thread_local.gcs_client = client
+    return client
 
 
 def build_gcs_index(force_rebuild: bool = False) -> dict[str, str]:
@@ -95,7 +117,6 @@ def build_gcs_index(force_rebuild: bool = False) -> dict[str, str]:
 
     index: dict[str, str] = {}
 
-    # Use google-cloud-storage Python client
     from google.cloud import storage as gcs_storage
 
     bucket_name = GCS_BUCKET.replace("gs://", "")
@@ -138,26 +159,13 @@ def minio_object_exists(minio_client, bucket: str, key: str) -> bool:
         raise
 
 
-_gcs_client = None
-
-
-def _get_gcs_storage_client():
-    global _gcs_client
-    if _gcs_client is None:
-        from google.cloud import storage
-
-        _gcs_client = storage.Client()
-    return _gcs_client
-
-
 def download_gcs_blob(gcs_path: str) -> bytes:
     """Download a blob from GCS and return its bytes."""
-    # Parse gs://bucket/key
     parts = gcs_path.replace("gs://", "").split("/", 1)
     bucket_name = parts[0]
     blob_name = parts[1]
 
-    client = _get_gcs_storage_client()
+    client = _get_thread_gcs_client()
     bucket = client.bucket(bucket_name)
     blob = bucket.blob(blob_name)
     return blob.download_as_bytes()
@@ -166,13 +174,18 @@ def download_gcs_blob(gcs_path: str) -> bytes:
 def process_document(
     doc: dict,
     gcs_index: dict[str, str],
-    minio_client,
+    minio_settings: dict,
     minio_bucket: str,
 ) -> str:
-    """Process a single document. Returns status string."""
+    """Process a single document. Returns status string.
+
+    Each thread gets its own MinIO and GCS clients via thread-local storage.
+    """
     doc_id = doc["id"]
     minio_path = doc["minio_path"]
     file_key = doc["file_key"]
+
+    minio_client = _get_thread_minio_client(minio_settings)
 
     # 1. Already in MinIO?
     if minio_object_exists(minio_client, minio_bucket, minio_path):
@@ -233,30 +246,35 @@ def get_documents_batch(engine, offset: int, limit: int, hf_dataset: str | None 
 
 
 def update_filenames_batch(engine, doc_ids: list[str]) -> int:
-    """Add .pdf extension to filenames for documents that were uploaded."""
+    """Add .pdf extension to filenames for documents that were uploaded.
+
+    Uses a single batch UPDATE. psycopg2 maps Python lists to PostgreSQL
+    arrays natively, so ANY(:ids) works without explicit uuid[] casting.
+    """
+    from uuid import UUID
+
     from sqlalchemy import text
 
     if not doc_ids:
         return 0
 
+    # Convert strings to UUID objects so psycopg2 sends them as uuid[]
+    uuid_ids = [UUID(did) for did in doc_ids]
+
     with engine.connect() as conn:
-        # Update each doc individually to avoid UUID array casting issues
-        updated = 0
-        for did in doc_ids:
-            r = conn.execute(
-                text("""
-                    UPDATE documents
-                    SET filename = filename || '.pdf',
-                        document_type = 'PDF',
-                        updated_at = now()
-                    WHERE id = :did
-                      AND filename NOT LIKE :pattern
-                """),
-                {"did": did, "pattern": "%.pdf"},
-            )
-            updated += r.rowcount
+        result = conn.execute(
+            text("""
+                UPDATE documents
+                SET filename = filename || '.pdf',
+                    document_type = 'PDF',
+                    updated_at = now()
+                WHERE id = ANY(:ids)
+                  AND filename NOT LIKE '%.pdf'
+            """),
+            {"ids": uuid_ids},
+        )
         conn.commit()
-        return updated
+        return result.rowcount
 
 
 def main() -> None:
@@ -276,7 +294,6 @@ def main() -> None:
 
     if args.dry_run:
         print(f"GCS index: {len(gcs_index):,} files")
-        # Quick count of what would match
         engine = _get_engine()
         from sqlalchemy import text
 
@@ -293,7 +310,8 @@ def main() -> None:
 
     # 2. Setup clients
     engine = _get_engine()
-    minio_client, minio_bucket = _get_minio_client()
+    minio_settings = _get_minio_settings()
+    minio_bucket = minio_settings["bucket"]
 
     # 3. Optional TaskTracker
     tracker = None
@@ -323,8 +341,9 @@ def main() -> None:
         uploaded_ids = []
 
         # Process with thread pool for concurrent GCS downloads
+        # Each thread gets its own GCS + MinIO client via thread-local storage
         with concurrent.futures.ThreadPoolExecutor(max_workers=args.workers) as pool:
-            futures = {pool.submit(process_document, doc, gcs_index, minio_client, minio_bucket): doc for doc in docs}
+            futures = {pool.submit(process_document, doc, gcs_index, minio_settings, minio_bucket): doc for doc in docs}
             for future in concurrent.futures.as_completed(futures):
                 doc = futures[future]
                 try:
