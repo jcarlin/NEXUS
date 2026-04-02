@@ -83,7 +83,7 @@ export function MessageInput({ onSend, onStop, isStreaming, disabled, variant = 
       )}
 
       {variant === "hero" ? (
-        <div className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-lg shadow-primary/5 transition-colors focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20">
+        <div className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-elevated transition-all duration-200 focus-within:border-primary/40 focus-within:shadow-glow">
           <textarea
             ref={textareaRef}
             value={text}

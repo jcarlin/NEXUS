@@ -115,8 +115,8 @@ export function Sidebar({ forceExpanded, onClose }: SidebarProps = {}) {
       <Link
         to={item.to}
         className={cn(
-          "group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-all duration-150 hover:bg-accent/60 hover:text-foreground",
-          isActive && "bg-accent text-foreground",
+          "group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150 hover:bg-white/[0.06] hover:text-foreground",
+          isActive && "bg-white/[0.08] text-foreground",
           collapsed && "justify-center px-2",
         )}
       >
@@ -164,7 +164,7 @@ export function Sidebar({ forceExpanded, onClose }: SidebarProps = {}) {
     <aside
       data-tour="sidebar-nav"
       className={cn(
-        "flex h-full flex-col border-r bg-sidebar text-sidebar-foreground transition-all duration-200",
+        "flex h-full flex-col border-r border-sidebar-border/40 bg-sidebar backdrop-blur-xl text-sidebar-foreground transition-all duration-200",
         collapsed ? "w-14" : "w-56",
       )}
     >
