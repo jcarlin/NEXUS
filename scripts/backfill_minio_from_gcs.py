@@ -50,8 +50,7 @@ def _get_engine():
     from app.config import Settings
 
     settings = Settings()
-    db_url = str(settings.database_url).replace("+asyncpg", "")
-    return create_engine(db_url)
+    return create_engine(settings.postgres_url_sync)
 
 
 def _get_minio_client():
