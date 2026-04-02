@@ -145,16 +145,16 @@ export function PipelineHealthStrip() {
         <div className="flex items-center gap-1">
           <Activity className="h-3 w-3 text-muted-foreground" />
           <span className="text-muted-foreground">
-            {throughput
+            {throughput?.jobs_per_minute != null
               ? `${throughput.jobs_per_minute.toLocaleString()} jobs/min`
               : "--"}
           </span>
-          {throughput && throughput.avg_duration_seconds > 0 && (
+          {throughput?.avg_duration_seconds != null && throughput.avg_duration_seconds > 0 && (
             <span className="text-muted-foreground/60 ml-1">
               (avg {Math.round(throughput.avg_duration_seconds)}s)
             </span>
           )}
-          {throughput && throughput.by_type.length > 1 && (
+          {throughput?.by_type != null && throughput.by_type.length > 1 && (
             <span className="text-muted-foreground/50 ml-1">
               {throughput.by_type.map((t) => (
                 <span key={t.task_type} className="ml-1.5">

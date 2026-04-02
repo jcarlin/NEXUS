@@ -44,6 +44,10 @@ vi.mock("@/components/admin/operations/celery-panel", () => ({
   CeleryPanel: () => <div data-testid="celery-panel">CeleryPanel</div>,
 }));
 
+vi.mock("@/components/admin/pipeline/pipeline-health-strip", () => ({
+  PipelineHealthStrip: () => <div data-testid="pipeline-health-strip">Health Strip</div>,
+}));
+
 import { Route } from "@/routes/admin/pipeline.lazy";
 import { BulkImportTable } from "@/components/admin/pipeline/bulk-import-table";
 
@@ -156,8 +160,9 @@ describe("PipelineMonitorPage", () => {
       return { data: { items: [], total: 0, offset: 0, limit: 25 }, isLoading: false };
     });
     render(<Component />);
-    expect(screen.getByText("Processing")).toBeInTheDocument();
-    expect(screen.getByText("Failed")).toBeInTheDocument();
+    // "Processing" appears both in summary cards and status filter buttons
+    expect(screen.getAllByText("Processing").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Failed").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("Queued")).toBeInTheDocument();
     expect(screen.getByText("Workers")).toBeInTheDocument();
     expect(screen.getByText("ETA")).toBeInTheDocument();
