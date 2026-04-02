@@ -441,9 +441,20 @@ class GraphService:
             )
             params["excluded_statuses"] = exclude_privilege_statuses
 
-        where_clause = "WHERE " + " AND ".join(where_clauses) if where_clauses else ""
-
         connected_pattern = "(connected:Entity)" if entity_only else "(connected)"
+
+        # When querying entity-only connections, filter out noise:
+        # short names (<3 chars), partial name matches of the queried entity
+        if entity_only:
+            where_clauses.extend(
+                [
+                    "size(connected.name) >= 3",
+                    "NOT toLower(connected.name) CONTAINS toLower($name)",
+                    "NOT toLower($name) CONTAINS toLower(connected.name)",
+                ]
+            )
+
+        where_clause = "WHERE " + " AND ".join(where_clauses) if where_clauses else ""
 
         query = f"""
         MATCH (e:Entity {{name: $name}})-[r]-{connected_pattern}
