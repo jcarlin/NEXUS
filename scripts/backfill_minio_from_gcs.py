@@ -246,7 +246,7 @@ def update_filenames_batch(engine, doc_ids: list[str]) -> int:
                 SET filename = filename || '.pdf',
                     document_type = 'PDF',
                     updated_at = now()
-                WHERE id = ANY(:ids)
+                WHERE id = ANY(:ids::uuid[])
                   AND filename NOT LIKE '%.pdf'
             """),
             {"ids": doc_ids},
