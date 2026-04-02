@@ -44,7 +44,7 @@ function RootLayout() {
   return (
     <TooltipProvider delayDuration={200}>
       <AuthGuard>
-        <div className="flex h-screen overflow-hidden">
+        <div className="flex h-screen overflow-hidden bg-mesh">
           {/* Desktop sidebar */}
           <div className="hidden xl:block">
             <Sidebar />
