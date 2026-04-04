@@ -54,19 +54,22 @@ export function detectDocumentType(
 ): DocumentViewType {
   const t = type?.toLowerCase()?.trim();
 
+  // Exact type matches
   if (t === "pdf") return "pdf";
-  if (t === "text" || t === "txt" || t === "csv" || t === "markdown" || t === "html" || t === "xml" || t === "json" || t === "log") return "text";
   if (t === "image" || t === "png" || t === "jpg" || t === "jpeg" || t === "gif" || t === "webp" || t === "tiff") return "image";
   if (t === "email" || t === "eml") return "email";
+  if (t === "text" || t === "txt" || t === "csv" || t === "markdown" || t === "html" || t === "xml" || t === "json" || t === "log") return "text";
 
   // Fallback to filename extension
   const ext = filename.split(".").pop()?.toLowerCase();
-  if (!ext) return "unknown";
-
   if (ext === "pdf") return "pdf";
-  if (TEXT_EXTENSIONS.has(ext)) return "text";
-  if (IMAGE_EXTENSIONS.has(ext)) return "image";
+  if (IMAGE_EXTENSIONS.has(ext ?? "")) return "image";
   if (ext === "eml") return "email";
+  if (TEXT_EXTENSIONS.has(ext ?? "")) return "text";
+
+  // Any known document type that has extracted text → show as text
+  // (covers DOCUMENT, LEGAL FILING, Court Document, Memorandum, etc.)
+  if (t) return "text";
 
   return "unknown";
 }

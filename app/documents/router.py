@@ -123,6 +123,8 @@ def _row_to_detail(row: dict) -> DocumentDetail:
 
 @router.get("/documents/health", response_model=DocumentHealthResponse)
 async def check_document_health(
+    limit: int = Query(default=200, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
     db: AsyncSession = Depends(get_db),
     current_user: UserRecord = Depends(require_role("admin", "attorney")),
     matter_id: UUID = Depends(get_matter_id),
@@ -133,6 +135,8 @@ async def check_document_health(
         db=db,
         qdrant=qdrant,
         matter_id=matter_id,
+        limit=limit,
+        offset=offset,
     )
     health_items = [DocumentHealthItem(**item) for item in items]
     healthy = sum(1 for i in health_items if i.status == "healthy")
@@ -395,13 +399,47 @@ async def document_download(
     if row is None:
         raise HTTPException(status_code=404, detail=f"Document {doc_id} not found")
 
-    data = await storage.download_bytes(row["minio_path"])
+    try:
+        data = await storage.download_bytes(row["minio_path"])
+    except Exception:
+        raise HTTPException(
+            status_code=404,
+            detail=f"File not found in storage for document {doc_id}",
+        )
     content_type, _ = mimetypes.guess_type(row["filename"])
     return Response(
         content=data,
         media_type=content_type or "application/octet-stream",
         headers={"Content-Disposition": f'attachment; filename="{row["filename"]}"'},
     )
+
+
+# -----------------------------------------------------------------------
+# GET /documents/{doc_id}/text — parsed text content for preview
+# -----------------------------------------------------------------------
+
+
+@router.get("/documents/{doc_id}/text")
+async def document_text(
+    doc_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserRecord = Depends(get_current_user),
+    matter_id: UUID = Depends(get_matter_id),
+    storage: StorageClient = Depends(get_minio),
+):
+    """Return parsed text content for non-PDF document preview."""
+    try:
+        content = await DocumentService.get_document_text(
+            db=db,
+            doc_id=doc_id,
+            matter_id=matter_id,
+            storage=storage,
+        )
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Document not found")
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Parsed text not available")
+    return Response(content=content, media_type="text/plain; charset=utf-8")
 
 
 # -----------------------------------------------------------------------

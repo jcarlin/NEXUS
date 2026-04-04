@@ -55,19 +55,24 @@ class DocumentService:
         db: AsyncSession,
         qdrant: VectorStoreClient,
         matter_id: UUID,
+        limit: int = 200,
+        offset: int = 0,
     ) -> list[dict]:
         """Compare expected chunk counts (PG) vs indexed points (Qdrant).
 
         Returns a list of dicts with doc_id, filename, expected_chunks,
         indexed_chunks, and status (healthy / missing / partial).
+        Paginated to avoid OOM on large corpora.
         """
         result = await db.execute(
             text(
                 "SELECT id, job_id, filename, chunk_count "
                 "FROM documents "
-                "WHERE matter_id = :matter_id AND chunk_count > 0"
+                "WHERE matter_id = :matter_id AND chunk_count > 0 "
+                "ORDER BY created_at DESC "
+                "LIMIT :limit OFFSET :offset"
             ),
-            {"matter_id": matter_id},
+            {"matter_id": matter_id, "limit": limit, "offset": offset},
         )
         rows = result.all()
         if not rows:
@@ -84,7 +89,13 @@ class DocumentService:
                 "expected_chunks": mapping["chunk_count"],
             }
 
-        qdrant_counts = qdrant.count_points_by_doc_ids(list(job_id_map.keys()))
+        try:
+            qdrant_counts = qdrant.count_points_by_doc_ids(list(job_id_map.keys()))
+        except Exception:
+            import structlog
+
+            structlog.get_logger().warning("qdrant.health_check_failed")
+            qdrant_counts = {}
 
         items = []
         for job_id, info in job_id_map.items():

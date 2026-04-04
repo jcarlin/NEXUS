@@ -6,7 +6,7 @@ import { ArrowLeft } from "lucide-react";
 import { apiClient } from "@/api/client";
 import { useAppStore } from "@/stores/app-store";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { LoadingState } from "@/components/ui/loading-state";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -154,7 +154,7 @@ function NetworkGraphPage() {
             <p className="text-sm text-muted-foreground">
               {entitiesData
                 ? `${entitiesData.items.length} entities, ${connectionsData?.length ?? 0} connections`
-                : "Loading..."}
+                : "Loading entity network..."}
             </p>
           </div>
         </div>
@@ -173,10 +173,20 @@ function NetworkGraphPage() {
       <PathFinder />
 
       {isLoading ? (
-        <Skeleton
-          className="w-full"
+        <div
+          className="flex w-full items-center justify-center rounded-md border bg-muted/20"
           style={{ height: "calc(100vh - 220px)" }}
-        />
+        >
+          <LoadingState
+            messages={[
+              "Querying entity index...",
+              "Loading entity relationships...",
+              "Mapping connection weights...",
+              "Building force-directed layout...",
+              "Resolving entity clusters...",
+            ]}
+          />
+        </div>
       ) : (
         <NetworkGraph
           ref={graphRef}

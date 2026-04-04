@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
-import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from "lucide-react";
+import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, FileWarning, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AnnotationLayer } from "@/components/documents/annotation-layer";
 import type { Annotation, AnnotationAnchor } from "@/types";
@@ -75,10 +75,17 @@ export function HighlightedPdfViewer({
   const [numPages, setNumPages] = useState<number>(0);
   const [pageNumber, setPageNumber] = useState(initialPage);
   const [scale, setScale] = useState(1.0);
+  const [error, setError] = useState<string | null>(null);
   const pageContainerRef = useRef<HTMLDivElement>(null);
 
   const onDocumentLoadSuccess = useCallback(({ numPages: n }: { numPages: number }) => {
     setNumPages(n);
+    setError(null);
+  }, []);
+
+  const onDocumentLoadError = useCallback((err: Error) => {
+    console.error("PDF load error:", err);
+    setError("Failed to load PDF preview. The file may be too large or corrupted.");
   }, []);
 
   // Reset page when initialPage changes (source navigation)
@@ -117,6 +124,21 @@ export function HighlightedPdfViewer({
     return () => clearTimeout(timer);
   }, [scale, highlightText]);
 
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 rounded-md border p-12 text-muted-foreground">
+        <FileWarning className="h-12 w-12" />
+        <p className="text-sm">{error}</p>
+        <Button variant="outline" size="sm" asChild>
+          <a href={url} download>
+            <Download className="mr-2 h-3.5 w-3.5" />
+            Download instead
+          </a>
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full flex-col items-center gap-3">
       <div className="flex shrink-0 items-center gap-2">
@@ -151,7 +173,7 @@ export function HighlightedPdfViewer({
       </div>
 
       <div className="min-h-0 w-full flex-1 overflow-auto rounded border bg-muted/30">
-        <Document file={url} onLoadSuccess={onDocumentLoadSuccess} loading={<div className="p-8 text-muted-foreground">Loading PDF...</div>}>
+        <Document file={url} onLoadSuccess={onDocumentLoadSuccess} onLoadError={onDocumentLoadError} loading={<div className="p-8 text-muted-foreground">Loading PDF...</div>}>
           <div ref={pageContainerRef} className="relative">
             <Page
               pageNumber={pageNumber}

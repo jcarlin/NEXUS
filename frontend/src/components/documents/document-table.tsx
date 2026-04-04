@@ -11,6 +11,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { LoadingState } from "@/components/ui/loading-state";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { formatDate, formatFileSize, formatNumber } from "@/lib/utils";
 import type { DocumentResponse } from "@/types";
@@ -131,10 +132,21 @@ export function DocumentTable({ data, loading, initialSorting, onSortingChange }
 
   if (loading) {
     return (
-      <div className="space-y-2">
-        {Array.from({ length: 8 }).map((_, i) => (
-          <Skeleton key={i} className="h-10 w-full" />
-        ))}
+      <div className="space-y-4">
+        <LoadingState
+          messages={[
+            "Querying document index...",
+            "Fetching metadata and classifications...",
+            "Loading privilege status...",
+            "Building document table...",
+          ]}
+          className="py-12"
+        />
+        <div className="space-y-2 opacity-30">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-10 w-full" />
+          ))}
+        </div>
       </div>
     );
   }

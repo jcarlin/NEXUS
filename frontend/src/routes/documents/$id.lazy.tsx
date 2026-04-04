@@ -39,12 +39,14 @@ function DocumentDetailPage() {
       }),
   });
 
-  const { downloadUrl, filename: downloadFilename } = useDocumentDownload(doc ? id : null);
+  const { downloadUrl, filename: downloadFilename, error: downloadError } = useDocumentDownload(doc ? id : null);
 
   const redactionEnabled = useFeatureFlag("redaction");
   const { data: annotationsData } = useAnnotations(id);
   const annotations = annotationsData?.items ?? [];
-  const isPdf = doc ? detectDocumentType(doc.type, doc.filename) === "pdf" : false;
+  const viewType = doc ? detectDocumentType(doc.type, doc.filename) : "unknown";
+  const isPdf = viewType === "pdf";
+  const isText = viewType === "text";
 
   const handleAnnotationClick = useCallback((annotation: Annotation) => {
     setSelectedAnnotationId(annotation.id);
@@ -103,7 +105,14 @@ function DocumentDetailPage() {
 
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="flex min-h-0 flex-col lg:col-span-2">
-          {downloadUrl ? (
+          {isText ? (
+            <DocumentViewer
+              url={`/api/v1/documents/${id}/text`}
+              filename={doc.filename}
+              type={doc.type}
+              highlightText={searchHighlight}
+            />
+          ) : downloadUrl ? (
             <DocumentViewer
               url={downloadUrl}
               filename={doc.filename}
@@ -115,6 +124,11 @@ function DocumentDetailPage() {
               onAnnotationClick={handleAnnotationClick}
               onCreateHighlight={handleCreateHighlight}
             />
+          ) : downloadError ? (
+            <div className="flex flex-col items-center justify-center gap-3 rounded-md border p-12 text-muted-foreground">
+              <p className="text-sm">Original file not available in storage</p>
+              <p className="text-xs">{doc.filename}</p>
+            </div>
           ) : (
             <Skeleton className="h-[400px]" />
           )}
