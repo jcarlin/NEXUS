@@ -82,7 +82,7 @@ services:
     logging: *default-logging
     environment:
       NEO4J_server_memory_heap_max__size: 2G
-      NEO4J_server_memory_pagecache_size: 512M
+      NEO4J_server_memory_pagecache_size: 4G
 
   minio:
     ports: !override []

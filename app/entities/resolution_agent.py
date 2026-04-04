@@ -107,7 +107,13 @@ def create_resolution_nodes(settings: dict[str, Any]) -> dict[str, Any]:
     # --- Node: deduplicate ---
 
     async def deduplicate(state: dict) -> dict:
-        """Run fuzzy + embedding matching, split confident vs uncertain."""
+        """Run exact dedup + fuzzy matching, split confident vs uncertain.
+
+        Pre-passes:
+        1. Case-insensitive exact dedup (zero risk, ~30-40% reduction)
+        2. Blocked fuzzy matching (phonetic/prefix blocking for >5K entities)
+        3. Name-component guard (rejects "Amy Epstein" ≈ "Jeffrey Epstein")
+        """
         from app.entities.resolver import EntityResolver
 
         entities = state.get("entities", [])
@@ -122,10 +128,21 @@ def create_resolution_nodes(settings: dict[str, Any]) -> dict[str, Any]:
         import asyncio
 
         resolver = EntityResolver()
+
+        # Pass 1: case-insensitive exact dedup (zero risk)
+        exact_matches, deduped_entities = resolver.exact_dedup(entities)
+        logger.info(
+            "resolution.exact_dedup",
+            original=len(entities),
+            deduped=len(deduped_entities),
+            exact_matches=len(exact_matches),
+        )
+
+        # Pass 2: fuzzy matching (with blocking for large sets)
         # CPU-bound cdist() on 13K+ names blocks for minutes — run in thread
         # pool so async DB connections don't time out.
         loop = asyncio.get_running_loop()
-        fuzzy_matches = await loop.run_in_executor(None, resolver.find_fuzzy_matches, entities)
+        fuzzy_matches = await loop.run_in_executor(None, resolver.find_fuzzy_matches, deduped_entities)
 
         # Split into confident vs uncertain
         confident = []
@@ -143,10 +160,23 @@ def create_resolution_nodes(settings: dict[str, Any]) -> dict[str, Any]:
             else:
                 uncertain.append(match_dict)
 
+        # Include exact matches as confident (score=100)
+        exact_match_dicts = [
+            {
+                "name_a": m.name_a,
+                "name_b": m.name_b,
+                "entity_type": m.entity_type,
+                "score": m.score,
+                "method": m.method,
+            }
+            for m in exact_matches
+        ]
+
         logger.info(
             "resolution.deduplicate.complete",
+            exact_matches=len(exact_matches),
             fuzzy_total=len(fuzzy_matches),
-            confident=len(confident),
+            confident=len(confident) + len(exact_match_dicts),
             uncertain=len(uncertain),
         )
         return {
@@ -161,7 +191,7 @@ def create_resolution_nodes(settings: dict[str, Any]) -> dict[str, Any]:
                 for m in fuzzy_matches
             ],
             "embedding_matches": [],
-            "all_matches": confident,
+            "all_matches": exact_match_dicts + confident,
             "uncertain_merges": uncertain,
         }
 
