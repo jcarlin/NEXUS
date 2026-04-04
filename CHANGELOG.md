@@ -10,6 +10,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follo
 
 ## [Unreleased]
 
+## [1.21.1] - 2026-04-04
+
+### Performance
+- Cache GLiNER model across Celery NER tasks — process-level singleton avoids ~11s model reload per task, ~3x throughput improvement for the NER queue (98a2514)
+
+### Added
+- Dispatch idempotency guard: `--dispatch-log` and `--force` flags for `dispatch_neo4j_gap_ner.py` — resume support after SSH disconnects (98a2514)
+
 ## [1.21.0] - 2026-03-30
 
 ### Added
