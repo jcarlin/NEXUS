@@ -82,6 +82,17 @@ def main() -> int:
         action="store_true",
         help="Also include docs with entity_count = 0 (the 15.9K NER backlog)",
     )
+    parser.add_argument(
+        "--dispatch-log",
+        type=str,
+        default=None,
+        help="Path to dispatch log for resume support (default: /tmp/ner_dispatch_{matter_id}.log)",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Ignore dispatch log and re-dispatch all gap docs (use after queue purge)",
+    )
     args = parser.parse_args()
 
     from neo4j import GraphDatabase
@@ -125,12 +136,26 @@ def main() -> int:
         print(f"  Including {len(zero_docs):,} docs with entity_count = 0")
 
     total_gap = len(gap_docs)
-    total_chunks = sum(d.get("chunk_count") or 1 for d in gap_docs)
 
     print("\n=== Neo4j Entity Gap Analysis ===")
     print(f"  Neo4j docs with entities:  {len(neo4j_doc_ids):,}")
     print(f"  PG docs with entities:     {len(pg_docs):,}")
     print(f"  Gap (needs NER+Neo4j):     {total_gap:,}")
+
+    # Resume support: skip docs already dispatched in a previous run
+    log_path = args.dispatch_log or f"/tmp/ner_dispatch_{args.matter_id}.log"
+    already_dispatched: set[str] = set()
+    if not args.force and Path(log_path).exists():
+        already_dispatched = set(Path(log_path).read_text().splitlines())
+        before = len(gap_docs)
+        gap_docs = [d for d in gap_docs if d["doc_id"] not in already_dispatched]
+        total_gap = len(gap_docs)
+        print(f"  Resume: {len(already_dispatched):,} already dispatched (log: {log_path})")
+        print(f"  Remaining after resume:    {total_gap:,} (skipped {before - total_gap:,})")
+    elif args.force and Path(log_path).exists():
+        print(f"  --force: ignoring dispatch log ({log_path})")
+
+    total_chunks = sum(d.get("chunk_count") or 1 for d in gap_docs)
     print(f"  Total chunks to process:   {total_chunks:,}")
 
     # Show entity_count distribution of gap docs
@@ -163,34 +188,39 @@ def main() -> int:
         engine.dispose()
         return 0
 
-    # Step 4: Dispatch Celery tasks
+    # Step 4: Dispatch Celery tasks (with dispatch log for resume support)
     from app.ingestion.tasks import extract_entities_for_job
 
     print(f"\n=== Dispatching {total_gap:,} NER tasks ===")
+    print(f"  Dispatch log: {log_path}")
     dispatched = 0
     t0 = time.time()
 
-    for i in range(0, total_gap, args.batch_size):
-        batch = gap_docs[i : i + args.batch_size]
-        for doc in batch:
-            extract_entities_for_job.apply_async(
-                args=[doc["doc_id"], args.matter_id],
-                queue="ner",
+    with open(log_path, "a") as log_f:
+        for i in range(0, total_gap, args.batch_size):
+            batch = gap_docs[i : i + args.batch_size]
+            for doc in batch:
+                extract_entities_for_job.apply_async(
+                    args=[doc["doc_id"], args.matter_id],
+                    queue="ner",
+                )
+                log_f.write(doc["doc_id"] + "\n")
+                dispatched += 1
+
+            log_f.flush()
+            elapsed = time.time() - t0
+            pct = dispatched * 100 // total_gap
+            print(
+                f"  Dispatched {dispatched:,}/{total_gap:,} ({pct}%) — {elapsed:.0f}s",
+                flush=True,
             )
-            dispatched += 1
 
-        elapsed = time.time() - t0
-        pct = dispatched * 100 // total_gap
-        print(
-            f"  Dispatched {dispatched:,}/{total_gap:,} ({pct}%) — {elapsed:.0f}s",
-            flush=True,
-        )
-
-        if i + args.batch_size < total_gap:
-            time.sleep(args.pause)
+            if i + args.batch_size < total_gap:
+                time.sleep(args.pause)
 
     elapsed = time.time() - t0
     print(f"\n=== Dispatched {dispatched:,} NER tasks to 'ner' queue in {elapsed:.0f}s ===")
+    print(f"  Dispatch log: {log_path} ({dispatched:,} entries)")
     print(f"  Estimated completion: ~{est_hours_6w:.1f}h at 6 workers")
     print("  Monitor: Admin > Pipeline > Workers & Queues tab")
 

@@ -1180,9 +1180,9 @@ def _stage_extract(ctx: _PipelineContext) -> None:
         _update_stage(ctx.engine, ctx.job_id, "indexing", "processing", progress=ctx.progress)
         return
 
-    from app.entities.extractor import EntityExtractor
+    from app.entities.extractor import get_cached_extractor
 
-    extractor = EntityExtractor(model_name=ctx.settings.gliner_model)
+    extractor = get_cached_extractor(model_name=ctx.settings.gliner_model)
 
     ctx.all_entities = []
     seen_entities: set[tuple[str, str]] = set()  # (name, type) dedup within doc
@@ -2128,9 +2128,9 @@ def import_text_document(
             # NER will be dispatched after Qdrant indexing (Stage 6)
             pass
         else:
-            from app.entities.extractor import EntityExtractor
+            from app.entities.extractor import get_cached_extractor
 
-            extractor = EntityExtractor(model_name=settings.gliner_model)
+            extractor = get_cached_extractor(model_name=settings.gliner_model)
             seen_entities: set[tuple[str, str]] = set()
 
             for chunk in chunks:
@@ -2723,7 +2723,7 @@ def extract_entities_for_job(self, doc_id_or_job_id: str, matter_id: str | None 
     _wait_for_memory(min_gb=2.0, critical_gb=1.0, task=self, job_id=doc_id_or_job_id)
 
     from app.config import Settings
-    from app.entities.extractor import EntityExtractor
+    from app.entities.extractor import get_cached_extractor
     from app.feature_flags.service import load_overrides_sync_safe
 
     settings = Settings()
@@ -2774,8 +2774,8 @@ def extract_entities_for_job(self, doc_id_or_job_id: str, matter_id: str | None 
 
         chunk_texts = [p.payload.get("chunk_text", "") for p in points]
 
-        # Batch NER extraction
-        extractor = EntityExtractor(model_name=settings.gliner_model)
+        # Batch NER extraction (process-level cached — avoids ~11s model reload per task)
+        extractor = get_cached_extractor(model_name=settings.gliner_model)
         batch_results = extractor.extract_batch(
             chunk_texts,
             batch_size=settings.ner_batch_size,

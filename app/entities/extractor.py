@@ -366,3 +366,23 @@ class EntityExtractor:
             # Fallback to sequential extraction on batch failure
             logger.warning("extractor.batch_fallback_to_sequential")
             return [self.extract(text, entity_types=entity_types, threshold=threshold) for text in texts]
+
+
+# ---------------------------------------------------------------------------
+# Process-level singleton cache
+# ---------------------------------------------------------------------------
+# Celery prefork workers reuse the same process for up to max_tasks_per_child
+# tasks.  Caching the extractor (and its loaded GLiNER model) here avoids
+# the ~11-second model reload on every single NER task.
+_EXTRACTOR_CACHE: dict[str, EntityExtractor] = {}
+
+
+def get_cached_extractor(model_name: str = "urchade/gliner_multi_pii-v1") -> EntityExtractor:
+    """Return a process-level cached EntityExtractor instance.
+
+    The GLiNER model (~600 MB) is loaded once on first use and persists
+    across Celery tasks within the same worker process.
+    """
+    if model_name not in _EXTRACTOR_CACHE:
+        _EXTRACTOR_CACHE[model_name] = EntityExtractor(model_name=model_name)
+    return _EXTRACTOR_CACHE[model_name]
