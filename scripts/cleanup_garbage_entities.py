@@ -143,7 +143,9 @@ def _list_category(session, cat: dict, limit: int = 50) -> list[dict]:
     """List sample entities for a category."""
     result = session.run(
         f"{cat['match']} "
-        "WITH e, count{{(e)-[:MENTIONED_IN]->()}} AS mentions "
+        "WITH e "
+        "OPTIONAL MATCH (e)-[r:MENTIONED_IN]->() "
+        "WITH e, count(r) AS mentions "
         "RETURN e.name AS name, e.type AS type, mentions "
         "ORDER BY mentions DESC LIMIT $limit",
         **cat["params"],
