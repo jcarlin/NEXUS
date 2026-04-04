@@ -23,9 +23,11 @@ interface GraphLink extends SimulationLinkDatum<GraphNode> {
 interface ConnectionsGraphProps {
   entity: EntityResponse;
   connections: EntityConnection[];
+  selectedConnection?: EntityConnection | null;
+  onConnectionSelect?: (connection: EntityConnection | null) => void;
 }
 
-export function ConnectionsGraph({ entity, connections }: ConnectionsGraphProps) {
+export function ConnectionsGraph({ entity, connections, selectedConnection, onConnectionSelect }: ConnectionsGraphProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const simulationRef = useRef<Simulation<GraphNode, GraphLink> | null>(null);
   const navigate = useNavigate();
@@ -143,15 +145,37 @@ export function ConnectionsGraph({ entity, connections }: ConnectionsGraphProps)
       .attr("fill", "var(--color-muted-foreground)")
       .attr("pointer-events", "none");
 
-    // Click to navigate
+    // Click to select connection, double-click to navigate
+    let clickTimer: ReturnType<typeof setTimeout> | null = null;
     node.on("click", (_event, d) => {
-      if (!d.isCenter) {
-        navigate({ to: "/entities/$id", params: { id: d.id } });
+      if (d.isCenter) {
+        onConnectionSelect?.(null);
+        return;
       }
+      if (clickTimer) {
+        clearTimeout(clickTimer);
+        clickTimer = null;
+        // Double-click: navigate
+        navigate({ to: "/entities/$id", params: { id: d.id } });
+        return;
+      }
+      clickTimer = setTimeout(() => {
+        clickTimer = null;
+        // Single click: select connection
+        const conn = connections.find(
+          (c) => c.target === d.name || c.source === d.name,
+        );
+        if (conn) onConnectionSelect?.(conn);
+      }, 250);
+    });
+
+    // Click background to deselect
+    sel.on("click", (event) => {
+      if (event.target === svg) onConnectionSelect?.(null);
     });
 
     // Tooltip on hover
-    node.append("title").text((d) => `${d.name} (${d.type})`);
+    node.append("title").text((d) => `${d.name} (${d.type})\nClick to select, double-click to open`);
 
     simulation.on("tick", () => {
       link
@@ -169,7 +193,60 @@ export function ConnectionsGraph({ entity, connections }: ConnectionsGraphProps)
       simulation.stop();
       simulationRef.current = null;
     };
-  }, [entity, connections, navigate, containerWidth, containerHeight]);
+  }, [entity, connections, navigate, containerWidth, containerHeight, onConnectionSelect]);
+
+  // Highlight effect when selectedConnection changes
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const sel = select(svg);
+
+    if (!selectedConnection) {
+      // Reset all to default
+      sel.selectAll("line")
+        .attr("stroke", "var(--color-border)")
+        .attr("stroke-opacity", 0.6)
+        .attr("stroke-width", (d: unknown) => Math.max(1, Math.min((d as GraphLink).weight, 4)));
+      sel.selectAll("circle")
+        .attr("stroke", "var(--color-background)")
+        .attr("stroke-width", 1.5);
+      return;
+    }
+
+    const target = selectedConnection.target;
+    const source = selectedConnection.source;
+
+    // Dim all links, highlight selected
+    sel.selectAll<SVGLineElement, GraphLink>("line")
+      .attr("stroke", (d) => {
+        const s = (d.source as GraphNode).name;
+        const t = (d.target as GraphNode).name;
+        return (s === source && t === target) || (s === target && t === source)
+          ? "var(--color-primary)"
+          : "var(--color-border)";
+      })
+      .attr("stroke-opacity", (d) => {
+        const s = (d.source as GraphNode).name;
+        const t = (d.target as GraphNode).name;
+        return (s === source && t === target) || (s === target && t === source) ? 1 : 0.15;
+      })
+      .attr("stroke-width", (d) => {
+        const s = (d.source as GraphNode).name;
+        const t = (d.target as GraphNode).name;
+        return (s === source && t === target) || (s === target && t === source)
+          ? Math.max(2, Math.min(d.weight + 1, 6))
+          : Math.max(1, Math.min(d.weight, 4));
+      });
+
+    // Highlight connected nodes
+    sel.selectAll<SVGCircleElement, GraphNode>("circle")
+      .attr("stroke", (d) =>
+        d.name === target || d.name === source ? "var(--color-primary)" : "var(--color-background)",
+      )
+      .attr("stroke-width", (d) =>
+        d.name === target || d.name === source ? 3 : 1.5,
+      );
+  }, [selectedConnection]);
 
   if (connections.length === 0) {
     return (

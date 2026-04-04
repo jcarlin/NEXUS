@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/api/client";
 import { Badge } from "@/components/ui/badge";
@@ -13,9 +14,11 @@ interface TimelineResponse {
 
 interface EntityTimelineProps {
   entityId: string;
+  filterEntity?: string | null;
+  centralEntity?: string;
 }
 
-export function EntityTimeline({ entityId }: EntityTimelineProps) {
+export function EntityTimeline({ entityId, filterEntity, centralEntity }: EntityTimelineProps) {
   const { data, isLoading } = useQuery({
     queryKey: ["entity-timeline", entityId],
     queryFn: () =>
@@ -25,10 +28,28 @@ export function EntityTimeline({ entityId }: EntityTimelineProps) {
       }),
   });
 
+  // Filter events to those mentioning the selected connection entity
+  const filteredEvents = useMemo(() => {
+    if (!data?.events) return [];
+    if (!filterEntity || filterEntity === centralEntity) return data.events;
+    return data.events.filter((e) =>
+      e.entities?.some((name) => name.toLowerCase() === filterEntity.toLowerCase()),
+    );
+  }, [data?.events, filterEntity, centralEntity]);
+
+  const isFiltered = !!filterEntity && filterEntity !== centralEntity;
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-sm font-medium">Timeline</CardTitle>
+        <CardTitle className="flex items-center gap-2 text-sm font-medium">
+          Timeline
+          {isFiltered && (
+            <Badge variant="secondary" className="text-[10px] font-normal">
+              {filterEntity}
+            </Badge>
+          )}
+        </CardTitle>
       </CardHeader>
       <CardContent>
         {isLoading ? (
@@ -40,7 +61,7 @@ export function EntityTimeline({ entityId }: EntityTimelineProps) {
               </div>
             ))}
           </div>
-        ) : !data?.events.length ? (
+        ) : !filteredEvents.length ? (
           <p className="text-sm text-muted-foreground">
             No timeline events found.
           </p>
@@ -49,7 +70,7 @@ export function EntityTimeline({ entityId }: EntityTimelineProps) {
             {/* Vertical line */}
             <div className="absolute left-[83px] top-0 bottom-0 w-px bg-border" />
 
-            {data.events.map((event, i) => (
+            {filteredEvents.map((event, i) => (
               <div key={i} className="flex gap-4 py-3 relative">
                 <div className="w-[72px] shrink-0 text-right">
                   {event.date ? (

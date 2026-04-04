@@ -46,6 +46,7 @@ function EntityDetailPage() {
   const user = useAuthStore((s) => s.user);
   const canEdit = user?.role === "admin" || user?.role === "attorney";
   const [activeDialog, setActiveDialog] = useState<EditDialog>(null);
+  const [selectedConnection, setSelectedConnection] = useState<EntityConnection | null>(null);
 
   const [filterVS, setFilterVS] = useViewState("/entities/filters", {
     activeTypes: [...DEFAULT_TYPES],
@@ -127,14 +128,36 @@ function EntityDetailPage() {
         onToggleType={toggleType}
       />
 
+      {selectedConnection && (
+        <div className="flex items-center gap-3 rounded-md border bg-muted/40 px-4 py-2.5 text-sm">
+          <span className="font-medium">{selectedConnection.source}</span>
+          <span className="text-muted-foreground">{selectedConnection.relationship_type.replace(/_/g, " ").toLowerCase()}</span>
+          <span className="font-medium">{selectedConnection.target}</span>
+          {selectedConnection.weight > 1 && (
+            <span className="text-xs text-muted-foreground">({selectedConnection.weight}x)</span>
+          )}
+          {selectedConnection.context && (
+            <span className="text-xs text-muted-foreground ml-2">— {selectedConnection.context}</span>
+          )}
+          <button
+            onClick={() => setSelectedConnection(null)}
+            className="ml-auto text-xs text-muted-foreground hover:text-foreground"
+          >
+            Clear
+          </button>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <ConnectionsGraph
           entity={data.entity}
           connections={data.connections.filter(
             (c) => !c.target_type || activeTypes.has(c.target_type),
           )}
+          selectedConnection={selectedConnection}
+          onConnectionSelect={setSelectedConnection}
         />
-        <EntityTimeline entityId={id} />
+        <EntityTimeline entityId={id} filterEntity={selectedConnection?.target ?? selectedConnection?.source} centralEntity={data.entity.name} />
       </div>
 
       <DocumentMentions entityName={data.entity.name} />
