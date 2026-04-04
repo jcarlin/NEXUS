@@ -169,7 +169,8 @@ def _delete_category(
     total_nodes = 0
 
     # Phase 1: delete relationships in batches
-    while True:
+    retries = 0
+    while retries < 5:
         try:
             with session_factory() as s:
                 result = s.run(
@@ -179,20 +180,27 @@ def _delete_category(
                 )
                 deleted = result.single()["deleted"]
                 total_rels += deleted
+                retries = 0  # Reset on success
                 if deleted < batch_size:
                     break
         except Exception as e:
+            retries += 1
             err = str(e)[:200]
-            print(f"    Rel error (retrying in 3s): {err}", flush=True)
+            print(f"    Rel error ({retries}/5, retrying in 3s): {err}", flush=True)
+            if retries >= 5:
+                print(f"    ABORTING category after {retries} consecutive errors", flush=True)
+                return total_rels, total_nodes
             time.sleep(3)
 
     # Phase 2: delete naked nodes in batches, logging each
-    while True:
+    # The match clause may or may not have a WHERE — use WITH + WHERE to filter
+    retries = 0
+    while retries < 5:
         try:
             with session_factory() as s:
                 result = s.run(
                     f"{cat['match']} "
-                    "WHERE NOT (e)--() "
+                    "WITH e WHERE NOT (e)--() "
                     "WITH e LIMIT $batch "
                     "WITH e, e.name AS name, e.type AS type "
                     "DELETE e RETURN name, type",
@@ -210,11 +218,16 @@ def _delete_category(
                     }
                     audit_file.write(json.dumps(audit_entry) + "\n")
                 total_nodes += len(records)
+                retries = 0  # Reset on success
                 if len(records) < batch_size:
                     break
         except Exception as e:
+            retries += 1
             err = str(e)[:200]
-            print(f"    Node error (retrying in 3s): {err}", flush=True)
+            print(f"    Node error ({retries}/5, retrying in 3s): {err}", flush=True)
+            if retries >= 5:
+                print(f"    ABORTING category after {retries} consecutive errors", flush=True)
+                return total_rels, total_nodes
             time.sleep(3)
 
     return total_rels, total_nodes
