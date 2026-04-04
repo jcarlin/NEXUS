@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from datetime import UTC, datetime
@@ -39,7 +40,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 DEFAULT_MATTER_ID = "00000000-0000-0000-0000-000000000002"
 DEFAULT_BATCH = 500
-AUDIT_LOG_DIR = Path(__file__).resolve().parent.parent / "reports"
+AUDIT_LOG_DIR = Path(os.environ.get("NEXUS_AUDIT_DIR", str(Path(__file__).resolve().parent.parent / "reports")))
 
 # --- Category definitions ---
 # Each category: (name, tier, description, cypher_match, cypher_params_fn)
