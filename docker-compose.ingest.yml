@@ -21,7 +21,7 @@ services:
 
   rabbitmq:
     environment:
-      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "-rabbit consumer_timeout 7200000"
+      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "-rabbit consumer_timeout 86400000"
 
   worker:
     command: celery -A workers.celery_app worker -Q default,bulk,background -l info -c ${CELERY_CONCURRENCY:-1} --pool=prefork --max-tasks-per-child=100
