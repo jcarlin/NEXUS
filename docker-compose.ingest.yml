@@ -20,7 +20,7 @@ services:
       - /mnt/epstein:/mnt/epstein:ro
 
   rabbitmq:
-    hostname: rabbitmq
+    hostname: 17c53451d607
     environment:
       RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "-rabbit consumer_timeout 86400000"
 
