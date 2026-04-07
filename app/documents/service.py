@@ -25,7 +25,7 @@ logger = structlog.get_logger(__name__)
 # Column list shared across queries
 _COLUMNS = """id, job_id, filename, document_type, page_count, chunk_count,
               entity_count, minio_path, file_size_bytes, content_hash,
-              matter_id, metadata_, created_at, updated_at,
+              matter_id, metadata_, created_at, updated_at, document_date,
               privilege_status, privilege_reviewed_by, privilege_reviewed_at,
               message_id, in_reply_to, references_, thread_id, thread_position,
               is_inclusive, duplicate_cluster_id, duplicate_score,

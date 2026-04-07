@@ -112,6 +112,14 @@ class SourceDocument(BaseModel):
     relevance_score: float
     preview_url: str | None = None
     download_url: str | None = None
+    document_date: str | None = Field(
+        default=None,
+        description=(
+            "Canonical communication date (ISO 8601) — email Date header, "
+            "EDRM field, etc. None when the source document has no real "
+            "date available."
+        ),
+    )
 
 
 class EntityMention(BaseModel):

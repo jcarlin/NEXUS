@@ -66,6 +66,7 @@ class HybridRetriever:
         dataset_doc_ids: list[str] | None = None,
         query_vector: list[float] | None = None,
         hyde_vector: list[float] | None = None,
+        date_range: dict[str, str] | None = None,
     ) -> list[dict[str, Any]]:
         """Embed *query* and run dense (+ optional sparse RRF) search against ``nexus_text``.
 
@@ -73,6 +74,10 @@ class HybridRetriever:
         If *hyde_vector* is provided, use it for dense retrieval instead of the
         raw query embedding (HyDE T2-6). The raw query is still used for sparse
         retrieval to preserve lexical matching.
+
+        *date_range* (optional) restricts results to chunks whose
+        ``document_date`` payload falls within the inclusive ISO 8601
+        bounds (``gte`` / ``lte``).
         """
         # Dense vector: prefer HyDE vector > explicit query_vector > embed query
         if hyde_vector is not None:
@@ -99,6 +104,7 @@ class HybridRetriever:
             exclude_privilege_statuses=exclude_privilege_statuses,
             prefetch_multiplier=prefetch_multiplier,
             dataset_doc_ids=dataset_doc_ids,
+            date_range=date_range,  # type: ignore[arg-type]
         )
         logger.debug("retriever.text", query_len=len(query), results=len(results), sparse=sparse_vector is not None)
 

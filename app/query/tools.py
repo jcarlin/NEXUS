@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import time as _time_obj
 from typing import Annotated, Any
 
 import structlog
@@ -17,10 +18,30 @@ from langchain_core.tools import tool
 from langgraph.prebuilt.tool_node import InjectedState
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.db_utils import parse_email_date
 from app.query.overrides import resolve_flag, resolve_param
 from app.query.trace import emit_tool_trace, reset_override_usage
 
 logger = structlog.get_logger(__name__)
+
+
+def _normalize_date_bound(raw: str, *, end_of_day: bool) -> str:
+    """Parse a date string and return a Qdrant-compatible ISO 8601 timestamp.
+
+    Accepts ``YYYY-MM-DD``, ISO 8601, or RFC 2822. When *end_of_day* is
+    ``True`` and the input contains no time component (midnight), the
+    returned value is shifted to the last microsecond of the day so an
+    upper bound like ``2020-03-31`` is inclusive of all of March 31.
+
+    Raises ``ValueError`` on unparseable input — temporal_search must not
+    silently ignore a malformed bound.
+    """
+    dt = parse_email_date(raw)
+    if dt is None:
+        raise ValueError(f"Invalid date bound: {raw!r}")
+    if end_of_day and dt.time() == _time_obj(0, 0, 0):
+        dt = dt.replace(hour=23, minute=59, second=59, microsecond=999999)
+    return dt.isoformat()
 
 
 @asynccontextmanager
@@ -174,6 +195,7 @@ async def vector_search(
             "page": r.get("page_number"),
             "text": r.get("chunk_text", "")[:500],
             "score": round(r.get("score", 0), 4),
+            "document_date": r.get("document_date"),
         }
         for r in results[:limit]
     ]
@@ -257,21 +279,27 @@ async def temporal_search(
     Use for queries like "Between January and March 2020..." or
     "What happened before the agreement was signed?".
     Provide date_from and/or date_to in YYYY-MM-DD format.
+
+    The date range is applied to each chunk's ``document_date`` payload
+    (the real communication date — email Date header, etc.). Chunks
+    without a ``document_date`` are excluded.
     """
     from app.dependencies import get_retriever
 
     try:
         retriever = get_retriever()
         filters: dict[str, Any] = dict(state.get("_filters") or {})
+        date_range: dict[str, str] = {}
         if date_from:
-            filters["date_from"] = date_from
+            date_range["gte"] = _normalize_date_bound(date_from, end_of_day=False)
         if date_to:
-            filters["date_to"] = date_to
+            date_range["lte"] = _normalize_date_bound(date_to, end_of_day=True)
 
         results = await retriever.retrieve_text(
             query,
             limit=limit,
             filters=filters,
+            date_range=date_range or None,
             exclude_privilege_statuses=state.get("_exclude_privilege") or None,
             dataset_doc_ids=state.get("_dataset_doc_ids"),
         )
@@ -285,6 +313,7 @@ async def temporal_search(
             "page": r.get("page_number"),
             "text": r.get("chunk_text", "")[:500],
             "score": round(r.get("score", 0), 4),
+            "document_date": r.get("document_date"),
         }
         for r in results[:limit]
     ]
@@ -369,6 +398,7 @@ async def document_retrieval(
             "filename": r.get("source_file", "unknown"),
             "page": r.get("page_number"),
             "text": r.get("chunk_text", "")[:500],
+            "document_date": r.get("document_date"),
         }
         for r in results
     ]
@@ -737,6 +767,7 @@ async def decompose_query(
                 "page": r.get("page_number"),
                 "text": r.get("chunk_text", "")[:500],
                 "score": round(r.get("score", 0), 4),
+                "document_date": r.get("document_date"),
             }
             for r in merged[:20]
         ]

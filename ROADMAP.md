@@ -1158,6 +1158,23 @@ frontend/
 
 **Feature flags added:** `enable_deposition_prep`, `enable_document_comparison`, `enable_splade_sparse`, `enable_hallugraph_alignment`, `enable_graphrag_communities` (all default off)
 
+### Post-Tier-3 Fixes
+
+#### Canonical `document_date` column + real timeline dates (2026-04-06)
+Entity timelines at `/entities/{name}` were showing the ingestion timestamp for every event because `d.date` was never set on Neo4j `:Document` nodes and the Cypher silently fell back to `d.created_at`. Non-email parsers never extracted dates at all, Qdrant chunk payloads had no date field, and `temporal_search` passed `date_from` / `date_to` as `MatchValue` (exact string equality) instead of a real `DatetimeRange` — meaning temporal filtering was silently broken end-to-end.
+
+**Fix**:
+- New `document_date TIMESTAMPTZ` column on `documents` (migration 038) with partial indexes for matter-scoped chronological queries
+- `_stage_index` parses `parse_result.metadata["date"]` via the existing `parse_email_date()` helper and writes to PG (`_finalize_document_record`), Neo4j (`create_document_node` → `d.document_date`), and every Qdrant chunk payload
+- `get_entity_timeline` Cypher rewritten: reads `d.document_date` directly (no fallback), excludes documents without a real date, orders `DESC`, and **UNIONs** the `MENTIONED_IN` path with the `SENT|SENT_TO|CC|BCC -> :Email -> SOURCED_FROM -> :Document` path so email senders/recipients show up even when not named in the body
+- `VectorStoreClient.query_text` now accepts a structured `date_range: {gte, lte}` that builds a real Qdrant `DatetimeRange` filter on the `document_date` payload (indexed as `PayloadSchemaType.DATETIME`)
+- `temporal_search` tool normalizes `YYYY-MM-DD` bounds to ISO 8601 (upper bound shifted to `23:59:59.999999` for inclusive day ranges) and **raises** on unparseable bounds — no silent fallback
+- `SourceDocument` schema gains `document_date`; `post_agent_extract` and every chunk-formatting tool propagate it through to the LLM and frontend
+- `scripts/backfill_document_dates.py` — three-phase idempotent backfill (PG from `metadata_->>'date'`, Neo4j via UNWIND, Qdrant via `set_payload` per doc) with `--dry-run`, `--matter-id`, per-phase skip flags, and `TaskTracker` integration for live Pipeline Monitor progress
+- Strict NULL contract for non-email docs: no improvised dates. Frontend already displays "Unknown" when the date is absent.
+
+**Tests added (~18)**: `get_entity_timeline` Cypher shape (UNION paths, no `created_at` fallback, `ORDER BY DESC`), `create_document_node` with/without date, `_stage_index` parses email metadata date, strict NULL for non-email, unparseable raw date logs warning, `_stage_complete` forwards `document_date`, `query_text(date_range=...)` builds `DatetimeRange`, combined with `filters`, `temporal_search` plumbing + invalid-bound error handling + `document_date` surfacing, `post_agent_extract` propagation, backfill `Phase 1` parse/skip/dry-run/empty, `Phase 3` per-doc `set_payload` + failure isolation.
+
 ---
 
 ## Future

@@ -290,6 +290,110 @@ class TestStageIndex:
         assert len(ctx.chunk_data_for_neo4j) == 1
         assert ctx.chunk_data_for_neo4j[0]["text_preview"] == "Test chunk content"
 
+    def test_parses_document_date_from_email_metadata(self):
+        """_stage_index should parse ctx.parse_result.metadata['date'] into ctx.document_date
+        and inject it into Qdrant chunk payloads as an ISO string."""
+        from datetime import UTC, datetime
+
+        ctx = _make_ctx()
+        ctx.parse_result = _FakeParseResult(
+            metadata={"date": "Wed, 12 Feb 2025 16:10:00 +0000"},
+        )
+        ctx.doc_type = "email"
+        ctx.document_type = "email"
+        ctx.chunks = [
+            _FakeChunk(
+                chunk_index=0,
+                text="email body",
+                token_count=5,
+                metadata={"page_number": 1, "section_heading": ""},
+            ),
+        ]
+        ctx.embeddings = [[0.1, 0.2, 0.3]]
+        ctx.sparse_embeddings = []
+        ctx.all_entities = []
+
+        mock_qdrant = MagicMock()
+
+        with (
+            patch("qdrant_client.QdrantClient", return_value=mock_qdrant),
+            patch("app.ingestion.tasks._index_to_neo4j"),
+            patch("app.ingestion.tasks.asyncio.run"),
+        ):
+            _stage_index(ctx)
+
+        assert ctx.document_date == datetime(2025, 2, 12, 16, 10, 0, tzinfo=UTC)
+        # Qdrant payload should have ISO-formatted document_date
+        upserted_points = mock_qdrant.upsert.call_args.kwargs["points"]
+        assert len(upserted_points) == 1
+        assert upserted_points[0].payload["document_date"] == "2025-02-12T16:10:00+00:00"
+
+    def test_document_date_missing_leaves_null(self):
+        """When parse metadata has no date (e.g. PDF), ctx.document_date stays None
+        and Qdrant payload omits document_date entirely (strict NULL, no fallback)."""
+        ctx = _make_ctx()
+        ctx.parse_result = _FakeParseResult(metadata={})
+        ctx.doc_type = "pdf"
+        ctx.document_type = "document"
+        ctx.chunks = [
+            _FakeChunk(
+                chunk_index=0,
+                text="pdf body",
+                token_count=5,
+                metadata={"page_number": 1, "section_heading": ""},
+            ),
+        ]
+        ctx.embeddings = [[0.1, 0.2, 0.3]]
+        ctx.sparse_embeddings = []
+        ctx.all_entities = []
+
+        mock_qdrant = MagicMock()
+
+        with (
+            patch("qdrant_client.QdrantClient", return_value=mock_qdrant),
+            patch("app.ingestion.tasks._index_to_neo4j"),
+            patch("app.ingestion.tasks.asyncio.run"),
+        ):
+            _stage_index(ctx)
+
+        assert ctx.document_date is None
+        payload = mock_qdrant.upsert.call_args.kwargs["points"][0].payload
+        assert "document_date" not in payload
+
+    def test_document_date_unparsable_logs_warning_and_leaves_null(self, caplog):
+        """Unparseable date string should warn but not raise; document_date stays None."""
+        import logging
+
+        ctx = _make_ctx()
+        ctx.parse_result = _FakeParseResult(metadata={"date": "not a real date"})
+        ctx.doc_type = "document"
+        ctx.document_type = "document"
+        ctx.chunks = [
+            _FakeChunk(
+                chunk_index=0,
+                text="body",
+                token_count=5,
+                metadata={"page_number": 1, "section_heading": ""},
+            ),
+        ]
+        ctx.embeddings = [[0.1, 0.2, 0.3]]
+        ctx.sparse_embeddings = []
+        ctx.all_entities = []
+
+        mock_qdrant = MagicMock()
+
+        with (
+            caplog.at_level(logging.WARNING),
+            patch("qdrant_client.QdrantClient", return_value=mock_qdrant),
+            patch("app.ingestion.tasks._index_to_neo4j"),
+            patch("app.ingestion.tasks.asyncio.run"),
+        ):
+            _stage_index(ctx)
+
+        assert ctx.document_date is None
+        payload = mock_qdrant.upsert.call_args.kwargs["points"][0].payload
+        assert "document_date" not in payload
+
 
 class TestStageComplete:
     """Tests for _stage_complete."""
@@ -321,6 +425,34 @@ class TestStageComplete:
         assert call_kwargs.kwargs["doc_id"] == "doc-001"
         assert call_kwargs.kwargs["chunk_count"] == 1
         assert call_kwargs.kwargs["entity_count"] == 1
+
+    def test_passes_document_date_to_finalize(self):
+        """_stage_complete should forward ctx.document_date to _finalize_document_record."""
+        from datetime import UTC, datetime
+
+        ctx = _make_ctx()
+        ctx.parse_result = _FakeParseResult()
+        ctx.doc_type = "email"
+        ctx.document_type = "email"
+        ctx.document_id = "doc-002"
+        ctx.chunks = [_FakeChunk(chunk_index=0, text="c", token_count=1)]
+        ctx.all_entities = []
+        ctx.embeddings = [[0.1]]
+        ctx.file_size = 50
+        ctx.content_hash = "hash"
+        ctx.document_date = datetime(2020, 3, 15, 10, 0, 0, tzinfo=UTC)
+
+        with (
+            patch("app.ingestion.tasks._finalize_document_record") as mock_finalize,
+            patch("app.ingestion.tasks._update_stage"),
+            patch("app.ingestion.tasks.detect_duplicates"),
+            patch("app.entities.tasks.resolve_entities") as mock_resolve,
+        ):
+            mock_resolve.delay = MagicMock()
+            _stage_complete(ctx)
+
+        call_kwargs = mock_finalize.call_args.kwargs
+        assert call_kwargs["document_date"] == datetime(2020, 3, 15, 10, 0, 0, tzinfo=UTC)
 
 
 # ---------------------------------------------------------------------------

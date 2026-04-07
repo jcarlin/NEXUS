@@ -164,6 +164,92 @@ async def test_default_multipliers_backward_compatible(mock_qdrant_client):
     assert prefetches[1].limit == 20
 
 
+# ---------------------------------------------------------------------------
+# document_date range filter tests
+# ---------------------------------------------------------------------------
+
+
+def _extract_must_conditions(call_kwargs: dict) -> list:
+    """Pull the flat list of `must` FieldConditions from a query_points call,
+    checking both direct query_filter (dense-only path) and prefetch.filter
+    (sparse RRF path).
+    """
+    qf = call_kwargs.get("query_filter")
+    if qf is not None:
+        return list(qf.must or [])
+    prefetches = call_kwargs.get("prefetch") or []
+    for p in prefetches:
+        if p.filter is not None:
+            return list(p.filter.must or [])
+    return []
+
+
+@pytest.mark.asyncio
+async def test_query_text_with_date_range_builds_datetime_range(mock_qdrant_client):
+    """date_range kwarg must produce a FieldCondition on document_date with DatetimeRange."""
+    from datetime import UTC, datetime
+
+    mock_qdrant_client.query_points.return_value.points = []
+
+    client = VectorStoreClient(_make_settings(enable_sparse=False))
+
+    await client.query_text(
+        vector=[0.1] * 1024,
+        limit=5,
+        date_range={
+            "gte": "2020-01-01T00:00:00+00:00",
+            "lte": "2020-03-31T23:59:59.999999+00:00",
+        },
+    )
+
+    call_kwargs = mock_qdrant_client.query_points.call_args.kwargs
+    conditions = _extract_must_conditions(call_kwargs)
+    date_conditions = [c for c in conditions if c.key == "document_date"]
+    assert len(date_conditions) == 1
+    rng = date_conditions[0].range
+    from qdrant_client.models import DatetimeRange
+
+    assert isinstance(rng, DatetimeRange)
+    # Pydantic coerces ISO strings to tz-aware datetime objects
+    assert rng.gte == datetime(2020, 1, 1, 0, 0, 0, tzinfo=UTC)
+    assert rng.lte == datetime(2020, 3, 31, 23, 59, 59, 999999, tzinfo=UTC)
+
+
+@pytest.mark.asyncio
+async def test_query_text_without_date_range_no_date_condition(mock_qdrant_client):
+    """Omitting date_range must not inject any document_date FieldCondition."""
+    mock_qdrant_client.query_points.return_value.points = []
+
+    client = VectorStoreClient(_make_settings(enable_sparse=False))
+
+    await client.query_text(vector=[0.1] * 1024, limit=5)
+
+    call_kwargs = mock_qdrant_client.query_points.call_args.kwargs
+    conditions = _extract_must_conditions(call_kwargs)
+    assert not any(c.key == "document_date" for c in conditions)
+
+
+@pytest.mark.asyncio
+async def test_query_text_date_range_combined_with_filters(mock_qdrant_client):
+    """date_range and filters together should produce BOTH conditions in must."""
+    mock_qdrant_client.query_points.return_value.points = []
+
+    client = VectorStoreClient(_make_settings(enable_sparse=False))
+
+    await client.query_text(
+        vector=[0.1] * 1024,
+        limit=5,
+        filters={"matter_id": "m-1"},
+        date_range={"gte": "2020-01-01T00:00:00+00:00"},
+    )
+
+    call_kwargs = mock_qdrant_client.query_points.call_args.kwargs
+    conditions = _extract_must_conditions(call_kwargs)
+    keys = [c.key for c in conditions]
+    assert "matter_id" in keys
+    assert "document_date" in keys
+
+
 @pytest.mark.asyncio
 async def test_mixed_multipliers(mock_qdrant_client):
     """When only one per-modality multiplier provided, the other falls back."""

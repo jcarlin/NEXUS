@@ -1211,6 +1211,7 @@ async def post_agent_extract(state: dict) -> dict:
                     "relevance_score": round(item.get("score", 0), 4),
                     "preview_url": None,
                     "download_url": None,
+                    "document_date": item.get("document_date"),
                 }
             )
 

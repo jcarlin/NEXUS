@@ -89,8 +89,13 @@ async def test_graph_query_calls_graph_service():
     assert parsed[0]["target"] == "Acme Corp"
 
 
-async def test_temporal_search_injects_date_filters():
-    """temporal_search merges date_from/date_to into the Qdrant filters."""
+async def test_temporal_search_injects_date_range():
+    """temporal_search passes date_from/date_to as a normalized ISO ``date_range``.
+
+    The lower bound stays at 00:00:00, the upper bound is shifted to 23:59:59.999999
+    so a bare YYYY-MM-DD upper bound is inclusive of the full day. Flat filters
+    dict must NOT include date_from/date_to (that was the broken legacy API).
+    """
     mock_retriever = AsyncMock()
     mock_retriever.retrieve_text.return_value = _retriever_results(1)
 
@@ -105,10 +110,53 @@ async def test_temporal_search_injects_date_filters():
         )
 
     call_kwargs = mock_retriever.retrieve_text.call_args.kwargs
+    # filters dict must not contain raw date keys — that would be the broken
+    # MatchValue-based path that was passing filters through as exact strings.
+    assert "date_from" not in call_kwargs["filters"]
+    assert "date_to" not in call_kwargs["filters"]
     assert call_kwargs["filters"]["matter_id"] == _MATTER_ID
-    assert call_kwargs["filters"]["date_from"] == "2020-01-01"
-    assert call_kwargs["filters"]["date_to"] == "2020-03-31"
+    # New API: structured date_range dict with ISO bounds.
+    date_range = call_kwargs["date_range"]
+    assert date_range is not None
+    assert date_range["gte"].startswith("2020-01-01T00:00:00")
+    assert date_range["lte"].startswith("2020-03-31T23:59:59")
     assert call_kwargs["exclude_privilege_statuses"] == ["privileged", "work_product"]
+
+
+async def test_temporal_search_surfaces_document_date_in_results():
+    """Each formatted result should include a document_date key for the LLM."""
+    mock_retriever = AsyncMock()
+    mock_retriever.retrieve_text.return_value = [
+        {
+            "id": "c1",
+            "source_file": "email.eml",
+            "page_number": 1,
+            "chunk_text": "hi",
+            "score": 0.9,
+            "document_date": "2020-02-15T10:00:00+00:00",
+        }
+    ]
+
+    with patch("app.dependencies.get_retriever", return_value=mock_retriever):
+        raw = await temporal_search.ainvoke({"query": "flights", "state": _SAMPLE_STATE})
+
+    parsed = json.loads(raw)
+    assert parsed[0]["document_date"] == "2020-02-15T10:00:00+00:00"
+
+
+async def test_temporal_search_invalid_date_returns_error():
+    """An unparseable date bound must surface as an error JSON, not a silent skip."""
+    mock_retriever = AsyncMock()
+    mock_retriever.retrieve_text.return_value = []
+
+    with patch("app.dependencies.get_retriever", return_value=mock_retriever):
+        raw = await temporal_search.ainvoke({"query": "x", "date_from": "not-a-date", "state": _SAMPLE_STATE})
+
+    parsed = json.loads(raw)
+    assert "error" in parsed
+    assert "ValueError" in parsed["error"] or "Invalid date bound" in parsed["error"]
+    # Retriever must NOT have been called with a bogus bound.
+    mock_retriever.retrieve_text.assert_not_called()
 
 
 async def test_entity_lookup_resolves_aliases():

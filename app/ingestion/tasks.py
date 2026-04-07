@@ -20,6 +20,7 @@ import traceback
 import uuid
 import zipfile
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +29,7 @@ from celery import shared_task
 from celery.exceptions import SoftTimeLimitExceeded
 from sqlalchemy import create_engine, text
 
+from app.common.db_utils import parse_email_date
 from app.ingestion.events import record_event
 from workers.celery_app import celery_app  # noqa: F401 — ensures @shared_task binds to our app
 
@@ -299,6 +301,7 @@ def _finalize_document_record(
     entity_count: int,
     metadata: dict | None = None,
     summary: str | None = None,
+    document_date: datetime | None = None,
 ) -> None:
     """Update the document record with final pipeline stats."""
     meta = dict(metadata) if metadata else {}
@@ -313,6 +316,7 @@ def _finalize_document_record(
                     entity_count = :entity_count,
                     metadata_ = :metadata_,
                     summary = :summary,
+                    document_date = :document_date,
                     updated_at = now()
                 WHERE id = :doc_id
                 """
@@ -323,6 +327,7 @@ def _finalize_document_record(
                 "entity_count": entity_count,
                 "metadata_": metadata_json,
                 "summary": summary or None,
+                "document_date": document_date,
             },
         )
         conn.commit()
@@ -537,6 +542,7 @@ async def _index_to_neo4j(
     chunk_data: list[dict],
     matter_id: str | None = None,
     email_metadata: dict | None = None,
+    document_date: datetime | None = None,
 ) -> None:
     """Create Document, Entity, and Chunk nodes in Neo4j.
 
@@ -563,6 +569,7 @@ async def _index_to_neo4j(
             page_count=page_count,
             minio_path=minio_path,
             matter_id=matter_id,
+            document_date=document_date,
         )
 
         # Create chunk nodes BEFORE entities (entities need Chunk nodes
@@ -747,7 +754,8 @@ class _PipelineContext:
     # Populated by _stage_create_document
     document_id: str = ""
 
-    # Populated by _stage_index
+    # Populated by _stage_index (parsed from parse_result.metadata["date"])
+    document_date: datetime | None = None
     chunk_data_for_neo4j: list[dict] = field(default_factory=list)
 
     # Progress dict shared across stages
@@ -1263,6 +1271,21 @@ def _stage_embed_and_extract(ctx: _PipelineContext) -> None:
 
 def _stage_index(ctx: _PipelineContext) -> None:
     """Stage 5: Qdrant upsert (dense/sparse/visual) + Neo4j graph indexing."""
+    # Parse the canonical document date from extracted metadata. This is the
+    # real communication date (email Date header, EDRM Date field, etc.) —
+    # NOT the ingestion timestamp. parse_email_date handles RFC 2822, ISO
+    # 8601, and dateutil fallback; it returns None on failure so the caller
+    # can leave document_date NULL per the strict "no improvised dates" rule.
+    raw_date = (ctx.parse_result.metadata or {}).get("date") if ctx.parse_result else None
+    ctx.document_date = parse_email_date(raw_date)
+    if raw_date and ctx.document_date is None:
+        logger.warning(
+            "ingestion.document_date_unparsable",
+            doc_id=ctx.document_id,
+            filename=ctx.filename,
+            raw_date=str(raw_date)[:200],
+        )
+
     # 5a. Qdrant upsert
     from qdrant_client import QdrantClient
     from qdrant_client.models import PointStruct, SparseVector
@@ -1271,6 +1294,8 @@ def _stage_index(ctx: _PipelineContext) -> None:
 
     points = []
     ctx.chunk_data_for_neo4j = []
+
+    document_date_iso = ctx.document_date.isoformat() if ctx.document_date else None
 
     for i, (chunk, embedding) in enumerate(zip(ctx.chunks, ctx.embeddings)):
         point_id = str(uuid.uuid4())
@@ -1285,6 +1310,8 @@ def _stage_index(ctx: _PipelineContext) -> None:
         }
         if ctx.matter_id is not None:
             payload["matter_id"] = ctx.matter_id
+        if document_date_iso is not None:
+            payload["document_date"] = document_date_iso
         if "quality_score" in chunk.metadata:
             payload["quality_score"] = chunk.metadata["quality_score"]
         if chunk.context_prefix:
@@ -1379,6 +1406,7 @@ def _stage_index(ctx: _PipelineContext) -> None:
                 chunk_data=ctx.chunk_data_for_neo4j,
                 matter_id=ctx.matter_id,
                 email_metadata=email_meta,
+                document_date=ctx.document_date,
             )
         )
         logger.info("task.neo4j_indexed", entities=len(ctx.all_entities))
@@ -1397,6 +1425,7 @@ def _stage_complete(ctx: _PipelineContext) -> None:
         entity_count=len(ctx.all_entities),
         metadata=ctx.parse_result.metadata,
         summary=ctx.document_summary or None,
+        document_date=ctx.document_date,
     )
 
     # Auto-assign document to dataset if the job has a dataset_id
@@ -2019,6 +2048,23 @@ def import_text_document(
         text_length=len(text),
     )
 
+    # Parse canonical document_date from email headers (preferred) or metadata.
+    # See _stage_index for rationale: strict NULL on parse failure, no fallback
+    # to ingestion timestamp.
+    raw_date = None
+    if email_headers:
+        raw_date = email_headers.get("date")
+    if not raw_date and metadata:
+        raw_date = metadata.get("date")
+    document_date = parse_email_date(raw_date)
+    if raw_date and document_date is None:
+        logger.warning(
+            "task.import_text.document_date_unparsable",
+            filename=filename,
+            raw_date=str(raw_date)[:200],
+        )
+    document_date_iso = document_date.isoformat() if document_date else None
+
     try:
         # ---------------------------------------------------------------
         # Stage 1: UPLOAD — store raw text in MinIO for /documents/{id}/download
@@ -2179,6 +2225,8 @@ def import_text_document(
             }
             if matter_id is not None:
                 payload["matter_id"] = matter_id
+            if document_date_iso is not None:
+                payload["document_date"] = document_date_iso
 
             vector: dict[str, Any] | list[float]
             if sparse_embeddings:
@@ -2220,6 +2268,7 @@ def import_text_document(
                     entities=all_entities,
                     chunk_data=chunk_data_for_neo4j,
                     matter_id=matter_id,
+                    document_date=document_date,
                 )
             )
             logger.info("task.neo4j_indexed", entities=len(all_entities))
@@ -2243,6 +2292,7 @@ def import_text_document(
             chunk_count=len(chunks),
             entity_count=len(all_entities),
             metadata=metadata,
+            document_date=document_date,
         )
 
         # Set import_source on the document record

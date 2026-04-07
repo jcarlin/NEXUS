@@ -12,11 +12,12 @@ via ``prefetch`` + ``FusionQuery``.
 from __future__ import annotations
 
 import uuid
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypedDict
 
 import structlog
 from qdrant_client import QdrantClient
 from qdrant_client.models import (
+    DatetimeRange,
     Distance,
     FieldCondition,
     Filter,
@@ -33,6 +34,19 @@ from qdrant_client.models import (
     SparseVectorParams,
     VectorParams,
 )
+
+
+class DateRangeFilter(TypedDict, total=False):
+    """Inclusive ISO 8601 date range for ``document_date`` filtering.
+
+    Both bounds are optional. At least one must be provided to have any
+    effect. Values must be ISO 8601 strings that Qdrant can parse (e.g.
+    ``"2020-01-01T00:00:00+00:00"`` or ``"2020-01-01T00:00:00Z"``).
+    """
+
+    gte: str
+    lte: str
+
 
 if TYPE_CHECKING:
     from app.config import Settings
@@ -187,6 +201,7 @@ class VectorStoreClient:
             ("privilege_status", PayloadSchemaType.KEYWORD),
             ("page_number", PayloadSchemaType.INTEGER),
             ("chunk_index", PayloadSchemaType.INTEGER),
+            ("document_date", PayloadSchemaType.DATETIME),
         ]
         for field, schema_type in text_indexes:
             try:
@@ -296,6 +311,7 @@ class VectorStoreClient:
         dataset_doc_ids: list[str] | None = None,
         dense_prefetch_multiplier: int | None = None,
         sparse_prefetch_multiplier: int | None = None,
+        date_range: DateRangeFilter | None = None,
     ) -> list[dict[str, Any]]:
         """Search ``nexus_text``. Uses RRF fusion when sparse vector is provided.
 
@@ -306,6 +322,10 @@ class VectorStoreClient:
         - *dense_prefetch_multiplier*: multiplier for dense prefetch limit.
         - *sparse_prefetch_multiplier*: multiplier for sparse prefetch limit.
         If not provided, falls back to the shared *prefetch_multiplier*.
+
+        *date_range* (optional) restricts results to chunks whose
+        ``document_date`` payload falls within the given inclusive ISO
+        8601 bounds. Chunks without a ``document_date`` are excluded.
         """
         # Matryoshka dimensionality optimization (T3-15):
         # Truncate query vector to fewer dimensions for faster search.
@@ -327,6 +347,17 @@ class VectorStoreClient:
 
         if dataset_doc_ids:
             must_conditions.append(FieldCondition(key="doc_id", match=MatchAny(any=dataset_doc_ids)))
+
+        if date_range:
+            must_conditions.append(
+                FieldCondition(
+                    key="document_date",
+                    range=DatetimeRange(
+                        gte=date_range.get("gte"),
+                        lte=date_range.get("lte"),
+                    ),
+                )
+            )
 
         if exclude_privilege_statuses:
             for status in exclude_privilege_statuses:

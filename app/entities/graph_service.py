@@ -10,6 +10,7 @@ topic/alias edges, communication/reporting chain queries, path-finding.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 import structlog
@@ -103,19 +104,26 @@ class GraphService:
         page_count: int,
         minio_path: str,
         matter_id: str | None = None,
+        document_date: datetime | None = None,
     ) -> None:
         """Create (or update) a ``:Document`` node.
 
         Uses ``MERGE`` on the document id so the call is idempotent.
+
+        ``document_date`` is the canonical communication date (email sent
+        date, letter date, etc.) stored as an ISO 8601 string on the node.
+        ``created_at`` remains the ingestion timestamp for auditability —
+        the two are distinct.
         """
         query = """
         MERGE (d:Document {id: $doc_id})
-        SET d.filename   = $filename,
-            d.type       = $doc_type,
-            d.page_count = $page_count,
-            d.minio_path = $minio_path,
-            d.matter_id  = $matter_id,
-            d.created_at = datetime()
+        SET d.filename      = $filename,
+            d.type          = $doc_type,
+            d.page_count    = $page_count,
+            d.minio_path    = $minio_path,
+            d.matter_id     = $matter_id,
+            d.document_date = $document_date,
+            d.created_at    = datetime()
         """
         try:
             await self._run_write(
@@ -127,6 +135,7 @@ class GraphService:
                     "page_count": page_count,
                     "minio_path": minio_path,
                     "matter_id": matter_id,
+                    "document_date": document_date.isoformat() if document_date else None,
                 },
             )
             logger.info(
@@ -675,26 +684,49 @@ class GraphService:
         entity_name: str,
         matter_id: str | None = None,
     ) -> list[dict[str, Any]]:
-        """Return chronological events / document mentions for an entity."""
-        where_clause = ""
-        params: dict[str, Any] = {"name": entity_name}
-        if matter_id:
-            where_clause = "WHERE e.matter_id = $matter_id"
-            params["matter_id"] = matter_id
+        """Return chronological events / document mentions for an entity.
 
-        cypher = f"""
-        MATCH (e:Entity {{name: $name}})-[r:MENTIONED_IN]->(d:Document)
-        {where_clause}
-        WITH d, r
-        ORDER BY coalesce(d.date, d.created_at, d.filename)
-        LIMIT 100
+        Uses the canonical ``d.document_date`` property (set at ingestion
+        time from the real communication date — email Date header, EDRM
+        field, etc.). Documents without a ``document_date`` are excluded
+        rather than falling back to the ingestion timestamp.
+
+        Merges two traversal paths so an entity appears on the timeline
+        both as a body-mentioned name and as an email participant:
+
+        * ``(:Entity)-[:MENTIONED_IN]->(:Document)`` — body extraction
+        * ``(:Entity)-[:SENT|SENT_TO|CC|BCC]->(:Email)-[:SOURCED_FROM]->(:Document)``
+          — email header participation
+        """
+        params: dict[str, Any] = {
+            "name": entity_name,
+            "matter_id": matter_id,
+        }
+
+        cypher = """
+        CALL {
+            WITH $name AS name, $matter_id AS mid
+            MATCH (e:Entity {name: name})-[r:MENTIONED_IN]->(d:Document)
+            WHERE (mid IS NULL OR e.matter_id = mid)
+            RETURN d AS d, r.page_number AS page_number, 'mention' AS source
+            UNION
+            WITH $name AS name, $matter_id AS mid
+            MATCH (p:Entity {name: name})-[:SENT|SENT_TO|CC|BCC]->(em:Email)-[:SOURCED_FROM]->(d:Document)
+            WHERE (mid IS NULL OR p.matter_id = mid)
+            RETURN d AS d, NULL AS page_number, 'communication' AS source
+        }
+        WITH DISTINCT d, page_number, source
+        WHERE d.document_date IS NOT NULL
         OPTIONAL MATCH (other:Entity)-[:MENTIONED_IN]->(d)
         WHERE other.name <> $name
-        WITH d, r, collect(DISTINCT other.name)[..5] AS co_entities
-        RETURN d.filename AS document,
+        WITH d, page_number, source, collect(DISTINCT other.name)[..5] AS co_entities
+        ORDER BY d.document_date DESC
+        LIMIT 100
+        RETURN d.filename       AS document,
                coalesce(d.doc_type, d.type) AS document_type,
-               r.page_number AS page_number,
-               coalesce(d.date, d.created_at) AS date,
+               page_number,
+               d.document_date   AS date,
+               source,
                co_entities
         """
         try:
@@ -705,9 +737,13 @@ class GraphService:
                 filename = r.get("document", "Unknown document")
                 page = r.get("page_number")
                 doc_type = r.get("document_type", "")
-                desc = f"Mentioned in {filename}"
-                if page is not None:
-                    desc += f" (page {page})"
+                source = r.get("source") or "mention"
+                if source == "communication":
+                    desc = f"Communication ({filename})"
+                else:
+                    desc = f"Mentioned in {filename}"
+                    if page is not None:
+                        desc += f" (page {page})"
                 if doc_type:
                     desc += f" [{doc_type}]"
                 events.append(

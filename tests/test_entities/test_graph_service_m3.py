@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
@@ -276,6 +277,88 @@ async def test_get_entity_timeline_with_matter_id(graph_service):
     assert call_params["matter_id"] == "m-123"
     cypher = graph_service._run_query.call_args[0][0]
     assert "matter_id" in cypher
+
+
+@pytest.mark.asyncio
+async def test_get_entity_timeline_uses_document_date_not_created_at(graph_service):
+    """Timeline Cypher must read d.document_date and NEVER fall back to created_at."""
+    graph_service._run_query = AsyncMock(return_value=[])
+
+    await graph_service.get_entity_timeline("Alice", matter_id="m-1")
+
+    cypher = graph_service._run_query.call_args[0][0]
+    assert "d.document_date" in cypher
+    assert "d.created_at" not in cypher
+    # No legacy coalesce fallback on d.date either
+    assert "coalesce(d.date" not in cypher
+    assert "d.document_date IS NOT NULL" in cypher
+
+
+@pytest.mark.asyncio
+async def test_get_entity_timeline_walks_email_path(graph_service):
+    """Timeline must UNION MENTIONED_IN with SENT|SENT_TO|CC|BCC -> Email -> SOURCED_FROM path."""
+    graph_service._run_query = AsyncMock(return_value=[])
+
+    await graph_service.get_entity_timeline("Alice", matter_id="m-1")
+
+    cypher = graph_service._run_query.call_args[0][0]
+    assert "UNION" in cypher
+    assert "MENTIONED_IN" in cypher
+    assert "SENT|SENT_TO|CC|BCC" in cypher
+    assert "SOURCED_FROM" in cypher
+
+
+@pytest.mark.asyncio
+async def test_get_entity_timeline_orders_by_document_date_desc(graph_service):
+    """Timeline must order by document_date DESC so recent events appear first."""
+    graph_service._run_query = AsyncMock(return_value=[])
+
+    await graph_service.get_entity_timeline("Alice")
+
+    cypher = graph_service._run_query.call_args[0][0]
+    assert "ORDER BY d.document_date DESC" in cypher
+
+
+@pytest.mark.asyncio
+async def test_create_document_node_with_document_date(graph_service):
+    """create_document_node should SET d.document_date from an ISO string."""
+    graph_service._run_write = AsyncMock()
+
+    await graph_service.create_document_node(
+        doc_id="doc-1",
+        filename="email.eml",
+        doc_type="email",
+        page_count=1,
+        minio_path="raw/1/email.eml",
+        matter_id="m-1",
+        document_date=datetime(2020, 3, 15, 10, 0, 0, tzinfo=UTC),
+    )
+
+    call_args = graph_service._run_write.call_args
+    cypher = call_args[0][0]
+    params = call_args[0][1]
+    assert "d.document_date = $document_date" in cypher
+    assert params["document_date"] == "2020-03-15T10:00:00+00:00"
+    # created_at must still be set separately for auditability
+    assert "d.created_at    = datetime()" in cypher
+
+
+@pytest.mark.asyncio
+async def test_create_document_node_null_document_date(graph_service):
+    """Omitted document_date should bind None (not a string)."""
+    graph_service._run_write = AsyncMock()
+
+    await graph_service.create_document_node(
+        doc_id="doc-1",
+        filename="scan.pdf",
+        doc_type="pdf",
+        page_count=3,
+        minio_path="raw/1/scan.pdf",
+        matter_id="m-1",
+    )
+
+    params = graph_service._run_write.call_args[0][1]
+    assert params["document_date"] is None
 
 
 @pytest.mark.asyncio

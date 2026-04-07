@@ -630,6 +630,52 @@ async def test_post_agent_extract_collects_source_documents():
     assert result["source_documents"][1]["id"] == "p2"
 
 
+async def test_post_agent_extract_propagates_document_date():
+    """Should carry a document_date field from tool results into source_documents."""
+    from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+
+    tool_result = ToolMessage(
+        content=json.dumps(
+            [
+                {
+                    "id": "p1",
+                    "filename": "email.eml",
+                    "page": 1,
+                    "text": "chunk 1",
+                    "score": 0.9,
+                    "document_date": "2020-02-15T10:00:00+00:00",
+                },
+                {
+                    "id": "p2",
+                    "filename": "scan.pdf",
+                    "page": 1,
+                    "text": "chunk 2",
+                    "score": 0.7,
+                    # no document_date: should propagate as None
+                },
+            ]
+        ),
+        tool_call_id="tc1",
+    )
+
+    state = {
+        "messages": [
+            HumanMessage(content="test"),
+            tool_result,
+            AIMessage(content="Answer."),
+        ],
+    }
+
+    with patch("app.dependencies.get_entity_extractor") as mock_get_ee:
+        mock_ee = MagicMock()
+        mock_ee.extract.return_value = []
+        mock_get_ee.return_value = mock_ee
+        result = await post_agent_extract(state)
+
+    assert result["source_documents"][0]["document_date"] == "2020-02-15T10:00:00+00:00"
+    assert result["source_documents"][1]["document_date"] is None
+
+
 async def test_post_agent_extract_deduplicates_sources():
     """Should not include duplicate document IDs in source_documents."""
     from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
