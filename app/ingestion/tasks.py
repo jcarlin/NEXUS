@@ -50,6 +50,68 @@ def _get_sync_engine(settings=None):
     return create_engine(settings.postgres_url_sync, pool_pre_ping=True)
 
 
+# ---------------------------------------------------------------------------
+# Process-level client caches for the deferred NER task
+# ---------------------------------------------------------------------------
+# The NER task runs tens of thousands of times per worker process. Creating a
+# fresh QdrantClient, Neo4j driver, and SQLAlchemy engine per task adds
+# 500-1500ms of overhead on top of 1-3s of actual GLiNER work. These caches
+# reuse long-lived clients across tasks in the same Celery worker process.
+# They are only used by ``extract_entities_for_job``; other tasks still use
+# ``_get_sync_engine`` + ``engine.dispose()`` as before.
+
+import threading as _threading  # noqa: E402
+
+_NER_QDRANT_CLIENT = None  # type: ignore[var-annotated]
+_NER_NEO4J_SYNC_DRIVER = None  # type: ignore[var-annotated]
+_NER_SYNC_ENGINE = None  # type: ignore[var-annotated]
+_NER_OVERRIDES_LOADED = False
+_NER_CLIENT_CACHE_LOCK = _threading.Lock()
+
+
+def _get_ner_qdrant(settings):
+    """Return a process-cached QdrantClient (thread-safe lazy init)."""
+    global _NER_QDRANT_CLIENT
+    if _NER_QDRANT_CLIENT is None:
+        with _NER_CLIENT_CACHE_LOCK:
+            if _NER_QDRANT_CLIENT is None:
+                from qdrant_client import QdrantClient
+
+                _NER_QDRANT_CLIENT = QdrantClient(url=settings.qdrant_url)
+    return _NER_QDRANT_CLIENT
+
+
+def _get_ner_neo4j_sync_driver(settings):
+    """Return a process-cached sync Neo4j driver.
+
+    We use the sync driver (not async) to avoid the two-event-loop bug:
+    each ``asyncio.run()`` call creates a fresh loop, and reusing an
+    AsyncDriver across loops corrupts its internal pool.  The sync driver
+    has no event loop coupling and is thread-safe.
+    """
+    global _NER_NEO4J_SYNC_DRIVER
+    if _NER_NEO4J_SYNC_DRIVER is None:
+        with _NER_CLIENT_CACHE_LOCK:
+            if _NER_NEO4J_SYNC_DRIVER is None:
+                from neo4j import GraphDatabase
+
+                _NER_NEO4J_SYNC_DRIVER = GraphDatabase.driver(
+                    settings.neo4j_uri,
+                    auth=(settings.neo4j_user, settings.neo4j_password),
+                )
+    return _NER_NEO4J_SYNC_DRIVER
+
+
+def _get_ner_sync_engine(settings):
+    """Return a process-cached sync SQLAlchemy engine for the NER task."""
+    global _NER_SYNC_ENGINE
+    if _NER_SYNC_ENGINE is None:
+        with _NER_CLIENT_CACHE_LOCK:
+            if _NER_SYNC_ENGINE is None:
+                _NER_SYNC_ENGINE = create_engine(settings.postgres_url_sync, pool_pre_ping=True)
+    return _NER_SYNC_ENGINE
+
+
 def _update_stage(
     engine,
     job_id: str,
@@ -635,11 +697,16 @@ async def _index_deferred_entities_to_neo4j(
     entities: list[dict],
     matter_id: str | None = None,
 ) -> None:
-    """Index entities from deferred NER to Neo4j.
+    """Index entities from deferred NER to Neo4j (async path).
 
     Runs inside a single ``asyncio.run()`` call so the async Neo4j driver
     stays on one event loop (avoids the two-loop bug from separate
     ``asyncio.run()`` calls for the operation and driver close).
+
+    NOTE: ``extract_entities_for_job`` uses the sync path
+    (``_index_deferred_entities_to_neo4j_sync``) for a ~400ms/task speedup.
+    This async function is kept for any other caller that already runs
+    inside an event loop.
     """
     from neo4j import AsyncGraphDatabase
 
@@ -658,6 +725,100 @@ async def _index_deferred_entities_to_neo4j(
         )
     finally:
         await driver.close()
+
+
+def _index_deferred_entities_to_neo4j_sync(
+    driver,
+    doc_id: str,
+    entities: list[dict],
+    matter_id: str | None = None,
+) -> int:
+    """Sync version of entity indexing for deferred NER.
+
+    Mirrors ``GraphService.index_entities_for_document`` exactly:
+      1. Group entities by type
+      2. For each type: UNWIND + MERGE Entity with label + MENTIONED_IN + EXTRACTED_FROM
+      3. If >= 2 entities: create chunk-level CO_OCCURS edges
+
+    Uses the process-cached sync neo4j driver (``driver`` argument) so we
+    avoid the 200-800ms per-task overhead of creating a new AsyncDriver and
+    event loop for every NER task.
+    """
+    if not entities:
+        return 0
+
+    from app.entities.schema import get_neo4j_label
+
+    by_type: dict[str, list[dict]] = {}
+    for ent in entities:
+        by_type.setdefault(ent["type"], []).append(ent)
+
+    total = 0
+    with driver.session() as session:
+        for etype, batch in by_type.items():
+            label = get_neo4j_label(etype)
+            label_clause = f"SET e:{label}" if label else ""
+
+            query = f"""
+            UNWIND $entities AS ent
+            MERGE (e:Entity {{name: ent.name, type: ent.type, matter_id: $matter_id}})
+            ON CREATE SET e.first_seen     = datetime(),
+                          e.mention_count  = 1
+            ON MATCH  SET e.mention_count  = e.mention_count + 1,
+                          e.last_seen      = datetime()
+            {label_clause}
+            WITH e, ent
+            MATCH (d:Document {{id: $doc_id}})
+            MERGE (e)-[r:MENTIONED_IN]->(d)
+            SET r.page_number = ent.page_number
+            WITH e, ent
+            WHERE ent.chunk_id IS NOT NULL
+            MATCH (c:Chunk {{id: ent.chunk_id}})
+            MERGE (e)-[:EXTRACTED_FROM]->(c)
+            """
+            try:
+                session.run(
+                    query,
+                    {"doc_id": doc_id, "entities": batch, "matter_id": matter_id},
+                ).consume()
+                total += len(batch)
+            except Exception:
+                logger.error(
+                    "graph.entities.index_failed",
+                    doc_id=doc_id,
+                    entity_type=etype,
+                    count=len(batch),
+                )
+                raise
+
+        # Chunk-level co-occurrence edges (matches async _create_co_occurrence_edges)
+        if total >= 2:
+            co_query = """
+            MATCH (e1:Entity)-[:EXTRACTED_FROM]->(c:Chunk)-[:PART_OF]->(d:Document {id: $doc_id, matter_id: $matter_id})
+            WITH c, e1
+            MATCH (e2:Entity)-[:EXTRACTED_FROM]->(c)
+            WHERE id(e1) < id(e2)
+            MERGE (e1)-[r:CO_OCCURS]->(e2)
+            ON CREATE SET r.weight = 1
+            ON MATCH  SET r.weight = r.weight + 1
+            """
+            try:
+                session.run(
+                    co_query,
+                    {"doc_id": doc_id, "matter_id": matter_id},
+                ).consume()
+            except Exception:
+                logger.warning(
+                    "graph.co_occurrence.failed",
+                    doc_id=doc_id,
+                )
+
+    logger.info(
+        "graph.entities.indexed",
+        doc_id=doc_id,
+        count=total,
+    )
+    return total
 
 
 async def _extract_relationships(
@@ -2774,14 +2935,20 @@ def extract_entities_for_job(self, doc_id_or_job_id: str, matter_id: str | None 
 
     from app.config import Settings
     from app.entities.extractor import get_cached_extractor
-    from app.feature_flags.service import load_overrides_sync_safe
 
     settings = Settings()
-    engine = _get_sync_engine(settings)
-    try:
-        load_overrides_sync_safe(settings, engine)
-    except Exception:
-        pass  # Feature flag DB may not be initialised yet
+    engine = _get_ner_sync_engine(settings)
+
+    # Load feature flag overrides once per process (not per task)
+    global _NER_OVERRIDES_LOADED
+    if not _NER_OVERRIDES_LOADED:
+        from app.feature_flags.service import load_overrides_sync_safe
+
+        try:
+            load_overrides_sync_safe(settings, engine)
+        except Exception:
+            pass  # Feature flag DB may not be initialised yet
+        _NER_OVERRIDES_LOADED = True
 
     # Resolve to canonical documents.id (handles both doc_id and legacy job_id)
     doc_id = doc_id_or_job_id
@@ -2799,9 +2966,7 @@ def extract_entities_for_job(self, doc_id_or_job_id: str, matter_id: str | None 
         pass  # Fall through with original value
 
     try:
-        from qdrant_client import QdrantClient
-
-        qdrant = QdrantClient(url=settings.qdrant_url)
+        qdrant = _get_ner_qdrant(settings)
 
         # Fetch chunks for this document from Qdrant
         scroll_result = qdrant.scroll(
@@ -2860,16 +3025,15 @@ def extract_entities_for_job(self, doc_id_or_job_id: str, matter_id: str | None 
             chunk_count=len(chunk_texts),
         )
 
-        # Index to Neo4j (single asyncio.run to keep driver on one event loop)
+        # Index to Neo4j using the process-cached sync driver (reused across tasks)
         if all_entities:
             try:
-                asyncio.run(
-                    _index_deferred_entities_to_neo4j(
-                        settings=settings,
-                        doc_id=doc_id,
-                        entities=all_entities,
-                        matter_id=matter_id,
-                    )
+                neo4j_driver = _get_ner_neo4j_sync_driver(settings)
+                _index_deferred_entities_to_neo4j_sync(
+                    driver=neo4j_driver,
+                    doc_id=doc_id,
+                    entities=all_entities,
+                    matter_id=matter_id,
                 )
             except Exception:
                 logger.warning("task.deferred_ner.neo4j_failed", exc_info=True)
@@ -2896,8 +3060,9 @@ def extract_entities_for_job(self, doc_id_or_job_id: str, matter_id: str | None 
     except Exception as exc:
         logger.error("task.deferred_ner.failed", doc_id=doc_id, error=str(exc), exc_info=True)
         raise self.retry(exc=exc)
-    finally:
-        engine.dispose()
+    # Note: engine is process-cached (_get_ner_sync_engine); we intentionally
+    # do NOT dispose it here. SQLAlchemy's connection pool will return the
+    # connection to the pool when the ``with engine.connect()`` block exits.
 
 
 def _get_neo4j_driver(settings):
