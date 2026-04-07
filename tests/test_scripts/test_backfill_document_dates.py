@@ -122,6 +122,67 @@ def test_backfill_postgres_empty_corpus_terminates_cleanly():
     assert unparsable == 0
 
 
+def test_backfill_postgres_uses_cursor_not_offset():
+    """Phase 1 must use ``id > :last_id`` cursor pagination, not OFFSET.
+
+    Regression test for a bug where OFFSET-based pagination combined with
+    ``WHERE document_date IS NULL`` skipped rows after each batch because
+    committed UPDATEs shrunk the matching set. The cursor approach advances
+    via the largest id seen so every row is visited exactly once.
+    """
+    executed_sql: list[str] = []
+    executed_params: list[dict] = []
+
+    engine = MagicMock()
+    conn = MagicMock()
+
+    # Two batches, then empty. Rows have ascending uuid-shaped ids.
+    batches = iter(
+        [
+            [
+                SimpleNamespace(id="aa000000-0000-0000-0000-000000000001", raw_date="2020-01-01"),
+                SimpleNamespace(id="aa000000-0000-0000-0000-000000000002", raw_date="2020-01-02"),
+            ],
+            [
+                SimpleNamespace(id="bb000000-0000-0000-0000-000000000003", raw_date="2020-01-03"),
+            ],
+            [],
+        ]
+    )
+
+    def execute_side_effect(stmt, params=None):
+        sql = str(stmt)
+        executed_sql.append(sql)
+        executed_params.append(dict(params) if params else {})
+        res = MagicMock()
+        if "SELECT" in sql.upper():
+            res.fetchall.return_value = next(batches)
+        return res
+
+    conn.execute.side_effect = execute_side_effect
+    conn.__enter__ = MagicMock(return_value=conn)
+    conn.__exit__ = MagicMock(return_value=None)
+    engine.connect.return_value = conn
+
+    parsed, _ = backfill_postgres(engine, matter_id=None, batch=100, dry_run=False, tracker=None)
+
+    # 3 rows total, all parseable
+    assert parsed == 3
+
+    # SELECT queries must use id > :last_id, NOT OFFSET
+    select_sqls = [s for s in executed_sql if "SELECT" in s.upper()]
+    for sql in select_sqls:
+        assert "id > :last_id" in sql, f"cursor not used: {sql!r}"
+        assert "OFFSET" not in sql.upper(), f"OFFSET leaked back into query: {sql!r}"
+
+    # Cursor must advance: batch 1 starts at zero-uuid, batch 2 starts at the
+    # largest id from batch 1, batch 3 starts at the largest id from batch 2.
+    select_params = [p for p, s in zip(executed_params, executed_sql) if "SELECT" in s.upper()]
+    assert select_params[0]["last_id"] == "00000000-0000-0000-0000-000000000000"
+    assert select_params[1]["last_id"] == "aa000000-0000-0000-0000-000000000002"
+    assert select_params[2]["last_id"] == "bb000000-0000-0000-0000-000000000003"
+
+
 def test_backfill_qdrant_issues_one_set_payload_per_doc():
     """Phase 3 should call ``set_payload`` once per doc with the correct
     ``doc_id`` FieldCondition + ``document_date`` ISO string."""

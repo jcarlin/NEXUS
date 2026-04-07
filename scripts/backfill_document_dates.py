@@ -84,6 +84,13 @@ def backfill_postgres(
 ) -> tuple[int, int]:
     """Parse metadata_->>'date' and write document_date.
 
+    Uses **id-cursor pagination** rather than LIMIT/OFFSET. OFFSET pagination
+    is broken here because each batch commits UPDATEs that shrink the
+    ``WHERE document_date IS NULL`` matching set, so a fixed OFFSET skips
+    rows. The cursor (``id > :last_id``) advances naturally regardless of
+    whether each row was updated or left NULL (unparseable), so every
+    matching row is visited exactly once.
+
     Returns ``(parsed, unparsable)``.
     """
     where_extra = _where_matter(matter_id)
@@ -94,9 +101,10 @@ def backfill_postgres(
         WHERE document_date IS NULL
           AND metadata_ ? 'date'
           AND length(metadata_->>'date') > 0
+          AND id > :last_id
           {where_extra}
         ORDER BY id
-        LIMIT :batch OFFSET :offset
+        LIMIT :batch
         """
     )
     update_sql = text(
@@ -110,10 +118,11 @@ def backfill_postgres(
 
     parsed = 0
     unparsable = 0
-    offset = 0
+    # Start cursor at the smallest possible UUID so the first query sees every row.
+    last_id = "00000000-0000-0000-0000-000000000000"
 
     while True:
-        params: dict[str, Any] = {"batch": batch, "offset": offset}
+        params: dict[str, Any] = {"batch": batch, "last_id": last_id}
         if matter_id:
             params["matter_id"] = matter_id
         with engine.connect() as conn:
@@ -136,10 +145,12 @@ def backfill_postgres(
                 conn.execute(update_sql, updates)
                 conn.commit()
             parsed += len(updates)
-        offset += batch
+            # Advance cursor past the largest id in this batch (rows are
+            # ORDER BY id so the last row has the max id).
+            last_id = str(rows[-1].id)
         if tracker:
             tracker.update(processed=parsed, failed=unparsable)
-        print(f"  PG batch offset={offset - batch}: parsed={parsed} unparsable={unparsable}")
+        print(f"  PG batch last_id={last_id}: parsed={parsed} unparsable={unparsable}")
 
     return parsed, unparsable
 
