@@ -27,44 +27,71 @@ def parse_jsonb(val: Any) -> list[Any]:
     return []
 
 
+_DOCUMENT_DATE_MIN_YEAR = 1950
+_DOCUMENT_DATE_MAX_YEAR_OFFSET = 2  # allow forward-dated contracts up to current_year+2
+
+
+def is_plausible_document_date(dt: datetime) -> bool:
+    """Return True iff *dt* falls within a plausible legal-document date range.
+
+    Rejects dates earlier than 1950 or later than 2 years from today. Catches
+    source-metadata corruption (e.g. raw values like "DEC-30-2036" or
+    dateutil mis-parsing "1/20/53" as 2053) that would otherwise populate
+    the timeline with implausible future/ancient dates.
+    """
+    now = datetime.now(tz=UTC)
+    return _DOCUMENT_DATE_MIN_YEAR <= dt.year <= now.year + _DOCUMENT_DATE_MAX_YEAR_OFFSET
+
+
 def parse_email_date(raw: str | None) -> datetime | None:
     """Parse an email date string into a timezone-aware datetime.
 
     Handles RFC 2822, ISO 8601, and Python datetime str representations.
-    Returns None for empty, missing, or unparseable values.
+    Returns None for empty, missing, unparseable, or **implausible** values
+    (year outside ``[1950, current_year+2]``). The plausibility check
+    catches source-metadata corruption that would otherwise populate the
+    corpus with year-4501 or year-200 dates.
     """
     if not raw or not raw.strip():
         return None
 
     raw = raw.strip()
+    dt: datetime | None = None
 
     # 1. RFC 2822 (e.g. "Wed, 12 Feb 2025 16:10:00 +0000")
     try:
-        return parsedate_to_datetime(raw)
+        dt = parsedate_to_datetime(raw)
     except (ValueError, TypeError):
         pass
 
     # 2. ISO 8601 / Python datetime str (e.g. "2025-02-12T16:10:00+00:00")
-    try:
-        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=UTC)
-        return dt
-    except (ValueError, TypeError):
-        pass
+    if dt is None:
+        try:
+            dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=UTC)
+        except (ValueError, TypeError):
+            dt = None
 
     # 3. Fallback: dateutil for diverse formats (e.g. "02/12/2025")
-    try:
-        from dateutil.parser import parse as dateutil_parse
+    if dt is None:
+        try:
+            from dateutil.parser import parse as dateutil_parse
 
-        dt = dateutil_parse(raw)
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=UTC)
-        return dt
-    except (ValueError, TypeError, ImportError):
-        pass
+            dt = dateutil_parse(raw)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=UTC)
+        except (ValueError, TypeError, ImportError):
+            dt = None
 
-    return None
+    if dt is None:
+        return None
+
+    # Plausibility gate — reject obviously bad values.
+    if not is_plausible_document_date(dt):
+        return None
+
+    return dt
 
 
 def row_to_dict(row) -> dict:

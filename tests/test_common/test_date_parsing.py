@@ -92,3 +92,50 @@ def test_parse_email_date_always_tz_aware():
         result = parse_email_date(s)
         assert result is not None, f"Failed to parse: {s}"
         assert result.tzinfo is not None, f"Naive result for: {s}"
+
+
+# ---------------------------------------------------------------------------
+# Plausibility gate: reject out-of-range dates that would otherwise populate
+# the corpus with source-metadata corruption (e.g. year 4501 from dateutil
+# misinterpretation, or literal "DEC-30-2036").
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        # Literal corrupted source metadata values seen in production corpus
+        "DEC-30-2036",
+        "March 29, 2111",
+        "4501-01-01",
+        "0200-01-07",
+        # 2-digit year that dateutil would parse as a future year (e.g. 2053)
+        # — note: dateutil default behaviour varies; this tests the gate.
+    ],
+    ids=["year_2036", "year_2111", "year_4501", "year_200"],
+)
+def test_parse_email_date_rejects_implausible_years(raw: str):
+    """Dates outside [1950, current_year+2] must be rejected as None."""
+    result = parse_email_date(raw)
+    assert result is None, f"Implausible date {raw!r} should have been rejected, got {result!r}"
+
+
+def test_is_plausible_document_date():
+    """The plausibility helper accepts the legal-doc range and rejects outside."""
+    from datetime import UTC, datetime
+
+    from app.common.db_utils import is_plausible_document_date
+
+    now = datetime.now(tz=UTC)
+
+    # Plausible: within [1950, current_year + 2]
+    assert is_plausible_document_date(datetime(1950, 1, 1, tzinfo=UTC))
+    assert is_plausible_document_date(datetime(2005, 6, 15, tzinfo=UTC))
+    assert is_plausible_document_date(datetime(now.year, 1, 1, tzinfo=UTC))
+    assert is_plausible_document_date(datetime(now.year + 2, 12, 31, tzinfo=UTC))
+
+    # Implausible: before 1950 or more than 2 years ahead
+    assert not is_plausible_document_date(datetime(1949, 12, 31, tzinfo=UTC))
+    assert not is_plausible_document_date(datetime(1900, 1, 1, tzinfo=UTC))
+    assert not is_plausible_document_date(datetime(now.year + 3, 1, 1, tzinfo=UTC))
+    assert not is_plausible_document_date(datetime(4501, 1, 1, tzinfo=UTC))
