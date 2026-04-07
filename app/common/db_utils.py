@@ -73,15 +73,23 @@ def parse_email_date(raw: str | None) -> datetime | None:
         except (ValueError, TypeError):
             dt = None
 
-    # 3. Fallback: dateutil for diverse formats (e.g. "02/12/2025")
+    # 3. Fallback: dateutil for diverse formats (e.g. "02/12/2025").
+    #
+    # We pass a sentinel default of year 1 so that if the raw input is
+    # missing any component (year, month, day), dateutil fills it with
+    # year 1 instead of the current year. That sentinel then fails the
+    # plausibility gate below, rejecting partial dates like "July 17",
+    # "4/28", or "5:47 PM" that would otherwise silently be dated
+    # "today". Full dates with an explicit year continue to parse
+    # normally.
     if dt is None:
         try:
             from dateutil.parser import parse as dateutil_parse
 
-            dt = dateutil_parse(raw)
+            dt = dateutil_parse(raw, default=datetime(1, 1, 1, tzinfo=UTC))
             if dt.tzinfo is None:
                 dt = dt.replace(tzinfo=UTC)
-        except (ValueError, TypeError, ImportError):
+        except (ValueError, TypeError, ImportError, OverflowError):
             dt = None
 
     if dt is None:

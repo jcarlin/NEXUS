@@ -120,6 +120,45 @@ def test_parse_email_date_rejects_implausible_years(raw: str):
     assert result is None, f"Implausible date {raw!r} should have been rejected, got {result!r}"
 
 
+@pytest.mark.parametrize(
+    "raw",
+    [
+        # Month + day, no year — dateutil default silently fills in current year
+        "July 17",
+        "December 11th",
+        "4/28",
+        "AUG 11",
+        # Full day-of-week + month + day, no year
+        "Mon Dec 20 10:39:31 PM",
+        "Thu Sep 27",
+        # Time only — dateutil uses today's date entirely
+        "5:47 PM",
+        # Day-of-week + ordinal only
+        "Mon, 19th",
+    ],
+    ids=[
+        "month_day_only",
+        "ordinal_month_day",
+        "slash_no_year",
+        "upper_month_day",
+        "weekday_full_no_year",
+        "weekday_short_no_year",
+        "time_only",
+        "weekday_ordinal_only",
+    ],
+)
+def test_parse_email_date_rejects_partial_dates_without_year(raw: str):
+    """Dates missing the year component must be rejected as None.
+
+    dateutil fills missing year/month/day with TODAY by default which
+    produces misleading "current year" results. We pass a sentinel
+    ``default=datetime(1, ...)`` so partial dates land in year 1 and
+    fail the plausibility gate.
+    """
+    result = parse_email_date(raw)
+    assert result is None, f"Partial date {raw!r} should have been rejected, got {result!r}"
+
+
 def test_is_plausible_document_date():
     """The plausibility helper accepts the legal-doc range and rejects outside."""
     from datetime import UTC, datetime
