@@ -75,18 +75,26 @@ def parse_email_date(raw: str | None) -> datetime | None:
 
     # 3. Fallback: dateutil for diverse formats (e.g. "02/12/2025").
     #
-    # We pass a sentinel default of year 1 so that if the raw input is
-    # missing any component (year, month, day), dateutil fills it with
-    # year 1 instead of the current year. That sentinel then fails the
-    # plausibility gate below, rejecting partial dates like "July 17",
-    # "4/28", or "5:47 PM" that would otherwise silently be dated
-    # "today". Full dates with an explicit year continue to parse
-    # normally.
+    # dateutil silently fills missing components (year, month, day) with
+    # today's date when the raw input lacks them. That produces misleading
+    # "current year" results for inputs like "July 17" or "5:47 PM". To
+    # detect this, we pass two different sentinel defaults and compare
+    # the parsed years. If they disagree, the parser made up the year
+    # from the default, so we refuse to guess and return None rather
+    # than fabricating a date.
     if dt is None:
         try:
             from dateutil.parser import parse as dateutil_parse
 
-            dt = dateutil_parse(raw, default=datetime(1, 1, 1, tzinfo=UTC))
+            sentinel_a = datetime(1, 1, 1, tzinfo=UTC)
+            sentinel_b = datetime(2, 1, 1, tzinfo=UTC)
+            dt_a = dateutil_parse(raw, default=sentinel_a)
+            dt_b = dateutil_parse(raw, default=sentinel_b)
+            if dt_a.year != dt_b.year:
+                # The year came from the default, not from *raw*. Don't
+                # fabricate a date from a partial input.
+                return None
+            dt = dt_a
             if dt.tzinfo is None:
                 dt = dt.replace(tzinfo=UTC)
         except (ValueError, TypeError, ImportError, OverflowError):
@@ -95,7 +103,9 @@ def parse_email_date(raw: str | None) -> datetime | None:
     if dt is None:
         return None
 
-    # Plausibility gate — reject obviously bad values.
+    # Plausibility gate — reject values outside the legal-doc range even
+    # when the parse succeeded (catches literal source-metadata corruption
+    # like "DEC-30-2036" or "March 29, 2111").
     if not is_plausible_document_date(dt):
         return None
 
