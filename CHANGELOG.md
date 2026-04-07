@@ -10,24 +10,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follo
 
 ## [Unreleased]
 
+## [1.22.0] - 2026-04-06
+
 ### Added
-- `document_date` column on the `documents` table (migration 038) — canonical communication date (email Date header, EDRM Date field, etc.) distinct from the ingestion timestamp `created_at`. Two partial indexes for matter-scoped chronological queries.
-- `DateRangeFilter` TypedDict and `date_range` parameter on `VectorStoreClient.query_text` — builds a real Qdrant `DatetimeRange` filter on the `document_date` payload instead of treating date bounds as exact-match strings.
-- `document_date` Qdrant payload field on all chunk points, indexed as `DATETIME` for efficient range queries.
-- `document_date` field on the `SourceDocument` Pydantic schema so source citations round-trip the real communication date to the LLM and frontend.
-- `scripts/backfill_document_dates.py` — three-phase idempotent, resumable backfill that parses `documents.metadata_->>'date'` into the new column, upserts Neo4j `:Document` nodes, and updates Qdrant chunk payloads via `set_payload`. CLI flags for matter scoping, dry runs, and per-phase skips; integrates with `TaskTracker` for live Pipeline Monitor progress.
+- `document_date` column on the `documents` table (migration 038) — canonical communication date (email Date header, EDRM Date field, etc.) distinct from the ingestion timestamp `created_at`. Two partial indexes for matter-scoped chronological queries (f2bd0e9)
+- `DateRangeFilter` TypedDict and `date_range` parameter on `VectorStoreClient.query_text` — builds a real Qdrant `DatetimeRange` filter on the `document_date` payload instead of treating date bounds as exact-match strings (f2bd0e9)
+- `document_date` Qdrant payload field on all chunk points, indexed as `DATETIME` for efficient range queries (f2bd0e9)
+- `document_date` field on the `SourceDocument` Pydantic schema so source citations round-trip the real communication date to the LLM and frontend (f2bd0e9)
+- `scripts/backfill_document_dates.py` — three-phase idempotent, resumable backfill that parses `documents.metadata_->>'date'` into the new column, upserts Neo4j `:Document` nodes, and updates Qdrant chunk payloads via `set_payload`. CLI flags for matter scoping, dry runs, and per-phase skips; integrates with `TaskTracker` for live Pipeline Monitor progress (f2bd0e9)
 
 ### Changed
-- `get_entity_timeline` Cypher rewritten: reads `d.document_date` directly with **no fallback** to the ingestion timestamp, excludes documents without a real date, orders by `document_date DESC`, and UNIONs the `MENTIONED_IN` path with the `SENT|SENT_TO|CC|BCC -> Email -> SOURCED_FROM -> Document` path so email senders/recipients appear on the timeline even when not named in the body.
-- `create_document_node` in `app/entities/graph_service.py` now accepts and sets `d.document_date` (ISO 8601 string) while keeping `d.created_at` as a separate audit timestamp.
-- `_stage_index` (and `import_text_document`) parses `parse_result.metadata["date"]` once via `parse_email_date()`, stores on `_PipelineContext.document_date`, and forwards to Qdrant payload construction, `_index_to_neo4j`, and `_finalize_document_record`.
-- `temporal_search` tool now normalizes `YYYY-MM-DD` bounds into ISO 8601 (upper bound shifted to `23:59:59.999999` for inclusive day ranges), passes a structured `date_range` through `HybridRetriever.retrieve_text`, and **raises `ValueError` on unparseable bounds** instead of silently skipping them. The tool output now includes `document_date` per result so the LLM can reason about it.
-- `vector_search`, `document_retrieval`, and `structured_query` tool result formatters now include `document_date` alongside existing fields.
+- `get_entity_timeline` Cypher rewritten: reads `d.document_date` directly with **no fallback** to the ingestion timestamp, excludes documents without a real date, orders by `document_date DESC`, and UNIONs the `MENTIONED_IN` path with the `SENT|SENT_TO|CC|BCC -> Email -> SOURCED_FROM -> Document` path so email senders/recipients appear on the timeline even when not named in the body (f2bd0e9)
+- `create_document_node` in `app/entities/graph_service.py` now accepts and sets `d.document_date` (ISO 8601 string) while keeping `d.created_at` as a separate audit timestamp (f2bd0e9)
+- `_stage_index` (and `import_text_document`) parses `parse_result.metadata["date"]` once via `parse_email_date()`, stores on `_PipelineContext.document_date`, and forwards to Qdrant payload construction, `_index_to_neo4j`, and `_finalize_document_record` (f2bd0e9)
+- `temporal_search` tool now normalizes `YYYY-MM-DD` bounds into ISO 8601 (upper bound shifted to `23:59:59.999999` for inclusive day ranges), passes a structured `date_range` through `HybridRetriever.retrieve_text`, and **raises `ValueError` on unparseable bounds** instead of silently skipping them. The tool output now includes `document_date` per result so the LLM can reason about it (f2bd0e9)
+- `vector_search`, `document_retrieval`, and `structured_query` tool result formatters now include `document_date` alongside existing fields (f2bd0e9)
 
 ### Fixed
-- Entity timeline on pages like `/entities/Jeffrey%20Epstein` previously showed the ingestion timestamp for every event because `d.date` was never set on `:Document` nodes and the Cypher fell back to `d.created_at`. Timeline now displays real communication dates and marks undated documents as "Unknown" rather than silently stamping them with "today".
-- Qdrant date range filtering in `temporal_search` was previously broken — `date_from` / `date_to` were passed as `FieldCondition(match=MatchValue(value=...))` (exact string equality) instead of a `DatetimeRange`, so no temporal filtering actually happened. Now uses a real `DatetimeRange` against a DATETIME-typed `document_date` payload index.
-- Source citations returned to the LLM and frontend had no date context at all. Each citation now carries a real `document_date` (or explicit `null`).
+- Entity timeline on pages like `/entities/Jeffrey%20Epstein` previously showed the ingestion timestamp for every event because `d.date` was never set on `:Document` nodes and the Cypher fell back to `d.created_at`. Timeline now displays real communication dates and marks undated documents as "Unknown" rather than silently stamping them with "today" (f2bd0e9)
+- Qdrant date range filtering in `temporal_search` was previously broken — `date_from` / `date_to` were passed as `FieldCondition(match=MatchValue(value=...))` (exact string equality) instead of a `DatetimeRange`, so no temporal filtering actually happened. Now uses a real `DatetimeRange` against a DATETIME-typed `document_date` payload index (f2bd0e9)
+- Source citations returned to the LLM and frontend had no date context at all. Each citation now carries a real `document_date` (or explicit `null`) (f2bd0e9)
 
 ## [1.21.1] - 2026-04-04
 
