@@ -545,7 +545,7 @@ class ExportService:
                 text("""
                     SELECT psd.bates_begin, psd.bates_end,
                            d.filename, d.document_type AS doc_type,
-                           d.created_at AS date,
+                           d.document_date AS date,
                            d.privilege_status, d.privilege_reviewed_by,
                            d.privilege_reviewed_at
                     FROM documents d
@@ -573,7 +573,7 @@ class ExportService:
                 text("""
                     SELECT bates_begin, bates_end,
                            filename, document_type AS doc_type,
-                           created_at AS date,
+                           document_date AS date,
                            privilege_status, privilege_reviewed_by,
                            privilege_reviewed_at
                     FROM documents

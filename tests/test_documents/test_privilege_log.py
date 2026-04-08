@@ -160,7 +160,7 @@ class TestServiceGetEntries:
             "id": uuid4(),
             "filename": "memo.pdf",
             "document_type": "correspondence",
-            "created_at": datetime(2024, 6, 15, tzinfo=UTC),
+            "document_date": datetime(2024, 6, 15, tzinfo=UTC),
             "privilege_status": "privileged",
             "privilege_basis": "Attorney-client communication",
             "bates_begin": "NEXUS000001",
@@ -185,6 +185,40 @@ class TestServiceGetEntries:
         assert entries[0]["author"] == "Jane Smith"
         assert entries[0]["recipients"] == "John Doe"
         assert entries[0]["basis"] == "Attorney-client communication"
+        # doc_date is now sourced from documents.document_date (real
+        # communication date) rather than created_at (ingestion time).
+        assert entries[0]["doc_date"] == "2024-06-15"
+
+    @pytest.mark.asyncio
+    async def test_returns_blank_doc_date_when_document_date_null(self) -> None:
+        """When document_date is NULL, doc_date stays empty (no fallback to created_at)."""
+        mock_db = AsyncMock()
+        mock_row = MagicMock()
+        mock_row._mapping = {
+            "id": uuid4(),
+            "filename": "scan.pdf",
+            "document_type": "scanned",
+            "document_date": None,  # PDF with no extractable date
+            "privilege_status": "privileged",
+            "privilege_basis": "Attorney work product",
+            "bates_begin": "NEXUS000010",
+            "bates_end": "NEXUS000010",
+            "metadata_": {},
+            "privilege_log_excluded": False,
+        }
+        mock_result = MagicMock()
+        mock_result.all.return_value = [mock_row]
+        mock_db.execute.return_value = mock_result
+
+        from app.documents.service import DocumentService
+
+        entries = await DocumentService.get_privilege_log_entries(
+            db=mock_db,
+            matter_id=_MATTER_ID,
+        )
+
+        assert len(entries) == 1
+        assert entries[0]["doc_date"] == ""
 
     @pytest.mark.asyncio
     async def test_filters_by_matter_id(self) -> None:

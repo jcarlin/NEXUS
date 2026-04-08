@@ -251,7 +251,7 @@ def generate_privilege_log(
             result = conn.execute(
                 text("""
                     SELECT psd.bates_begin, psd.bates_end,
-                           d.filename, d.document_type, d.created_at,
+                           d.filename, d.document_type, d.document_date,
                            d.privilege_status, d.privilege_reviewed_by,
                            d.privilege_reviewed_at, d.metadata_
                     FROM documents d
@@ -267,7 +267,7 @@ def generate_privilege_log(
             result = conn.execute(
                 text("""
                     SELECT bates_begin, bates_end,
-                           filename, document_type, created_at,
+                           filename, document_type, document_date,
                            privilege_status, privilege_reviewed_by,
                            privilege_reviewed_at, metadata_
                     FROM documents
@@ -317,7 +317,7 @@ def generate_privilege_log(
                 m.get("bates_end") or "",
                 m.get("filename") or "",
                 m.get("document_type") or "",
-                m.get("created_at").isoformat() if m.get("created_at") else "",
+                m.get("document_date").isoformat() if m.get("document_date") else "",
                 meta.get("from", ""),
                 meta.get("to", ""),
                 meta.get("subject", ""),

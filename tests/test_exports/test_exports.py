@@ -134,7 +134,7 @@ def test_privilege_log_generation() -> None:
                 "bates_end": "NEXUS-000010",
                 "filename": "contract.pdf",
                 "document_type": "correspondence",
-                "created_at": datetime(2025, 6, 15, tzinfo=UTC),
+                "document_date": datetime(2025, 6, 15, tzinfo=UTC),
                 "privilege_status": "privileged",
                 "privilege_reviewed_by": uuid4(),
                 "privilege_reviewed_at": datetime(2025, 7, 1, tzinfo=UTC),
@@ -147,7 +147,7 @@ def test_privilege_log_generation() -> None:
                 "bates_end": "NEXUS-000015",
                 "filename": "memo.docx",
                 "document_type": "legal_filing",
-                "created_at": datetime(2025, 6, 20, tzinfo=UTC),
+                "document_date": None,  # PDF with no real date — should render as ""
                 "privilege_status": "work_product",
                 "privilege_reviewed_by": uuid4(),
                 "privilege_reviewed_at": datetime(2025, 7, 2, tzinfo=UTC),
@@ -173,6 +173,7 @@ def test_privilege_log_generation() -> None:
     assert "Bates End" in header
     assert "Privilege Status" in header
     assert "Privilege Basis" in header
+    assert "Date" in header
 
     # Data rows
     assert len(rows) == 3  # header + 2 data rows
@@ -180,6 +181,13 @@ def test_privilege_log_generation() -> None:
     # Check basis mapping
     assert rows[1][header.index("Privilege Basis")] == "Attorney-Client Privilege"
     assert rows[2][header.index("Privilege Basis")] == "Work Product Doctrine"
+
+    # Date column must come from document_date (real communication date),
+    # not the ingestion timestamp. NULL document_date renders as blank
+    # rather than fabricating a date from created_at.
+    date_col = header.index("Date")
+    assert rows[1][date_col] == "2025-06-15T00:00:00+00:00"
+    assert rows[2][date_col] == ""
 
 
 # ---------------------------------------------------------------------------

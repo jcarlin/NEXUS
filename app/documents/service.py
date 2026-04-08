@@ -512,13 +512,13 @@ class DocumentService:
 
         result = await db.execute(
             text(f"""
-                SELECT d.id, d.filename, d.document_type, d.created_at,
+                SELECT d.id, d.filename, d.document_type, d.document_date,
                        d.privilege_status, d.privilege_basis,
                        d.bates_begin, d.bates_end,
                        d.metadata_, d.privilege_log_excluded
                 FROM documents d
                 {where_sql}
-                ORDER BY d.bates_begin ASC NULLS LAST, d.created_at ASC
+                ORDER BY d.bates_begin ASC NULLS LAST, d.document_date ASC NULLS LAST
             """),
             {"matter_id": matter_id},
         )
@@ -552,8 +552,8 @@ class DocumentService:
 
             subject = metadata.get("subject") or ""
             doc_date = ""
-            if m.get("created_at"):
-                doc_date = m["created_at"].strftime("%Y-%m-%d")
+            if m.get("document_date"):
+                doc_date = m["document_date"].strftime("%Y-%m-%d")
 
             entries.append(
                 {
