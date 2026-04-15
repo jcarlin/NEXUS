@@ -390,10 +390,7 @@ def create_app() -> FastAPI:
         async def _check_minio() -> tuple[str, str]:
             try:
                 storage = get_minio()
-                await asyncio.wait_for(
-                    storage.list_objects(prefix=""),
-                    timeout=health_timeout,
-                )
+                await asyncio.wait_for(storage.ping(), timeout=health_timeout)
                 return ("minio", "ok")
             except TimeoutError:
                 return ("minio", "error: timeout")

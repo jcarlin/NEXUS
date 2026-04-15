@@ -231,6 +231,32 @@ async def test_health_deep_reports_llm_error(client: AsyncClient) -> None:
 
 
 # ---------------------------------------------------------------------------
+# MinIO health check uses lightweight ping, not a full bucket enumeration
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_health_minio_uses_head_bucket(client: AsyncClient) -> None:
+    """`_check_minio` must probe via `StorageClient.ping()` (head_bucket), not a
+    full bucket listing. A list-based probe times out on large buckets and
+    falsely reports MinIO as degraded.
+    """
+    mock_storage = MagicMock()
+    mock_storage.ping = AsyncMock(return_value=None)
+    mock_storage.list_objects = AsyncMock(
+        side_effect=AssertionError("list_objects must not be called by the health check")
+    )
+
+    with patch("app.main.get_minio", return_value=mock_storage):
+        response = await client.get("/api/v1/health")
+
+    body = response.json()
+    assert body["services"]["minio"] == "ok"
+    mock_storage.ping.assert_awaited()
+    mock_storage.list_objects.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
 # Feature flags endpoint
 # ---------------------------------------------------------------------------
 

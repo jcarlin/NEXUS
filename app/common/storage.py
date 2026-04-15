@@ -55,6 +55,10 @@ class StorageClient:
 
         await asyncio.to_thread(_ensure)
 
+    async def ping(self) -> None:
+        """Lightweight liveness probe — HEAD the configured bucket."""
+        await asyncio.to_thread(self._client.head_bucket, Bucket=self._bucket)
+
     # ------------------------------------------------------------------
     # Object CRUD
     # ------------------------------------------------------------------
