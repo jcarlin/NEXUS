@@ -10,6 +10,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follo
 
 ## [Unreleased]
 
+## [1.22.1] - 2026-04-14
+
+### Fixed
+- `/api/v1/health` no longer returns 503 on large MinIO buckets. `_check_minio` was calling `list_objects(prefix="")`, which enumerates the entire bucket and exceeds the 5s `health_timeout` on production-size corpora. It now calls a new `StorageClient.ping()` that does a single `head_bucket`. Observed effect on the demo VM: api container CPU dropped from ~205% to ~0.3% once the health probe stopped looping on a false timeout (6e20a73)
+
+### Added
+- `StorageClient.ping()` — lightweight liveness probe via `head_bucket` (reuses the pattern already in `ensure_bucket`) (6e20a73)
+- Regression test `test_health_minio_uses_head_bucket` asserts the health check never calls `list_objects` (6e20a73)
+
 ## [1.22.0] - 2026-04-06
 
 ### Added
