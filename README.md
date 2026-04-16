@@ -12,6 +12,8 @@ Multimodal RAG investigation platform for legal document intelligence. Ingests, 
 - **Full auditability** — SOC 2-ready audit trail for every API call and LLM invocation
 - **Run anywhere** — 4 LLM providers, 6 embedding providers, CPU or GPU, full local deployment with zero cloud dependency
 
+## Demo Site: https://nexus-alpha-swart.vercel.app/chat
+
 ## Tech Stack
 
 | Component | Technology |
